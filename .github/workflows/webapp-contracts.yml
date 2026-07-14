@@ -1,0 +1,38 @@
+name: Web app contracts
+
+"on":
+  pull_request:
+    paths:
+      - "04_Web_app/**"
+      - "02_Code/02_Budget_optimizer/budget_optimizer.py"
+      - ".github/workflows/webapp-contracts.yml"
+  push:
+    branches:
+      - main
+      - "codex/**"
+    paths:
+      - "04_Web_app/**"
+      - "02_Code/02_Budget_optimizer/budget_optimizer.py"
+      - ".github/workflows/webapp-contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  decision-result-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install schema validator
+        run: python -m pip install "jsonschema>=4.21,<5"
+
+      - name: Run source-only web contract tests
+        run: python -B -m unittest discover -s 04_Web_app/tests -p "test_*.py" -v
