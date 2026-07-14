@@ -34,17 +34,18 @@ Before changing code, read the repository in this order:
 4. [`04_Web_app/PROJECT_HANDOFF.md`](04_Web_app/PROJECT_HANDOFF.md) for the frozen application boundary;
 5. [`04_Web_app/OPEN_DECISIONS.md`](04_Web_app/OPEN_DECISIONS.md) before making an assumption about business policy, infrastructure or governance.
 
-DecisionResult v1 and application lifecycle v1 are implemented under
-`04_Web_app`. Together they define upload, validation, immutable jobs, legal
-state transitions, progress, safe errors, completed campaign decisions,
-artifact references, and stable machine-status codes. The next implementation
-milestone is the execution worker that composes these contracts with the
-existing forecast, optimizer, marketer-report, and completed-result adapter
-boundaries. API and frontend code must use these contracts rather than reading
-CSV or XLSX layouts directly.
+DecisionResult v1, application lifecycle v1 and local Execution Worker v1 are
+implemented under `04_Web_app`. Together they define upload, validation,
+immutable jobs, legal state transitions, progress, safe errors, completed
+campaign decisions, artifact references, and isolated invocation of the real
+optimizer/report process. The next implementation milestone is a thin local
+HTTP smoke boundary over these tested ports. API and frontend code must use the
+contracts rather than reading CSV or XLSX layouts directly.
 
-The web application is not implemented yet. There is currently no frontend,
-backend, database, queue or worker runtime in this repository.
+The browser application is not implemented yet. There is currently no
+frontend, HTTP API, database, queue, authentication, or production worker
+runtime. The file-backed worker is a local development adapter, not enterprise
+infrastructure.
 
 Local development and future server deployment must use the same versioned
 calculation interfaces and immutable artifact contracts. Environment-specific

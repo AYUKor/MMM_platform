@@ -2,12 +2,13 @@
 
 ## Status
 
-Contract and integration foundation for the future enterprise application. The
-folder contains implemented DecisionResult v1 and application lifecycle v1
-contracts, the adapter from completed optimizer artifacts, synthetic lifecycle
-fixtures, sanitized real-derived result fixtures, tests, and canonical
-architecture documents. There is still no execution worker, HTTP API, database
-runtime, authentication, or frontend. The previous mock/stub prototype was
+Contract and local execution foundation for the future enterprise application.
+The folder contains implemented DecisionResult v1 and application lifecycle v1
+contracts, the completed-result adapter, local Execution Worker v1, synthetic
+lifecycle/worker fixtures, sanitized real-derived result fixtures, tests, and
+canonical architecture documents. There is still no HTTP API, queue,
+PostgreSQL runtime, approved object storage, authentication, or frontend. The
+previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
 
