@@ -1,0 +1,352 @@
+{
+  "fixture_name": "application_lifecycle_v1_happy_path_synthetic",
+  "fixture_origin": "synthetic_contract_fixture_not_production_evidence",
+  "uploads": [{
+    "contract_name": "campaign_upload_v1",
+    "schema_version": "1.0.0",
+    "record_origin": "synthetic_fixture",
+    "upload_id": "upload_111111111111",
+    "actor_id": "actor_222222222222",
+    "status": {
+      "code": "parsed",
+      "display_text": "Файл разобран"
+    },
+    "received_at_utc": "2026-07-15T08:00:00Z",
+    "parsed_at_utc": "2026-07-15T08:00:04Z",
+    "rejected_at_utc": null,
+    "original_file": {
+      "artifact_id": "artifact_111111111111",
+      "kind": "campaign_upload_source",
+      "display_name": "campaign_plan.xlsx",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 24576,
+      "storage_key": "uploads/upload_111111111111/source/campaign_plan.xlsx"
+    },
+    "parser_name": "campaign_plan_parser",
+    "parser_version": "1.0.0",
+    "parsed_payload": {
+      "artifact_id": "artifact_222222222222",
+      "kind": "campaign_upload_parsed",
+      "display_name": "parsed_campaign_payload.json",
+      "media_type": "application/json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "size_bytes": 4096,
+      "storage_key": "uploads/upload_111111111111/parsed/parsed_campaign_payload.json"
+    },
+    "source_rows_n": 8,
+    "detected_campaigns_n": 1,
+    "rejection_error_id": null
+  }],
+  "validations": [{
+    "contract_name": "validation_result_v1",
+    "schema_version": "1.0.0",
+    "record_origin": "synthetic_fixture",
+    "validation_id": "validation_333333333333",
+    "upload_id": "upload_111111111111",
+    "status": {
+      "code": "valid",
+      "display_text": "План можно рассчитать"
+    },
+    "validator_name": "campaign_plan_validator",
+    "validator_version": "1.0.0",
+    "started_at_utc": "2026-07-15T08:00:05Z",
+    "finished_at_utc": "2026-07-15T08:00:08Z",
+    "source_payload": {
+      "artifact_id": "artifact_222222222222",
+      "kind": "campaign_upload_parsed",
+      "display_name": "parsed_campaign_payload.json",
+      "media_type": "application/json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "size_bytes": 4096,
+      "storage_key": "uploads/upload_111111111111/parsed/parsed_campaign_payload.json"
+    },
+    "model": {
+      "registry_channel": "preprod",
+      "registry_event_id": "evt_synthetic_001",
+      "package_id": "pkg_synthetic_preprod",
+      "package_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "package_manifest_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "activation_status": "preprod_restricted",
+      "production_blockers": [
+        "MISSING_OR_FAILED_OOT_VALIDATION"
+      ]
+    },
+    "normalized_plan": {
+      "artifact_id": "artifact_333333333333",
+      "kind": "campaign_plan_normalized",
+      "display_name": "campaign_plan_normalized.csv",
+      "media_type": "text/csv",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "size_bytes": 3072,
+      "storage_key": "validations/validation_333333333333/campaign_plan_normalized.csv"
+    },
+    "daily_flighting": {
+      "artifact_id": "artifact_444444444444",
+      "kind": "campaign_flighting_daily",
+      "display_name": "campaign_flighting_daily.csv",
+      "media_type": "text/csv",
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "size_bytes": 16384,
+      "storage_key": "validations/validation_333333333333/campaign_flighting_daily.csv"
+    },
+    "model_validation": {
+      "artifact_id": "artifact_555555555555",
+      "kind": "campaign_model_validation",
+      "display_name": "campaign_model_validation.csv",
+      "media_type": "text/csv",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "size_bytes": 2048,
+      "storage_key": "validations/validation_333333333333/campaign_model_validation.csv"
+    },
+    "campaigns": [
+      {
+        "campaign_id": "campaign_666666666666",
+        "campaign_name": "Синтетическая тестовая кампания",
+        "segments": ["Сегмент A"],
+        "start_date": "2026-08-01",
+        "end_date": "2026-08-30",
+        "active_days": 30,
+        "channels": ["Канал A", "Канал B"],
+        "geographies": ["Гео A", "Гео B"],
+        "creatives": ["Креатив A"],
+        "source_rows_n": 8,
+        "normalized_rows_n": 7,
+        "daily_rows_n": 210,
+        "uploaded_budget_rub": 100000000.0,
+        "model_input_budget_rub": 95000000.0,
+        "unmodeled_budget_rub": 5000000.0,
+        "daily_budget_rub": 95000000.0
+      }
+    ],
+    "totals": {
+      "source_rows_n": 8,
+      "normalized_rows_n": 7,
+      "daily_rows_n": 210,
+      "uploaded_budget_rub": 100000000.0,
+      "model_input_budget_rub": 95000000.0,
+      "unmodeled_budget_rub": 5000000.0,
+      "daily_budget_rub": 95000000.0,
+      "raw_to_normalized_abs_diff_rub": 0.0,
+      "normalized_to_daily_abs_diff_rub": 0.0
+    },
+    "blocking_errors": [],
+    "warnings": [
+      {
+        "code": "LIMITED_CHANNEL_HISTORY",
+        "severity": "warning",
+        "display_text": "Для одного канала доступна ограниченная история; результат будет показан с повышенной осторожностью.",
+        "scope": "cell",
+        "recoverable": true,
+        "source_row_ids": [3],
+        "affected_cells": [
+          {
+            "campaign_id": "campaign_666666666666",
+            "segment": "Сегмент A",
+            "geo": "Гео A",
+            "channel": "Канал B",
+            "target": "turnover_per_user"
+          }
+        ]
+      }
+    ],
+    "job_creation_allowed": true
+  }],
+  "jobs": [{
+    "contract_name": "decision_job_v1",
+    "schema_version": "1.0.0",
+    "record_origin": "synthetic_fixture",
+    "job_id": "job_777777777777",
+    "idempotency_key": "forecast_optimizer:777777777777",
+    "job_type": "forecast_optimizer_report",
+    "created_by_actor_id": "actor_222222222222",
+    "upload_id": "upload_111111111111",
+    "validation_id": "validation_333333333333",
+    "normalized_plan": {
+      "artifact_id": "artifact_333333333333",
+      "kind": "campaign_plan_normalized",
+      "display_name": "campaign_plan_normalized.csv",
+      "media_type": "text/csv",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "size_bytes": 3072,
+      "storage_key": "validations/validation_333333333333/campaign_plan_normalized.csv"
+    },
+    "daily_flighting": {
+      "artifact_id": "artifact_444444444444",
+      "kind": "campaign_flighting_daily",
+      "display_name": "campaign_flighting_daily.csv",
+      "media_type": "text/csv",
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "size_bytes": 16384,
+      "storage_key": "validations/validation_333333333333/campaign_flighting_daily.csv"
+    },
+    "workflow_config": {
+      "artifact_id": "artifact_777777777777",
+      "kind": "workflow_config",
+      "display_name": "decision_job_config.yaml",
+      "media_type": "application/yaml",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "size_bytes": 4096,
+      "storage_key": "jobs/job_777777777777/config/decision_job_config.yaml"
+    },
+    "model_selector": {
+      "mode": "registry_channel",
+      "registry_channel": "preprod",
+      "package_id": "pkg_synthetic_preprod",
+      "expected_package_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "policies": {
+      "optimizer_policy_id": "optimizer_recommendation_materiality_v2_surgical_search",
+      "optimizer_policy_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "gate_policy_version": "1.2.0",
+      "business_policy_id": "business_hurdle_unapproved_v1",
+      "business_policy_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "business_decision_mode": "allocation_only"
+    },
+    "sampling": {
+      "scenario6_attempt_budget": 2048,
+      "search_posterior_draws": 128,
+      "final_posterior_draws": 600,
+      "search_seed": 42,
+      "final_seed": 10042
+    },
+    "code_reference": "git:f7c91b4",
+    "status": {
+      "code": "succeeded",
+      "display_text": "Расчет завершен"
+    },
+    "created_at_utc": "2026-07-15T08:00:10Z",
+    "queued_at_utc": "2026-07-15T08:00:10Z",
+    "started_at_utc": "2026-07-15T08:00:12Z",
+    "cancel_requested_at_utc": null,
+    "finished_at_utc": "2026-07-15T08:02:00Z",
+    "attempt_number": 1,
+    "result_id": "result_888888888888",
+    "terminal_error_id": null
+  }],
+  "job_events": [
+    {
+      "contract_name": "job_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "event_id": "event_111111111111",
+      "job_id": "job_777777777777",
+      "sequence": 1,
+      "attempt_number": 0,
+      "emitted_at_utc": "2026-07-15T08:00:10Z",
+      "actor_type": "system",
+      "actor_id": null,
+      "from_status_code": null,
+      "to_status": {"code": "queued", "display_text": "В очереди"},
+      "reason_code": null,
+      "display_text": "Расчет поставлен в очередь"
+    },
+    {
+      "contract_name": "job_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "event_id": "event_222222222222",
+      "job_id": "job_777777777777",
+      "sequence": 2,
+      "attempt_number": 1,
+      "emitted_at_utc": "2026-07-15T08:00:12Z",
+      "actor_type": "worker",
+      "actor_id": null,
+      "from_status_code": "queued",
+      "to_status": {"code": "running", "display_text": "Выполняется"},
+      "reason_code": null,
+      "display_text": "Worker начал расчет"
+    },
+    {
+      "contract_name": "job_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "event_id": "event_333333333333",
+      "job_id": "job_777777777777",
+      "sequence": 8,
+      "attempt_number": 1,
+      "emitted_at_utc": "2026-07-15T08:02:00Z",
+      "actor_type": "worker",
+      "actor_id": null,
+      "from_status_code": "running",
+      "to_status": {"code": "succeeded", "display_text": "Завершено"},
+      "reason_code": null,
+      "display_text": "Результат и отчет сформированы"
+    }
+  ],
+  "progress_events": [
+    {
+      "contract_name": "progress_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "progress_event_id": "progress_111111111111",
+      "job_id": "job_777777777777",
+      "sequence": 3,
+      "attempt_number": 1,
+      "emitted_at_utc": "2026-07-15T08:00:20Z",
+      "stage": "prepare",
+      "phase": "campaign_normalization",
+      "state": "completed",
+      "display_text": "Медиаплан подготовлен",
+      "campaign_id": null,
+      "percent_complete": 15.0,
+      "counters": []
+    },
+    {
+      "contract_name": "progress_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "progress_event_id": "progress_222222222222",
+      "job_id": "job_777777777777",
+      "sequence": 4,
+      "attempt_number": 1,
+      "emitted_at_utc": "2026-07-15T08:00:40Z",
+      "stage": "forecast",
+      "phase": "fit_scoring",
+      "state": "running",
+      "display_text": "Рассчитывается прогноз",
+      "campaign_id": "campaign_666666666666",
+      "percent_complete": 35.0,
+      "counters": [
+        {"name": "fits", "current": 4.0, "total": 12.0, "unit": "fits"}
+      ]
+    },
+    {
+      "contract_name": "progress_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "progress_event_id": "progress_333333333333",
+      "job_id": "job_777777777777",
+      "sequence": 5,
+      "attempt_number": 1,
+      "emitted_at_utc": "2026-07-15T08:01:20Z",
+      "stage": "scenario6",
+      "phase": "adaptive_search",
+      "state": "running",
+      "display_text": "Ищется безопасное перераспределение бюджета",
+      "campaign_id": "campaign_666666666666",
+      "percent_complete": 70.0,
+      "counters": [
+        {"name": "attempts", "current": 1536.0, "total": 2048.0, "unit": "allocations"}
+      ]
+    },
+    {
+      "contract_name": "progress_event_v1",
+      "schema_version": "1.0.0",
+      "record_origin": "synthetic_fixture",
+      "progress_event_id": "progress_444444444444",
+      "job_id": "job_777777777777",
+      "sequence": 7,
+      "attempt_number": 1,
+      "emitted_at_utc": "2026-07-15T08:01:58Z",
+      "stage": "report",
+      "phase": "result_adapter",
+      "state": "completed",
+      "display_text": "Отчет готов",
+      "campaign_id": null,
+      "percent_complete": 100.0,
+      "counters": []
+    }
+  ],
+  "errors": []
+}
