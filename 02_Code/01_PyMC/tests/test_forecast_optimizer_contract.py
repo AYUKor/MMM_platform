@@ -1274,17 +1274,17 @@ class SupportedArtifactsContractTests(unittest.TestCase):
         cls.project_root = Path(__file__).resolve().parents[3]
         cls.optimizer_dir = cls.project_root / (
             "03_Outputs/02_Budget_optimizer_outputs/"
-            "15_Budget_optimizer_14072026_agency_gender_boost_surgical_s6_v3"
+            "18_Budget_optimizer_14072026_agency_gender_boost_contract_v1"
         )
         cls.forecast_dir = cls.project_root / (
             "03_Outputs/03_AC_forecast_outputs/"
             "20_AC_forecast_14072026_agency_gender_boost_serving_v3"
         )
-        cls.run_id = "optimizer_agency_gender_boost_surgical_s6_v3_14072026"
+        cls.run_id = "optimizer_agency_gender_boost_contract_v1_14072026"
         cls.forecast_run_id = "forecast_agency_gender_boost_serving_v3_14072026"
         cls.flighting_path = cls.project_root / (
             "00_Data/00_Future_Campaigns/03_Flighting/"
-            "optimizer_agency_gender_boost_surgical_s6_v3_14072026_campaign_flighting_daily.csv"
+            "optimizer_agency_gender_boost_contract_v1_14072026_campaign_flighting_daily.csv"
         )
         cls.model_run_dir = cls.project_root / (
             "03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/"
@@ -1295,6 +1295,23 @@ class SupportedArtifactsContractTests(unittest.TestCase):
             "production_q1_2026_tc5_specific_indoor_separate_rf_prorata_"
             "tc5_online_basket_pooled_tc5_offline_turnover_nat_tv_tier_pool"
         )
+        required_external_artifacts = (
+            cls.optimizer_dir,
+            cls.forecast_dir,
+            cls.flighting_path,
+            cls.model_run_dir,
+            cls.legacy_model_run_dir,
+        )
+        missing = [
+            str(path.relative_to(cls.project_root))
+            for path in required_external_artifacts
+            if not path.exists()
+        ]
+        if missing:
+            raise unittest.SkipTest(
+                "External supported-artifact fixture is not included in the source checkout: "
+                + ", ".join(missing)
+            )
 
     def _require(self, path: Path) -> None:
         if not path.exists():

@@ -2,7 +2,13 @@
 
 ## Status
 
-Clean foundation for the future enterprise application. There is currently no active web application code in this folder. The previous mock/stub prototype was removed because it duplicated `mmm_core` and returned synthetic calculation results.
+Contract and integration foundation for the future enterprise application. The
+folder contains the implemented DecisionResult v1 contract, the adapter from
+completed optimizer artifacts, sanitized real-derived fixtures, tests, and the
+canonical architecture documents. There is still no execution worker, HTTP
+API, database runtime, authentication, or frontend. The previous mock/stub
+prototype was removed because it duplicated `mmm_core` and returned synthetic
+calculation results.
 
 ## Product Purpose
 

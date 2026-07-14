@@ -1,0 +1,672 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.local/mmm/contracts/decision_result_v1.schema.json",
+  "title": "X5 MMM DecisionResult v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "result_id",
+    "result_origin",
+    "created_at_utc",
+    "job",
+    "model",
+    "policies",
+    "campaign_results",
+    "artifacts",
+    "warnings"
+  ],
+  "properties": {
+    "contract_name": {"const": "decision_result_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "result_id": {"$ref": "#/$defs/opaqueId"},
+    "result_origin": {
+      "enum": ["verified_optimizer_artifacts", "sanitized_fixture"]
+    },
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "job": {"$ref": "#/$defs/jobLineage"},
+    "model": {"$ref": "#/$defs/modelLineage"},
+    "policies": {"$ref": "#/$defs/policyLineage"},
+    "campaign_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/campaignResult"}
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/artifactReference"}
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/warning"}
+    }
+  },
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableNumber": {
+      "type": ["number", "null"]
+    },
+    "nullableFraction": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "nullableInteger": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "nullableOpaqueId": {
+      "anyOf": [
+        {"$ref": "#/$defs/opaqueId"},
+        {"type": "null"}
+      ]
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "calculationStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": ["calculated", "partially_calculated", "not_calculated"]
+            }
+          }
+        }
+      ]
+    },
+    "campaignScaleStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "within_historical_p95",
+                "between_historical_p95_p99",
+                "between_historical_p99_and_robust_upper",
+                "above_historical_robust_upper",
+                "benchmark_unavailable"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "cellSupportStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "within_p95",
+                "between_p95_p99",
+                "above_p99_within_robust_upper",
+                "above_robust_upper",
+                "not_evaluated"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "optimizerStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "best_safe_available",
+                "partial_safe_available",
+                "no_safe_candidate",
+                "gate_policy_blocked",
+                "not_run"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "businessDecisionStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "allocation_only",
+                "manual_review_required",
+                "meets_business_hurdle",
+                "below_business_hurdle",
+                "not_evaluated"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "qualityStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "reliable",
+                "elevated_uncertainty",
+                "manual_review_required",
+                "not_for_automatic_reallocation",
+                "not_calculated"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "recommendationType": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "keep_uploaded_plan",
+                "reallocate_for_reliability",
+                "reallocate_for_effect",
+                "partial_safe_plan",
+                "manual_review"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "planStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "recommended_media_plan",
+                "full_plan_partial_model_coverage",
+                "partial_safe_plan",
+                "no_automatic_plan"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "scenario6RunStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "completed_best_safe",
+                "completed_partial_safe",
+                "completed_no_safe_candidate",
+                "gate_policy_blocked",
+                "not_run"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "quantileMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "p10", "p50", "p90"],
+      "properties": {
+        "unit": {"enum": ["RUB", "orders"]},
+        "p10": {"type": "number"},
+        "p50": {"type": "number"},
+        "p90": {"type": "number"}
+      }
+    },
+    "nullableQuantileMetric": {
+      "anyOf": [
+        {"$ref": "#/$defs/quantileMetric"},
+        {"type": "null"}
+      ]
+    },
+    "scenarioMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incremental_turnover",
+        "roas_p50",
+        "incremental_orders",
+        "avg_basket_bridge"
+      ],
+      "properties": {
+        "incremental_turnover": {"$ref": "#/$defs/nullableQuantileMetric"},
+        "roas_p50": {"$ref": "#/$defs/nullableNumber"},
+        "incremental_orders": {"$ref": "#/$defs/nullableQuantileMetric"},
+        "avg_basket_bridge": {"$ref": "#/$defs/nullableQuantileMetric"}
+      }
+    },
+    "pairedComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delta_incremental_turnover",
+        "probability_gt_zero",
+        "probability_noninferior",
+        "moved_budget_rub",
+        "posterior_draws"
+      ],
+      "properties": {
+        "delta_incremental_turnover": {"$ref": "#/$defs/quantileMetric"},
+        "probability_gt_zero": {"$ref": "#/$defs/nullableFraction"},
+        "probability_noninferior": {"$ref": "#/$defs/nullableFraction"},
+        "moved_budget_rub": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "posterior_draws": {"$ref": "#/$defs/nullableInteger"}
+      }
+    },
+    "supportSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elevated_warnings",
+        "strong_warnings",
+        "hard_warnings",
+        "policy_violations"
+      ],
+      "properties": {
+        "elevated_warnings": {"type": "integer", "minimum": 0},
+        "strong_warnings": {"type": "integer", "minimum": 0},
+        "hard_warnings": {"type": "integer", "minimum": 0},
+        "policy_violations": {"type": "integer", "minimum": 0}
+      }
+    },
+    "qualitySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "explanation", "coverage_share", "uncertainty_width_share"],
+      "properties": {
+        "status": {"$ref": "#/$defs/qualityStatus"},
+        "explanation": {"type": "string", "minLength": 1},
+        "coverage_share": {"$ref": "#/$defs/nullableFraction"},
+        "uncertainty_width_share": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "display_text", "scope", "affected_cells"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["info", "caution", "manual_review", "blocking"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "affected_cells": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "scenarioResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "name",
+        "description",
+        "available",
+        "requested_budget_rub",
+        "allocated_budget_rub",
+        "unallocated_budget_rub",
+        "metrics",
+        "calculation_status",
+        "cell_support_status",
+        "optimizer_status",
+        "support",
+        "quality",
+        "paired_comparison"
+      ],
+      "properties": {
+        "scenario_id": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "available": {"type": "boolean"},
+        "requested_budget_rub": {"type": "number", "minimum": 0},
+        "allocated_budget_rub": {"type": "number", "minimum": 0},
+        "unallocated_budget_rub": {"type": "number", "minimum": 0},
+        "metrics": {"$ref": "#/$defs/scenarioMetrics"},
+        "calculation_status": {"$ref": "#/$defs/calculationStatus"},
+        "cell_support_status": {"$ref": "#/$defs/cellSupportStatus"},
+        "optimizer_status": {"$ref": "#/$defs/optimizerStatus"},
+        "support": {"$ref": "#/$defs/supportSummary"},
+        "quality": {"$ref": "#/$defs/qualitySummary"},
+        "paired_comparison": {
+          "anyOf": [
+            {"$ref": "#/$defs/pairedComparison"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "scenario6Audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_status",
+        "method",
+        "attempt_budget",
+        "attempts_evaluated",
+        "kernel_evaluations",
+        "unique_allocations",
+        "candidates_generated",
+        "candidates_scored",
+        "candidates_rejected",
+        "finalists",
+        "search_posterior_draws",
+        "final_posterior_draws",
+        "search_converged",
+        "search_budget_exhausted",
+        "best_raw_candidate_id",
+        "best_safe_candidate_id",
+        "explanation"
+      ],
+      "properties": {
+        "run_status": {"$ref": "#/$defs/scenario6RunStatus"},
+        "method": {"type": "string", "minLength": 1},
+        "attempt_budget": {"type": "integer", "minimum": 0},
+        "attempts_evaluated": {"type": "integer", "minimum": 0},
+        "kernel_evaluations": {"type": "integer", "minimum": 0},
+        "unique_allocations": {"type": "integer", "minimum": 0},
+        "candidates_generated": {"type": "integer", "minimum": 0},
+        "candidates_scored": {"type": "integer", "minimum": 0},
+        "candidates_rejected": {"type": "integer", "minimum": 0},
+        "finalists": {"type": "integer", "minimum": 0},
+        "search_posterior_draws": {"type": "integer", "minimum": 0},
+        "final_posterior_draws": {"type": "integer", "minimum": 0},
+        "search_converged": {"type": ["boolean", "null"]},
+        "search_budget_exhausted": {"type": ["boolean", "null"]},
+        "best_raw_candidate_id": {"$ref": "#/$defs/nullableOpaqueId"},
+        "best_safe_candidate_id": {"$ref": "#/$defs/nullableOpaqueId"},
+        "explanation": {"type": "string", "minLength": 1}
+      }
+    },
+    "campaignPassport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_name",
+        "source_campaign_name",
+        "segments",
+        "source_start_date",
+        "source_end_date",
+        "model_start_date",
+        "model_end_date",
+        "source_active_days",
+        "model_active_days",
+        "source_channels",
+        "modeled_channels",
+        "unmodeled_channels",
+        "geographies",
+        "creatives"
+      ],
+      "properties": {
+        "campaign_name": {"type": "string", "minLength": 1},
+        "source_campaign_name": {"type": "string", "minLength": 1},
+        "segments": {"$ref": "#/$defs/stringArray"},
+        "source_start_date": {"type": "string", "format": "date"},
+        "source_end_date": {"type": "string", "format": "date"},
+        "model_start_date": {"type": "string", "format": "date"},
+        "model_end_date": {"type": "string", "format": "date"},
+        "source_active_days": {"type": "integer", "minimum": 0},
+        "model_active_days": {"type": "integer", "minimum": 0},
+        "source_channels": {"$ref": "#/$defs/stringArray"},
+        "modeled_channels": {"$ref": "#/$defs/stringArray"},
+        "unmodeled_channels": {"$ref": "#/$defs/stringArray"},
+        "geographies": {"$ref": "#/$defs/stringArray"},
+        "creatives": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "budgetReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uploaded_budget_rub",
+        "model_input_budget_rub",
+        "calculated_budget_rub",
+        "unmodeled_budget_rub",
+        "unallocated_budget_rub",
+        "model_coverage_share"
+      ],
+      "properties": {
+        "uploaded_budget_rub": {"type": "number", "minimum": 0},
+        "model_input_budget_rub": {"type": "number", "minimum": 0},
+        "calculated_budget_rub": {"type": "number", "minimum": 0},
+        "unmodeled_budget_rub": {"type": "number", "minimum": 0},
+        "unallocated_budget_rub": {"type": "number", "minimum": 0},
+        "model_coverage_share": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "allocationLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segment", "geo", "channel", "budget_rub", "budget_share", "allocation_note"],
+      "properties": {
+        "segment": {"type": "string"},
+        "geo": {"type": "string"},
+        "channel": {"type": "string"},
+        "budget_rub": {"type": "number", "minimum": 0},
+        "budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "allocation_note": {"type": "string"}
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "scenario_name",
+        "candidate_id",
+        "recommendation_type",
+        "reason",
+        "plan_status",
+        "optimizer_available",
+        "metrics"
+      ],
+      "properties": {
+        "scenario_id": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]},
+        "scenario_name": {"type": "string", "minLength": 1},
+        "candidate_id": {"$ref": "#/$defs/opaqueId"},
+        "recommendation_type": {"$ref": "#/$defs/recommendationType"},
+        "reason": {"type": "string", "minLength": 1},
+        "plan_status": {"$ref": "#/$defs/planStatus"},
+        "optimizer_available": {"type": "boolean"},
+        "metrics": {"$ref": "#/$defs/scenarioMetrics"}
+      }
+    },
+    "decisionStatuses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "calculation_status",
+        "campaign_scale_status",
+        "cell_support_status",
+        "optimizer_status",
+        "business_decision_status"
+      ],
+      "properties": {
+        "calculation_status": {"$ref": "#/$defs/calculationStatus"},
+        "campaign_scale_status": {"$ref": "#/$defs/campaignScaleStatus"},
+        "cell_support_status": {"$ref": "#/$defs/cellSupportStatus"},
+        "optimizer_status": {"$ref": "#/$defs/optimizerStatus"},
+        "business_decision_status": {"$ref": "#/$defs/businessDecisionStatus"}
+      }
+    },
+    "campaignResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "passport",
+        "budget",
+        "scenarios",
+        "scenario6",
+        "recommendation",
+        "recommended_allocation",
+        "statuses",
+        "quality",
+        "warnings"
+      ],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/opaqueId"},
+        "passport": {"$ref": "#/$defs/campaignPassport"},
+        "budget": {"$ref": "#/$defs/budgetReconciliation"},
+        "scenarios": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/scenarioResult"}
+        },
+        "scenario6": {"$ref": "#/$defs/scenario6Audit"},
+        "recommendation": {"$ref": "#/$defs/recommendation"},
+        "recommended_allocation": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/allocationLine"}
+        },
+        "statuses": {"$ref": "#/$defs/decisionStatuses"},
+        "quality": {"$ref": "#/$defs/qualitySummary"},
+        "warnings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/warning"}
+        }
+      }
+    },
+    "jobLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "source_run_id",
+        "job_type",
+        "started_at_utc",
+        "finished_at_utc",
+        "workflow_config_sha256",
+        "input_flighting_sha256",
+        "adapter_name",
+        "adapter_version",
+        "adapter_sha256"
+      ],
+      "properties": {
+        "job_id": {"$ref": "#/$defs/opaqueId"},
+        "source_run_id": {"type": "string", "minLength": 1},
+        "job_type": {"const": "forecast_optimizer_report"},
+        "started_at_utc": {"type": "string", "format": "date-time"},
+        "finished_at_utc": {"type": "string", "format": "date-time"},
+        "workflow_config_sha256": {"$ref": "#/$defs/sha256"},
+        "input_flighting_sha256": {"$ref": "#/$defs/sha256"},
+        "adapter_name": {"const": "optimizer_result_adapter"},
+        "adapter_version": {"const": "1.0.0"},
+        "adapter_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "modelLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry_channel",
+        "registry_event_id",
+        "package_id",
+        "package_fingerprint",
+        "package_manifest_sha256",
+        "activation_status",
+        "production_blockers"
+      ],
+      "properties": {
+        "registry_channel": {"type": "string", "minLength": 1},
+        "registry_event_id": {"type": "string", "minLength": 1},
+        "package_id": {"type": "string", "minLength": 1},
+        "package_fingerprint": {"$ref": "#/$defs/sha256"},
+        "package_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "activation_status": {"type": "string", "minLength": 1},
+        "production_blockers": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "policyLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "optimizer_policy_id",
+        "optimizer_policy_sha256",
+        "business_policy_id",
+        "business_policy_sha256",
+        "business_decision_mode",
+        "search_seed",
+        "final_seed"
+      ],
+      "properties": {
+        "optimizer_policy_id": {"type": "string", "minLength": 1},
+        "optimizer_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "business_policy_id": {"type": "string", "minLength": 1},
+        "business_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "business_decision_mode": {"type": "string", "minLength": 1},
+        "search_seed": {"type": "integer"},
+        "final_seed": {"type": "integer"}
+      }
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "kind",
+        "display_name",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "storage_key"
+      ],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "kind": {"type": "string", "minLength": 1},
+        "display_name": {"type": "string", "minLength": 1},
+        "media_type": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "storage_key": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!file://)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        }
+      }
+    }
+  }
+}
