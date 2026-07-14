@@ -1,0 +1,734 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.local/mmm/contracts/application_lifecycle_v1.schema.json",
+  "title": "X5 MMM Application Lifecycle v1",
+  "description": "Wire contracts for uploads, validation, jobs, lifecycle events, progress and application errors.",
+  "oneOf": [
+    {"$ref": "#/$defs/campaignUpload"},
+    {"$ref": "#/$defs/validationResult"},
+    {"$ref": "#/$defs/decisionJob"},
+    {"$ref": "#/$defs/jobEvent"},
+    {"$ref": "#/$defs/progressEvent"},
+    {"$ref": "#/$defs/applicationError"}
+  ],
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"
+    },
+    "nullableOpaqueId": {
+      "anyOf": [
+        {"$ref": "#/$defs/opaqueId"},
+        {"type": "null"}
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "stableCode": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,127}$"
+    },
+    "recordOrigin": {
+      "enum": ["application_runtime", "synthetic_fixture"]
+    },
+    "nullableDateTime": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "nullableNonNegativeInteger": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "uploadStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {"properties": {"code": {"enum": ["received", "parsed", "rejected"]}}}
+      ]
+    },
+    "validationStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {"properties": {"code": {"enum": ["running", "valid", "invalid"]}}}
+      ]
+    },
+    "jobStatus": {
+      "allOf": [
+        {"$ref": "#/$defs/status"},
+        {
+          "properties": {
+            "code": {
+              "enum": [
+                "queued",
+                "running",
+                "cancel_requested",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "timed_out"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "artifactIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "kind",
+        "display_name",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "storage_key"
+      ],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "kind": {"$ref": "#/$defs/stableCode"},
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\]+$"
+        },
+        "media_type": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "storage_key": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?![A-Za-z][A-Za-z0-9+.-]*://)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$)).+$"
+        }
+      }
+    },
+    "affectedCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["campaign_id", "segment", "geo", "channel", "target"],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/nullableOpaqueId"},
+        "segment": {"type": "string", "minLength": 1},
+        "geo": {"type": "string", "minLength": 1},
+        "channel": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1}
+      }
+    },
+    "validationIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "severity",
+        "display_text",
+        "scope",
+        "recoverable",
+        "source_row_ids",
+        "affected_cells"
+      ],
+      "properties": {
+        "code": {"$ref": "#/$defs/stableCode"},
+        "severity": {"enum": ["blocking", "warning"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "scope": {"enum": ["upload", "row", "campaign", "cell", "model"]},
+        "recoverable": {"type": "boolean"},
+        "source_row_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "affected_cells": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/affectedCell"}
+        }
+      }
+    },
+    "stringSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "campaignPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "campaign_name",
+        "segments",
+        "start_date",
+        "end_date",
+        "active_days",
+        "channels",
+        "geographies",
+        "creatives",
+        "source_rows_n",
+        "normalized_rows_n",
+        "daily_rows_n",
+        "uploaded_budget_rub",
+        "model_input_budget_rub",
+        "unmodeled_budget_rub",
+        "daily_budget_rub"
+      ],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/opaqueId"},
+        "campaign_name": {"type": "string", "minLength": 1},
+        "segments": {"allOf": [{"$ref": "#/$defs/stringSet"}, {"minItems": 1}]},
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"},
+        "active_days": {"type": "integer", "minimum": 1},
+        "channels": {"allOf": [{"$ref": "#/$defs/stringSet"}, {"minItems": 1}]},
+        "geographies": {"allOf": [{"$ref": "#/$defs/stringSet"}, {"minItems": 1}]},
+        "creatives": {"$ref": "#/$defs/stringSet"},
+        "source_rows_n": {"type": "integer", "minimum": 0},
+        "normalized_rows_n": {"type": "integer", "minimum": 0},
+        "daily_rows_n": {"type": "integer", "minimum": 0},
+        "uploaded_budget_rub": {"type": "number", "minimum": 0},
+        "model_input_budget_rub": {"type": "number", "minimum": 0},
+        "unmodeled_budget_rub": {"type": "number", "minimum": 0},
+        "daily_budget_rub": {"type": "number", "minimum": 0}
+      }
+    },
+    "validationTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_rows_n",
+        "normalized_rows_n",
+        "daily_rows_n",
+        "uploaded_budget_rub",
+        "model_input_budget_rub",
+        "unmodeled_budget_rub",
+        "daily_budget_rub",
+        "raw_to_normalized_abs_diff_rub",
+        "normalized_to_daily_abs_diff_rub"
+      ],
+      "properties": {
+        "source_rows_n": {"type": "integer", "minimum": 0},
+        "normalized_rows_n": {"type": "integer", "minimum": 0},
+        "daily_rows_n": {"type": "integer", "minimum": 0},
+        "uploaded_budget_rub": {"type": "number", "minimum": 0},
+        "model_input_budget_rub": {"type": "number", "minimum": 0},
+        "unmodeled_budget_rub": {"type": "number", "minimum": 0},
+        "daily_budget_rub": {"type": "number", "minimum": 0},
+        "raw_to_normalized_abs_diff_rub": {"type": "number", "minimum": 0},
+        "normalized_to_daily_abs_diff_rub": {"type": "number", "minimum": 0}
+      }
+    },
+    "resolvedModelReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry_channel",
+        "registry_event_id",
+        "package_id",
+        "package_fingerprint",
+        "package_manifest_sha256",
+        "activation_status",
+        "production_blockers"
+      ],
+      "properties": {
+        "registry_channel": {"type": "string", "minLength": 1},
+        "registry_event_id": {"type": "string", "minLength": 1},
+        "package_id": {"type": "string", "minLength": 1},
+        "package_fingerprint": {"$ref": "#/$defs/sha256"},
+        "package_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "activation_status": {"type": "string", "minLength": 1},
+        "production_blockers": {"$ref": "#/$defs/stringSet"}
+      }
+    },
+    "modelSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "registry_channel",
+        "package_id",
+        "expected_package_fingerprint"
+      ],
+      "properties": {
+        "mode": {"enum": ["registry_channel", "explicit_package"]},
+        "registry_channel": {"$ref": "#/$defs/nullableString"},
+        "package_id": {"$ref": "#/$defs/nullableString"},
+        "expected_package_fingerprint": {
+          "anyOf": [
+            {"$ref": "#/$defs/sha256"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"mode": {"const": "registry_channel"}},
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "registry_channel": {"type": "string", "minLength": 1},
+              "package_id": {"type": "string", "minLength": 1},
+              "expected_package_fingerprint": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"mode": {"const": "explicit_package"}},
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "registry_channel": {"type": "null"},
+              "package_id": {"type": "string", "minLength": 1},
+              "expected_package_fingerprint": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      ]
+    },
+    "policySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "optimizer_policy_id",
+        "optimizer_policy_sha256",
+        "gate_policy_version",
+        "business_policy_id",
+        "business_policy_sha256",
+        "business_decision_mode"
+      ],
+      "properties": {
+        "optimizer_policy_id": {"type": "string", "minLength": 1},
+        "optimizer_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "gate_policy_version": {"type": "string", "minLength": 1},
+        "business_policy_id": {"type": "string", "minLength": 1},
+        "business_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "business_decision_mode": {"type": "string", "minLength": 1}
+      }
+    },
+    "samplingProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario6_attempt_budget",
+        "search_posterior_draws",
+        "final_posterior_draws",
+        "search_seed",
+        "final_seed"
+      ],
+      "properties": {
+        "scenario6_attempt_budget": {"type": "integer", "minimum": 1},
+        "search_posterior_draws": {"type": "integer", "minimum": 1},
+        "final_posterior_draws": {"type": "integer", "minimum": 1},
+        "search_seed": {"type": "integer", "minimum": 0},
+        "final_seed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "progressCounter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "current", "total", "unit"],
+      "properties": {
+        "name": {"$ref": "#/$defs/stableCode"},
+        "current": {"type": "number", "minimum": 0},
+        "total": {"type": ["number", "null"], "minimum": 0},
+        "unit": {"type": "string", "minLength": 1}
+      }
+    },
+    "campaignUpload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "upload_id",
+        "actor_id",
+        "status",
+        "received_at_utc",
+        "parsed_at_utc",
+        "rejected_at_utc",
+        "original_file",
+        "parser_name",
+        "parser_version",
+        "parsed_payload",
+        "source_rows_n",
+        "detected_campaigns_n",
+        "rejection_error_id"
+      ],
+      "properties": {
+        "contract_name": {"const": "campaign_upload_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"$ref": "#/$defs/recordOrigin"},
+        "upload_id": {"$ref": "#/$defs/opaqueId"},
+        "actor_id": {"$ref": "#/$defs/opaqueId"},
+        "status": {"$ref": "#/$defs/uploadStatus"},
+        "received_at_utc": {"type": "string", "format": "date-time"},
+        "parsed_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "rejected_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "original_file": {"$ref": "#/$defs/artifactIdentity"},
+        "parser_name": {"$ref": "#/$defs/nullableString"},
+        "parser_version": {"$ref": "#/$defs/nullableString"},
+        "parsed_payload": {
+          "anyOf": [
+            {"$ref": "#/$defs/artifactIdentity"},
+            {"type": "null"}
+          ]
+        },
+        "source_rows_n": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "detected_campaigns_n": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "rejection_error_id": {"$ref": "#/$defs/nullableOpaqueId"}
+      }
+    },
+    "validationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "validation_id",
+        "upload_id",
+        "status",
+        "validator_name",
+        "validator_version",
+        "started_at_utc",
+        "finished_at_utc",
+        "source_payload",
+        "model",
+        "normalized_plan",
+        "daily_flighting",
+        "model_validation",
+        "campaigns",
+        "totals",
+        "blocking_errors",
+        "warnings",
+        "job_creation_allowed"
+      ],
+      "properties": {
+        "contract_name": {"const": "validation_result_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"$ref": "#/$defs/recordOrigin"},
+        "validation_id": {"$ref": "#/$defs/opaqueId"},
+        "upload_id": {"$ref": "#/$defs/opaqueId"},
+        "status": {"$ref": "#/$defs/validationStatus"},
+        "validator_name": {"type": "string", "minLength": 1},
+        "validator_version": {"type": "string", "minLength": 1},
+        "started_at_utc": {"type": "string", "format": "date-time"},
+        "finished_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "source_payload": {"$ref": "#/$defs/artifactIdentity"},
+        "model": {
+          "anyOf": [
+            {"$ref": "#/$defs/resolvedModelReference"},
+            {"type": "null"}
+          ]
+        },
+        "normalized_plan": {
+          "anyOf": [
+            {"$ref": "#/$defs/artifactIdentity"},
+            {"type": "null"}
+          ]
+        },
+        "daily_flighting": {
+          "anyOf": [
+            {"$ref": "#/$defs/artifactIdentity"},
+            {"type": "null"}
+          ]
+        },
+        "model_validation": {
+          "anyOf": [
+            {"$ref": "#/$defs/artifactIdentity"},
+            {"type": "null"}
+          ]
+        },
+        "campaigns": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/campaignPreview"}
+        },
+        "totals": {
+          "anyOf": [
+            {"$ref": "#/$defs/validationTotals"},
+            {"type": "null"}
+          ]
+        },
+        "blocking_errors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/validationIssue"}
+        },
+        "warnings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/validationIssue"}
+        },
+        "job_creation_allowed": {"type": "boolean"}
+      }
+    },
+    "decisionJob": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "job_id",
+        "idempotency_key",
+        "job_type",
+        "created_by_actor_id",
+        "upload_id",
+        "validation_id",
+        "normalized_plan",
+        "daily_flighting",
+        "workflow_config",
+        "model_selector",
+        "policies",
+        "sampling",
+        "code_reference",
+        "status",
+        "created_at_utc",
+        "queued_at_utc",
+        "started_at_utc",
+        "cancel_requested_at_utc",
+        "finished_at_utc",
+        "attempt_number",
+        "result_id",
+        "terminal_error_id"
+      ],
+      "properties": {
+        "contract_name": {"const": "decision_job_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"$ref": "#/$defs/recordOrigin"},
+        "job_id": {"$ref": "#/$defs/opaqueId"},
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{16,128}$"
+        },
+        "job_type": {"const": "forecast_optimizer_report"},
+        "created_by_actor_id": {"$ref": "#/$defs/opaqueId"},
+        "upload_id": {"$ref": "#/$defs/opaqueId"},
+        "validation_id": {"$ref": "#/$defs/opaqueId"},
+        "normalized_plan": {"$ref": "#/$defs/artifactIdentity"},
+        "daily_flighting": {"$ref": "#/$defs/artifactIdentity"},
+        "workflow_config": {"$ref": "#/$defs/artifactIdentity"},
+        "model_selector": {"$ref": "#/$defs/modelSelector"},
+        "policies": {"$ref": "#/$defs/policySelection"},
+        "sampling": {"$ref": "#/$defs/samplingProfile"},
+        "code_reference": {"type": "string", "minLength": 1},
+        "status": {"$ref": "#/$defs/jobStatus"},
+        "created_at_utc": {"type": "string", "format": "date-time"},
+        "queued_at_utc": {"type": "string", "format": "date-time"},
+        "started_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "cancel_requested_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "finished_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "attempt_number": {"type": "integer", "minimum": 0},
+        "result_id": {"$ref": "#/$defs/nullableOpaqueId"},
+        "terminal_error_id": {"$ref": "#/$defs/nullableOpaqueId"}
+      }
+    },
+    "jobEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "event_id",
+        "job_id",
+        "sequence",
+        "attempt_number",
+        "emitted_at_utc",
+        "actor_type",
+        "actor_id",
+        "from_status_code",
+        "to_status",
+        "reason_code",
+        "display_text"
+      ],
+      "properties": {
+        "contract_name": {"const": "job_event_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"$ref": "#/$defs/recordOrigin"},
+        "event_id": {"$ref": "#/$defs/opaqueId"},
+        "job_id": {"$ref": "#/$defs/opaqueId"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "attempt_number": {"type": "integer", "minimum": 0},
+        "emitted_at_utc": {"type": "string", "format": "date-time"},
+        "actor_type": {"enum": ["system", "user", "worker", "admin"]},
+        "actor_id": {"$ref": "#/$defs/nullableOpaqueId"},
+        "from_status_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "queued",
+                "running",
+                "cancel_requested",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "timed_out"
+              ]
+            },
+            {"type": "null"}
+          ]
+        },
+        "to_status": {"$ref": "#/$defs/jobStatus"},
+        "reason_code": {
+          "anyOf": [
+            {"$ref": "#/$defs/stableCode"},
+            {"type": "null"}
+          ]
+        },
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "progressEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "progress_event_id",
+        "job_id",
+        "sequence",
+        "attempt_number",
+        "emitted_at_utc",
+        "stage",
+        "phase",
+        "state",
+        "display_text",
+        "campaign_id",
+        "percent_complete",
+        "counters"
+      ],
+      "properties": {
+        "contract_name": {"const": "progress_event_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"$ref": "#/$defs/recordOrigin"},
+        "progress_event_id": {"$ref": "#/$defs/opaqueId"},
+        "job_id": {"$ref": "#/$defs/opaqueId"},
+        "sequence": {"type": "integer", "minimum": 1},
+        "attempt_number": {"type": "integer", "minimum": 1},
+        "emitted_at_utc": {"type": "string", "format": "date-time"},
+        "stage": {
+          "enum": [
+            "prepare",
+            "forecast",
+            "benchmarks",
+            "scenario6",
+            "final_scoring",
+            "report"
+          ]
+        },
+        "phase": {"$ref": "#/$defs/stableCode"},
+        "state": {"enum": ["started", "running", "completed"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "campaign_id": {"$ref": "#/$defs/nullableOpaqueId"},
+        "percent_complete": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "counters": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/progressCounter"}
+        }
+      }
+    },
+    "applicationError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "error_id",
+        "resource_type",
+        "resource_id",
+        "occurred_at_utc",
+        "component",
+        "stage",
+        "code",
+        "category",
+        "severity",
+        "retryable",
+        "display_text",
+        "support_reference",
+        "source_row_ids",
+        "affected_cells"
+      ],
+      "properties": {
+        "contract_name": {"const": "application_error_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"$ref": "#/$defs/recordOrigin"},
+        "error_id": {"$ref": "#/$defs/opaqueId"},
+        "resource_type": {"enum": ["upload", "validation", "job"]},
+        "resource_id": {"$ref": "#/$defs/opaqueId"},
+        "occurred_at_utc": {"type": "string", "format": "date-time"},
+        "component": {
+          "enum": [
+            "upload",
+            "validation",
+            "worker",
+            "forecast",
+            "optimizer",
+            "report",
+            "result_adapter",
+            "storage",
+            "api"
+          ]
+        },
+        "stage": {
+          "type": ["string", "null"],
+          "enum": [
+            "upload",
+            "validation",
+            "prepare",
+            "forecast",
+            "benchmarks",
+            "scenario6",
+            "final_scoring",
+            "report",
+            null
+          ]
+        },
+        "code": {"$ref": "#/$defs/stableCode"},
+        "category": {
+          "enum": [
+            "input_validation",
+            "model_policy",
+            "calculation",
+            "artifact_integrity",
+            "infrastructure",
+            "timeout",
+            "cancellation",
+            "internal"
+          ]
+        },
+        "severity": {"enum": ["error", "fatal"]},
+        "retryable": {"type": "boolean"},
+        "display_text": {"type": "string", "minLength": 1},
+        "support_reference": {"$ref": "#/$defs/nullableString"},
+        "source_row_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "affected_cells": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/affectedCell"}
+        }
+      }
+    }
+  }
+}

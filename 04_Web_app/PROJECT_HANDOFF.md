@@ -4,7 +4,7 @@
 
 This handoff defines the frozen integration boundary for the future enterprise application. Current package, run, QA, and blocker facts live only in `04_Web_app/CURRENT_TRUTH.md` and must be verified from its cited evidence before implementation.
 
-As of 2026-07-14:
+As of 2026-07-15:
 
 - the verified serving channel is `preprod`;
 - that pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b` with fingerprint `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`;
@@ -12,6 +12,8 @@ As of 2026-07-14:
 - the latest code-lineage optimizer run is `optimizer_agency_gender_boost_contract_v1_14072026`;
 - the current business mode is `allocation_only`;
 - DecisionResult v1 and its completed-result adapter are implemented under `04_Web_app`;
+- application lifecycle v1 now defines upload, validation, immutable jobs,
+  legal transitions, progress, and browser-safe errors;
 - the execution worker, HTTP API, database, and frontend are not implemented yet.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
@@ -150,7 +152,9 @@ Current `marketer_report_recommendations.csv` contains all five named columns, w
 
 ## Contract Boundary V1
 
-DecisionResult is now an implemented v1 schema. CampaignUpload, ValidationResult, DecisionJob, and JobEvent below remain frozen design boundaries pending their own versioned schemas.
+DecisionResult and application lifecycle are implemented v1 contracts. They
+freeze the boundary that the future worker, API, persistence layer, and
+frontend must use.
 
 ### Campaign Upload
 
@@ -186,11 +190,42 @@ One immutable job describes the complete `forecast + optimizer + report` calcula
 - job ID and idempotency key;
 - normalized-plan artifact ID and SHA-256;
 - job type and contract version;
-- registry channel or explicit immutable package ID;
+- registry channel provenance or explicit-package mode, with resolved immutable
+  package ID and expected fingerprint pinned in either case;
 - scenario, optimizer, gate, and business-policy versions;
 - posterior sample counts and deterministic seeds.
 
 The API creates application state only. The worker performs calculation outside the request.
+
+### Implemented Application Lifecycle V1
+
+The lifecycle implementation is intentionally dependency-light and contains no
+MMM calculations:
+
+- `04_Web_app/contracts/application_lifecycle_v1.py`: immutable typed records,
+  legal state combinations and transitions, timestamp/order checks, safe
+  artifact references, JSON-to-domain parsing, and semantic validation;
+- `04_Web_app/contracts/application_lifecycle_v1.schema.json`: Draft 2020-12
+  wire schema for `campaign_upload_v1`, `validation_result_v1`,
+  `decision_job_v1`, `job_event_v1`, `progress_event_v1`, and
+  `application_error_v1`, all at version `1.0.0`;
+- `04_Web_app/tests/fixtures/application_lifecycle_v1_happy_path_synthetic.json`:
+  explicitly synthetic parsed-upload, valid-validation, successful-job path;
+- `04_Web_app/tests/fixtures/application_lifecycle_v1_failure_path_synthetic.json`:
+  explicitly synthetic rejected-upload, invalid-validation, and failed-job path;
+- `04_Web_app/tests/test_application_lifecycle_v1.py`: schema, semantic,
+  round-trip, path-safety, transition, cancellation, progress, selector, and
+  terminal-outcome tests;
+- `04_Web_app/docs/adr/0002-application-lifecycle-contract-v1.md`: rationale,
+  ownership boundaries, and rules future layers must preserve.
+
+JSON Schema validates the wire shape. Python entry points must additionally
+call `parse_lifecycle_contract()` or `validate_lifecycle_payload()` because
+timestamp ordering, budget reconciliation, state combinations, transition
+legality, and relative counter bounds are semantic checks.
+
+Lifecycle fixtures are application-contract examples only. They are not real
+campaigns, model packages, calculation outputs, or evidence of model quality.
 
 ### DecisionResult
 
@@ -248,7 +283,9 @@ The first worker adapter must use the tested CLI workflows as process boundaries
 
 1. Load the immutable job by `job_id` from PostgreSQL.
 2. Resolve upload, normalized-plan, configuration, and artifact references.
-3. Resolve the package through the existing registry and verify package ID, fingerprint, registration, and inventory.
+3. Load the package pinned by the job through the existing registry and verify
+   package ID, fingerprint, registration, inventory, and serving permission;
+   never replace it silently with a newer channel pointer.
 4. Create an immutable run configuration with versions and seeds.
 5. Launch the existing forecast, optimizer, and marketer-report workflows in a separate process.
 6. Read their run cards and artifacts, verify hashes, and map completed values into DecisionResult.
@@ -261,8 +298,11 @@ No notebooks run in this flow. No existing calculation function is copied into t
 Each item is a separate reviewable milestone:
 
 1. Completed: define DecisionResult v1, emit real manifests, verify source/output hashes, and add safe-S6 plus gate-blocked real-derived fixtures.
-2. Define versioned CampaignUpload, ValidationResult, DecisionJob, JobEvent, progress, and error schemas.
-3. Implement the execution worker around the existing calculation boundary and compose the completed result adapter into it.
+2. Completed: define versioned CampaignUpload, ValidationResult, DecisionJob,
+   JobEvent, progress, and error contracts with happy/failure fixtures and
+   semantic validation.
+3. Next: implement the execution worker around the existing calculation
+   boundary and compose the completed result adapter into it.
 4. Add a local HTTP smoke path against in-memory or file-backed development state; do not introduce a second calculation engine.
 5. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
 6. Implement API endpoints and asynchronous event delivery against the frozen contracts.

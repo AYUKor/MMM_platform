@@ -34,13 +34,14 @@ Before changing code, read the repository in this order:
 4. [`04_Web_app/PROJECT_HANDOFF.md`](04_Web_app/PROJECT_HANDOFF.md) for the frozen application boundary;
 5. [`04_Web_app/OPEN_DECISIONS.md`](04_Web_app/OPEN_DECISIONS.md) before making an assumption about business policy, infrastructure or governance.
 
-DecisionResult v1 is implemented under `04_Web_app`: it includes the versioned
-JSON Schema, standard-library domain models, stable machine-status codes, an
-adapter from completed optimizer artifacts, sanitized real-derived fixtures,
-and contract tests. The next implementation milestone is the remaining
-application lifecycle contract set: CampaignUpload, ValidationResult,
-DecisionJob, JobEvent, progress, and error schemas. API, worker, and frontend
-code must use these contracts rather than reading CSV or XLSX layouts directly.
+DecisionResult v1 and application lifecycle v1 are implemented under
+`04_Web_app`. Together they define upload, validation, immutable jobs, legal
+state transitions, progress, safe errors, completed campaign decisions,
+artifact references, and stable machine-status codes. The next implementation
+milestone is the execution worker that composes these contracts with the
+existing forecast, optimizer, marketer-report, and completed-result adapter
+boundaries. API and frontend code must use these contracts rather than reading
+CSV or XLSX layouts directly.
 
 The web application is not implemented yet. There is currently no frontend,
 backend, database, queue or worker runtime in this repository.
