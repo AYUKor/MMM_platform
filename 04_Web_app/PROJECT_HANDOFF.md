@@ -9,9 +9,10 @@ As of 2026-07-14:
 - the verified serving channel is `preprod`;
 - that pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b` with fingerprint `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`;
 - the package is `preprod_restricted`, not production-active;
-- the latest verified optimizer run is `optimizer_agency_may_tsx_surgical_s6_v3_14072026`;
+- the latest code-lineage optimizer run is `optimizer_agency_gender_boost_contract_v1_14072026`;
 - the current business mode is `allocation_only`;
-- there is no web application code under `04_Web_app`.
+- DecisionResult v1 and its completed-result adapter are implemented under `04_Web_app`;
+- the execution worker, HTTP API, database, and frontend are not implemented yet.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
@@ -145,11 +146,11 @@ Only `code` is a stable API enum. `display_text` is localized presentation text,
 
 The current policy maps to `allocation_only`. This is not a launch recommendation and does not approve a future hurdle.
 
-Current `marketer_report_recommendations.csv` already contains all five named columns, while scenario-level files contain the applicable subset. Their values are display strings, so they do not yet implement this machine-code contract. A future adapter must use an explicit, versioned, tested mapping; string matching in the frontend is prohibited.
+Current `marketer_report_recommendations.csv` contains all five named columns, while scenario-level files contain the applicable subset. Their source values remain display strings. `04_Web_app/adapters/optimizer_result_adapter.py` now converts them through an explicit fail-closed mapping; string matching in the frontend remains prohibited.
 
 ## Contract Boundary V1
 
-The following is a frozen design boundary, not an implemented schema.
+DecisionResult is now an implemented v1 schema. CampaignUpload, ValidationResult, DecisionJob, and JobEvent below remain frozen design boundaries pending their own versioned schemas.
 
 ### Campaign Upload
 
@@ -218,6 +219,29 @@ Each `campaign_results[]` item contains:
 
 Artifact references contain an opaque artifact ID, kind, SHA-256, and an approved relative storage key or download capability. They must never expose a local absolute path. Existing local artifacts are evidence inputs; their workstation paths are not copied into the future contract.
 
+### Implemented DecisionResult V1
+
+The current implementation is intentionally dependency-light and does not duplicate MMM mathematics:
+
+- `04_Web_app/contracts/decision_result_v1.py`: standard-library immutable domain models and semantic validation;
+- `04_Web_app/contracts/decision_result_v1.schema.json`: Draft 2020-12 wire schema, contract name `decision_result_v1`, version `1.0.0`;
+- `04_Web_app/adapters/optimizer_result_adapter.py`: reads completed optimizer/report artifacts, verifies declared hashes, records adapter version/hash, maps source display statuses to stable codes, and emits JSON-native DecisionResult;
+- `04_Web_app/tests/fixtures/decision_result_v1_real_sanitized.json`: real-derived safe-S6 fixture for frontend and API tests;
+- `04_Web_app/tests/fixtures/decision_result_v1_gate_blocked_sanitized.json`: real-derived gate-blocked fixture;
+- `04_Web_app/tests/test_decision_result_v1.py`: schema, semantics, multi-campaign, path-safety, tamper, and fallback-policy tests.
+
+The adapter command is:
+
+```bash
+python -B 04_Web_app/adapters/optimizer_result_adapter.py \
+  --optimizer-output-dir <completed-optimizer-output-dir> \
+  --output <completed-optimizer-output-dir>/decision_result_manifest_v1.json
+```
+
+The adapter is not the future execution worker. It starts only after optimizer and marketer artifacts have completed. It does not parse an upload, create a job, run forecast, search candidates, or persist application lifecycle state.
+
+Scenario 6 is read from the marketer decision pool and enriched from finalist totals. Therefore a safe S6 remains visible with p10/p50/p90, ROAS, orders, basket bridge, best-safe ID and search audit even when materiality policy recommends S01. Gate-blocked S6 is represented as unavailable with no invented metrics. Search audit distinguishes configured attempt budget, attempts actually evaluated, kernel evaluations, unique allocations, scored/rejected candidates, convergence and budget-exhaustion state.
+
 ## Worker Integration Rule
 
 The first worker adapter must use the tested CLI workflows as process boundaries:
@@ -236,12 +260,13 @@ No notebooks run in this flow. No existing calculation function is copied into t
 
 Each item is a separate reviewable milestone:
 
-1. Define versioned CampaignUpload, ValidationResult, DecisionJob, JobEvent, and DecisionResult schemas; create one DecisionResult fixture from verified real run artifacts.
-2. Emit or assemble one canonical `decision_result_manifest_v1.json` and verify every source/output hash.
-3. Implement the worker adapter around the existing calculation boundary with a local HTTP smoke path.
-4. Add PostgreSQL application-state persistence and approved external artifact storage.
-5. Implement API endpoints and asynchronous event delivery against the frozen contracts.
-6. Build the marketer workflow on the real fixture and stable API.
-7. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
+1. Completed: define DecisionResult v1, emit real manifests, verify source/output hashes, and add safe-S6 plus gate-blocked real-derived fixtures.
+2. Define versioned CampaignUpload, ValidationResult, DecisionJob, JobEvent, progress, and error schemas.
+3. Implement the execution worker around the existing calculation boundary and compose the completed result adapter into it.
+4. Add a local HTTP smoke path against in-memory or file-backed development state; do not introduce a second calculation engine.
+5. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
+6. Implement API endpoints and asynchronous event delivery against the frozen contracts.
+7. Build the marketer workflow on the real-derived fixtures and stable API.
+8. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
 
 Do not start a later milestone while an earlier contract or evidence gate is unresolved. Decisions requiring owner approval are listed only in `04_Web_app/OPEN_DECISIONS.md`.

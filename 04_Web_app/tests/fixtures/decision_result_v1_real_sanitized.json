@@ -1,0 +1,5101 @@
+{
+  "contract_name": "decision_result_v1",
+  "schema_version": "1.0.0",
+  "result_id": "result_29a2f3285295658a3c2d",
+  "result_origin": "sanitized_fixture",
+  "created_at_utc": "2026-01-01T00:00:00+00:00",
+  "job": {
+    "job_id": "job_438aacdffa3653463259",
+    "source_run_id": "sanitized_optimizer_run",
+    "job_type": "forecast_optimizer_report",
+    "started_at_utc": "2026-01-01T00:00:00+00:00",
+    "finished_at_utc": "2026-01-01T00:01:00+00:00",
+    "workflow_config_sha256": "2afe3a214a4e6126c50d8a2fac4059f29bbfd0edb3a974f56119dc8a0c88086c",
+    "input_flighting_sha256": "c96cbfea72e3106b6d294b0426e100c650cf585e87179c09fa88a154dcbcc26f",
+    "adapter_name": "optimizer_result_adapter",
+    "adapter_version": "1.0.0",
+    "adapter_sha256": "d32949914d712689db00e1f85cd15c17aabf8b3e9333e3bb33472292afa351e3"
+  },
+  "model": {
+    "registry_channel": "preprod",
+    "registry_event_id": "sanitized_registry_event",
+    "package_id": "pkg_sanitized_fixture",
+    "package_fingerprint": "b7d37fddd45264e32dd4ba82e67c0450e76b170812c126bb80e2cc6a80fa57fd",
+    "package_manifest_sha256": "069a0890baf22e218e4f69bed4b1ce0bf6dab3f15c0aa13519cb77a0eaad72ef",
+    "activation_status": "preprod_restricted",
+    "production_blockers": [
+      "MISSING_OR_FAILED_OOT_VALIDATION"
+    ]
+  },
+  "policies": {
+    "optimizer_policy_id": "optimizer_recommendation_materiality_v2_surgical_search",
+    "optimizer_policy_sha256": "c251965cae4d0b6c17b86936e4c6491b44970cac03818340587ceb8c696ee6c7",
+    "business_policy_id": "business_hurdle_unapproved_v1",
+    "business_policy_sha256": "a46f7ae597a8958c5df9a5e48dc817e3682a0d7b6126d28aac3fcb7c0e966f55",
+    "business_decision_mode": "allocation_only",
+    "search_seed": 42,
+    "final_seed": 10042
+  },
+  "campaign_results": [
+    {
+      "campaign_id": "campaign_63f5d6c1651f67eef2b3",
+      "passport": {
+        "campaign_name": "Demo campaign 1",
+        "source_campaign_name": "Demo source campaign 1",
+        "segments": [
+          "SEGMENT_01"
+        ],
+        "source_start_date": "2026-01-01",
+        "source_end_date": "2026-01-30",
+        "model_start_date": "2026-01-01",
+        "model_end_date": "2026-01-30",
+        "source_active_days": 30,
+        "model_active_days": 30,
+        "source_channels": [
+          "CHANNEL_01",
+          "CHANNEL_02",
+          "CHANNEL_03",
+          "CHANNEL_04",
+          "CHANNEL_05",
+          "CHANNEL_06",
+          "CHANNEL_07"
+        ],
+        "modeled_channels": [
+          "CHANNEL_08",
+          "CHANNEL_09",
+          "CHANNEL_10",
+          "CHANNEL_11",
+          "CHANNEL_06"
+        ],
+        "unmodeled_channels": [],
+        "geographies": [
+          "GEO_01",
+          "GEO_02",
+          "GEO_03",
+          "GEO_04",
+          "GEO_05",
+          "GEO_06",
+          "GEO_07",
+          "GEO_08",
+          "GEO_09",
+          "GEO_10",
+          "GEO_11",
+          "GEO_12"
+        ],
+        "creatives": []
+      },
+      "budget": {
+        "uploaded_budget_rub": 27373702.49,
+        "model_input_budget_rub": 27373702.49,
+        "calculated_budget_rub": 27373702.49,
+        "unmodeled_budget_rub": 0.0,
+        "unallocated_budget_rub": 0.0,
+        "model_coverage_share": 1.0
+      },
+      "scenarios": [
+        {
+          "scenario_id": "S01",
+          "name": "Сценарий 1. Как загрузили",
+          "description": "Ничего не меняем: бюджет, каналы, гео и даты остаются как в исходной спецификации маркетолога.",
+          "available": true,
+          "requested_budget_rub": 27373702.49,
+          "allocated_budget_rub": 27373702.49,
+          "unallocated_budget_rub": 0.0,
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 82547005.71,
+              "p50": 84616974.4,
+              "p90": 86605097.91
+            },
+            "roas_p50": 3.091178,
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2290290205.1506,
+              "p50": 3560498219.2607,
+              "p90": 5357154497.0665
+            },
+            "avg_basket_bridge": {
+              "unit": "RUB",
+              "p10": 78156294.91,
+              "p50": 79663232.07,
+              "p90": 81045688.6
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 3,
+            "strong_warnings": 1,
+            "hard_warnings": 1,
+            "policy_violations": 1
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.04795837036046974
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 0.0,
+              "p50": 0.0,
+              "p90": 0.0
+            },
+            "probability_gt_zero": 0.0,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S02",
+          "name": "Сценарий 2. Ровно по всем связкам",
+          "description": "Общий бюджет кампании делится поровну между всеми исходными связками geo x channel.",
+          "available": true,
+          "requested_budget_rub": 27373702.49,
+          "allocated_budget_rub": 27373702.49,
+          "unallocated_budget_rub": 0.0,
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 95082454.81,
+              "p50": 98359342.86,
+              "p90": 101992123.15
+            },
+            "roas_p50": 3.593206,
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2276043219.9729,
+              "p50": 3098671018.1322,
+              "p90": 3919559114.5083
+            },
+            "avg_basket_bridge": {
+              "unit": "RUB",
+              "p10": 80895463.19,
+              "p50": 83270176.89,
+              "p90": 85552039.72
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 3,
+            "strong_warnings": 1,
+            "hard_warnings": 1,
+            "policy_violations": 1
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.0702492324576686
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 10558608.99,
+              "p50": 13784592.35,
+              "p90": 17457488.25
+            },
+            "probability_gt_zero": 1.0,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S03",
+          "name": "Сценарий 3. Каналы как были, гео ровно",
+          "description": "Сохраняем бюджет каждого канала, но внутри канала делим его поровну между его гео.",
+          "available": true,
+          "requested_budget_rub": 27373702.49,
+          "allocated_budget_rub": 27373702.49,
+          "unallocated_budget_rub": 0.0,
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 78375585.9,
+              "p50": 81474639.1,
+              "p90": 84912150.66
+            },
+            "roas_p50": 2.976384,
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 1651600157.1267,
+              "p50": 2768395400.0103,
+              "p90": 4448661233.5089
+            },
+            "avg_basket_bridge": {
+              "unit": "RUB",
+              "p10": 61219812.8,
+              "p50": 62868440.98,
+              "p90": 64399328.99
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 3,
+            "strong_warnings": 1,
+            "hard_warnings": 1,
+            "policy_violations": 1
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.08022821375692972
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": -6058437.88,
+              "p50": -3022031.83,
+              "p90": 127593.31
+            },
+            "probability_gt_zero": 0.105,
+            "probability_noninferior": 0.1733333333333333,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S04",
+          "name": "Сценарий 4. Гео как были, каналы ровно",
+          "description": "Сохраняем бюджет каждого гео, но внутри гео делим его поровну между доступными каналами.",
+          "available": true,
+          "requested_budget_rub": 27373702.49,
+          "allocated_budget_rub": 27373702.49,
+          "unallocated_budget_rub": 0.0,
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 100240484.08,
+              "p50": 103390327.36,
+              "p90": 106305512.24
+            },
+            "roas_p50": 3.776995,
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 3838839814.9126,
+              "p50": 5538541029.1255,
+              "p90": 7569438774.8513
+            },
+            "avg_basket_bridge": {
+              "unit": "RUB",
+              "p10": 104790787.38,
+              "p50": 107385634.02,
+              "p90": 109639599.44
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 3,
+            "strong_warnings": 1,
+            "hard_warnings": 1,
+            "policy_violations": 1
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.058661465819256575
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 16234212.55,
+              "p50": 18816628.03,
+              "p90": 21214025.38
+            },
+            "probability_gt_zero": 1.0,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S05",
+          "name": "Сценарий 5. Осторожный support-safe",
+          "description": "Распределяем максимум бюджета внутри p95 support-zone. Если весь бюджет не помещается, остаток явно остается нераспределенным для ручного решения.",
+          "available": true,
+          "requested_budget_rub": 27373702.49,
+          "allocated_budget_rub": 27373702.49,
+          "unallocated_budget_rub": 0.0,
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 76361645.36,
+              "p50": 78187246.52,
+              "p90": 80032553.3
+            },
+            "roas_p50": 2.856291,
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2303018259.0078,
+              "p50": 3546422929.3266,
+              "p90": 5327779838.4616
+            },
+            "avg_basket_bridge": {
+              "unit": "RUB",
+              "p10": 73410941.72,
+              "p50": 74789903.3,
+              "p90": 76086382.54
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "within_p95",
+            "display_text": "Внутри p95 support-zone"
+          },
+          "optimizer_status": {
+            "code": "best_safe_available",
+            "display_text": "Автоматический план доступен"
+          },
+          "support": {
+            "elevated_warnings": 0,
+            "strong_warnings": 0,
+            "hard_warnings": 0,
+            "policy_violations": 0
+          },
+          "quality": {
+            "status": {
+              "code": "elevated_uncertainty",
+              "display_text": "Повышенная неопределенность"
+            },
+            "explanation": "Расчет выполнен, но часть channel/fit evidence имеет caution или diagnostic ограничения.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.04695021377433617
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": -6627142.17,
+              "p50": -6391929.43,
+              "p90": -6152830.36
+            },
+            "probability_gt_zero": 0.0,
+            "probability_noninferior": 0.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S06",
+          "name": "Сценарий 6. Адаптивный поиск",
+          "description": "Лучший безопасный вариант адаптивного поиска после support и gate constraints.",
+          "available": true,
+          "requested_budget_rub": 27373702.49,
+          "allocated_budget_rub": 27373702.49,
+          "unallocated_budget_rub": 0.0,
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 82571072.97,
+              "p50": 84627166.71,
+              "p90": 86629038.86
+            },
+            "roas_p50": 3.09155,
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2335.4692,
+              "p50": 3580.4448,
+              "p90": 5377.4846
+            },
+            "avg_basket_bridge": {
+              "unit": "RUB",
+              "p10": 78165341.3,
+              "p50": 79673922.33,
+              "p90": 81061895.9
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "between_p95_p99",
+            "display_text": "Между p95 и p99"
+          },
+          "optimizer_status": {
+            "code": "best_safe_available",
+            "display_text": "Автоматический план доступен"
+          },
+          "support": {
+            "elevated_warnings": 3,
+            "strong_warnings": 0,
+            "hard_warnings": 0,
+            "policy_violations": 0
+          },
+          "quality": {
+            "status": {
+              "code": "elevated_uncertainty",
+              "display_text": "Повышенная неопределенность"
+            },
+            "explanation": "Есть ячейки между historical p95 и p99: расчет допустим, но неопределенность выше обычной.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.0479511018428269
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 1719.31,
+              "p50": 14771.4,
+              "p90": 41964.13
+            },
+            "probability_gt_zero": 0.935,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": 1417361.78,
+            "posterior_draws": null
+          }
+        }
+      ],
+      "scenario6": {
+        "run_status": {
+          "code": "completed_best_safe",
+          "display_text": "Лучший безопасный вариант найден"
+        },
+        "method": "adaptive_marginal_posterior",
+        "attempt_budget": 2048,
+        "attempts_evaluated": 1706,
+        "kernel_evaluations": 48172,
+        "unique_allocations": 60,
+        "candidates_generated": 11,
+        "candidates_scored": 11,
+        "candidates_rejected": 0,
+        "finalists": 11,
+        "search_posterior_draws": 128,
+        "final_posterior_draws": 600,
+        "search_converged": false,
+        "search_budget_exhausted": true,
+        "best_raw_candidate_id": "candidate_44babf6bb61e4f942fa1",
+        "best_safe_candidate_id": "candidate_31aaba538f84bfb32816",
+        "explanation": "S6 выбран не из-за микроскопического роста p50, а потому что уменьшает support/model risk без содержательного ухудшения downside."
+      },
+      "recommendation": {
+        "scenario_id": "S06",
+        "scenario_name": "Сценарий 6. Адаптивный поиск",
+        "candidate_id": "candidate_d44a2d7362008e952f73",
+        "recommendation_type": {
+          "code": "reallocate_for_reliability",
+          "display_text": "Перераспределить ради надежности"
+        },
+        "reason": "S6 выбран не из-за микроскопического роста p50, а потому что уменьшает support/model risk без содержательного ухудшения downside.",
+        "plan_status": {
+          "code": "recommended_media_plan",
+          "display_text": "Рекомендованный медиаплан"
+        },
+        "optimizer_available": true,
+        "metrics": {
+          "incremental_turnover": {
+            "unit": "RUB",
+            "p10": 82571072.97,
+            "p50": 84627166.71,
+            "p90": 86629038.86
+          },
+          "roas_p50": 3.09155,
+          "incremental_orders": {
+            "unit": "orders",
+            "p10": 2335.4692,
+            "p50": 3580.4448,
+            "p90": 5377.4846
+          },
+          "avg_basket_bridge": {
+            "unit": "RUB",
+            "p10": 78165341.3,
+            "p50": 79673922.33,
+            "p90": 81061895.9
+          }
+        }
+      },
+      "recommended_allocation": [
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_10",
+          "budget_rub": 2835900.0,
+          "budget_share": 0.10359943092693223,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_09",
+          "budget_rub": 1397526.62,
+          "budget_share": 0.051053620602149026,
+          "allocation_note": "Сохранить как в исходном плане"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_14",
+          "channel": "CHANNEL_10",
+          "budget_rub": 1219300.0,
+          "budget_share": 0.044542750495154444,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_11",
+          "budget_rub": 1196537.72,
+          "budget_share": 0.04371121227528885,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_15",
+          "channel": "CHANNEL_11",
+          "budget_rub": 778333.91,
+          "budget_share": 0.028433636556361573,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_16",
+          "channel": "CHANNEL_11",
+          "budget_rub": 545673.8,
+          "budget_share": 0.019934234169499857,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_14",
+          "channel": "CHANNEL_11",
+          "budget_rub": 511340.91,
+          "budget_share": 0.018680005245849937,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_17",
+          "channel": "CHANNEL_11",
+          "budget_rub": 386884.18,
+          "budget_share": 0.014133425397618955,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_18",
+          "channel": "CHANNEL_11",
+          "budget_rub": 377844.41,
+          "budget_share": 0.013803189590594109,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_19",
+          "channel": "CHANNEL_11",
+          "budget_rub": 364513.02,
+          "budget_share": 0.01331617516811302,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_14",
+          "channel": "CHANNEL_09",
+          "budget_rub": 357807.56,
+          "budget_share": 0.013071215251590941,
+          "allocation_note": "Сохранить как в исходном плане"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_20",
+          "channel": "CHANNEL_11",
+          "budget_rub": 356386.35,
+          "budget_share": 0.01301929651331291,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_06",
+          "budget_rub": 315100.0,
+          "budget_share": 0.011511047880770248,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_21",
+          "channel": "CHANNEL_11",
+          "budget_rub": 311370.09,
+          "budget_share": 0.011374788908633618,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_22",
+          "channel": "CHANNEL_11",
+          "budget_rub": 284433.38,
+          "budget_share": 0.010390752918004025,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_23",
+          "channel": "CHANNEL_11",
+          "budget_rub": 283428.96,
+          "budget_share": 0.01035406005055682,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_24",
+          "channel": "CHANNEL_10",
+          "budget_rub": 274000.0,
+          "budget_share": 0.010009606852843694,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_25",
+          "channel": "CHANNEL_10",
+          "budget_rub": 260300.0,
+          "budget_share": 0.00950912651020151,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_26",
+          "channel": "CHANNEL_11",
+          "budget_rub": 258135.85,
+          "budget_share": 0.009430066933931742,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_27",
+          "channel": "CHANNEL_11",
+          "budget_rub": 257496.67,
+          "budget_share": 0.009406716927374426,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_28",
+          "channel": "CHANNEL_11",
+          "budget_rub": 255487.83,
+          "budget_share": 0.009333331192480018,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_23",
+          "channel": "CHANNEL_10",
+          "budget_rub": 243140.72,
+          "budget_share": 0.008882273867881357,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_29",
+          "channel": "CHANNEL_11",
+          "budget_rub": 234942.88,
+          "budget_share": 0.00858279526742355,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_30",
+          "channel": "CHANNEL_11",
+          "budget_rub": 231381.76,
+          "budget_share": 0.008452702373747093,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_31",
+          "channel": "CHANNEL_11",
+          "budget_rub": 223163.78,
+          "budget_share": 0.008152488003724506,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_32",
+          "channel": "CHANNEL_10",
+          "budget_rub": 219200.0,
+          "budget_share": 0.008007685482274957,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_33",
+          "channel": "CHANNEL_11",
+          "budget_rub": 213667.45,
+          "budget_share": 0.007805573620587291,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_34",
+          "channel": "CHANNEL_11",
+          "budget_rub": 211293.37,
+          "budget_share": 0.0077188450248029915,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_35",
+          "channel": "CHANNEL_11",
+          "budget_rub": 209741.08,
+          "budget_share": 0.007662137866020944,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_02",
+          "channel": "CHANNEL_11",
+          "budget_rub": 207093.07,
+          "budget_share": 0.007565402124569222,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_08",
+          "budget_rub": 206829.46,
+          "budget_share": 0.007555772253736395,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_36",
+          "channel": "CHANNEL_10",
+          "budget_rub": 205500.0,
+          "budget_share": 0.007507205139632771,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_37",
+          "channel": "CHANNEL_11",
+          "budget_rub": 190017.93,
+          "budget_share": 0.0069416233779667335,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_38",
+          "channel": "CHANNEL_11",
+          "budget_rub": 170751.34,
+          "budget_share": 0.006237787466024886,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_39",
+          "channel": "CHANNEL_11",
+          "budget_rub": 168285.94,
+          "budget_share": 0.006147723155018113,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_40",
+          "channel": "CHANNEL_10",
+          "budget_rub": 164400.0,
+          "budget_share": 0.006005764111706217,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_41",
+          "channel": "CHANNEL_11",
+          "budget_rub": 157967.82,
+          "budget_share": 0.00577078733487864,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_36",
+          "channel": "CHANNEL_11",
+          "budget_rub": 149293.28,
+          "budget_share": 0.005453894388743685,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_42",
+          "channel": "CHANNEL_11",
+          "budget_rub": 145549.54,
+          "budget_share": 0.005317130064622284,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_25",
+          "channel": "CHANNEL_11",
+          "budget_rub": 140253.51,
+          "budget_share": 0.0051236585817188394,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_43",
+          "channel": "CHANNEL_11",
+          "budget_rub": 139705.64,
+          "budget_share": 0.005103644290384,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_14",
+          "channel": "CHANNEL_06",
+          "budget_rub": 137000.0,
+          "budget_share": 0.005004803426421847,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_15",
+          "channel": "CHANNEL_08",
+          "budget_rub": 134540.17,
+          "budget_share": 0.004914942207787624,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_44",
+          "channel": "CHANNEL_11",
+          "budget_rub": 133679.12,
+          "budget_share": 0.0048834870857007665,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_45",
+          "channel": "CHANNEL_11",
+          "budget_rub": 119434.63,
+          "budget_share": 0.004363115510994949,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_46",
+          "channel": "CHANNEL_11",
+          "budget_rub": 116969.23,
+          "budget_share": 0.004273051199988171,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_47",
+          "channel": "CHANNEL_11",
+          "budget_rub": 113955.97,
+          "budget_share": 0.004162972597646556,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_48",
+          "channel": "CHANNEL_11",
+          "budget_rub": 111034.03,
+          "budget_share": 0.0040562297105274136,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_49",
+          "channel": "CHANNEL_11",
+          "budget_rub": 108568.63,
+          "budget_share": 0.003966165399520636,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_50",
+          "channel": "CHANNEL_11",
+          "budget_rub": 108294.7,
+          "budget_share": 0.003956158253853219,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_51",
+          "channel": "CHANNEL_11",
+          "budget_rub": 107746.83,
+          "budget_share": 0.003936143962518378,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_52",
+          "channel": "CHANNEL_11",
+          "budget_rub": 107107.66,
+          "budget_share": 0.003912793955961066,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_32",
+          "channel": "CHANNEL_11",
+          "budget_rub": 106285.86,
+          "budget_share": 0.0038827725189588083,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_53",
+          "channel": "CHANNEL_11",
+          "budget_rub": 106011.93,
+          "budget_share": 0.003872765373291389,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_40",
+          "channel": "CHANNEL_11",
+          "budget_rub": 104368.33,
+          "budget_share": 0.0038127224992868707,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_54",
+          "channel": "CHANNEL_11",
+          "budget_rub": 103181.29,
+          "budget_share": 0.003769358201394718,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_55",
+          "channel": "CHANNEL_11",
+          "budget_rub": 102998.67,
+          "budget_share": 0.0037626867709497705,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_56",
+          "channel": "CHANNEL_11",
+          "budget_rub": 102816.05,
+          "budget_share": 0.003756015340504826,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_57",
+          "channel": "CHANNEL_11",
+          "budget_rub": 102359.49,
+          "budget_share": 0.0037393367643924614,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_58",
+          "channel": "CHANNEL_11",
+          "budget_rub": 101629.01,
+          "budget_share": 0.0037126510426126733,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_59",
+          "channel": "CHANNEL_11",
+          "budget_rub": 99802.79,
+          "budget_share": 0.0036459367381632113,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_60",
+          "channel": "CHANNEL_11",
+          "budget_rub": 98067.88,
+          "budget_share": 0.003582558148936218,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_61",
+          "channel": "CHANNEL_11",
+          "budget_rub": 97520.02,
+          "budget_share": 0.0035625438576013806,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_24",
+          "channel": "CHANNEL_11",
+          "budget_rub": 96606.91,
+          "budget_share": 0.0035291867053766483,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_06",
+          "channel": "CHANNEL_11",
+          "budget_rub": 96150.35,
+          "budget_share": 0.0035125081292642804,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_16",
+          "channel": "CHANNEL_08",
+          "budget_rub": 94323.33,
+          "budget_share": 0.003445764269561104,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_62",
+          "channel": "CHANNEL_11",
+          "budget_rub": 93867.58,
+          "budget_share": 0.0034291152487024505,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_63",
+          "channel": "CHANNEL_11",
+          "budget_rub": 93867.58,
+          "budget_share": 0.0034291152487024505,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_64",
+          "channel": "CHANNEL_11",
+          "budget_rub": 91310.88,
+          "budget_share": 0.003335715222473203,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_65",
+          "channel": "CHANNEL_11",
+          "budget_rub": 90397.77,
+          "budget_share": 0.0033023580702484703,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_15",
+          "channel": "CHANNEL_06",
+          "budget_rub": 90315.92,
+          "budget_share": 0.0032993680439966345,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_07",
+          "channel": "CHANNEL_11",
+          "budget_rub": 90215.15,
+          "budget_share": 0.003295686639803523,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_66",
+          "channel": "CHANNEL_11",
+          "budget_rub": 90123.83,
+          "budget_share": 0.0032923509245810505,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_14",
+          "channel": "CHANNEL_08",
+          "budget_rub": 88388.66,
+          "budget_share": 0.0032289625015967495,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_67",
+          "channel": "CHANNEL_11",
+          "budget_rub": 86927.95,
+          "budget_share": 0.0031756008917944874,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_68",
+          "channel": "CHANNEL_11",
+          "budget_rub": 85832.22,
+          "budget_share": 0.00313557230912481,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_69",
+          "channel": "CHANNEL_11",
+          "budget_rub": 82727.65,
+          "budget_share": 0.003022157991560721,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_70",
+          "channel": "CHANNEL_11",
+          "budget_rub": 77340.31,
+          "budget_share": 0.0028253507934348017,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_71",
+          "channel": "CHANNEL_11",
+          "budget_rub": 73779.19,
+          "budget_share": 0.002695257899758347,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_72",
+          "channel": "CHANNEL_11",
+          "budget_rub": 70857.24,
+          "budget_share": 0.002588515012639205,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_73",
+          "channel": "CHANNEL_11",
+          "budget_rub": 69852.82,
+          "budget_share": 0.002551822145192,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_54",
+          "channel": "CHANNEL_10",
+          "budget_rub": 68417.97,
+          "budget_share": 0.002499405168315787,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_74",
+          "channel": "CHANNEL_11",
+          "budget_rub": 67661.36,
+          "budget_share": 0.002471764979852642,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_17",
+          "channel": "CHANNEL_08",
+          "budget_rub": 66875.49,
+          "budget_share": 0.0024430560927259696,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_18",
+          "channel": "CHANNEL_08",
+          "budget_rub": 65312.91,
+          "budget_share": 0.002385972648501313,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_75",
+          "channel": "CHANNEL_11",
+          "budget_rub": 63369.75,
+          "budget_share": 0.002314986364396402,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_16",
+          "channel": "CHANNEL_06",
+          "budget_rub": 63318.62,
+          "budget_share": 0.002313118656842314,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_19",
+          "channel": "CHANNEL_08",
+          "budget_rub": 63008.49,
+          "budget_share": 0.0023017889832811114,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_76",
+          "channel": "CHANNEL_11",
+          "budget_rub": 62000.08,
+          "budget_share": 0.0022649506360593046,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_77",
+          "channel": "CHANNEL_11",
+          "budget_rub": 61634.84,
+          "budget_share": 0.0022516077751694123,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_20",
+          "channel": "CHANNEL_08",
+          "budget_rub": 61603.74,
+          "budget_share": 0.0022504715435235924,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_78",
+          "channel": "CHANNEL_11",
+          "budget_rub": 60721.73,
+          "budget_share": 0.002218250622944679,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_79",
+          "channel": "CHANNEL_11",
+          "budget_rub": 60447.8,
+          "budget_share": 0.0022082434772772593,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_80",
+          "channel": "CHANNEL_11",
+          "budget_rub": 58621.58,
+          "budget_share": 0.0021415291728277956,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_10",
+          "channel": "CHANNEL_11",
+          "budget_rub": 57251.92,
+          "budget_share": 0.0020914934444906984,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_81",
+          "channel": "CHANNEL_11",
+          "budget_rub": 57160.61,
+          "budget_share": 0.0020881577292682246,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_82",
+          "channel": "CHANNEL_11",
+          "budget_rub": 56795.36,
+          "budget_share": 0.002074814868378332,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_83",
+          "channel": "CHANNEL_11",
+          "budget_rub": 55699.63,
+          "budget_share": 0.0020347862857086527,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_84",
+          "channel": "CHANNEL_11",
+          "budget_rub": 55608.32,
+          "budget_share": 0.0020314505704861806,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_85",
+          "channel": "CHANNEL_11",
+          "budget_rub": 55243.08,
+          "budget_share": 0.002018107709596287,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_23",
+          "channel": "CHANNEL_06",
+          "budget_rub": 54800.0,
+          "budget_share": 0.002001921370568739,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_21",
+          "channel": "CHANNEL_08",
+          "budget_rub": 53822.38,
+          "budget_share": 0.0019662075232937354,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_86",
+          "channel": "CHANNEL_11",
+          "budget_rub": 53325.55,
+          "budget_share": 0.001948057689924351,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_87",
+          "channel": "CHANNEL_11",
+          "budget_rub": 52503.75,
+          "budget_share": 0.0019180362529220916,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_88",
+          "channel": "CHANNEL_11",
+          "budget_rub": 52229.82,
+          "budget_share": 0.0019080291072546718,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_89",
+          "channel": "CHANNEL_11",
+          "budget_rub": 52138.51,
+          "budget_share": 0.0019046933920321978,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_90",
+          "channel": "CHANNEL_11",
+          "budget_rub": 51864.58,
+          "budget_share": 0.0018946862463647795,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_91",
+          "channel": "CHANNEL_11",
+          "budget_rub": 50403.6,
+          "budget_share": 0.0018413148028052079,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_22",
+          "channel": "CHANNEL_08",
+          "budget_rub": 49166.19,
+          "budget_share": 0.0017961103915131922,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_92",
+          "channel": "CHANNEL_11",
+          "budget_rub": 49125.25,
+          "budget_share": 0.0017946147896905828,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_23",
+          "channel": "CHANNEL_08",
+          "budget_rub": 48992.57,
+          "budget_share": 0.001789767786599342,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_09",
+          "channel": "CHANNEL_11",
+          "budget_rub": 48394.76,
+          "budget_share": 0.0017679290679107962,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_93",
+          "channel": "CHANNEL_11",
+          "budget_rub": 47846.9,
+          "budget_share": 0.0017479147765759578,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_94",
+          "channel": "CHANNEL_11",
+          "budget_rub": 47664.28,
+          "budget_share": 0.0017412433461310116,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_95",
+          "channel": "CHANNEL_11",
+          "budget_rub": 47572.97,
+          "budget_share": 0.0017379076309085378,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_96",
+          "channel": "CHANNEL_11",
+          "budget_rub": 45929.37,
+          "budget_share": 0.0016778647569040202,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_08",
+          "channel": "CHANNEL_11",
+          "budget_rub": 45838.06,
+          "budget_share": 0.0016745290416815479,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_97",
+          "channel": "CHANNEL_11",
+          "budget_rub": 45472.82,
+          "budget_share": 0.0016611861807916551,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_98",
+          "channel": "CHANNEL_11",
+          "budget_rub": 45290.19,
+          "budget_share": 0.0016545147503467075,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_99",
+          "channel": "CHANNEL_11",
+          "budget_rub": 45107.57,
+          "budget_share": 0.0016478433199017615,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_17",
+          "channel": "CHANNEL_06",
+          "budget_rub": 44893.07,
+          "budget_share": 0.001640007320789974,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_100",
+          "channel": "CHANNEL_11",
+          "budget_rub": 44742.33,
+          "budget_share": 0.001634500459011869,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_26",
+          "channel": "CHANNEL_08",
+          "budget_rub": 44620.49,
+          "budget_share": 0.0016300494628596455,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_27",
+          "channel": "CHANNEL_08",
+          "budget_rub": 44510.0,
+          "budget_share": 0.0016260132597326498,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_28",
+          "channel": "CHANNEL_08",
+          "budget_rub": 44162.76,
+          "budget_share": 0.0016133280499049474,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_18",
+          "channel": "CHANNEL_06",
+          "budget_rub": 43844.12,
+          "budget_share": 0.0016016875840049352,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_101",
+          "channel": "CHANNEL_11",
+          "budget_rub": 42733.49,
+          "budget_share": 0.0015611147241174589,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_19",
+          "channel": "CHANNEL_06",
+          "budget_rub": 42297.18,
+          "budget_share": 0.001545175648948212,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_102",
+          "channel": "CHANNEL_11",
+          "budget_rub": 42185.62,
+          "budget_share": 0.0015411004327826189,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_103",
+          "channel": "CHANNEL_11",
+          "budget_rub": 41911.69,
+          "budget_share": 0.0015310932871152,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_104",
+          "channel": "CHANNEL_11",
+          "budget_rub": 41455.14,
+          "budget_share": 0.0015144147110028338,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_20",
+          "channel": "CHANNEL_06",
+          "budget_rub": 41354.18,
+          "budget_share": 0.0015107265926465115,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_29",
+          "channel": "CHANNEL_08",
+          "budget_rub": 40611.43,
+          "budget_share": 0.0014835929493943638,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_105",
+          "channel": "CHANNEL_11",
+          "budget_rub": 40176.79,
+          "budget_share": 0.001467714697888209,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_30",
+          "channel": "CHANNEL_08",
+          "budget_rub": 39995.87,
+          "budget_share": 0.0014611055319725301,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_106",
+          "channel": "CHANNEL_11",
+          "budget_rub": 38807.12,
+          "budget_share": 0.001417678969551111,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_31",
+          "channel": "CHANNEL_08",
+          "budget_rub": 38575.34,
+          "budget_share": 0.0014092114917682963,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_107",
+          "channel": "CHANNEL_11",
+          "budget_rub": 37528.77,
+          "budget_share": 0.001370978956436486,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_33",
+          "channel": "CHANNEL_08",
+          "budget_rub": 36933.83,
+          "budget_share": 0.0013492450453100708,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_34",
+          "channel": "CHANNEL_08",
+          "budget_rub": 36523.46,
+          "budget_share": 0.0013342534336955143,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_35",
+          "channel": "CHANNEL_08",
+          "budget_rub": 36255.13,
+          "budget_share": 0.0013244512261013813,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_108",
+          "channel": "CHANNEL_11",
+          "budget_rub": 36250.42,
+          "budget_share": 0.001324278943321861,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_21",
+          "channel": "CHANNEL_06",
+          "budget_rub": 36130.61,
+          "budget_share": 0.0013199020448179872,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_109",
+          "channel": "CHANNEL_11",
+          "budget_rub": 35885.17,
+          "budget_share": 0.0013109360824319688,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_110",
+          "channel": "CHANNEL_11",
+          "budget_rub": 35885.17,
+          "budget_share": 0.0013109360824319688,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_02",
+          "channel": "CHANNEL_08",
+          "budget_rub": 35797.41,
+          "budget_share": 0.001307729813146684,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_111",
+          "channel": "CHANNEL_11",
+          "budget_rub": 35702.55,
+          "budget_share": 0.0013042646519870217,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_22",
+          "channel": "CHANNEL_06",
+          "budget_rub": 33004.94,
+          "budget_share": 0.0012057169705595393,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_37",
+          "channel": "CHANNEL_08",
+          "budget_rub": 32845.86,
+          "budget_share": 0.001199905529611221,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_112",
+          "channel": "CHANNEL_11",
+          "budget_rub": 31502.25,
+          "budget_share": 0.0011508217517532547,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_113",
+          "channel": "CHANNEL_11",
+          "budget_rub": 31410.94,
+          "budget_share": 0.0011474860365307817,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_114",
+          "channel": "CHANNEL_11",
+          "budget_rub": 31137.01,
+          "budget_share": 0.0011374788908633617,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_115",
+          "channel": "CHANNEL_11",
+          "budget_rub": 31045.7,
+          "budget_share": 0.0011341431756408883,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_116",
+          "channel": "CHANNEL_11",
+          "budget_rub": 31045.7,
+          "budget_share": 0.0011341431756408883,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_05",
+          "channel": "CHANNEL_11",
+          "budget_rub": 29858.66,
+          "budget_share": 0.0010907788777487373,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_28",
+          "channel": "CHANNEL_06",
+          "budget_rub": 29646.17,
+          "budget_share": 0.0010830163992377503,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_38",
+          "channel": "CHANNEL_08",
+          "budget_rub": 29515.5,
+          "budget_share": 0.001078242835354629,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_39",
+          "channel": "CHANNEL_08",
+          "budget_rub": 29089.34,
+          "budget_share": 0.001062674623293359,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_117",
+          "channel": "CHANNEL_11",
+          "budget_rub": 28854.24,
+          "budget_share": 0.0010540860103015323,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_118",
+          "channel": "CHANNEL_11",
+          "budget_rub": 28854.24,
+          "budget_share": 0.0010540860103015323,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_119",
+          "channel": "CHANNEL_11",
+          "budget_rub": 28488.99,
+          "budget_share": 0.001040743149411639,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_120",
+          "channel": "CHANNEL_11",
+          "budget_rub": 27849.82,
+          "budget_share": 0.0010173931428543264,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_121",
+          "channel": "CHANNEL_11",
+          "budget_rub": 27667.2,
+          "budget_share": 0.0010107217124093802,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_122",
+          "channel": "CHANNEL_11",
+          "budget_rub": 27575.88,
+          "budget_share": 0.0010073859971869072,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_24",
+          "channel": "CHANNEL_06",
+          "budget_rub": 27400.0,
+          "budget_share": 0.0010009606852843696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_25",
+          "channel": "CHANNEL_06",
+          "budget_rub": 27400.0,
+          "budget_share": 0.0010009606852843696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_57",
+          "channel": "CHANNEL_06",
+          "budget_rub": 27400.0,
+          "budget_share": 0.0010009606852843696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_36",
+          "channel": "CHANNEL_06",
+          "budget_rub": 27400.0,
+          "budget_share": 0.0010009606852843696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_27",
+          "channel": "CHANNEL_06",
+          "budget_rub": 27400.0,
+          "budget_share": 0.0010009606852843696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_123",
+          "channel": "CHANNEL_11",
+          "budget_rub": 27393.26,
+          "budget_share": 0.0010007145667419609,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_41",
+          "channel": "CHANNEL_08",
+          "budget_rub": 27305.78,
+          "budget_share": 0.0009975187728147104,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_30",
+          "channel": "CHANNEL_06",
+          "budget_rub": 26848.96,
+          "budget_share": 0.0009808304344776481,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_124",
+          "channel": "CHANNEL_11",
+          "budget_rub": 26571.46,
+          "budget_share": 0.000970693129739702,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_31",
+          "channel": "CHANNEL_06",
+          "budget_rub": 25895.37,
+          "budget_share": 0.0009459943101276132,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_36",
+          "channel": "CHANNEL_08",
+          "budget_rub": 25806.33,
+          "budget_share": 0.0009427417303769081,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_125",
+          "channel": "CHANNEL_11",
+          "budget_rub": 25567.05,
+          "budget_share": 0.0009340002622924965,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_126",
+          "channel": "CHANNEL_11",
+          "budget_rub": 25293.11,
+          "budget_share": 0.0009239931166250772,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_42",
+          "channel": "CHANNEL_08",
+          "budget_rub": 25159.2,
+          "budget_share": 0.0009191011120616465,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_127",
+          "channel": "CHANNEL_11",
+          "budget_rub": 25019.18,
+          "budget_share": 0.000913985970957657,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_33",
+          "channel": "CHANNEL_06",
+          "budget_rub": 24793.44,
+          "budget_share": 0.0009057392331009063,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_128",
+          "channel": "CHANNEL_11",
+          "budget_rub": 24745.25,
+          "budget_share": 0.0009039788252902377,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_34",
+          "channel": "CHANNEL_06",
+          "budget_rub": 24517.95,
+          "budget_share": 0.0008956754638442295,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_129",
+          "channel": "CHANNEL_11",
+          "budget_rub": 24380.0,
+          "budget_share": 0.0008906359644003451,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_35",
+          "channel": "CHANNEL_06",
+          "budget_rub": 24337.83,
+          "budget_share": 0.0008890953070225564,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_25",
+          "channel": "CHANNEL_08",
+          "budget_rub": 24243.75,
+          "budget_share": 0.0008856582861522516,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_43",
+          "channel": "CHANNEL_08",
+          "budget_rub": 24149.04,
+          "budget_share": 0.0008821986834719695,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_130",
+          "channel": "CHANNEL_11",
+          "budget_rub": 24106.07,
+          "budget_share": 0.0008806288187329252,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_131",
+          "channel": "CHANNEL_11",
+          "budget_rub": 23923.45,
+          "budget_share": 0.0008739573882879789,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_44",
+          "channel": "CHANNEL_08",
+          "budget_rub": 23107.32,
+          "budget_share": 0.0008441430539888646,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_132",
+          "channel": "CHANNEL_11",
+          "budget_rub": 23101.65,
+          "budget_share": 0.0008439359512857202,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_133",
+          "channel": "CHANNEL_11",
+          "budget_rub": 22279.85,
+          "budget_share": 0.0008139145142834613,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_37",
+          "channel": "CHANNEL_06",
+          "budget_rub": 22049.21,
+          "budget_share": 0.0008054886085824723,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_134",
+          "channel": "CHANNEL_11",
+          "budget_rub": 20727.57,
+          "budget_share": 0.0007572073555014169,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_45",
+          "channel": "CHANNEL_08",
+          "budget_rub": 20645.07,
+          "budget_share": 0.0007541933843015267,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_135",
+          "channel": "CHANNEL_11",
+          "budget_rub": 20636.26,
+          "budget_share": 0.0007538716402789439,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_136",
+          "channel": "CHANNEL_11",
+          "budget_rub": 20544.95,
+          "budget_share": 0.0007505359250564705,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_137",
+          "channel": "CHANNEL_11",
+          "budget_rub": 20271.01,
+          "budget_share": 0.0007405287793890509,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_46",
+          "channel": "CHANNEL_08",
+          "budget_rub": 20218.91,
+          "budget_share": 0.0007386251722402566,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_38",
+          "channel": "CHANNEL_06",
+          "budget_rub": 19813.56,
+          "budget_share": 0.0007238172503840575,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_26",
+          "channel": "CHANNEL_06",
+          "budget_rub": 19743.23,
+          "budget_share": 0.0007212480033981782,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_47",
+          "channel": "CHANNEL_08",
+          "budget_rub": 19698.04,
+          "budget_share": 0.0007195973574987041,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_48",
+          "channel": "CHANNEL_08",
+          "budget_rub": 19192.97,
+          "budget_share": 0.0007011461432038658,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_138",
+          "channel": "CHANNEL_11",
+          "budget_rub": 18901.35,
+          "budget_share": 0.0006904930510519528,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_49",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18766.81,
+          "budget_share": 0.0006855779311425957,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_50",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18719.46,
+          "budget_share": 0.0006838481298024547,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_51",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18624.75,
+          "budget_share": 0.0006803885271221725,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_52",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18514.27,
+          "budget_share": 0.0006763523239951764,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_32",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18372.21,
+          "budget_share": 0.0006711629199747532,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_41",
+          "channel": "CHANNEL_06",
+          "budget_rub": 18330.19,
+          "budget_share": 0.0006696277236173366,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_53",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18324.86,
+          "budget_share": 0.0006694331186346119,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_40",
+          "channel": "CHANNEL_08",
+          "budget_rub": 18040.76,
+          "budget_share": 0.0006590543105937652,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_54",
+          "channel": "CHANNEL_08",
+          "budget_rub": 17835.57,
+          "budget_share": 0.000651558504786487,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_55",
+          "channel": "CHANNEL_08",
+          "budget_rub": 17804.0,
+          "budget_share": 0.0006504053038930598,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_56",
+          "channel": "CHANNEL_08",
+          "budget_rub": 17772.43,
+          "budget_share": 0.0006492521029996322,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_57",
+          "channel": "CHANNEL_08",
+          "budget_rub": 17693.52,
+          "budget_share": 0.0006463691007660638,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_58",
+          "channel": "CHANNEL_08",
+          "budget_rub": 17567.25,
+          "budget_share": 0.0006417562971923542,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_04",
+          "channel": "CHANNEL_11",
+          "budget_rub": 17440.38,
+          "budget_share": 0.0006371216074923814,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_59",
+          "channel": "CHANNEL_08",
+          "budget_rub": 17251.57,
+          "budget_share": 0.00063022428825808,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_60",
+          "channel": "CHANNEL_08",
+          "budget_rub": 16951.68,
+          "budget_share": 0.0006192688797705196,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_42",
+          "channel": "CHANNEL_06",
+          "budget_rub": 16889.2,
+          "budget_share": 0.0006169864690439506,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_61",
+          "channel": "CHANNEL_08",
+          "budget_rub": 16856.98,
+          "budget_share": 0.0006158092770902374,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_24",
+          "channel": "CHANNEL_08",
+          "budget_rub": 16699.14,
+          "budget_share": 0.0006100432726231003,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_06",
+          "channel": "CHANNEL_08",
+          "budget_rub": 16620.22,
+          "budget_share": 0.0006071602703895319,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_62",
+          "channel": "CHANNEL_08",
+          "budget_rub": 16225.63,
+          "budget_share": 0.0005927452592216891,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_63",
+          "channel": "CHANNEL_08",
+          "budget_rub": 16225.63,
+          "budget_share": 0.0005927452592216891,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_43",
+          "channel": "CHANNEL_06",
+          "budget_rub": 16211.09,
+          "budget_share": 0.0005922141139505924,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_139",
+          "channel": "CHANNEL_11",
+          "budget_rub": 15979.4,
+          "budget_share": 0.0005837501639328106,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_64",
+          "channel": "CHANNEL_08",
+          "budget_rub": 15783.69,
+          "budget_share": 0.0005766004467137054,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_140",
+          "channel": "CHANNEL_11",
+          "budget_rub": 15705.47,
+          "budget_share": 0.0005737430182653909,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_65",
+          "channel": "CHANNEL_08",
+          "budget_rub": 15625.85,
+          "budget_share": 0.0005708344422465682,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_07",
+          "channel": "CHANNEL_08",
+          "budget_rub": 15594.28,
+          "budget_share": 0.000569681241353141,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_66",
+          "channel": "CHANNEL_08",
+          "budget_rub": 15578.5,
+          "budget_share": 0.0005691046409064272,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_44",
+          "channel": "CHANNEL_06",
+          "budget_rub": 15511.79,
+          "budget_share": 0.0005666676227605667,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_141",
+          "channel": "CHANNEL_11",
+          "budget_rub": 15431.54,
+          "budget_share": 0.0005637358725979712,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_67",
+          "channel": "CHANNEL_08",
+          "budget_rub": 15026.07,
+          "budget_share": 0.0005489236252714475,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_68",
+          "channel": "CHANNEL_08",
+          "budget_rub": 14836.67,
+          "budget_share": 0.0005420044199108832,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_69",
+          "channel": "CHANNEL_08",
+          "budget_rub": 14300.02,
+          "budget_share": 0.0005224000047226171,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_45",
+          "channel": "CHANNEL_06",
+          "budget_rub": 13858.9,
+          "budget_share": 0.0005062850072205062,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_29",
+          "channel": "CHANNEL_06",
+          "budget_rub": 13700.0,
+          "budget_share": 0.0005004803426421848,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_39",
+          "channel": "CHANNEL_06",
+          "budget_rub": 13700.0,
+          "budget_share": 0.0005004803426421848,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_46",
+          "channel": "CHANNEL_06",
+          "budget_rub": 13572.82,
+          "budget_share": 0.000495834169915496,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_70",
+          "channel": "CHANNEL_08",
+          "budget_rub": 13368.78,
+          "budget_share": 0.0004883805783665085,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_142",
+          "channel": "CHANNEL_11",
+          "budget_rub": 13331.39,
+          "budget_share": 0.00048701442248108773,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_48",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12884.11,
+          "budget_share": 0.0004706747467738043,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_143",
+          "channel": "CHANNEL_11",
+          "budget_rub": 12783.52,
+          "budget_share": 0.0004670001311462481,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_71",
+          "channel": "CHANNEL_08",
+          "budget_rub": 12753.22,
+          "budget_share": 0.00046589316094467403,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_49",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12598.03,
+          "budget_share": 0.0004602239094687936,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_50",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12566.25,
+          "budget_share": 0.0004590627053237925,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_51",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12502.67,
+          "budget_share": 0.0004567402970337904,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_52",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12428.5,
+          "budget_share": 0.0004540308206954542,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_32",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12333.15,
+          "budget_share": 0.0004505472082604507,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_53",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12301.36,
+          "budget_share": 0.0004493860041154495,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_72",
+          "channel": "CHANNEL_08",
+          "budget_rub": 12248.14,
+          "budget_share": 0.0004474419466498355,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_144",
+          "channel": "CHANNEL_11",
+          "budget_rub": 12235.66,
+          "budget_share": 0.00044698583981140917,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_145",
+          "channel": "CHANNEL_11",
+          "budget_rub": 12235.66,
+          "budget_share": 0.00044698583981140917,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_40",
+          "channel": "CHANNEL_06",
+          "budget_rub": 12110.64,
+          "budget_share": 0.0004424187792454426,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_73",
+          "channel": "CHANNEL_08",
+          "budget_rub": 12074.52,
+          "budget_share": 0.00044109934173598475,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_54",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11972.9,
+          "budget_share": 0.00043738689461710414,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_11",
+          "channel": "CHANNEL_11",
+          "budget_rub": 11961.72,
+          "budget_share": 0.00043697869414398944,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_55",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11951.71,
+          "budget_share": 0.00043661275852043696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_56",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11930.52,
+          "budget_share": 0.0004358386224237693,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_58",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11792.78,
+          "budget_share": 0.0004308067377954309,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_74",
+          "channel": "CHANNEL_08",
+          "budget_rub": 11695.71,
+          "budget_share": 0.00042726093101485576,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_146",
+          "channel": "CHANNEL_11",
+          "budget_rub": 11596.48,
+          "budget_share": 0.0004236358332540967,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_59",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11580.87,
+          "budget_share": 0.0004230653768287566,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_60",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11379.55,
+          "budget_share": 0.00041571108391041587,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_61",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11315.98,
+          "budget_share": 0.00041338867562041345,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_06",
+          "channel": "CHANNEL_06",
+          "budget_rub": 11157.05,
+          "budget_share": 0.00040758265489540773,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_75",
+          "channel": "CHANNEL_08",
+          "budget_rub": 10953.88,
+          "budget_share": 0.0004001607100193114,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_62",
+          "channel": "CHANNEL_06",
+          "budget_rub": 10892.16,
+          "budget_share": 0.0003979059536870647,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_63",
+          "channel": "CHANNEL_06",
+          "budget_rub": 10892.16,
+          "budget_share": 0.0003979059536870647,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_76",
+          "channel": "CHANNEL_08",
+          "budget_rub": 10717.12,
+          "budget_share": 0.000391511703318606,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_147",
+          "channel": "CHANNEL_11",
+          "budget_rub": 10683.37,
+          "budget_share": 0.0003902786810293647,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_77",
+          "channel": "CHANNEL_08",
+          "budget_rub": 10653.99,
+          "budget_share": 0.00038920530153175117,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_64",
+          "channel": "CHANNEL_06",
+          "budget_rub": 10595.49,
+          "budget_share": 0.0003870680483337206,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_78",
+          "channel": "CHANNEL_08",
+          "budget_rub": 10496.15,
+          "budget_share": 0.00038343929706461413,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_07",
+          "channel": "CHANNEL_06",
+          "budget_rub": 10468.34,
+          "budget_share": 0.00038242323175371584,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_79",
+          "channel": "CHANNEL_08",
+          "budget_rub": 10448.8,
+          "budget_share": 0.0003817094957244729,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_80",
+          "channel": "CHANNEL_08",
+          "budget_rub": 10133.13,
+          "budget_share": 0.0003701774867901991,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_67",
+          "channel": "CHANNEL_06",
+          "budget_rub": 10086.9,
+          "budget_share": 0.00036848878201370194,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_68",
+          "channel": "CHANNEL_06",
+          "budget_rub": 9959.76,
+          "budget_share": 0.0003638439654336973,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_10",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9896.37,
+          "budget_share": 0.00036152848008949324,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_81",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9880.59,
+          "budget_share": 0.00036095187964277966,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_82",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9817.45,
+          "budget_share": 0.00035864547785592485,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_83",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9628.05,
+          "budget_share": 0.0003517262724953602,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_84",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9612.27,
+          "budget_share": 0.00035114967204864664,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_85",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9549.13,
+          "budget_share": 0.00034884327026179184,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_86",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9217.67,
+          "budget_share": 0.0003367346608808039,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_87",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9075.62,
+          "budget_share": 0.00033154525686038055,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_88",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9028.27,
+          "budget_share": 0.0003298154555202395,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_89",
+          "channel": "CHANNEL_08",
+          "budget_rub": 9012.49,
+          "budget_share": 0.0003292388550735258,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_70",
+          "channel": "CHANNEL_06",
+          "budget_rub": 8974.38,
+          "budget_share": 0.00032784663693866145,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_90",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8965.14,
+          "budget_share": 0.00032750905373338474,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_91",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8712.6,
+          "budget_share": 0.00031828344658596546,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_71",
+          "channel": "CHANNEL_06",
+          "budget_rub": 8561.15,
+          "budget_share": 0.0003127509830536462,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_92",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8491.62,
+          "budget_share": 0.00031021104033197356,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_148",
+          "channel": "CHANNEL_11",
+          "budget_rub": 8400.6,
+          "budget_share": 0.00030688580046753466,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_149",
+          "channel": "CHANNEL_11",
+          "budget_rub": 8400.6,
+          "budget_share": 0.00030688580046753466,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_09",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8365.36,
+          "budget_share": 0.00030559823675826384,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_93",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8270.65,
+          "budget_share": 0.00030213863407798155,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_94",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8239.09,
+          "budget_share": 0.00030098543318455423,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_95",
+          "channel": "CHANNEL_08",
+          "budget_rub": 8223.3,
+          "budget_share": 0.00030040883273784054,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_72",
+          "channel": "CHANNEL_06",
+          "budget_rub": 8222.1,
+          "budget_share": 0.00030036480550696724,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_73",
+          "channel": "CHANNEL_06",
+          "budget_rub": 8105.55,
+          "budget_share": 0.0002961070569752962,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_150",
+          "channel": "CHANNEL_11",
+          "budget_rub": 7944.05,
+          "budget_share": 0.0002902072243551685,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_96",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7939.2,
+          "budget_share": 0.0002900300246969938,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_08",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7923.41,
+          "budget_share": 0.00028945342425028015,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_97",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7860.28,
+          "budget_share": 0.0002871470224634253,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_151",
+          "channel": "CHANNEL_11",
+          "budget_rub": 7852.74,
+          "budget_share": 0.00028687150913269543,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_74",
+          "channel": "CHANNEL_06",
+          "budget_rub": 7851.25,
+          "budget_share": 0.00028681742381528677,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_98",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7828.71,
+          "budget_share": 0.0002859938215699979,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_99",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7797.14,
+          "budget_share": 0.0002848406206765705,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_100",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7734.01,
+          "budget_share": 0.0002825342188897157,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_101",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7386.77,
+          "budget_share": 0.00026984900906201417,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_75",
+          "channel": "CHANNEL_06",
+          "budget_rub": 7353.27,
+          "budget_share": 0.0002686252255436021,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_102",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7292.06,
+          "budget_share": 0.0002663894063817319,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_103",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7244.71,
+          "budget_share": 0.00026465960504159076,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_152",
+          "channel": "CHANNEL_11",
+          "budget_rub": 7213.56,
+          "budget_share": 0.00026352150257538307,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_104",
+          "channel": "CHANNEL_08",
+          "budget_rub": 7165.79,
+          "budget_share": 0.0002617766028080223,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_77",
+          "channel": "CHANNEL_06",
+          "budget_rub": 7151.95,
+          "budget_share": 0.0002612709326252612,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_78",
+          "channel": "CHANNEL_06",
+          "budget_rub": 7046.0,
+          "budget_share": 0.0002574002521419242,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_153",
+          "channel": "CHANNEL_11",
+          "budget_rub": 7030.94,
+          "budget_share": 0.0002568500721304364,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_154",
+          "channel": "CHANNEL_11",
+          "budget_rub": 7030.94,
+          "budget_share": 0.0002568500721304364,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_79",
+          "channel": "CHANNEL_06",
+          "budget_rub": 7014.21,
+          "budget_share": 0.00025623904799692296,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_105",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6944.82,
+          "budget_share": 0.0002537041965540305,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_155",
+          "channel": "CHANNEL_11",
+          "budget_rub": 6939.63,
+          "budget_share": 0.00025351435690796335,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_80",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6802.3,
+          "budget_share": 0.00024849768703024864,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_106",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6708.07,
+          "budget_share": 0.00024505518985332484,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_81",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6632.77,
+          "budget_share": 0.00024230459825690898,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_82",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6590.39,
+          "budget_share": 0.0002407563260635742,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_107",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6487.1,
+          "budget_share": 0.00023698278359933297,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_83",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6463.25,
+          "budget_share": 0.00023611150948356949,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_84",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6452.65,
+          "budget_share": 0.00023572444143523587,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_85",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6410.27,
+          "budget_share": 0.00023417616924190085,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_108",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6266.12,
+          "budget_share": 0.00022891037734534104,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_109",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6202.99,
+          "budget_share": 0.00022660397555848626,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_110",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6202.99,
+          "budget_share": 0.00022660397555848626,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_86",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6187.76,
+          "budget_share": 0.00022604774022689275,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_111",
+          "channel": "CHANNEL_08",
+          "budget_rub": 6171.42,
+          "budget_share": 0.00022545077466505883,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_87",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6092.4,
+          "budget_share": 0.00022256412779188929,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_88",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6060.62,
+          "budget_share": 0.0002214029236468881,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_89",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6050.02,
+          "budget_share": 0.00022101585559855451,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_156",
+          "channel": "CHANNEL_11",
+          "budget_rub": 6026.52,
+          "budget_share": 0.0002201572046832313,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_90",
+          "channel": "CHANNEL_06",
+          "budget_rub": 6018.24,
+          "budget_share": 0.00021985465145355328,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_91",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5848.71,
+          "budget_share": 0.00021366156268021378,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_157",
+          "channel": "CHANNEL_11",
+          "budget_rub": 5752.59,
+          "budget_share": 0.00021015005901581175,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_92",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5700.37,
+          "budget_share": 0.00020824261000354166,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_09",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5615.61,
+          "budget_share": 0.0002051460656168719,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_93",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5552.03,
+          "budget_share": 0.0002028236573268696,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_94",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5530.84,
+          "budget_share": 0.00020204952123020206,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_95",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5520.25,
+          "budget_share": 0.0002016624531818684,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_112",
+          "channel": "CHANNEL_08",
+          "budget_rub": 5445.37,
+          "budget_share": 0.00019892715411622833,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_113",
+          "channel": "CHANNEL_08",
+          "budget_rub": 5429.59,
+          "budget_share": 0.00019835055366951458,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_114",
+          "channel": "CHANNEL_08",
+          "budget_rub": 5382.24,
+          "budget_share": 0.00019662075232937357,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_115",
+          "channel": "CHANNEL_08",
+          "budget_rub": 5366.45,
+          "budget_share": 0.0001960441518826598,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_116",
+          "channel": "CHANNEL_08",
+          "budget_rub": 5366.45,
+          "budget_share": 0.0001960441518826598,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_96",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5329.53,
+          "budget_share": 0.00019469522831186151,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_08",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5318.93,
+          "budget_share": 0.0001943081602635277,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_97",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5276.55,
+          "budget_share": 0.00019275988807019277,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_98",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5255.36,
+          "budget_share": 0.00019198575197352534,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_99",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5234.17,
+          "budget_share": 0.00019121161587685792,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_158",
+          "channel": "CHANNEL_11",
+          "budget_rub": 5204.72,
+          "budget_share": 0.0001901357676809725,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_100",
+          "channel": "CHANNEL_06",
+          "budget_rub": 5191.79,
+          "budget_share": 0.000189663343683523,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_05",
+          "channel": "CHANNEL_08",
+          "budget_rub": 5161.27,
+          "budget_share": 0.00018854834607538167,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_01",
+          "channel": "CHANNEL_11",
+          "budget_rub": 5113.41,
+          "budget_share": 0.00018680005245849934,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_117",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4987.65,
+          "budget_share": 0.00018220574116153095,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_118",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4987.65,
+          "budget_share": 0.00018220574116153095,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_101",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4958.69,
+          "budget_share": 0.0001811478466201812,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_159",
+          "channel": "CHANNEL_11",
+          "budget_rub": 4930.79,
+          "budget_share": 0.0001801286220135529,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_119",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4924.51,
+          "budget_share": 0.00017989933937467603,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_102",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4895.11,
+          "budget_share": 0.00017882543833017887,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_103",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4863.33,
+          "budget_share": 0.0001776642341851777,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_160",
+          "channel": "CHANNEL_11",
+          "budget_rub": 4839.48,
+          "budget_share": 0.00017679290679107972,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_120",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4814.03,
+          "budget_share": 0.0001758631362476801,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_104",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4810.35,
+          "budget_share": 0.00017572889394350916,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_121",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4782.46,
+          "budget_share": 0.0001747099353542527,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_122",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4766.67,
+          "budget_share": 0.00017413333490753905,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_03",
+          "channel": "CHANNEL_11",
+          "budget_rub": 4748.17,
+          "budget_share": 0.00017345719156860653,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_123",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4735.11,
+          "budget_share": 0.00017298013401411162,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_124",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4593.05,
+          "budget_share": 0.0001677907299936883,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_106",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4503.08,
+          "budget_share": 0.0001645039205418312,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_161",
+          "channel": "CHANNEL_11",
+          "budget_rub": 4474.23,
+          "budget_share": 0.00016345004590118687,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_125",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4419.43,
+          "budget_share": 0.00016144812507983754,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_162",
+          "channel": "CHANNEL_11",
+          "budget_rub": 4382.92,
+          "budget_share": 0.00016011433067871373,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_126",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4372.08,
+          "budget_share": 0.00015971832373969642,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_107",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4354.74,
+          "budget_share": 0.00015908496786515912,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_127",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4324.73,
+          "budget_share": 0.00015798852239955527,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_128",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4277.38,
+          "budget_share": 0.00015625872105941416,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_129",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4214.24,
+          "budget_share": 0.00015395231927255935,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_108",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4206.41,
+          "budget_share": 0.00015366601518848705,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_130",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4166.89,
+          "budget_share": 0.00015222251793241823,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_109",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4164.03,
+          "budget_share": 0.00015211774299515215,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_110",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4164.03,
+          "budget_share": 0.00015211774299515215,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_111",
+          "channel": "CHANNEL_06",
+          "budget_rub": 4142.83,
+          "budget_share": 0.0001513436068984847,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_131",
+          "channel": "CHANNEL_08",
+          "budget_rub": 4135.33,
+          "budget_share": 0.00015106931703899078,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_132",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3993.27,
+          "budget_share": 0.00014587991301856748,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_163",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3926.37,
+          "budget_share": 0.00014343575456634772,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_133",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3851.22,
+          "budget_share": 0.0001406905089981441,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_164",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3835.06,
+          "budget_share": 0.00014010003934387453,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_112",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3655.44,
+          "budget_share": 0.00013353847667513355,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_113",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3644.85,
+          "budget_share": 0.00013315140862679985,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_114",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3613.06,
+          "budget_share": 0.00013199020448179875,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_115",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3602.47,
+          "budget_share": 0.00013160313643346497,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_116",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3602.47,
+          "budget_share": 0.00013160313643346497,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_134",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3582.9,
+          "budget_share": 0.00013088830140401116,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_135",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3567.11,
+          "budget_share": 0.00013031170095729742,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_165",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3561.12,
+          "budget_share": 0.0001300928936764549,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_136",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3551.33,
+          "budget_share": 0.0001297351005105837,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_137",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3503.98,
+          "budget_share": 0.00012800529917044262,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_05",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3464.72,
+          "budget_share": 0.00012657125180512655,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_166",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3378.5,
+          "budget_share": 0.0001234214632315085,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_167",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3378.5,
+          "budget_share": 0.0001234214632315085,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_168",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3378.5,
+          "budget_share": 0.0001234214632315085,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_117",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3348.17,
+          "budget_share": 0.0001223135032734557,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_118",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3348.17,
+          "budget_share": 0.0001223135032734557,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_119",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3305.79,
+          "budget_share": 0.00012076523108012079,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_138",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3267.22,
+          "budget_share": 0.00011935629246973705,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_120",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3231.62,
+          "budget_share": 0.00011805575474178474,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_121",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3210.43,
+          "budget_share": 0.00011728161864511737,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_122",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3199.84,
+          "budget_share": 0.00011689455059678363,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_169",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3195.88,
+          "budget_share": 0.00011675003278656203,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_123",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3178.65,
+          "budget_share": 0.00011612041450011615,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_170",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3104.57,
+          "budget_share": 0.00011341431756408884,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_124",
+          "channel": "CHANNEL_06",
+          "budget_rub": 3083.29,
+          "budget_share": 0.00011263680206511267,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_04",
+          "channel": "CHANNEL_08",
+          "budget_rub": 3014.68,
+          "budget_share": 0.00011013068532231775,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_171",
+          "channel": "CHANNEL_11",
+          "budget_rub": 3013.26,
+          "budget_share": 0.00011007860234161564,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_125",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2966.74,
+          "budget_share": 0.00010837905353344173,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_126",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2934.95,
+          "budget_share": 0.00010721784938844058,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_127",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2903.16,
+          "budget_share": 0.0001060566452434394,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_128",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2871.38,
+          "budget_share": 0.00010489544109843827,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_172",
+          "channel": "CHANNEL_11",
+          "budget_rub": 2830.64,
+          "budget_share": 0.00010340717189666922,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_129",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2828.99,
+          "budget_share": 0.00010334716890510336,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_130",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2797.21,
+          "budget_share": 0.00010218596476010224,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_131",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2776.02,
+          "budget_share": 0.0001014118286634348,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_139",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2762.15,
+          "budget_share": 0.00010090507817489842,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_140",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2714.79,
+          "budget_share": 9.917527683475729e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_132",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2680.66,
+          "budget_share": 9.792821622843128e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_141",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2667.44,
+          "budget_share": 9.744547549461619e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_133",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2585.3,
+          "budget_share": 9.444460379342783e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_134",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2405.18,
+          "budget_share": 8.786444697175458e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_135",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2394.58,
+          "budget_share": 8.747737892342083e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_136",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2383.98,
+          "budget_share": 8.709031087508711e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_173",
+          "channel": "CHANNEL_11",
+          "budget_rub": 2374.08,
+          "budget_share": 8.672859578430327e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_137",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2352.2,
+          "budget_share": 8.592910673008595e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_142",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2304.42,
+          "budget_share": 8.418366522020098e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_174",
+          "channel": "CHANNEL_11",
+          "budget_rub": 2282.77,
+          "budget_share": 8.339288056183004e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_143",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2209.72,
+          "budget_share": 8.072406253991877e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_138",
+          "channel": "CHANNEL_06",
+          "budget_rub": 2193.27,
+          "budget_share": 8.012308600508017e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_144",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2115.01,
+          "budget_share": 7.726445985963653e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_145",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2115.01,
+          "budget_share": 7.726445985963653e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_11",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2067.66,
+          "budget_share": 7.553465851949539e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_146",
+          "channel": "CHANNEL_08",
+          "budget_rub": 2004.53,
+          "budget_share": 7.322825673264058e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_139",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1854.21,
+          "budget_share": 6.77369084584011e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_147",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1846.69,
+          "budget_share": 6.746225226550354e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_175",
+          "channel": "CHANNEL_11",
+          "budget_rub": 1826.22,
+          "budget_share": 6.671430444946405e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_140",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1822.42,
+          "budget_share": 6.657570431339993e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_141",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1790.64,
+          "budget_share": 6.541450016839877e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_176",
+          "channel": "CHANNEL_11",
+          "budget_rub": 1643.6,
+          "budget_share": 6.004287400451763e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_142",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1546.94,
+          "budget_share": 5.651193505672319e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_143",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1483.37,
+          "budget_share": 5.4189526766720866e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_148",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1452.1,
+          "budget_share": 5.3047241097660894e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_149",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1452.1,
+          "budget_share": 5.3047241097660894e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_144",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1419.8,
+          "budget_share": 5.186711847671856e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_145",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1419.8,
+          "budget_share": 5.186711847671856e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_11",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1388.01,
+          "budget_share": 5.07059143317174e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_150",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1373.18,
+          "budget_share": 5.0164238864092374e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_151",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1357.4,
+          "budget_share": 4.9587638417378646e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_146",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1345.63,
+          "budget_share": 4.91576421383825e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_152",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1246.91,
+          "budget_share": 4.5551435290382737e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_147",
+          "channel": "CHANNEL_06",
+          "budget_rub": 1239.67,
+          "budget_share": 4.52869616550453e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_153",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1215.34,
+          "budget_share": 4.4398234396955314e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_154",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1215.34,
+          "budget_share": 4.4398234396955314e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_155",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1199.56,
+          "budget_share": 4.382163395024161e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_156",
+          "channel": "CHANNEL_08",
+          "budget_rub": 1041.72,
+          "budget_share": 3.805562948310456e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_157",
+          "channel": "CHANNEL_08",
+          "budget_rub": 994.37,
+          "budget_share": 3.632582814296344e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_148",
+          "channel": "CHANNEL_06",
+          "budget_rub": 974.78,
+          "budget_share": 3.56102604467023e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_149",
+          "channel": "CHANNEL_06",
+          "budget_rub": 974.78,
+          "budget_share": 3.56102604467023e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_150",
+          "channel": "CHANNEL_06",
+          "budget_rub": 921.81,
+          "budget_share": 3.3674920205033696e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_151",
+          "channel": "CHANNEL_06",
+          "budget_rub": 911.21,
+          "budget_share": 3.328785215669996e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_158",
+          "channel": "CHANNEL_08",
+          "budget_rub": 899.67,
+          "budget_share": 3.286622546268122e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_01",
+          "channel": "CHANNEL_08",
+          "budget_rub": 883.89,
+          "budget_share": 3.22896250159675e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_159",
+          "channel": "CHANNEL_08",
+          "budget_rub": 852.32,
+          "budget_share": 3.1136424122540095e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_152",
+          "channel": "CHANNEL_06",
+          "budget_rub": 837.04,
+          "budget_share": 3.057837581836393e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_160",
+          "channel": "CHANNEL_08",
+          "budget_rub": 836.54,
+          "budget_share": 3.055982367582638e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_03",
+          "channel": "CHANNEL_08",
+          "budget_rub": 820.75,
+          "budget_share": 2.9983223229112682e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_153",
+          "channel": "CHANNEL_06",
+          "budget_rub": 815.85,
+          "budget_share": 2.980423972169649e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_154",
+          "channel": "CHANNEL_06",
+          "budget_rub": 815.85,
+          "budget_share": 2.980423972169649e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_155",
+          "channel": "CHANNEL_06",
+          "budget_rub": 805.26,
+          "budget_share": 2.9417171673362767e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_161",
+          "channel": "CHANNEL_08",
+          "budget_rub": 773.4,
+          "budget_share": 2.8253421888971565e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_162",
+          "channel": "CHANNEL_08",
+          "budget_rub": 757.62,
+          "budget_share": 2.7676821442257863e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_156",
+          "channel": "CHANNEL_06",
+          "budget_rub": 699.3,
+          "budget_share": 2.5546491190025556e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_163",
+          "channel": "CHANNEL_08",
+          "budget_rub": 678.7,
+          "budget_share": 2.4793819208689326e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_157",
+          "channel": "CHANNEL_06",
+          "budget_rub": 667.52,
+          "budget_share": 2.438528704502439e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_164",
+          "channel": "CHANNEL_08",
+          "budget_rub": 662.91,
+          "budget_share": 2.4217218761975632e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_165",
+          "channel": "CHANNEL_08",
+          "budget_rub": 615.56,
+          "budget_share": 2.2487417421834504e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_158",
+          "channel": "CHANNEL_06",
+          "budget_rub": 603.94,
+          "budget_share": 2.2062878755022077e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_01",
+          "channel": "CHANNEL_06",
+          "budget_rub": 593.35,
+          "budget_share": 2.1675810706688354e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_166",
+          "channel": "CHANNEL_08",
+          "budget_rub": 584.0,
+          "budget_share": 2.1334216528407098e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_167",
+          "channel": "CHANNEL_08",
+          "budget_rub": 584.0,
+          "budget_share": 2.1334216528407098e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_168",
+          "channel": "CHANNEL_08",
+          "budget_rub": 584.0,
+          "budget_share": 2.1334216528407098e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_159",
+          "channel": "CHANNEL_06",
+          "budget_rub": 572.16,
+          "budget_share": 2.0901674610020907e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_160",
+          "channel": "CHANNEL_06",
+          "budget_rub": 561.56,
+          "budget_share": 2.051460656168719e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_169",
+          "channel": "CHANNEL_08",
+          "budget_rub": 552.43,
+          "budget_share": 2.0181015634979692e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_03",
+          "channel": "CHANNEL_06",
+          "budget_rub": 550.97,
+          "budget_share": 2.0127538513353466e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_170",
+          "channel": "CHANNEL_08",
+          "budget_rub": 536.65,
+          "budget_share": 1.960441518826598e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_171",
+          "channel": "CHANNEL_08",
+          "budget_rub": 520.86,
+          "budget_share": 1.902781474155228e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_161",
+          "channel": "CHANNEL_06",
+          "budget_rub": 519.18,
+          "budget_share": 1.8966334368352306e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_162",
+          "channel": "CHANNEL_06",
+          "budget_rub": 508.58,
+          "budget_share": 1.8579266320018582e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_172",
+          "channel": "CHANNEL_08",
+          "budget_rub": 489.29,
+          "budget_share": 1.787461384812487e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_163",
+          "channel": "CHANNEL_06",
+          "budget_rub": 455.61,
+          "budget_share": 1.664392607834998e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_164",
+          "channel": "CHANNEL_06",
+          "budget_rub": 445.01,
+          "budget_share": 1.6256858030016268e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_165",
+          "channel": "CHANNEL_06",
+          "budget_rub": 413.22,
+          "budget_share": 1.5095653885015099e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_173",
+          "channel": "CHANNEL_08",
+          "budget_rub": 410.38,
+          "budget_share": 1.4991611614556341e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_174",
+          "channel": "CHANNEL_08",
+          "budget_rub": 394.59,
+          "budget_share": 1.4415011167842635e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_166",
+          "channel": "CHANNEL_06",
+          "budget_rub": 392.03,
+          "budget_share": 1.4321517788347665e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_167",
+          "channel": "CHANNEL_06",
+          "budget_rub": 392.03,
+          "budget_share": 1.4321517788347665e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_168",
+          "channel": "CHANNEL_06",
+          "budget_rub": 392.03,
+          "budget_share": 1.4321517788347665e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_169",
+          "channel": "CHANNEL_06",
+          "budget_rub": 370.84,
+          "budget_share": 1.3547381691680215e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_170",
+          "channel": "CHANNEL_06",
+          "budget_rub": 360.25,
+          "budget_share": 1.3160313643346498e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_171",
+          "channel": "CHANNEL_06",
+          "budget_rub": 349.65,
+          "budget_share": 1.277324559501278e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_172",
+          "channel": "CHANNEL_06",
+          "budget_rub": 328.46,
+          "budget_share": 1.1999109498345334e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_175",
+          "channel": "CHANNEL_08",
+          "budget_rub": 315.67,
+          "budget_share": 1.153200893427411e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_176",
+          "channel": "CHANNEL_08",
+          "budget_rub": 284.11,
+          "budget_share": 1.0378808040846698e-05,
+          "allocation_note": "Не увеличивать"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_173",
+          "channel": "CHANNEL_06",
+          "budget_rub": 275.48,
+          "budget_share": 1.0063769256676733e-05,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_174",
+          "channel": "CHANNEL_06",
+          "budget_rub": 264.89,
+          "budget_share": 9.67670120834301e-06,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_175",
+          "channel": "CHANNEL_06",
+          "budget_rub": 211.91,
+          "budget_share": 7.741360966674409e-06,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_176",
+          "channel": "CHANNEL_06",
+          "budget_rub": 190.72,
+          "budget_share": 6.9672248700069725e-06,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_02",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_04",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_10",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_64",
+          "channel": "CHANNEL_10",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_65",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_69",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_47",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_66",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_76",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_105",
+          "channel": "CHANNEL_06",
+          "budget_rub": 0.0,
+          "budget_share": 0.0,
+          "allocation_note": "Можно перераспределять"
+        }
+      ],
+      "statuses": {
+        "calculation_status": {
+          "code": "calculated",
+          "display_text": "Рассчитано"
+        },
+        "campaign_scale_status": {
+          "code": "between_historical_p99_and_robust_upper",
+          "display_text": "Очень крупная, нужна повышенная осторожность"
+        },
+        "cell_support_status": {
+          "code": "between_p95_p99",
+          "display_text": "Между p95 и p99"
+        },
+        "optimizer_status": {
+          "code": "best_safe_available",
+          "display_text": "Лучший безопасный S6 рассчитан"
+        },
+        "business_decision_status": {
+          "code": "allocation_only",
+          "display_text": "Не настроено: нужен бизнес-порог"
+        }
+      },
+      "quality": {
+        "status": {
+          "code": "elevated_uncertainty",
+          "display_text": "Повышенная неопределенность"
+        },
+        "explanation": "Есть ячейки между historical p95 и p99: расчет допустим, но неопределенность выше обычной.",
+        "coverage_share": 1.0,
+        "uncertainty_width_share": 0.0479511018428269
+      },
+      "warnings": [
+        {
+          "code": "cell_support_risk",
+          "severity": "caution",
+          "display_text": "В демонстрационном плане есть geo x channel ячейки с повышенным support risk.",
+          "scope": "recommended_scenario",
+          "affected_cells": []
+        },
+        {
+          "code": "quality_elevated_uncertainty",
+          "severity": "caution",
+          "display_text": "Демонстрационное предупреждение: quality_elevated_uncertainty.",
+          "scope": "campaign",
+          "affected_cells": []
+        },
+        {
+          "code": "business_hurdle_not_approved",
+          "severity": "info",
+          "display_text": "Fixture показывает allocation-only режим без утвержденного business hurdle.",
+          "scope": "campaign",
+          "affected_cells": []
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "artifact_0c27c6d44427011395e0",
+      "kind": "marketer_report_xlsx",
+      "display_name": "Demo artifact 1: marketer_report_xlsx",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-01.xlsx"
+    },
+    {
+      "artifact_id": "artifact_3a2fd812890ea4c3c10d",
+      "kind": "scenario_results_csv",
+      "display_name": "Demo artifact 2: scenario_results_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-02.csv"
+    },
+    {
+      "artifact_id": "artifact_25a13067e8ef8b62d010",
+      "kind": "recommendations_csv",
+      "display_name": "Demo artifact 3: recommendations_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-03.csv"
+    },
+    {
+      "artifact_id": "artifact_b2e3c4094102af070da8",
+      "kind": "best_plan_csv",
+      "display_name": "Demo artifact 4: best_plan_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-04.csv"
+    },
+    {
+      "artifact_id": "artifact_dc39725bb71908a199c8",
+      "kind": "decision_pool_csv",
+      "display_name": "Demo artifact 5: decision_pool_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-05.csv"
+    },
+    {
+      "artifact_id": "artifact_2f9a00d4b7e9abb59e83",
+      "kind": "candidate_scores_csv",
+      "display_name": "Demo artifact 6: candidate_scores_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-06.csv"
+    },
+    {
+      "artifact_id": "artifact_d1a11aa99c0043b30acd",
+      "kind": "finalist_summary_csv",
+      "display_name": "Demo artifact 7: finalist_summary_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-07.csv"
+    },
+    {
+      "artifact_id": "artifact_7fbac359bd63e7e4f73f",
+      "kind": "recommended_allocations_csv",
+      "display_name": "Demo artifact 8: recommended_allocations_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-08.csv"
+    },
+    {
+      "artifact_id": "artifact_7f12d8c05d4ebff1f056",
+      "kind": "paired_comparisons_csv",
+      "display_name": "Demo artifact 9: paired_comparisons_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-09.csv"
+    },
+    {
+      "artifact_id": "artifact_b5f111a6afb72f937c5b",
+      "kind": "search_trace_csv",
+      "display_name": "Demo artifact 10: search_trace_csv",
+      "media_type": "text/csv",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-10.csv"
+    },
+    {
+      "artifact_id": "artifact_6781e80fb9e8194f2966",
+      "kind": "technical_optimizer_xlsx",
+      "display_name": "Demo artifact 11: technical_optimizer_xlsx",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-11.xlsx"
+    },
+    {
+      "artifact_id": "artifact_000fa8b57536a9b508f3",
+      "kind": "optimizer_run_card",
+      "display_name": "Demo artifact 12: optimizer_run_card",
+      "media_type": "application/json",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-12.json"
+    },
+    {
+      "artifact_id": "artifact_35290fc822b4182f777f",
+      "kind": "marketer_report_card",
+      "display_name": "Demo artifact 13: marketer_report_card",
+      "media_type": "application/json",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-13.json"
+    },
+    {
+      "artifact_id": "artifact_02617f4d034cafd34f62",
+      "kind": "campaign_prepare_card",
+      "display_name": "Demo artifact 14: campaign_prepare_card",
+      "media_type": "application/json",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-14.json"
+    },
+    {
+      "artifact_id": "artifact_e797495bdc6246691213",
+      "kind": "model_resolution",
+      "display_name": "Demo artifact 15: model_resolution",
+      "media_type": "application/json",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-15.json"
+    },
+    {
+      "artifact_id": "artifact_5cef01a43e4b652f74cb",
+      "kind": "optimizer_policy_snapshot",
+      "display_name": "Demo artifact 16: optimizer_policy_snapshot",
+      "media_type": "application/json",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-16.json"
+    },
+    {
+      "artifact_id": "artifact_2a8d59a0a7f8e9f41def",
+      "kind": "business_policy_snapshot",
+      "display_name": "Demo artifact 17: business_policy_snapshot",
+      "media_type": "application/json",
+      "sha256": "c051a343759519fb39e91c6b9aea27a5ef959a016cc20510e4ffe1a75ce227c3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/decision-result-v1/artifact-17.json"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "sanitized_fixture_not_production_evidence",
+      "severity": "info",
+      "display_text": "Sanitized fixture for contract and UI tests; not production evidence.",
+      "scope": "result",
+      "affected_cells": []
+    },
+    {
+      "code": "model_preprod_restricted",
+      "severity": "caution",
+      "display_text": "Расчет выполнен preprod-моделью. Production activation ожидает обязательную OOT-валидацию.",
+      "scope": "model",
+      "affected_cells": []
+    },
+    {
+      "code": "missing_or_failed_oot_validation",
+      "severity": "caution",
+      "display_text": "Production blocker модели: MISSING_OR_FAILED_OOT_VALIDATION.",
+      "scope": "model",
+      "affected_cells": []
+    }
+  ]
+}

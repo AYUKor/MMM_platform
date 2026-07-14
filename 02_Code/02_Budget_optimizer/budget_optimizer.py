@@ -99,7 +99,7 @@ def main() -> None:
             "policy": business_policy,
         },
     )
-    decision_policy_value = config.get("decision_policy_file") or "optimizer_decision_policy_v1.yaml"
+    decision_policy_value = config.get("decision_policy_file") or "optimizer_decision_policy_v2.yaml"
     decision_policy_path = resolve_path(decision_policy_value, base_dir=config_path.parent)
     decision_policy = load_config(decision_policy_path)
     config["decision_policy"] = decision_policy
