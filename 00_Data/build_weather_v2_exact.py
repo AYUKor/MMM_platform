@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from meteostat import Point, daily, normals, stations
 
-ROOT = Path('/Users/aleksan.korenkov/Work/01_ML_projects/03_ML_MMM')
+ROOT = Path(__file__).resolve().parents[1]
 DATA_2025_DIR = ROOT / '00_Data' / '01_2025_first_pass'
 V2_DIR = ROOT / '00_Data' / '02_2025_2026Q1_second_pass'
 RAW_V2 = V2_DIR / '01_Raw_Data_v2'

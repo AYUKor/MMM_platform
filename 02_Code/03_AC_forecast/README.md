@@ -15,21 +15,32 @@ The workflow is now end-to-end for incremental media-effect forecasting:
 Full run:
 
 ```bash
-cd /Users/aleksan.korenkov/Work/01_ML_projects/03_ML_MMM
-PYTHONDONTWRITEBYTECODE=1 /Users/aleksan.korenkov/miniconda3/bin/python -B   02_Code/03_AC_forecast/ac_forecast.py   --config 02_Code/03_AC_forecast/ac_forecast_template.yaml
+cd /path/to/MMM_platform
+PYTHONDONTWRITEBYTECODE=1 python -B \
+  02_Code/03_AC_forecast/ac_forecast.py \
+  --config 02_Code/03_AC_forecast/ac_forecast_template.yaml
 ```
 
 Useful partial runs:
 
 ```bash
 # Check selected fitted model package only.
-PYTHONDONTWRITEBYTECODE=1 /Users/aleksan.korenkov/miniconda3/bin/python -B   02_Code/03_AC_forecast/ac_forecast.py   --config 02_Code/03_AC_forecast/ac_forecast_template.yaml   --check-model-package-only
+PYTHONDONTWRITEBYTECODE=1 python -B \
+  02_Code/03_AC_forecast/ac_forecast.py \
+  --config 02_Code/03_AC_forecast/ac_forecast_template.yaml \
+  --check-model-package-only
 
 # Parse, flight and validate the campaign brief only.
-PYTHONDONTWRITEBYTECODE=1 /Users/aleksan.korenkov/miniconda3/bin/python -B   02_Code/03_AC_forecast/ac_forecast.py   --config 02_Code/03_AC_forecast/ac_forecast_template.yaml   --prepare-campaign-only
+PYTHONDONTWRITEBYTECODE=1 python -B \
+  02_Code/03_AC_forecast/ac_forecast.py \
+  --config 02_Code/03_AC_forecast/ac_forecast_template.yaml \
+  --prepare-campaign-only
 
 # Export strict replay/forecast metadata from the model package only.
-PYTHONDONTWRITEBYTECODE=1 /Users/aleksan.korenkov/miniconda3/bin/python -B   02_Code/03_AC_forecast/ac_forecast.py   --config 02_Code/03_AC_forecast/ac_forecast_template.yaml   --export-model-metadata-only
+PYTHONDONTWRITEBYTECODE=1 python -B \
+  02_Code/03_AC_forecast/ac_forecast.py \
+  --config 02_Code/03_AC_forecast/ac_forecast_template.yaml \
+  --export-model-metadata-only
 ```
 
 ## Forecast semantics

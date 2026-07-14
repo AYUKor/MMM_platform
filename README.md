@@ -24,6 +24,22 @@ Read the stable product scope in
 current state in
 [`04_Web_app/CURRENT_TRUTH.md`](04_Web_app/CURRENT_TRUTH.md).
 
+## Development handoff
+
+Before changing code, read the repository in this order:
+
+1. [`AGENTS.md`](AGENTS.md) for contribution and safety rules;
+2. [`04_Web_app/PROJECT_BRIEF.md`](04_Web_app/PROJECT_BRIEF.md) for product scope;
+3. [`04_Web_app/CURRENT_TRUTH.md`](04_Web_app/CURRENT_TRUTH.md) for verified backend status;
+4. [`04_Web_app/PROJECT_HANDOFF.md`](04_Web_app/PROJECT_HANDOFF.md) for the frozen application boundary;
+5. [`04_Web_app/OPEN_DECISIONS.md`](04_Web_app/OPEN_DECISIONS.md) before making an assumption about business policy, infrastructure or governance.
+
+The next implementation milestone is the versioned DecisionResult contract:
+JSON Schema/Pydantic models, stable machine-status codes, an adapter from real
+optimizer artifacts and one sanitized real fixture. API, worker and frontend
+code should be built against that contract rather than directly against CSV or
+XLSX layouts.
+
 The web application is not implemented yet. There is currently no frontend,
 backend, database, queue or worker runtime in this repository.
 

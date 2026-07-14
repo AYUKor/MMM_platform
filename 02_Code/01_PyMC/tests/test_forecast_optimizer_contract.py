@@ -1295,6 +1295,23 @@ class SupportedArtifactsContractTests(unittest.TestCase):
             "production_q1_2026_tc5_specific_indoor_separate_rf_prorata_"
             "tc5_online_basket_pooled_tc5_offline_turnover_nat_tv_tier_pool"
         )
+        required_external_artifacts = (
+            cls.optimizer_dir,
+            cls.forecast_dir,
+            cls.flighting_path,
+            cls.model_run_dir,
+            cls.legacy_model_run_dir,
+        )
+        missing = [
+            str(path.relative_to(cls.project_root))
+            for path in required_external_artifacts
+            if not path.exists()
+        ]
+        if missing:
+            raise unittest.SkipTest(
+                "External supported-artifact fixture is not included in the source checkout: "
+                + ", ".join(missing)
+            )
 
     def _require(self, path: Path) -> None:
         if not path.exists():
