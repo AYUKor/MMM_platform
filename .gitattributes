@@ -1,0 +1,98 @@
+# Default text normalization
+* text=auto
+
+# Source, configuration and documentation: always LF
+*.py text eol=lf
+*.pyi text eol=lf
+*.ipynb text eol=lf
+*.md text eol=lf
+*.rst text eol=lf
+*.txt text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.csv text eol=lf
+*.tsv text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+*.sql text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+Dockerfile text eol=lf
+Makefile text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Excel and office binaries
+*.xls -text
+*.xlsx -text
+*.xlsm -text
+*.xlsb -text
+*.ods -text
+*.doc -text
+*.docx -text
+*.ppt -text
+*.pptx -text
+*.pdf -text
+
+# Analytical and model binaries
+*.parquet -text
+*.pq -text
+*.feather -text
+*.arrow -text
+*.nc -text
+*.netcdf -text
+*.pkl -text
+*.pickle -text
+*.joblib -text
+*.dill -text
+*.npy -text
+*.npz -text
+*.pt -text
+*.pth -text
+*.onnx -text
+*.ckpt -text
+*.h5 -text
+*.hdf5 -text
+*.safetensors -text
+
+# Images
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.gif -text
+*.webp -text
+*.bmp -text
+*.tif -text
+*.tiff -text
+*.ico -text
+*.svg -text
+
+# Archives and package bundles
+*.zip -text
+*.tar -text
+*.gz -text
+*.tgz -text
+*.bz2 -text
+*.xz -text
+*.7z -text
+*.rar -text
+*.zst -text
+*.whl -text
+
+# Database and local state files
+*.db -text
+*.sqlite -text
+*.sqlite3 -text
+*.duckdb -text
+*.mdb -text
+*.accdb -text
+*.rdb -text
+*.aof -text

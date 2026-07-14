@@ -1,0 +1,217 @@
+# macOS and desktop metadata
+.DS_Store
+Thumbs.db
+
+# Python bytecode, caches, coverage and build products
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments and local interpreter selection
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.csr
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+.aws/
+.ssh/
+
+# Local Codex, Claude, Obsidian and IDE state
+.codex/
+.claude/
+.agents/
+.obsidian/
+.cursor/
+.idea/
+.vscode/
+CLAUDE.local.md
+*.code-workspace
+
+# Project brain, raw research assets and local AI settings stay local until a
+# separate confidentiality review is completed.
+/01_Main_Brain_MMM/
+
+# Jupyter local state
+.ipynb_checkpoints/
+
+# Real campaign, company and analytical data
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
+*.ods
+*.csv
+*.tsv
+*.parquet
+*.pq
+*.feather
+*.arrow
+
+# Generated data-tree JSON, working state and DQ/report artifacts
+/00_Data/**/*.json
+!/00_Data/**/*schema*.json
+!/00_Data/**/schemas/**/*.json
+!/00_Data/**/*config*.json
+/00_Data/**/working/
+/00_Data/**/reports/**
+!/00_Data/**/reports/**/
+!/00_Data/**/reports/**/README.md
+
+# Posterior, serialized models and runtime model artifacts
+*.nc
+*.netcdf
+*.zarr/
+*.pkl
+*.pickle
+*.joblib
+*.dill
+*.npy
+*.npz
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.h5
+*.hdf5
+*.safetensors
+*.whl
+/model_packages/
+/model-package/
+/posterior/
+/posteriors/
+
+# Canonical generated MMM outputs. Track only the root storage contract.
+/03_Outputs/*
+!/03_Outputs/README.md
+
+# Other generated forecast, optimizer and report locations
+/outputs/
+/forecast_outputs/
+/optimizer_outputs/
+/generated_outputs/
+/generated_reports/
+**/generated_reports/
+**/reports/generated/
+
+# Real campaign-specific run configs stay local. Generic templates and policy
+# files remain eligible for version control.
+/02_Code/02_Budget_optimizer/budget_optimizer_agency_*.yaml
+/02_Code/02_Budget_optimizer/budget_optimizer_real_*.yaml
+/02_Code/03_AC_forecast/ac_forecast_agency_*.yaml
+/02_Code/03_AC_forecast/ac_forecast_real_*.yaml
+
+# Logs, uploads, job artifacts and runtime state
+*.log
+*.log.*
+logs/
+uploads/
+job_artifacts/
+job-artifacts/
+.cache/
+.runtime/
+/runtime/
+/tmp/
+/temp/
+/var/
+/04_Web_app/runtime/
+/04_Web_app/.runtime/
+/04_Web_app/tmp/
+/04_Web_app/temp/
+/04_Web_app/var/
+/04_Web_app/uploads/
+/04_Web_app/job_artifacts/
+/04_Web_app/job-artifacts/
+/04_Web_app/logs/
+
+# Local databases and state stores
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.duckdb
+*.mdb
+*.accdb
+dump.rdb
+*.rdb
+appendonly.aof
+*.aof
+
+# Data and model-package archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+
+# Generated office and presentation reports
+*.pdf
+*.ppt
+*.pptx
+*.doc
+*.docx
+
+# Node, Vite and future frontend build state
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.vite/
+*.timestamp-*
+.turbo/
+.next/
+coverage/
+/04_Web_app/**/dist/
+
+# Docker, PostgreSQL and Redis runtime volumes
+/docker-data/
+/docker/volumes/
+/volumes/
+/postgres-data/
+/postgres_data/
+/redis-data/
+/redis_data/
+/04_Web_app/**/docker-data/
+/04_Web_app/**/volumes/
+/04_Web_app/**/postgres-data/
+/04_Web_app/**/postgres_data/
+/04_Web_app/**/redis-data/
+/04_Web_app/**/redis_data/

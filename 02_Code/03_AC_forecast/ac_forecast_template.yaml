@@ -1,0 +1,50 @@
+# Campaign forecast template.
+# Copy this file and fill run-specific fields for each future campaign forecast.
+
+run_id: campaign_forecast_q1_daily_example
+layer: scenario_forecaster
+
+model_ref:
+  source: registry
+  registry_root: ../../03_Outputs/01_PyMC_outputs/00_Model_registry
+  channel: production
+  expected_package_id: null
+
+paths:
+  campaign_input_dir: ../../00_Data/00_Future_Campaigns/01_Inbox
+  campaign_file: null
+  campaign_sheet: null
+  model_ready_panel: ../../00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet
+  output_dir: ../../03_Outputs/03_AC_forecast_outputs/07_AC_forecast_05072026_example
+
+validation:
+  fail_on_parse_issues: true
+  fail_on_unsupported: true
+
+campaign:
+  name: null
+  creative_name: null
+  default_daily_split: even_by_active_day
+  allow_channel_specific_dates: true
+  allow_geo_specific_dates: true
+
+future_controls:
+  strategy: historical_analog_period
+  analog_year: 2025
+  # New geos without the configured analog year use only the same geo's nearest available year.
+  missing_geo_policy: nearest_available_year_same_geo
+  note: Use the same calendar period from 2025 as MVP proxy for unknown future controls.
+
+forecast:
+  posterior_samples: 600
+  random_seed: 10042
+  targets:
+    - turnover_per_user
+    - orders_per_user
+    - avg_basket
+  intervals:
+    - p10
+    - p50
+    - p90
+  report_geo_channel_detail: true
+  report_total_campaign: true

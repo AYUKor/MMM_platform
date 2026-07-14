@@ -1,0 +1,34 @@
+# Business go/no-go remains disabled until Finance/Marketing approve real economics.
+schema_version: 1.0.0
+policy_id: business_hurdle_unapproved_v1
+effective_from: null
+currency: RUB
+
+spend_basis:
+  vat_policy: unapproved
+  include_creative_costs: null
+  include_production_costs: null
+
+decision:
+  mode: allocation_only
+  min_roas_p50: null
+  min_contribution_p50_rub: null
+  min_contribution_p10_rub: null
+  missing_margin_policy: allocation_only
+
+evidence:
+  primary: automatic_decision_when_business_threshold_is_approved
+  caution: manual_review
+  diagnostic: not_evaluated
+
+contribution_margin_rate_by_segment:
+  ТС5/Онлайн: null
+  ТС5/Оффлайн: null
+  ТСХ/Онлайн: null
+  ТСХ/Оффлайн: null
+
+calculation_contract:
+  draw_formula: sum_segment_margin_rate_times_incremental_turnover_minus_incremental_costs
+  aggregate_draws_before_quantiles: true
+  avg_basket_bridge_included: false
+  revenue_roas_is_profit_roi: false

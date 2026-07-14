@@ -1,0 +1,55 @@
+# Immutable fit contract for the corrected 2025 + 2026Q1 daily panel.
+schema_version: 1.0.0
+mode: production
+panel_path: 00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet
+run_dir: 03_Outputs/01_PyMC_outputs/05_PyMC_10072026_panel_v3_refit/production_panel_v3_q1_2026_guarded
+train_start: 2025-01-01
+train_end: 2026-03-20
+holdout_start: 2026-03-21
+holdout_end: 2026-05-31
+random_seed: 42
+require_numpyro: true
+thin_sample_threshold: 50
+vif_threshold: 7.0
+
+profiles:
+  fast:
+    top_n_geos: 20
+    draws: 300
+    tune: 300
+    chains: 2
+    fourier_pairs: 1
+    decay_grid_step: 0.15
+    target_accept: 0.90
+    use_jax: true
+    l_max: 14
+  medium:
+    top_n_geos: 20
+    draws: 1000
+    tune: 1000
+    chains: 4
+    fourier_pairs: 2
+    decay_grid_step: 0.10
+    target_accept: 0.99
+    use_jax: true
+    l_max: 14
+  pilot:
+    top_n_geos: null
+    draws: 1000
+    tune: 1000
+    chains: 2
+    fourier_pairs: 2
+    decay_grid_step: 0.10
+    target_accept: 0.99
+    use_jax: true
+    l_max: 14
+  production:
+    top_n_geos: null
+    draws: 2000
+    tune: 2000
+    chains: 4
+    fourier_pairs: 2
+    decay_grid_step: 0.05
+    target_accept: 0.99
+    use_jax: true
+    l_max: 14

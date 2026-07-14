@@ -1,0 +1,67 @@
+# Data refresh config for upcoming 2026H1 data.
+# This is the run contract; workflow code should not hard-code these paths.
+
+run_id: 2026H1_refresh_001
+layer: data_refresh_pipeline
+mode: build_panel  # audit_only | build_panel | fast_smoke | medium | pilot | production
+
+paths:
+  v2_dir: 00_Data/02_2025_2026Q1_second_pass
+  raw_v2_dir: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2
+  output_dir: 00_Data/02_2025_2026Q1_second_pass/working/macro_fixed_shadow
+  batch_dir: 00_Data/02_2025_2026Q1_second_pass
+  reports_dir: 00_Data/02_2025_2026Q1_second_pass/reports
+
+input_files:
+  media_agency: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/2025-2026_26_06.xlsx
+  targets_2026: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/daily_metrics_by_region_itog.parquet
+  geo_mapping: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/geo_mapping_media_to_model_v2.csv
+  usd_rub: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/Прошлые данные - USD_RUB.csv
+  brent: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/Прошлые данные - Фьючерс на нефть Brent.csv
+  ruonia: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/RUONIA_01_2026_T31_05_2026.xlsx
+  usd_rub_history: 00_Data/01_2025_first_pass/01_Raw_Data/USD_RUB_01-01-2024-05_to_05-05-2026.csv
+  brent_history: 00_Data/01_2025_first_pass/01_Raw_Data/Brent_01-01-2024-05_to_05-05-2026.csv
+  ruonia_history: 00_Data/01_2025_first_pass/01_Raw_Data/RUONIA_for_MMM.xlsx
+  ruonia_cbr_cache: 00_Data/02_2025_2026Q1_second_pass/01_Raw_Data_v2/RUONIA_CBR_2024-12-01_to_2026-05-31.csv
+
+refresh_period:
+  start_date: 2026-01-01
+  end_date: 2026-05-31
+
+assembly:
+  panel_start_date: 2025-01-01
+  panel_end_date: 2026-05-31
+  build_weather_features: true
+  build_calendar_features: true
+  join_with_existing_history: true
+  historical_panel: 00_Data/01_2025_first_pass/panel_final.parquet
+  historical_target: 00_Data/01_2025_first_pass/01_Raw_Data/target_features_for_MMM.parquet
+  output_panel_candidate: 00_Data/02_2025_2026Q1_second_pass/working/macro_fixed_shadow/panel_candidate_v2_macro_fixed.parquet
+  promoted_panel: 00_Data/02_2025_2026Q1_second_pass/panel_final_v2.parquet
+  allow_overwrite_candidate: false
+
+promotion:
+  target_panel: 00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet
+  panel_preflight_summary: 00_Data/02_2025_2026Q1_second_pass/working/macro_fixed_shadow/audits/panel_priors_input_summary.json
+
+control_sources:
+  ruonia:
+    provider: Bank of Russia DailyInfoWebServ
+    fetch_if_cache_missing: true
+    fill_policy: backward_asof_then_forward_only
+  macro:
+    fill_policy: backward_asof_then_forward_only
+    leading_backfill_allowed: false
+
+quality_checks:
+  check_grain_uniqueness: true
+  check_missing_targets: true
+  check_negative_media_spend: true
+  check_active_days_by_channel_geo: true
+  check_budget_totals_by_channel_geo: true
+  check_old_vs_new_drift: true
+
+model_refresh:
+  enabled: false
+  default_mode_after_validation: fast_smoke
+  accepted_baseline_run: 03_Outputs/01_PyMC_outputs/01_PyMC_23052026/production_fourteenth_try_23_05_2026
