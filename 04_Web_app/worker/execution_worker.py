@@ -1603,6 +1603,9 @@ def _materialize_execution_config(
     paths["campaign_file"] = normalized_plan_path.name
     paths["campaign_sheet"] = None
     paths["output_dir"] = str(output_dir)
+    intermediate_dir = output_dir.parent / "campaign_intermediates"
+    paths["validated_output_dir"] = str(intermediate_dir / "validated")
+    paths["flighting_output_dir"] = str(intermediate_dir / "flighting")
     paths.pop("model_run_dir", None)
     paths.pop("model_artifacts_dir", None)
     paths.pop("model_ready_panel", None)

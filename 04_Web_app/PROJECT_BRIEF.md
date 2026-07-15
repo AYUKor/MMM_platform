@@ -4,10 +4,12 @@
 
 Contract and local execution foundation for the future enterprise application.
 The folder contains implemented DecisionResult v1 and application lifecycle v1
-contracts, the completed-result adapter, local Execution Worker v1, synthetic
-lifecycle/worker fixtures, sanitized real-derived result fixtures, tests, and
-canonical architecture documents. There is still no HTTP API, queue,
-PostgreSQL runtime, approved object storage, authentication, or frontend. The
+contracts, the completed-result adapter, local Execution Worker v1, localhost
+HTTP API, marketer upload/validation service, runtime launcher/recovery,
+synthetic lifecycle/worker fixtures, sanitized real-derived result fixtures,
+tests, and canonical architecture documents. There is still no durable company
+queue, PostgreSQL runtime, approved object storage, authentication, or
+frontend. The
 previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
@@ -25,6 +27,20 @@ The product is an internal browser-based tool for marketers and media planners. 
 7. a marketer-facing Excel report and equivalent browser views.
 
 The application will first run locally for development and then move into the company infrastructure without changing the MMM calculation logic.
+
+The local development backend now has an asynchronous HTTP smoke boundary for
+immutable jobs, progress polling, verified results and artifact downloads. It
+is localhost-only and is not the future company deployment runtime.
+
+The local marketer path also accepts a canonical campaign CSV/XLSX, parses and
+validates it in the background against the pinned preprod package, then creates
+the immutable DecisionJob. Specialized agency workbooks require an explicit
+future input profile and are not auto-detected.
+
+`backend_runtime.py` provides a versioned preflight and one-command localhost
+launch. Local restart recovery resumes deterministic preparation, requeues
+jobs that never started and fails interrupted attempts with a retryable,
+auditable error instead of leaving stale `running` state.
 
 ## User Journey
 
@@ -72,6 +88,10 @@ A support warning must not be translated into a blanket statement that advertisi
 - Scenario 6 distinguishes `best_raw`, `best_safe` and `no_safe_candidate`.
 - The UI never hides warnings, but translates them into business language.
 - Production activation remains fail-closed when mandatory model gates are not passed.
+
+The browser consumes the versioned `ResultOverview v1` projection. The
+canonical `DecisionResult v1` remains the completed-job source of truth; React
+must not join optimizer CSV files or derive alternative metric semantics.
 
 ## Initial Enterprise MVP
 

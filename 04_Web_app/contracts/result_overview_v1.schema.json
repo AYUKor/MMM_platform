@@ -1,0 +1,508 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.local/mmm/contracts/result_overview_v1.schema.json",
+  "title": "X5 MMM ResultOverview v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "overview_adapter_version",
+    "overview_id",
+    "source_result_id",
+    "result_origin",
+    "created_at_utc",
+    "campaigns",
+    "artifacts",
+    "warnings"
+  ],
+  "properties": {
+    "contract_name": {"const": "result_overview_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "overview_adapter_version": {"const": "1.0.0"},
+    "overview_id": {"$ref": "#/$defs/opaqueId"},
+    "source_result_id": {"$ref": "#/$defs/opaqueId"},
+    "result_origin": {"enum": ["verified_optimizer_artifacts", "sanitized_fixture"]},
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "campaigns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/campaign"}
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/artifact"}
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/warning"}
+    }
+  },
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableNumber": {"type": ["number", "null"]},
+    "nullableFraction": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "quantileMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "p10", "p50", "p90"],
+      "properties": {
+        "unit": {
+          "enum": [
+            "RUB",
+            "orders",
+            "ratio",
+            "turnover_bridge_from_avg_basket_rub"
+          ]
+        },
+        "p10": {"type": "number"},
+        "p50": {"type": "number"},
+        "p90": {"type": "number"}
+      }
+    },
+    "nullableMetric": {
+      "anyOf": [
+        {"$ref": "#/$defs/quantileMetric"},
+        {"type": "null"}
+      ]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incremental_turnover",
+        "turnover_roas",
+        "incremental_orders",
+        "incremental_orders_usage",
+        "avg_basket_turnover_bridge"
+      ],
+      "properties": {
+        "incremental_turnover": {"$ref": "#/$defs/nullableMetric"},
+        "turnover_roas": {"$ref": "#/$defs/nullableMetric"},
+        "incremental_orders": {"$ref": "#/$defs/nullableMetric"},
+        "incremental_orders_usage": {"const": "diagnostic_only"},
+        "avg_basket_turnover_bridge": {"$ref": "#/$defs/nullableMetric"}
+      }
+    },
+    "support": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elevated_warnings",
+        "strong_warnings",
+        "hard_warnings",
+        "policy_violations"
+      ],
+      "properties": {
+        "elevated_warnings": {"type": "integer", "minimum": 0},
+        "strong_warnings": {"type": "integer", "minimum": 0},
+        "hard_warnings": {"type": "integer", "minimum": 0},
+        "policy_violations": {"type": "integer", "minimum": 0}
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "explanation", "coverage_share", "uncertainty_width_share"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "explanation": {"type": "string", "minLength": 1},
+        "coverage_share": {"$ref": "#/$defs/nullableFraction"},
+        "uncertainty_width_share": {"$ref": "#/$defs/nullableNumber"}
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "display_text", "scope", "affected_cells"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["info", "caution", "manual_review", "blocking"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "affected_cells": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "passport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_name",
+        "source_campaign_name",
+        "segments",
+        "source_start_date",
+        "source_end_date",
+        "model_start_date",
+        "model_end_date",
+        "source_active_days",
+        "model_active_days",
+        "source_channels",
+        "modeled_channels",
+        "unmodeled_channels",
+        "geographies",
+        "creatives"
+      ],
+      "properties": {
+        "campaign_name": {"type": "string", "minLength": 1},
+        "source_campaign_name": {"type": "string", "minLength": 1},
+        "segments": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "source_start_date": {"type": "string", "format": "date"},
+        "source_end_date": {"type": "string", "format": "date"},
+        "model_start_date": {"type": "string", "format": "date"},
+        "model_end_date": {"type": "string", "format": "date"},
+        "source_active_days": {"type": "integer", "minimum": 1},
+        "model_active_days": {"type": "integer", "minimum": 1},
+        "source_channels": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "modeled_channels": {"type": "array", "items": {"type": "string"}},
+        "unmodeled_channels": {"type": "array", "items": {"type": "string"}},
+        "geographies": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "creatives": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "budgetReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uploaded_budget_rub",
+        "model_input_budget_rub",
+        "calculated_budget_rub",
+        "unmodeled_budget_rub",
+        "unallocated_budget_rub",
+        "model_coverage_share"
+      ],
+      "properties": {
+        "uploaded_budget_rub": {"type": "number", "minimum": 0},
+        "model_input_budget_rub": {"type": "number", "minimum": 0},
+        "calculated_budget_rub": {"type": "number", "minimum": 0},
+        "unmodeled_budget_rub": {"type": "number", "minimum": 0},
+        "unallocated_budget_rub": {"type": "number", "minimum": 0},
+        "model_coverage_share": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "pairedComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delta_incremental_turnover",
+        "probability_gt_zero",
+        "probability_noninferior",
+        "moved_budget_rub",
+        "posterior_draws"
+      ],
+      "properties": {
+        "delta_incremental_turnover": {"$ref": "#/$defs/quantileMetric"},
+        "probability_gt_zero": {"$ref": "#/$defs/nullableFraction"},
+        "probability_noninferior": {"$ref": "#/$defs/nullableFraction"},
+        "moved_budget_rub": {"$ref": "#/$defs/nullableNumber"},
+        "posterior_draws": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "name",
+        "description",
+        "available",
+        "budget",
+        "metrics",
+        "calculation_status",
+        "cell_support_status",
+        "optimizer_status",
+        "support",
+        "quality",
+        "paired_comparison"
+      ],
+      "properties": {
+        "scenario_id": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "available": {"type": "boolean"},
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested_budget_rub", "allocated_budget_rub", "unallocated_budget_rub"],
+          "properties": {
+            "requested_budget_rub": {"type": "number", "minimum": 0},
+            "allocated_budget_rub": {"type": "number", "minimum": 0},
+            "unallocated_budget_rub": {"type": "number", "minimum": 0}
+          }
+        },
+        "metrics": {"$ref": "#/$defs/metrics"},
+        "calculation_status": {"$ref": "#/$defs/status"},
+        "cell_support_status": {"$ref": "#/$defs/status"},
+        "optimizer_status": {"$ref": "#/$defs/status"},
+        "support": {"$ref": "#/$defs/support"},
+        "quality": {"$ref": "#/$defs/quality"},
+        "paired_comparison": {
+          "anyOf": [
+            {"$ref": "#/$defs/pairedComparison"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "evaluation_level",
+        "eligible_for_automatic_recommendation",
+        "incremental_turnover",
+        "turnover_roas",
+        "support",
+        "rejection_reasons",
+        "explanation"
+      ],
+      "properties": {
+        "candidate_id": {"$ref": "#/$defs/opaqueId"},
+        "evaluation_level": {"enum": ["search_only", "final_posterior"]},
+        "eligible_for_automatic_recommendation": {"type": "boolean"},
+        "incremental_turnover": {"$ref": "#/$defs/nullableMetric"},
+        "turnover_roas": {"$ref": "#/$defs/nullableMetric"},
+        "support": {"$ref": "#/$defs/support"},
+        "rejection_reasons": {"type": "array", "items": {"type": "string"}},
+        "explanation": {"type": "string", "minLength": 1}
+      }
+    },
+    "scenario6Audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_status",
+        "method",
+        "attempt_budget",
+        "attempts_evaluated",
+        "kernel_evaluations",
+        "unique_allocations",
+        "candidates_generated",
+        "candidates_scored",
+        "candidates_rejected",
+        "finalists",
+        "search_posterior_draws",
+        "final_posterior_draws",
+        "search_converged",
+        "search_budget_exhausted",
+        "best_raw_candidate_id",
+        "best_safe_candidate_id",
+        "explanation"
+      ],
+      "properties": {
+        "run_status": {"$ref": "#/$defs/status"},
+        "method": {"type": "string", "minLength": 1},
+        "attempt_budget": {"type": "integer", "minimum": 0},
+        "attempts_evaluated": {"type": "integer", "minimum": 0},
+        "kernel_evaluations": {"type": "integer", "minimum": 0},
+        "unique_allocations": {"type": "integer", "minimum": 0},
+        "candidates_generated": {"type": "integer", "minimum": 0},
+        "candidates_scored": {"type": "integer", "minimum": 0},
+        "candidates_rejected": {"type": "integer", "minimum": 0},
+        "finalists": {"type": "integer", "minimum": 0},
+        "search_posterior_draws": {"type": "integer", "minimum": 0},
+        "final_posterior_draws": {"type": "integer", "minimum": 0},
+        "search_converged": {"type": ["boolean", "null"]},
+        "search_budget_exhausted": {"type": ["boolean", "null"]},
+        "best_raw_candidate_id": {
+          "anyOf": [{"$ref": "#/$defs/opaqueId"}, {"type": "null"}]
+        },
+        "best_safe_candidate_id": {
+          "anyOf": [{"$ref": "#/$defs/opaqueId"}, {"type": "null"}]
+        },
+        "explanation": {"type": "string", "minLength": 1}
+      }
+    },
+    "allocationLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment",
+        "geo",
+        "channel",
+        "uploaded_budget_rub",
+        "recommended_budget_rub",
+        "delta_budget_rub",
+        "uploaded_budget_share",
+        "recommended_budget_share",
+        "action",
+        "optimizer_policy",
+        "allowed_use",
+        "gate_reason_codes"
+      ],
+      "properties": {
+        "segment": {"type": "string", "minLength": 1},
+        "geo": {"type": "string", "minLength": 1},
+        "channel": {"type": "string", "minLength": 1},
+        "uploaded_budget_rub": {"type": "number", "minimum": 0},
+        "recommended_budget_rub": {"type": "number", "minimum": 0},
+        "delta_budget_rub": {"type": "number"},
+        "uploaded_budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "recommended_budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "action": {"enum": ["increase", "decrease", "keep"]},
+        "optimizer_policy": {"type": "string"},
+        "allowed_use": {"type": "string"},
+        "gate_reason_codes": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "passport",
+        "budget",
+        "statuses",
+        "quality",
+        "scenarios",
+        "recommendation",
+        "scenario6",
+        "allocation_comparison",
+        "warnings"
+      ],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/opaqueId"},
+        "passport": {"$ref": "#/$defs/passport"},
+        "budget": {"$ref": "#/$defs/budgetReconciliation"},
+        "statuses": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "calculation_status",
+            "campaign_scale_status",
+            "cell_support_status",
+            "optimizer_status",
+            "business_decision_status"
+          ],
+          "properties": {
+            "calculation_status": {"$ref": "#/$defs/status"},
+            "campaign_scale_status": {"$ref": "#/$defs/status"},
+            "cell_support_status": {"$ref": "#/$defs/status"},
+            "optimizer_status": {"$ref": "#/$defs/status"},
+            "business_decision_status": {"$ref": "#/$defs/status"}
+          }
+        },
+        "quality": {"$ref": "#/$defs/quality"},
+        "scenarios": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/scenario"}
+        },
+        "recommendation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scenario_id",
+            "scenario_name",
+            "recommendation_type",
+            "reason",
+            "plan_status",
+            "optimizer_available",
+            "metrics",
+            "versus_uploaded_plan"
+          ],
+          "properties": {
+            "scenario_id": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]},
+            "scenario_name": {"type": "string", "minLength": 1},
+            "recommendation_type": {"$ref": "#/$defs/status"},
+            "reason": {"type": "string", "minLength": 1},
+            "plan_status": {"$ref": "#/$defs/status"},
+            "optimizer_available": {"type": "boolean"},
+            "metrics": {"$ref": "#/$defs/metrics"},
+            "versus_uploaded_plan": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "delta_incremental_turnover_p50_rub",
+                "delta_incremental_turnover_p50_share",
+                "moved_budget_rub"
+              ],
+              "properties": {
+                "delta_incremental_turnover_p50_rub": {"$ref": "#/$defs/nullableNumber"},
+                "delta_incremental_turnover_p50_share": {"$ref": "#/$defs/nullableNumber"},
+                "moved_budget_rub": {"type": "number", "minimum": 0}
+              }
+            }
+          }
+        },
+        "scenario6": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["audit", "best_raw", "best_safe", "raw_differs_from_safe"],
+          "properties": {
+            "audit": {"$ref": "#/$defs/scenario6Audit"},
+            "best_raw": {
+              "anyOf": [{"$ref": "#/$defs/candidate"}, {"type": "null"}]
+            },
+            "best_safe": {
+              "anyOf": [{"$ref": "#/$defs/candidate"}, {"type": "null"}]
+            },
+            "raw_differs_from_safe": {"type": "boolean"}
+          }
+        },
+        "allocation_comparison": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/allocationLine"}
+        },
+        "warnings": {"type": "array", "items": {"$ref": "#/$defs/warning"}}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "kind",
+        "display_name",
+        "media_type",
+        "sha256",
+        "size_bytes",
+        "storage_key",
+        "download_path"
+      ],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "kind": {"type": "string", "minLength": 1},
+        "display_name": {"type": "string", "minLength": 1},
+        "media_type": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "storage_key": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "download_path": {
+          "type": "string",
+          "pattern": "^/api/v1/artifacts/[a-z][a-z0-9_]*_[0-9a-f]{12,64}/download$"
+        }
+      }
+    }
+  }
+}

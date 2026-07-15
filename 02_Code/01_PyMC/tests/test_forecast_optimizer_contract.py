@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 PYMC_CODE_DIR = Path(__file__).resolve().parents[1]
 if str(PYMC_CODE_DIR) not in sys.path:
@@ -996,6 +996,26 @@ class PanelPreflightTests(unittest.TestCase):
 
 
 class MarketerReportContractTests(unittest.TestCase):
+    def test_wrapped_marketer_explanation_expands_row_height(self) -> None:
+        workbook = Workbook()
+        worksheet = workbook.active
+        long_explanation = (
+            "Система сохраняет исходный план, потому что найденное улучшение меньше "
+            "порога содержательности и поиск не подтвердил устойчивое преимущество."
+        )
+        row_after_table, _ = MARKETER_REPORT._write_table(
+            worksheet,
+            pd.DataFrame([{"Почему": long_explanation}]),
+            start_row=1,
+            title="Проверка",
+        )
+        worksheet.column_dimensions["A"].width = 38
+
+        MARKETER_REPORT._fit_wrapped_row_heights(worksheet)
+
+        data_row = row_after_table - 2
+        self.assertGreater(worksheet.row_dimensions[data_row].height, 34)
+
     def test_cached_paired_comparisons_are_attached_to_finalists(self) -> None:
         finalist = pd.DataFrame(
             [

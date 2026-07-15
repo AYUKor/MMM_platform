@@ -1,6 +1,6 @@
 import type { DecisionResultV1 } from "../../entities/decision-result/types";
 
-export type ResultProviderKind = "fixture" | "unavailable";
+export type ResultProviderKind = "fixture" | "http" | "unavailable";
 
 export interface ResultProvider {
   readonly kind: ResultProviderKind;

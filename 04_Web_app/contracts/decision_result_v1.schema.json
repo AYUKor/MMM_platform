@@ -239,7 +239,9 @@
       "additionalProperties": false,
       "required": ["unit", "p10", "p50", "p90"],
       "properties": {
-        "unit": {"enum": ["RUB", "orders"]},
+        "unit": {
+          "enum": ["RUB", "orders", "turnover_bridge_from_avg_basket_rub"]
+        },
         "p10": {"type": "number"},
         "p50": {"type": "number"},
         "p90": {"type": "number"}
@@ -594,7 +596,7 @@
         "workflow_config_sha256": {"$ref": "#/$defs/sha256"},
         "input_flighting_sha256": {"$ref": "#/$defs/sha256"},
         "adapter_name": {"const": "optimizer_result_adapter"},
-        "adapter_version": {"const": "1.0.0"},
+        "adapter_version": {"const": "1.0.2"},
         "adapter_sha256": {"$ref": "#/$defs/sha256"}
       }
     },

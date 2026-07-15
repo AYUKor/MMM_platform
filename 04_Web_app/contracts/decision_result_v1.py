@@ -18,7 +18,7 @@ from typing import Any
 CONTRACT_NAME = "decision_result_v1"
 SCHEMA_VERSION = "1.0.0"
 RESULT_ADAPTER_NAME = "optimizer_result_adapter"
-RESULT_ADAPTER_VERSION = "1.0.0"
+RESULT_ADAPTER_VERSION = "1.0.2"
 
 CALCULATION_STATUS_CODES = {"calculated", "partially_calculated", "not_calculated"}
 CAMPAIGN_SCALE_STATUS_CODES = {

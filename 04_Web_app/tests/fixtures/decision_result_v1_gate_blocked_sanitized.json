@@ -13,7 +13,7 @@
     "workflow_config_sha256": "2afe3a214a4e6126c50d8a2fac4059f29bbfd0edb3a974f56119dc8a0c88086c",
     "input_flighting_sha256": "c96cbfea72e3106b6d294b0426e100c650cf585e87179c09fa88a154dcbcc26f",
     "adapter_name": "optimizer_result_adapter",
-    "adapter_version": "1.0.0",
+    "adapter_version": "1.0.2",
     "adapter_sha256": "d32949914d712689db00e1f85cd15c17aabf8b3e9333e3bb33472292afa351e3"
   },
   "model": {
@@ -99,12 +99,12 @@
             "roas_p50": 0.494208,
             "incremental_orders": {
               "unit": "orders",
-              "p10": 17982941.4563,
-              "p50": 66493064.2227,
-              "p90": 209137314.3149
+              "p10": 17.9829,
+              "p50": 66.4931,
+              "p90": 209.1373
             },
             "avg_basket_bridge": {
-              "unit": "RUB",
+              "unit": "turnover_bridge_from_avg_basket_rub",
               "p10": 4009868.93,
               "p50": 4646467.09,
               "p90": 5306645.17
@@ -168,12 +168,12 @@
             "roas_p50": 0.519401,
             "incremental_orders": {
               "unit": "orders",
-              "p10": 15162526.8592,
-              "p50": 55905941.0127,
-              "p90": 157047410.5857
+              "p10": 15.1625,
+              "p50": 55.9059,
+              "p90": 157.0474
             },
             "avg_basket_bridge": {
-              "unit": "RUB",
+              "unit": "turnover_bridge_from_avg_basket_rub",
               "p10": 4190783.04,
               "p50": 4859992.72,
               "p90": 5648041.59
@@ -237,12 +237,12 @@
             "roas_p50": 0.479016,
             "incremental_orders": {
               "unit": "orders",
-              "p10": 16884929.8671,
-              "p50": 63030691.3736,
-              "p90": 192081232.4803
+              "p10": 16.8849,
+              "p50": 63.0307,
+              "p90": 192.0812
             },
             "avg_basket_bridge": {
-              "unit": "RUB",
+              "unit": "turnover_bridge_from_avg_basket_rub",
               "p10": 3905399.15,
               "p50": 4492386.68,
               "p90": 5127523.0
@@ -306,12 +306,12 @@
             "roas_p50": 0.522267,
             "incremental_orders": {
               "unit": "orders",
-              "p10": 15617188.5922,
-              "p50": 58067247.6938,
-              "p90": 164425218.4546
+              "p10": 15.6172,
+              "p50": 58.0672,
+              "p90": 164.4252
             },
             "avg_basket_bridge": {
-              "unit": "RUB",
+              "unit": "turnover_bridge_from_avg_basket_rub",
               "p10": 4212177.46,
               "p50": 4886723.23,
               "p90": 5681613.9
@@ -375,12 +375,12 @@
             "roas_p50": 0.495132,
             "incremental_orders": {
               "unit": "orders",
-              "p10": 17810308.6802,
-              "p50": 66171850.8033,
-              "p90": 208374988.1906
+              "p10": 17.8103,
+              "p50": 66.1719,
+              "p90": 208.375
             },
             "avg_basket_bridge": {
-              "unit": "RUB",
+              "unit": "turnover_bridge_from_avg_basket_rub",
               "p10": 3957092.25,
               "p50": 4566874.67,
               "p90": 5200289.54
@@ -516,12 +516,12 @@
           "roas_p50": 0.494208,
           "incremental_orders": {
             "unit": "orders",
-            "p10": 17982941.4563,
-            "p50": 66493064.2227,
-            "p90": 209137314.3149
+            "p10": 17.9829,
+            "p50": 66.4931,
+            "p90": 209.1373
           },
           "avg_basket_bridge": {
-            "unit": "RUB",
+            "unit": "turnover_bridge_from_avg_basket_rub",
             "p10": 4009868.93,
             "p50": 4646467.09,
             "p90": 5306645.17

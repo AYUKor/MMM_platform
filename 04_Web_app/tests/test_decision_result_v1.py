@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -12,7 +14,7 @@ from typing import Any, Iterator
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
-PROJECT_ROOT = WEB_APP_DIR.parent
+PROJECT_ROOT = Path(os.environ.get("MMM_EVIDENCE_PROJECT_ROOT", WEB_APP_DIR.parent)).resolve()
 if str(WEB_APP_DIR) not in sys.path:
     sys.path.insert(0, str(WEB_APP_DIR))
 
@@ -87,7 +89,7 @@ class DecisionResultV1ContractTest(unittest.TestCase):
         self.assertEqual(self.fixture["schema_version"], "1.0.0")
         self.assertEqual(self.fixture["result_origin"], "sanitized_fixture")
         self.assertEqual(self.fixture["job"]["adapter_name"], "optimizer_result_adapter")
-        self.assertEqual(self.fixture["job"]["adapter_version"], "1.0.0")
+        self.assertEqual(self.fixture["job"]["adapter_version"], "1.0.2")
         self.assertTrue(self.fixture["campaign_results"])
 
         warning_codes = {warning["code"] for warning in self.fixture["warnings"]}
@@ -212,6 +214,31 @@ class DecisionResultV1ContractTest(unittest.TestCase):
             )
 
     @unittest.skipUnless(RUN_18.is_dir(), "canonical optimizer run 18 is unavailable")
+    def test_run_18_preserves_order_counts_and_basket_bridge_semantics(self) -> None:
+        payload = build_decision_result(RUN_18).to_dict()
+        scenario_path = RUN_18 / "marketer_report_scenario_results.csv"
+        with scenario_path.open(encoding="utf-8-sig", newline="") as handle:
+            source_rows = {
+                (row["campaign_name"], row["scenario_no"]): row
+                for row in csv.DictReader(handle)
+            }
+
+        for campaign in payload["campaign_results"]:
+            campaign_name = campaign["passport"]["campaign_name"]
+            for scenario in campaign["scenarios"][:5]:
+                source = source_rows[(campaign_name, scenario["scenario_id"])]
+                orders = scenario["metrics"]["incremental_orders"]
+                basket = scenario["metrics"]["avg_basket_bridge"]
+                self.assertAlmostEqual(orders["p50"], float(source["orders_p50_mln"]))
+                self.assertEqual(orders["unit"], "orders")
+                self.assertAlmostEqual(
+                    basket["p50"], float(source["basket_p50_mln"]) * 1_000_000.0
+                )
+                self.assertEqual(
+                    basket["unit"], "turnover_bridge_from_avg_basket_rub"
+                )
+
+    @unittest.skipUnless(RUN_18.is_dir(), "canonical optimizer run 18 is unavailable")
     def test_worker_can_preserve_preexisting_job_identity(self) -> None:
         job_id = "job_1234567890ab"
         workflow_sha256 = "f" * 64
@@ -241,6 +268,14 @@ class DecisionResultV1ContractTest(unittest.TestCase):
                 build_decision_result(copied_run)
 
     def test_status_mapping_is_fail_closed(self) -> None:
+        self.assertEqual(
+            _status("quality_status", "Сопоставимо с историей").code,
+            "reliable",
+        )
+        self.assertEqual(
+            _status("quality_status", "Расчет невозможен").code,
+            "not_calculated",
+        )
         with self.assertRaisesRegex(OptimizerResultAdapterError, "Unmapped quality_status"):
             _status("quality_status", "Неизвестный новый статус")
 

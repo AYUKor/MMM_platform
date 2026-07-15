@@ -42,9 +42,13 @@ export function ResultOverview({ result, campaign }: ResultOverviewProps) {
     );
   }
 
+  const reportArtifactId =
+    result.artifacts.find((artifact) => artifact.kind === "marketer_report_xlsx")
+      ?.artifact_id ?? null;
+
   return (
     <div className={styles.page}>
-      <CampaignHeader model={model} />
+      <CampaignHeader model={model} reportArtifactId={reportArtifactId} />
       <Tabs items={resultTabs} activeId="overview" />
       <section id="overview-panel" role="tabpanel" className={styles.overviewPanel}>
         <section className={styles.decisionGrid} aria-label="Рекомендация и benchmark">

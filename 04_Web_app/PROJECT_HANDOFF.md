@@ -17,8 +17,14 @@ As of 2026-07-15:
 - local Execution Worker v1 now verifies immutable inputs and package/policy
   pins, launches the existing optimizer/report CLI in a subprocess, publishes
   lifecycle progress, and composes DecisionResult with the original `job_id`;
-- HTTP API, queue, PostgreSQL/object-storage adapters, authentication, and
-  frontend are not implemented yet.
+- localhost HTTP API, canonical upload, model-aware validation, recoverable
+  local runtime, ResultOverview delivery, and hash-checked downloads are
+  implemented and have passed a real preprod-package E2E job;
+- frontend Phase 1 is merged without replacing its design or history; the
+  browser now covers upload and validation review, immutable job creation,
+  progress and cancellation, result, server-backed history, and Excel download;
+- company queue, PostgreSQL/object-storage adapters, authentication, and
+  production deployment are not implemented.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
@@ -281,6 +287,23 @@ The adapter is not the future execution worker. It starts only after optimizer a
 
 Scenario 6 is read from the marketer decision pool and enriched from finalist totals. Therefore a safe S6 remains visible with p10/p50/p90, ROAS, orders, basket bridge, best-safe ID and search audit even when materiality policy recommends S01. Gate-blocked S6 is represented as unavailable with no invented metrics. Search audit distinguishes configured attempt budget, attempts actually evaluated, kernel evaluations, unique allocations, scored/rejected candidates, convergence and budget-exhaustion state.
 
+Adapter `1.0.1` fixes a verified legacy-unit defect: marketer-report
+`orders_*_mln` columns contain raw order counts and must not be multiplied by
+one million. The basket metric now carries the explicit unit
+`turnover_bridge_from_avg_basket_rub`; it is an aggregate turnover bridge, not
+an average-basket delta. See ADR 0004.
+
+Adapter `1.0.2` maps the report generator's best-rank quality label
+`Сопоставимо с историей` to stable code `reliable` and its blocked label
+`Расчет невозможен` to `not_calculated`. Unknown display text remains
+fail-closed. See ADR 0009.
+
+`ResultOverview v1` is now the browser-facing projection over DecisionResult.
+It adds ROAS p10/p50/p90, uploaded-versus-recommended allocation deltas,
+UI-safe `best_raw`/`best_safe` summaries, canonical artifact download paths,
+and an explicit diagnostic-only label for orders. It contains no model math
+and never exposes raw candidate names or workstation paths. See ADR 0005.
+
 ## Implemented Local Execution Worker V1
 
 The local worker uses the tested composite optimizer CLI as its process
@@ -324,11 +347,26 @@ Each item is a separate reviewable milestone:
 3. Completed: implement local Execution Worker v1 around the existing composite
    optimizer/report boundary, including immutable preflight, progress,
    cancellation, timeout, lineage verification, and DecisionResult composition.
-4. Next: add a local HTTP smoke path against in-memory or file-backed
-   development state; do not introduce a second calculation engine.
-5. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
-6. Implement API endpoints and asynchronous event delivery against the frozen contracts.
-7. Build the marketer workflow on the real-derived fixtures and stable API.
-8. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
+4. Completed: add a localhost-only HTTP smoke path with file-backed state,
+   bounded background execution, idempotency, progress polling,
+   ResultOverview delivery and hash-checked artifact downloads.
+5. Completed: implement canonical marketer upload, background campaign parsing
+   and model-aware validation, isolated flighting artifacts and immutable
+   DecisionJob creation over the same lifecycle contracts.
+6. Completed: the versioned local runtime launcher, registry preflight,
+   single-process lock and restart/recovery guardrails are implemented. Real
+   localhost job `job_85c4b1ac16afa1a5e165` completed against pinned preprod
+   package `pkg_807d3ddbae57a52a_9aacd3beb350725b`; DecisionResult,
+   ResultOverview and the hash-checked marketer Excel were accepted. See ADR
+   0010. Smoke sampling proves application integration only, not business
+   effectiveness or production model readiness.
+7. Completed for localhost: preserve the merged Phase 1 presentation and add
+   the core marketer workflow over the stable API. Standard-profile job
+   `job_66ae8290e5d41b825808` passed validation review, browser job creation,
+   progress, result redirect, server-backed history, reopen, and hash-checked
+   Excel download. See ADR 0013.
+8. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
+9. Implement production API adapters and asynchronous event delivery against the frozen contracts.
+10. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
 
 Do not start a later milestone while an earlier contract or evidence gate is unresolved. Decisions requiring owner approval are listed only in `04_Web_app/OPEN_DECISIONS.md`.
