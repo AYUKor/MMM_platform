@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import fcntl
 import hashlib
 import json
@@ -25,9 +26,18 @@ for entry in (WEB_APP_DIR, PYMC_CODE_DIR):
 
 from api.http_smoke import HttpSmokeApplication, HttpSmokeSettings, serve  # noqa: E402
 from mmm_core.model_registry import resolve_channel  # noqa: E402
+from services.product_api_service import (  # noqa: E402
+    RuntimeRetentionManager,
+    build_model_passport,
+)
 
 
-CONFIG_SCHEMA_VERSION = "1.0.0"
+CONFIG_SCHEMA_VERSION = "1.1.0"
+SUPPORTED_CONFIG_SCHEMA_VERSIONS = {"1.0.0", CONFIG_SCHEMA_VERSION}
+ENV_PUBLIC_BASE_URL = "MMM_BACKEND_PUBLIC_BASE_URL"
+ENV_ALLOWED_ORIGINS = "MMM_BACKEND_ALLOWED_ORIGINS"
+ENV_PORT = "MMM_BACKEND_PORT"
+ENV_RETENTION_DAYS = "MMM_BACKEND_RETENTION_DAYS"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -56,17 +66,48 @@ def _positive_number(value: Any, field_name: str) -> float:
     return number
 
 
+def apply_environment_overrides(
+    config: Mapping[str, Any],
+    environ: Mapping[str, str],
+) -> dict[str, Any]:
+    """Apply non-secret deployment overrides before hashing the effective config."""
+
+    effective = copy.deepcopy(dict(config))
+    server = effective.setdefault("server", {})
+    retention = effective.setdefault("retention", {})
+    if not isinstance(server, dict) or not isinstance(retention, dict):
+        raise ValueError("server and retention config sections must be objects")
+    if environ.get(ENV_PUBLIC_BASE_URL):
+        server["public_base_url"] = environ[ENV_PUBLIC_BASE_URL].strip()
+    if environ.get(ENV_ALLOWED_ORIGINS):
+        origins = [
+            value.strip()
+            for value in environ[ENV_ALLOWED_ORIGINS].split(",")
+            if value.strip()
+        ]
+        if not origins:
+            raise ValueError(f"{ENV_ALLOWED_ORIGINS} must contain at least one origin")
+        server["allowed_origins"] = origins
+    if environ.get(ENV_PORT):
+        server["port"] = int(environ[ENV_PORT])
+    if environ.get(ENV_RETENTION_DAYS):
+        retention["days"] = int(environ[ENV_RETENTION_DAYS])
+    return effective
+
+
 def build_settings(
     config: Mapping[str, Any],
     *,
     project_root: Path,
 ) -> tuple[HttpSmokeSettings, str, int]:
-    if config.get("schema_version") != CONFIG_SCHEMA_VERSION:
+    schema_version = str(config.get("schema_version") or "")
+    if schema_version not in SUPPORTED_CONFIG_SCHEMA_VERSIONS:
         raise ValueError(f"Unsupported backend config schema: {config.get('schema_version')!r}")
     server = dict(config.get("server") or {})
     paths = dict(config.get("paths") or {})
     model = dict(config.get("model") or {})
     worker = dict(config.get("worker") or {})
+    retention = dict(config.get("retention") or {})
     host = str(server.get("host") or "127.0.0.1")
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("Local backend may bind only to localhost")
@@ -116,6 +157,15 @@ def build_settings(
         ),
         max_workers=int(worker.get("max_workers", 1)),
         max_upload_bytes=int(worker.get("max_upload_mb", 50)) * 1024 * 1024,
+        config_schema_version=schema_version,
+        deployment_profile=str(server.get("deployment_profile") or "local_development"),
+        public_base_url=(
+            str(server["public_base_url"]).rstrip("/")
+            if server.get("public_base_url")
+            else None
+        ),
+        access_control_mode=str(server.get("access_control_mode") or "local_only"),
+        retention_days=int(retention.get("days", 30)),
         allowed_origins=allowed_origins,
     )
     settings.validate()
@@ -149,6 +199,11 @@ def preflight(
             "Registry channel/package mismatch: "
             f"expected={settings.expected_package_id}, actual={actual_package_id}"
         )
+    model_passport = build_model_passport(
+        resolved,
+        project_root=settings.project_root,
+        deployment_profile=settings.deployment_profile,
+    )
     git_commit = subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
         cwd=settings.project_root,
@@ -156,8 +211,8 @@ def preflight(
     ).strip()
     return {
         "status": "ready",
-        "mode": "local_development_only",
-        "config_schema_version": CONFIG_SCHEMA_VERSION,
+        "mode": settings.deployment_profile,
+        "config_schema_version": settings.config_schema_version,
         "config_sha256": config_sha256,
         "package_id": actual_package_id,
         "package_fingerprint": resolved["registration"]["package_input_fingerprint"],
@@ -165,6 +220,7 @@ def preflight(
         "inventory_files_n": resolved["verified"]["inventory_files_n"],
         "git_commit": git_commit,
         "python_version": sys.version.split()[0],
+        "model_passport": model_passport,
     }
 
 
@@ -213,23 +269,65 @@ def _write_runtime_card(
     temporary.replace(target)
 
 
+def _console_preflight(preflight_result: Mapping[str, Any]) -> dict[str, Any]:
+    payload = {
+        key: value
+        for key, value in preflight_result.items()
+        if key != "model_passport"
+    }
+    passport = dict(preflight_result.get("model_passport") or {})
+    coverage = dict(passport.get("coverage") or {})
+    validation = dict(passport.get("validation") or {})
+    payload["model_passport_summary"] = {
+        "contract_name": passport.get("contract_name"),
+        "capability_cells_n": coverage.get("capability_cells_n"),
+        "historical_replay": dict(validation.get("historical_replay") or {}).get("status"),
+        "sealed_oot": dict(validation.get("sealed_oot") or {}).get("status"),
+    }
+    return payload
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--project-root", type=Path, default=PROJECT_ROOT)
-    parser.add_argument("--check-only", action="store_true")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--check-only", action="store_true")
+    action.add_argument("--retention-report", action="store_true")
+    action.add_argument("--apply-retention", action="store_true")
     args = parser.parse_args(argv)
     project_root = args.project_root.expanduser().resolve()
-    config = _read_json(args.config.expanduser().resolve())
+    config = apply_environment_overrides(
+        _read_json(args.config.expanduser().resolve()),
+        os.environ,
+    )
     config_sha = _config_sha256(config)
     settings, host, port = build_settings(config, project_root=project_root)
+    if args.retention_report or args.apply_retention:
+        manager = RuntimeRetentionManager(
+            settings.state_root,
+            settings.runtime_root,
+            settings.artifact_root,
+        )
+        plan = manager.plan(settings.retention_days)
+        if args.retention_report:
+            print(json.dumps({"status": "dry_run", **plan.to_dict()}, ensure_ascii=False, indent=2))
+            return 0
+        lock_path = settings.state_root.parent / "backend.lock"
+        with _single_instance_lock(lock_path):
+            result = manager.apply(plan)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     preflight_result = preflight(settings, config_sha256=config_sha)
     if args.check_only:
         print(json.dumps(preflight_result, ensure_ascii=False, indent=2), flush=True)
         return 0
     lock_path = settings.state_root.parent / "backend.lock"
     with _single_instance_lock(lock_path):
-        application = HttpSmokeApplication(settings)
+        application = HttpSmokeApplication(
+            settings,
+            model_passport=preflight_result["model_passport"],
+        )
         _write_runtime_card(
             settings,
             {**preflight_result, "recovery": application.recovery_summary},
@@ -239,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 {
-                    **preflight_result,
+                    **_console_preflight(preflight_result),
                     "status": "starting",
                     "url": f"http://{host}:{port}",
                     "pid": os.getpid(),

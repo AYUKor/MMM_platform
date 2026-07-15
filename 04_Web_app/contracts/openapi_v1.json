@@ -1,0 +1,267 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "X5 MMM Research Product API",
+    "version": "1.1.0",
+    "description": "Versioned HTTP boundary for campaign upload, validation, asynchronous forecast and optimizer jobs, browser-safe results, model passport and artifacts. The API contains no MMM mathematics."
+  },
+  "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
+  "paths": {
+    "/health": {
+      "get": {"operationId": "getHealth", "responses": {"200": {"description": "Process liveness"}}}
+    },
+    "/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "responses": {
+          "200": {"description": "Package, upload service and local stores are ready"},
+          "503": {"description": "One or more serving dependencies are not ready"}
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {"operationId": "getOpenApi", "responses": {"200": {"description": "This OpenAPI document"}}}
+    },
+    "/api/v1/contracts/{contract_name}.json": {
+      "get": {
+        "operationId": "getContractSchema",
+        "parameters": [{"$ref": "#/components/parameters/ContractName"}],
+        "responses": {
+          "200": {"description": "Published JSON Schema"},
+          "404": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/meta/errors": {
+      "get": {
+        "operationId": "getHttpErrorCatalog",
+        "responses": {
+          "200": {
+            "description": "Stable HTTP errors and suggested user actions",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HttpErrorCatalog"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/models/active": {
+      "get": {
+        "operationId": "getActiveModelPassport",
+        "responses": {
+          "200": {
+            "description": "Verified research-serving model package",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ModelPassport"}}}
+          },
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/uploads": {
+      "post": {
+        "operationId": "createCampaignUpload",
+        "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {"file": {"type": "string", "format": "binary"}}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/CampaignUpload"},
+          "202": {"$ref": "#/components/responses/CampaignUpload"},
+          "400": {"$ref": "#/components/responses/ApiError"},
+          "413": {"$ref": "#/components/responses/ApiError"},
+          "422": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}": {
+      "get": {
+        "operationId": "getCampaignUpload",
+        "parameters": [{"$ref": "#/components/parameters/UploadId"}],
+        "responses": {
+          "200": {"$ref": "#/components/responses/CampaignUpload"},
+          "404": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}/validations": {
+      "post": {
+        "operationId": "createCampaignValidation",
+        "parameters": [
+          {"$ref": "#/components/parameters/UploadId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"}
+        ],
+        "responses": {
+          "200": {"$ref": "#/components/responses/ValidationResult"},
+          "202": {"$ref": "#/components/responses/ValidationResult"},
+          "409": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/validations/{validation_id}": {
+      "get": {
+        "operationId": "getCampaignValidation",
+        "parameters": [{"$ref": "#/components/parameters/ValidationId"}],
+        "responses": {
+          "200": {"$ref": "#/components/responses/ValidationResult"},
+          "404": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/validations/{validation_id}/jobs": {
+      "post": {
+        "operationId": "createDecisionJobFromValidation",
+        "parameters": [
+          {"$ref": "#/components/parameters/ValidationId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"}
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {"application/json": {"schema": {"type": "object"}}}
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/DecisionJob"},
+          "202": {"$ref": "#/components/responses/DecisionJob"},
+          "409": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "operationId": "listDecisionJobs",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0, "default": 0}},
+          {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/JobStatus"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Paged jobs ordered newest first",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/JobList"}}}
+          },
+          "400": {"$ref": "#/components/responses/ApiError"}
+        }
+      },
+      "post": {
+        "operationId": "submitDecisionJobContract",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionJob"}}}
+        },
+        "responses": {
+          "200": {"$ref": "#/components/responses/DecisionJob"},
+          "202": {"$ref": "#/components/responses/DecisionJob"},
+          "422": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "getDecisionJob",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {"200": {"$ref": "#/components/responses/DecisionJob"}, "404": {"$ref": "#/components/responses/ApiError"}}
+      }
+    },
+    "/api/v1/jobs/{job_id}/progress": {
+      "get": {
+        "operationId": "getJobProgress",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {"200": {"description": "ProgressEvent v1 array"}, "404": {"$ref": "#/components/responses/ApiError"}}
+      }
+    },
+    "/api/v1/jobs/{job_id}/errors": {
+      "get": {
+        "operationId": "getJobErrors",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {"200": {"description": "ApplicationError v1 array"}, "404": {"$ref": "#/components/responses/ApiError"}}
+      }
+    },
+    "/api/v1/jobs/{job_id}/result": {
+      "get": {
+        "operationId": "getDecisionResult",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {
+          "200": {"description": "Full audit result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionResult"}}}},
+          "404": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/overview": {
+      "get": {
+        "operationId": "getResultOverview",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {
+          "200": {"description": "Browser-oriented result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ResultOverview"}}}},
+          "404": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "requestJobCancellation",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {"202": {"description": "Cancellation requested"}, "409": {"$ref": "#/components/responses/ApiError"}}
+      }
+    },
+    "/api/v1/artifacts/{artifact_id}/download": {
+      "get": {
+        "operationId": "downloadArtifact",
+        "parameters": [{"$ref": "#/components/parameters/ArtifactId"}],
+        "responses": {
+          "200": {"description": "Hash-checked artifact bytes"},
+          "404": {"$ref": "#/components/responses/ApiError"},
+          "409": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 16, "maxLength": 128}},
+      "ContractName": {"name": "contract_name", "in": "path", "required": true, "schema": {"enum": ["application-lifecycle-v1", "decision-result-v1", "result-overview-v1", "product-api-v1"]}},
+      "UploadId": {"name": "upload_id", "in": "path", "required": true, "schema": {"type": "string"}},
+      "ValidationId": {"name": "validation_id", "in": "path", "required": true, "schema": {"type": "string"}},
+      "JobId": {"name": "job_id", "in": "path", "required": true, "schema": {"type": "string"}},
+      "ArtifactId": {"name": "artifact_id", "in": "path", "required": true, "schema": {"type": "string"}}
+    },
+    "responses": {
+      "ApiError": {"description": "Browser-safe API error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
+      "CampaignUpload": {"description": "CampaignUpload v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CampaignUpload"}}}},
+      "ValidationResult": {"description": "ValidationResult v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationResult"}}}},
+      "DecisionJob": {"description": "DecisionJob v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionJob"}}}}
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "display_text", "retryable", "user_action"],
+            "properties": {
+              "code": {"type": "string"},
+              "display_text": {"type": "string"},
+              "retryable": {"type": "boolean"},
+              "user_action": {"type": "string"}
+            }
+          }
+        }
+      },
+      "JobStatus": {"enum": ["queued", "running", "cancel_requested", "succeeded", "failed", "cancelled", "timed_out"]},
+      "CampaignUpload": {"$ref": "./contracts/application-lifecycle-v1.json#/$defs/campaignUpload"},
+      "ValidationResult": {"$ref": "./contracts/application-lifecycle-v1.json#/$defs/validationResult"},
+      "DecisionJob": {"$ref": "./contracts/application-lifecycle-v1.json#/$defs/decisionJob"},
+      "DecisionResult": {"$ref": "./contracts/decision-result-v1.json"},
+      "ResultOverview": {"$ref": "./contracts/result-overview-v1.json"},
+      "ModelPassport": {"$ref": "./contracts/product-api-v1.json#/$defs/modelPassport"},
+      "HttpErrorCatalog": {"$ref": "./contracts/product-api-v1.json#/$defs/httpErrorCatalog"},
+      "JobList": {"$ref": "./contracts/product-api-v1.json#/$defs/jobList"}
+    }
+  }
+}

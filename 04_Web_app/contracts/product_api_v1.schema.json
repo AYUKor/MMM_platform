@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example.invalid/contracts/product_api_v1.schema.json",
+  "title": "X5 MMM Product API v1",
+  "oneOf": [
+    {"$ref": "#/$defs/modelPassport"},
+    {"$ref": "#/$defs/httpErrorCatalog"},
+    {"$ref": "#/$defs/jobList"}
+  ],
+  "$defs": {
+    "nullableString": {"type": ["string", "null"]},
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "modelPassport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "record_origin",
+        "serving",
+        "package",
+        "data",
+        "coverage",
+        "validation",
+        "caveats"
+      ],
+      "properties": {
+        "contract_name": {"const": "model_passport_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "record_origin": {"enum": ["verified_model_package", "synthetic_fixture"]},
+        "serving": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "deployment_profile",
+            "display_name",
+            "calculation_allowed",
+            "decision_scope",
+            "production_claim_allowed"
+          ],
+          "properties": {
+            "deployment_profile": {"enum": ["local_development", "research_pilot"]},
+            "display_name": {"type": "string", "minLength": 1},
+            "calculation_allowed": {"type": "boolean"},
+            "decision_scope": {"const": "forecast_and_allocation_only"},
+            "production_claim_allowed": {"const": false}
+          }
+        },
+        "package": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "registry_channel",
+            "registry_event_id",
+            "package_id",
+            "package_fingerprint",
+            "model_run_id",
+            "package_stage",
+            "activation_status",
+            "package_schema_version",
+            "gate_policy_version"
+          ],
+          "properties": {
+            "registry_channel": {"type": "string", "minLength": 1},
+            "registry_event_id": {"type": "string", "minLength": 1},
+            "package_id": {"type": "string", "pattern": "^pkg_[0-9a-f]{16}_[0-9a-f]{16}$"},
+            "package_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "model_run_id": {"type": "string", "minLength": 1},
+            "package_stage": {"type": "string", "minLength": 1},
+            "activation_status": {"type": "string", "minLength": 1},
+            "package_schema_version": {"type": "string", "minLength": 1},
+            "gate_policy_version": {"type": "string", "minLength": 1}
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["grain", "training_period", "development_shadow_period"],
+          "properties": {
+            "grain": {"const": "daily"},
+            "training_period": {"$ref": "#/$defs/requiredPeriod"},
+            "development_shadow_period": {"$ref": "#/$defs/nullablePeriod"}
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "segments",
+            "channels",
+            "targets",
+            "geographies_n",
+            "capability_cells_n",
+            "allowed_use_counts",
+            "channel_policies"
+          ],
+          "properties": {
+            "segments": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "channels": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "targets": {"type": "array", "items": {"$ref": "#/$defs/targetSummary"}},
+            "geographies_n": {"type": "integer", "minimum": 0},
+            "capability_cells_n": {"type": "integer", "minimum": 0},
+            "allowed_use_counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "primary": {"type": "integer", "minimum": 0},
+                "caution": {"type": "integer", "minimum": 0},
+                "diagnostic": {"type": "integer", "minimum": 0},
+                "unavailable": {"type": "integer", "minimum": 0}
+              }
+            },
+            "channel_policies": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/channelPolicy"}
+            }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["historical_replay", "sealed_oot", "production_blockers"],
+          "properties": {
+            "historical_replay": {"$ref": "#/$defs/evidenceStatus"},
+            "sealed_oot": {"$ref": "#/$defs/evidenceStatus"},
+            "production_blockers": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/status"}
+            }
+          }
+        },
+        "caveats": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/status"}
+        }
+      }
+    },
+    "requiredPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"}
+      }
+    },
+    "nullablePeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date", "purpose"],
+      "properties": {
+        "start_date": {"type": ["string", "null"], "format": "date"},
+        "end_date": {"type": ["string", "null"], "format": "date"},
+        "purpose": {"const": "development_shadow_not_sealed_oot"}
+      }
+    },
+    "targetSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "allowed_use_counts", "objective_roles"],
+      "properties": {
+        "target": {"type": "string", "minLength": 1},
+        "allowed_use_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "objective_roles": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "channelPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment",
+        "channel",
+        "target",
+        "allowed_use",
+        "forecast_action",
+        "optimizer_action",
+        "display_text"
+      ],
+      "properties": {
+        "segment": {"type": "string", "minLength": 1},
+        "channel": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1},
+        "allowed_use": {"enum": ["primary", "caution", "diagnostic", "unavailable"]},
+        "forecast_action": {"type": "string", "minLength": 1},
+        "optimizer_action": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidenceStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "generated_at_utc", "reason_code", "display_text"],
+      "properties": {
+        "status": {"enum": ["passed", "unavailable", "failed"]},
+        "generated_at_utc": {"$ref": "#/$defs/nullableString"},
+        "reason_code": {"$ref": "#/$defs/nullableString"},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "httpErrorCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_name", "schema_version", "errors"],
+      "properties": {
+        "contract_name": {"const": "http_error_catalog_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "http_status", "retryable", "display_text", "user_action"],
+            "properties": {
+              "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]+$"},
+              "http_status": {"type": "integer", "minimum": 400, "maximum": 599},
+              "retryable": {"type": "boolean"},
+              "display_text": {"type": "string", "minLength": 1},
+              "user_action": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "jobList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_name", "schema_version", "items", "total", "limit", "offset", "next_offset"],
+      "properties": {
+        "contract_name": {"const": "job_list_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "items": {"type": "array", "items": {"type": "object"}},
+        "total": {"type": "integer", "minimum": 0},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+        "offset": {"type": "integer", "minimum": 0},
+        "next_offset": {"type": ["integer", "null"], "minimum": 0}
+      }
+    }
+  }
+}

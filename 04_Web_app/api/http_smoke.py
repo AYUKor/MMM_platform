@@ -25,7 +25,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -47,6 +47,12 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     ValidationResultV1,
     parse_lifecycle_contract,
 )
+from contracts.product_api_v1 import (  # noqa: E402
+    HTTP_ERROR_CATALOG,
+    build_error_catalog_payload,
+    load_openapi_document,
+    validate_model_passport,
+)
 from worker.execution_worker import (  # noqa: E402
     ExecutionOutcome,
     ExecutionWorker,
@@ -58,10 +64,11 @@ from services.local_campaign_service import (  # noqa: E402
     LocalCampaignService,
     LocalCampaignServiceSettings,
 )
+from services.product_api_service import paginate_jobs  # noqa: E402
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
     r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|errors|result|overview|cancel))?$"
@@ -76,6 +83,15 @@ _VALIDATION_PATH_RE = re.compile(
     r"^/api/v1/validations/(?P<validation_id>validation_[0-9a-f]{12,64})(?:/(?P<resource>jobs))?$"
 )
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9._:-]{16,128}$")
+_SCHEMA_PATH_RE = re.compile(
+    r"^/api/v1/contracts/(?P<contract_name>[a-z0-9][a-z0-9-]{0,63})\.json$"
+)
+_CONTRACT_SCHEMA_FILES = {
+    "application-lifecycle-v1": WEB_APP_DIR / "contracts" / "application_lifecycle_v1.schema.json",
+    "decision-result-v1": WEB_APP_DIR / "contracts" / "decision_result_v1.schema.json",
+    "result-overview-v1": WEB_APP_DIR / "contracts" / "result_overview_v1.schema.json",
+    "product-api-v1": WEB_APP_DIR / "contracts" / "product_api_v1.schema.json",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -146,6 +162,11 @@ class HttpSmokeSettings:
     timeout_seconds: float = 7200.0
     max_workers: int = 1
     max_upload_bytes: int = 50 * 1024 * 1024
+    config_schema_version: str = "1.1.0"
+    deployment_profile: str = "local_development"
+    public_base_url: str | None = None
+    access_control_mode: str = "local_only"
+    retention_days: int = 30
     allowed_origins: tuple[str, ...] = (
         "http://localhost:4173",
         "http://127.0.0.1:4173",
@@ -160,9 +181,61 @@ class HttpSmokeSettings:
             raise ValueError("max_workers must be positive")
         if self.max_upload_bytes <= 0:
             raise ValueError("max_upload_bytes must be positive")
+        if self.retention_days <= 0:
+            raise ValueError("retention_days must be positive")
+        if self.deployment_profile not in {"local_development", "research_pilot"}:
+            raise ValueError("Unknown deployment_profile")
+        if not self.allowed_origins:
+            raise ValueError("At least one explicit CORS origin is required")
         for origin in self.allowed_origins:
-            if not origin.startswith(("http://localhost:", "http://127.0.0.1:")):
-                raise ValueError("HTTP Smoke v1 accepts localhost CORS origins only")
+            parsed = urlsplit(origin)
+            is_local = parsed.scheme == "http" and parsed.hostname in {
+                "localhost",
+                "127.0.0.1",
+            }
+            is_https = parsed.scheme == "https" and bool(parsed.hostname)
+            if (
+                "*" in origin
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("CORS origins must not contain paths, query strings or fragments")
+            if self.deployment_profile == "local_development" and not is_local:
+                raise ValueError("Local development accepts localhost CORS origins only")
+            if self.deployment_profile == "research_pilot" and not (is_local or is_https):
+                raise ValueError("Research pilot accepts only HTTPS or localhost CORS origins")
+        if self.deployment_profile == "local_development":
+            if self.access_control_mode != "local_only":
+                raise ValueError("Local development requires access_control_mode=local_only")
+            if self.public_base_url is not None:
+                parsed_public = urlsplit(self.public_base_url)
+                if parsed_public.hostname not in {"localhost", "127.0.0.1"}:
+                    raise ValueError("Local public_base_url must remain on localhost")
+        else:
+            if self.access_control_mode not in {
+                "reverse_proxy_basic_auth",
+                "reverse_proxy_token",
+            }:
+                raise ValueError("Research pilot requires reverse-proxy access control")
+            if not self.public_base_url:
+                raise ValueError("Research pilot requires public_base_url")
+            parsed_public = urlsplit(self.public_base_url)
+            if (
+                parsed_public.scheme != "https"
+                or not parsed_public.hostname
+                or parsed_public.username is not None
+                or parsed_public.password is not None
+                or parsed_public.path not in {"", "/"}
+                or parsed_public.query
+                or parsed_public.fragment
+            ):
+                raise ValueError("Research pilot public_base_url must be one HTTPS origin")
+            public_origin = f"{parsed_public.scheme}://{parsed_public.netloc}"
+            if public_origin not in self.allowed_origins:
+                raise ValueError("Research public_base_url must be present in allowed_origins")
 
 
 class LocalApiState:
@@ -629,10 +702,16 @@ class HttpSmokeApplication:
         *,
         worker_factory: WorkerFactory | None = None,
         overview_builder: OverviewBuilder | None = None,
+        model_passport: Mapping[str, Any] | None = None,
     ) -> None:
         settings.validate()
         self.settings = settings
+        settings.runtime_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
+        settings.artifact_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         self.state = LocalApiState(settings.state_root)
+        self.model_passport = dict(model_passport) if model_passport is not None else None
+        if self.model_passport is not None:
+            validate_model_passport(self.model_passport)
         self._cancel_events: dict[str, threading.Event] = {}
         self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(
@@ -682,6 +761,30 @@ class HttpSmokeApplication:
         }
         for job in queued_jobs:
             self._dispatch_job(job)
+
+    def readiness(self) -> tuple[bool, dict[str, Any]]:
+        """Return dependency readiness without exposing local filesystem paths."""
+
+        checks = {
+            "state_store": self.state.root.is_dir(),
+            "runtime_store": self.settings.runtime_root.expanduser().resolve().is_dir(),
+            "artifact_store": self.settings.artifact_root.expanduser().resolve().is_dir(),
+            "campaign_service": self.campaign_service is not None,
+            "model_passport": self.model_passport is not None,
+        }
+        ready = all(checks.values())
+        package_id = None
+        if self.model_passport is not None:
+            package_id = str((self.model_passport.get("package") or {}).get("package_id") or "")
+        payload = {
+            "status": "ready" if ready else "not_ready",
+            "service": "x5-mmm-product-api",
+            "version": SERVER_VERSION,
+            "deployment_profile": self.settings.deployment_profile,
+            "checks": checks,
+            "active_package_id": package_id or None,
+        }
+        return ready, payload
 
     def close(self) -> None:
         with self._lock:
@@ -841,6 +944,24 @@ def _local_actor_id() -> str:
     return "actor_" + hashlib.sha256(b"local-development-actor").hexdigest()[:20]
 
 
+def _job_list_parameters(query: str) -> tuple[int, int, str | None]:
+    parameters = parse_qs(query, keep_blank_values=True)
+    unknown = set(parameters) - {"limit", "offset", "status"}
+    if unknown:
+        raise ValueError(f"Unsupported query parameters: {sorted(unknown)}")
+    if any(len(values) != 1 for values in parameters.values()):
+        raise ValueError("Each job-list query parameter may appear only once")
+    try:
+        limit = int(parameters.get("limit", ["50"])[0])
+        offset = int(parameters.get("offset", ["0"])[0])
+    except ValueError as exc:
+        raise ValueError("limit and offset must be integers") from exc
+    status = parameters.get("status", [None])[0]
+    if status == "":
+        raise ValueError("status must not be empty")
+    return limit, offset, status
+
+
 def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = f"X5MMMHTTP/{SERVER_VERSION}"
@@ -870,7 +991,25 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             self.wfile.write(body)
 
         def _error(self, status: HTTPStatus, code: str, text: str) -> None:
-            self._json(status, {"error": {"code": code, "display_text": text}})
+            catalog_entry = HTTP_ERROR_CATALOG.get(code)
+            if catalog_entry is None:
+                raise RuntimeError(f"HTTP error code is not registered: {code}")
+            if int(catalog_entry["http_status"]) != status.value:
+                raise RuntimeError(
+                    f"HTTP error status mismatch for {code}: "
+                    f"catalog={catalog_entry['http_status']}, actual={status.value}"
+                )
+            self._json(
+                status,
+                {
+                    "error": {
+                        "code": code,
+                        "display_text": text or str(catalog_entry["display_text"]),
+                        "retryable": bool(catalog_entry["retryable"]),
+                        "user_action": str(catalog_entry["user_action"]),
+                    }
+                },
+            )
 
         def do_OPTIONS(self) -> None:  # noqa: N802
             self.send_response(HTTPStatus.NO_CONTENT.value)
@@ -1004,23 +1143,36 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                 except FileNotFoundError:
                     self._error(HTTPStatus.NOT_FOUND, "JOB_NOT_FOUND", "Задача не найдена.")
                     return
+                if not accepted:
+                    self._error(
+                        HTTPStatus.CONFLICT,
+                        "CANCELLATION_NOT_ACCEPTED",
+                        "Расчет уже завершен или отмена больше не может быть принята.",
+                    )
+                    return
                 self._json(
-                    HTTPStatus.ACCEPTED if accepted else HTTPStatus.CONFLICT,
-                    {"job_id": match.group("job_id"), "cancellation_requested": accepted},
+                    HTTPStatus.ACCEPTED,
+                    {"job_id": match.group("job_id"), "cancellation_requested": True},
                 )
                 return
             self._error(HTTPStatus.NOT_FOUND, "ROUTE_NOT_FOUND", "Маршрут не найден.")
 
         def do_GET(self) -> None:  # noqa: N802
-            path = urlsplit(self.path).path
+            request_url = urlsplit(self.path)
+            path = request_url.path
             if path == "/health":
                 self._json(
                     HTTPStatus.OK,
                     {
                         "status": "ok",
-                        "service": "x5-mmm-http-smoke",
+                        "service": "x5-mmm-product-api",
                         "version": SERVER_VERSION,
-                        "mode": "local_development_only",
+                        "mode": (
+                            "local_development_only"
+                            if application.settings.deployment_profile == "local_development"
+                            else "research_pilot"
+                        ),
+                        "deployment_profile": application.settings.deployment_profile,
                         "capabilities": {
                             "job_execution": True,
                             "campaign_upload": application.campaign_service is not None,
@@ -1030,9 +1182,52 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     },
                 )
                 return
+            if path == "/ready":
+                ready, payload = application.readiness()
+                self._json(HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE, payload)
+                return
+            if path == "/api/v1/openapi.json":
+                self._json(HTTPStatus.OK, load_openapi_document())
+                return
+            schema_match = _SCHEMA_PATH_RE.fullmatch(path)
+            if schema_match:
+                schema_path = _CONTRACT_SCHEMA_FILES.get(schema_match.group("contract_name"))
+                if schema_path is None or not schema_path.is_file():
+                    self._error(
+                        HTTPStatus.NOT_FOUND,
+                        "SCHEMA_NOT_FOUND",
+                        "Запрошенная JSON Schema не опубликована.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, _read_json(schema_path))
+                return
+            if path == "/api/v1/meta/errors":
+                self._json(HTTPStatus.OK, build_error_catalog_payload())
+                return
+            if path == "/api/v1/models/active":
+                if application.model_passport is None:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "MODEL_PASSPORT_UNAVAILABLE",
+                        "Паспорт активной модели временно недоступен.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, application.model_passport)
+                return
             if path == "/api/v1/jobs":
                 jobs = application.state.list_jobs()
-                self._json(HTTPStatus.OK, {"items": jobs, "total": len(jobs)})
+                try:
+                    limit, offset, status = _job_list_parameters(request_url.query)
+                    listing = paginate_jobs(
+                        jobs,
+                        limit=limit,
+                        offset=offset,
+                        status=status,
+                    )
+                except ValueError as exc:
+                    self._error(HTTPStatus.BAD_REQUEST, "INVALID_QUERY", str(exc))
+                    return
+                self._json(HTTPStatus.OK, listing)
                 return
             upload_match = _UPLOAD_PATH_RE.fullmatch(path)
             if upload_match and upload_match.group("resource") is None:

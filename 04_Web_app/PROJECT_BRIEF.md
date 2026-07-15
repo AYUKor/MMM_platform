@@ -2,14 +2,15 @@
 
 ## Status
 
-Contract and local execution foundation for the future enterprise application.
-The folder contains implemented DecisionResult v1 and application lifecycle v1
-contracts, the completed-result adapter, local Execution Worker v1, localhost
-HTTP API, marketer upload/validation service, runtime launcher/recovery,
-synthetic lifecycle/worker fixtures, sanitized real-derived result fixtures,
-tests, and canonical architecture documents. There is still no durable company
-queue, PostgreSQL runtime, approved object storage, authentication, or
-frontend. The
+Working local product foundation and research-pilot backend contract.
+The folder contains implemented DecisionResult v1, ResultOverview v1,
+application lifecycle v1 and Product API v1.1 contracts, the completed-result
+adapter, local Execution Worker v1, localhost HTTP API, marketer
+upload/validation service, model passport, runtime launcher/recovery and
+retention, source-only tests, canonical architecture documents and the merged
+Phase 1 React frontend. There is still no hosted research VM, reverse-proxy
+configuration, durable company queue, PostgreSQL runtime, approved object
+storage or corporate authentication. The
 previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
@@ -26,11 +27,17 @@ The product is an internal browser-based tool for marketers and media planners. 
 6. a clear manual-review status when the model can calculate a scenario but cannot safely automate the decision;
 7. a marketer-facing Excel report and equivalent browser views.
 
-The application will first run locally for development and then move into the company infrastructure without changing the MMM calculation logic.
+The application first runs locally and may then move to one external
+research-pilot server behind HTTPS and simple access control. A later company
+deployment can replace runtime adapters without changing MMM calculation logic
+or browser contracts.
 
-The local development backend now has an asynchronous HTTP smoke boundary for
-immutable jobs, progress polling, verified results and artifact downloads. It
-is localhost-only and is not the future company deployment runtime.
+The backend has an asynchronous HTTP boundary for immutable jobs, progress
+polling, verified results and artifact downloads. Product API v1.1 additionally
+publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
+and paginated history. The Python process remains loopback-only in both local
+and research profiles; a research server must place HTTPS/auth at a reverse
+proxy.
 
 The local marketer path also accepts a canonical campaign CSV/XLSX, parses and
 validates it in the background against the pinned preprod package, then creates
@@ -41,6 +48,11 @@ future input profile and are not auto-detected.
 launch. Local restart recovery resumes deterministic preparation, requeues
 jobs that never started and fails interrupted attempts with a retryable,
 auditable error instead of leaving stale `running` state.
+
+The owner-approved current product scope is `research_pilot` and
+`allocation_only`. Missing sealed OOT does not block research calculations,
+but the package remains `preprod_restricted` and cannot be described as
+production-ready. No launch/cancel business verdict is produced.
 
 ## User Journey
 
@@ -108,3 +120,12 @@ The first usable version should include:
 - admin-only model registry status and rollback controls.
 
 Corporate SSO, infrastructure monitoring, backups and production storage adapters are required for company deployment, but they must not alter the domain contracts above.
+
+## Research Pilot MVP
+
+The nearer-term product can use one external VM with local file-backed state,
+one worker, a reverse proxy, HTTPS, simple access control, scheduled retention,
+disk monitoring and backup. PostgreSQL, object storage, SSO/RBAC and a durable
+distributed queue are deferred until usage or company-contour requirements
+justify them. This is a deployment simplification, not permission to expose
+the stdlib Python server directly to the internet.

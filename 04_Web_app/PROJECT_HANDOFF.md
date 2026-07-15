@@ -20,11 +20,16 @@ As of 2026-07-15:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
+- Product API v1.1 now adds readiness, a verified target-grain model passport,
+  stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
+  local/research deployment profiles and safe terminal-resource retention;
 - frontend Phase 1 is merged without replacing its design or history; the
   browser now covers upload and validation review, immutable job creation,
   progress and cancellation, result, server-backed history, and Excel download;
-- company queue, PostgreSQL/object-storage adapters, authentication, and
-  production deployment are not implemented.
+- the owner-approved near-term scope is a research pilot with allocation-only
+  decisions; hosted VM/reverse-proxy deployment is not implemented yet;
+- company queue, PostgreSQL/object-storage adapters, corporate authentication,
+  and company-contour deployment remain future work.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
@@ -42,6 +47,10 @@ The web layer must call this existing boundary. It must not copy adstock, satura
 
 ## Frozen Architecture Boundary
 
+Items 1-3 below are the target for a later company/multi-node deployment.
+ADR 0014 accepts file-backed state and artifacts for one research-pilot server;
+that adapter must preserve the same resource IDs, hashes and contracts.
+
 1. The application records uploads, validation records, jobs, events, model references, result metadata, and audit history in PostgreSQL.
 2. PostgreSQL is the source of truth for application state, not for large calculation artifacts.
 3. Original uploads, normalized plans, JSON/CSV outputs, run cards, and Excel reports are stored outside PostgreSQL in approved artifact storage.
@@ -49,6 +58,9 @@ The web layer must call this existing boundary. It must not copy adstock, satura
 5. The API request must not run long forecast, optimization, report, notebook, or PyMC work.
 6. The web layer reads completed artifacts and maps them into a versioned DecisionResult; it does not recalculate model values.
 7. Local and preprod application development can proceed independently of production model activation. Production remains fail-closed until its gates pass.
+8. Product API discovery must preserve the exact `segment x channel x target`
+   policy and must not collapse diagnostic side metrics into another target's
+   reliability status.
 
 See `04_Web_app/docs/adr/0001-source-of-truth-and-boundaries.md`.
 
@@ -365,8 +377,17 @@ Each item is a separate reviewable milestone:
    `job_66ae8290e5d41b825808` passed validation review, browser job creation,
    progress, result redirect, server-backed history, reopen, and hash-checked
    Excel download. See ADR 0013.
-8. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
-9. Implement production API adapters and asynchronous event delivery against the frozen contracts.
-10. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
+8. Completed in backend branch: Product API v1.1, verified ModelPassport,
+   readiness, error catalog, OpenAPI/schema discovery, paginated history,
+   research-pilot configuration boundary and safe local retention. See ADR
+   0014.
+9. Package and accept one research-pilot server deployment: reverse proxy,
+   HTTPS, simple access control, service supervision, disk monitoring, backup,
+   scheduled retention and live browser acceptance.
+10. Integrate the next frontend phase against Product API v1.1 without copying
+    status or model-policy logic.
+11. When company-contour or multi-node scale is approved, replace file-backed
+    state/artifacts with PostgreSQL, durable queue and object storage while
+    preserving the frozen contracts.
 
 Do not start a later milestone while an earlier contract or evidence gate is unresolved. Decisions requiring owner approval are listed only in `04_Web_app/OPEN_DECISIONS.md`.

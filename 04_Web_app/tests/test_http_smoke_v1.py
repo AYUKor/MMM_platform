@@ -40,6 +40,7 @@ from services.local_campaign_service import (  # noqa: E402
 
 
 LIFECYCLE_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "application_lifecycle_v1_happy_path_synthetic.json"
+PASSPORT_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "model_passport_v1_synthetic.json"
 
 
 class _FakeResult:
@@ -174,6 +175,7 @@ class HttpSmokeV1Test(unittest.TestCase):
             ),
             worker_factory=worker_factory,
             overview_builder=overview_builder,
+            model_passport=json.loads(PASSPORT_FIXTURE.read_text(encoding="utf-8")),
         )
         self.application.campaign_service = LocalCampaignService(
             LocalCampaignServiceSettings(
@@ -338,6 +340,53 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "localhost"):
             serve(self.application, "0.0.0.0", 0)
+
+    def test_product_metadata_readiness_schemas_and_job_query(self) -> None:
+        status, readiness, _ = self._request("GET", "/ready")
+        self.assertEqual(status, 200)
+        self.assertEqual(readiness["status"], "ready")
+        self.assertTrue(readiness["checks"]["model_passport"])
+        self.assertNotIn("/Users/", json.dumps(readiness, ensure_ascii=False))
+
+        status, passport, _ = self._request("GET", "/api/v1/models/active")
+        self.assertEqual(status, 200)
+        self.assertEqual(passport["contract_name"], "model_passport_v1")
+
+        status, catalog, _ = self._request("GET", "/api/v1/meta/errors")
+        self.assertEqual(status, 200)
+        self.assertEqual(catalog["contract_name"], "http_error_catalog_v1")
+
+        status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
+        self.assertEqual(status, 200)
+        self.assertEqual(openapi["info"]["version"], "1.1.0")
+        for contract in (
+            "application-lifecycle-v1",
+            "decision-result-v1",
+            "result-overview-v1",
+            "product-api-v1",
+        ):
+            status, schema, _ = self._request(
+                "GET", f"/api/v1/contracts/{contract}.json"
+            )
+            self.assertEqual(status, 200)
+            self.assertIn("$schema", schema)
+        status, error, _ = self._request(
+            "GET", "/api/v1/contracts/unknown-contract.json"
+        )
+        self.assertEqual(status, 404)
+        self.assertEqual(error["error"]["code"], "SCHEMA_NOT_FOUND")
+
+        self.application.state.create_job(self.job, "e" * 64)
+        status, listing, _ = self._request(
+            "GET", "/api/v1/jobs?limit=1&offset=0&status=queued"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(listing["contract_name"], "job_list_v1")
+        self.assertEqual(listing["total"], 1)
+        status, error, _ = self._request("GET", "/api/v1/jobs?limit=0")
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "INVALID_QUERY")
+        self.assertIn("user_action", error["error"])
 
     def test_multipart_upload_parse_and_invalid_validation_are_fail_closed(self) -> None:
         boundary = "----x5-http-upload-boundary"

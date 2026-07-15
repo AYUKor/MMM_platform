@@ -1,0 +1,100 @@
+{
+  "contract_name": "model_passport_v1",
+  "schema_version": "1.0.0",
+  "record_origin": "synthetic_fixture",
+  "serving": {
+    "deployment_profile": "local_development",
+    "display_name": "Синтетическая исследовательская MMM-модель",
+    "calculation_allowed": true,
+    "decision_scope": "forecast_and_allocation_only",
+    "production_claim_allowed": false
+  },
+  "package": {
+    "registry_channel": "preprod",
+    "registry_event_id": "registry_event_synthetic",
+    "package_id": "pkg_1111111111111111_2222222222222222",
+    "package_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model_run_id": "synthetic_model_run",
+    "package_stage": "posterior_ready",
+    "activation_status": "preprod_restricted",
+    "package_schema_version": "0.3.0",
+    "gate_policy_version": "gate_policy_v3"
+  },
+  "data": {
+    "grain": "daily",
+    "training_period": {
+      "start_date": "2025-01-01",
+      "end_date": "2026-03-20"
+    },
+    "development_shadow_period": {
+      "start_date": "2026-03-21",
+      "end_date": "2026-05-31",
+      "purpose": "development_shadow_not_sealed_oot"
+    }
+  },
+  "coverage": {
+    "segments": ["ТС5/Онлайн"],
+    "channels": ["Indoor", "Рег_ТВ"],
+    "targets": [
+      {
+        "target": "turnover_per_user",
+        "allowed_use_counts": {"primary": 1, "caution": 1},
+        "objective_roles": ["objective_allowed", "objective_allowed_with_penalty"]
+      }
+    ],
+    "geographies_n": 2,
+    "capability_cells_n": 2,
+    "allowed_use_counts": {
+      "primary": 1,
+      "caution": 1,
+      "diagnostic": 0,
+      "unavailable": 0
+    },
+    "channel_policies": [
+      {
+        "segment": "ТС5/Онлайн",
+        "channel": "Indoor",
+        "target": "turnover_per_user",
+        "allowed_use": "caution",
+        "forecast_action": "allowed_with_warning",
+        "optimizer_action": "no_increase",
+        "display_text": "Короткая история канала ограничивает автоматическое увеличение бюджета."
+      },
+      {
+        "segment": "ТС5/Онлайн",
+        "channel": "Рег_ТВ",
+        "target": "turnover_per_user",
+        "allowed_use": "primary",
+        "forecast_action": "allowed",
+        "optimizer_action": "allowed",
+        "display_text": "Канал доступен для прогноза и оптимизации."
+      }
+    ]
+  },
+  "validation": {
+    "historical_replay": {
+      "status": "passed",
+      "generated_at_utc": "2026-07-15T10:00:00+00:00",
+      "reason_code": null,
+      "display_text": "Независимый historical replay пройден."
+    },
+    "sealed_oot": {
+      "status": "unavailable",
+      "generated_at_utc": null,
+      "reason_code": "MISSING_OR_FAILED_OOT_VALIDATION",
+      "display_text": "Новые полные данные для sealed OOT пока недоступны."
+    },
+    "production_blockers": [
+      {
+        "code": "MISSING_OR_FAILED_OOT_VALIDATION",
+        "display_text": "Sealed OOT пока недоступен."
+      }
+    ]
+  },
+  "caveats": [
+    {
+      "code": "research_model",
+      "display_text": "Результаты предназначены для исследовательского планирования."
+    }
+  ]
+}
