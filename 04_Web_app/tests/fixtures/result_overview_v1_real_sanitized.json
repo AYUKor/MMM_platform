@@ -1,0 +1,1282 @@
+{
+  "contract_name": "result_overview_v1",
+  "schema_version": "1.0.0",
+  "overview_adapter_version": "1.0.0",
+  "overview_id": "overview_012af093046f88dd38dd",
+  "source_result_id": "result_3bf644fdcc2a02dac32a",
+  "result_origin": "sanitized_fixture",
+  "created_at_utc": "2026-07-14T01:10:18.636710+00:00",
+  "campaigns": [
+    {
+      "campaign_id": "campaign_680a1c703970b736d20e",
+      "passport": {
+        "campaign_name": "Demo campaign 1",
+        "source_campaign_name": "Demo source campaign 1",
+        "segments": [
+          "SEGMENT_01"
+        ],
+        "source_start_date": "2026-04-16",
+        "source_end_date": "2026-05-15",
+        "model_start_date": "2026-04-16",
+        "model_end_date": "2026-05-15",
+        "source_active_days": 30,
+        "model_active_days": 30,
+        "source_channels": [
+          "CHANNEL_01",
+          "CHANNEL_02",
+          "CHANNEL_03",
+          "CHANNEL_04",
+          "CHANNEL_05",
+          "CHANNEL_06",
+          "CHANNEL_07"
+        ],
+        "modeled_channels": [
+          "CHANNEL_08",
+          "CHANNEL_09",
+          "CHANNEL_10",
+          "CHANNEL_11",
+          "CHANNEL_06"
+        ],
+        "unmodeled_channels": [],
+        "geographies": [
+          "GEO_01",
+          "GEO_02",
+          "GEO_03",
+          "GEO_04",
+          "GEO_05",
+          "GEO_06",
+          "GEO_07",
+          "GEO_08",
+          "GEO_09",
+          "GEO_10",
+          "GEO_11",
+          "GEO_12"
+        ],
+        "creatives": []
+      },
+      "budget": {
+        "uploaded_budget_rub": 27373702.49,
+        "model_input_budget_rub": 27373702.49,
+        "calculated_budget_rub": 27373702.49,
+        "unmodeled_budget_rub": 0.0,
+        "unallocated_budget_rub": 0.0,
+        "model_coverage_share": 1.0
+      },
+      "statuses": {
+        "calculation_status": {
+          "code": "calculated",
+          "display_text": "Рассчитано"
+        },
+        "campaign_scale_status": {
+          "code": "between_historical_p99_and_robust_upper",
+          "display_text": "Очень крупная, нужна повышенная осторожность"
+        },
+        "cell_support_status": {
+          "code": "between_p95_p99",
+          "display_text": "Между p95 и p99"
+        },
+        "optimizer_status": {
+          "code": "best_safe_available",
+          "display_text": "Лучший безопасный S6 рассчитан"
+        },
+        "business_decision_status": {
+          "code": "allocation_only",
+          "display_text": "Не настроено: нужен бизнес-порог"
+        }
+      },
+      "quality": {
+        "status": {
+          "code": "elevated_uncertainty",
+          "display_text": "Повышенная неопределенность"
+        },
+        "explanation": "Есть ячейки между historical p95 и p99: расчет допустим, но неопределенность выше обычной.",
+        "coverage_share": 1.0,
+        "uncertainty_width_share": 0.0479511018428269
+      },
+      "scenarios": [
+        {
+          "scenario_id": "S01",
+          "name": "Сценарий 1. Как загрузили",
+          "description": "Ничего не меняем: бюджет, каналы, гео и даты остаются как в исходной спецификации маркетолога.",
+          "available": true,
+          "budget": {
+            "requested_budget_rub": 27373702.49,
+            "allocated_budget_rub": 27373702.49,
+            "unallocated_budget_rub": 0.0
+          },
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 82547005.712748,
+              "p50": 84616974.399163,
+              "p90": 86605097.909765
+            },
+            "turnover_roas": {
+              "unit": "ratio",
+              "p10": 3.015559,
+              "p50": 3.091178,
+              "p90": 3.163807
+            },
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2290.290205,
+              "p50": 3560.498219,
+              "p90": 5357.154497
+            },
+            "incremental_orders_usage": "diagnostic_only",
+            "avg_basket_turnover_bridge": {
+              "unit": "turnover_bridge_from_avg_basket_rub",
+              "p10": 78156294.905115,
+              "p50": 79663232.066932,
+              "p90": 81045688.59595
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 318,
+            "strong_warnings": 1,
+            "hard_warnings": 2,
+            "policy_violations": 2
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.04795837036046974
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 0.0,
+              "p50": 0.0,
+              "p90": 0.0
+            },
+            "probability_gt_zero": 0.0,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S02",
+          "name": "Сценарий 2. Ровно по всем связкам",
+          "description": "Общий бюджет кампании делится поровну между всеми исходными связками geo x channel.",
+          "available": true,
+          "budget": {
+            "requested_budget_rub": 27373702.49,
+            "allocated_budget_rub": 27373702.49,
+            "unallocated_budget_rub": 0.0
+          },
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 95082454.813814,
+              "p50": 98359342.856383,
+              "p90": 101992123.154515
+            },
+            "turnover_roas": {
+              "unit": "ratio",
+              "p10": 3.473496,
+              "p50": 3.593206,
+              "p90": 3.725916
+            },
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2276.04322,
+              "p50": 3098.671018,
+              "p90": 3919.559115
+            },
+            "incremental_orders_usage": "diagnostic_only",
+            "avg_basket_turnover_bridge": {
+              "unit": "turnover_bridge_from_avg_basket_rub",
+              "p10": 80895463.192675,
+              "p50": 83270176.893543,
+              "p90": 85552039.72289
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 64,
+            "strong_warnings": 22,
+            "hard_warnings": 348,
+            "policy_violations": 609
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.0702492324576686
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 10558608.985062,
+              "p50": 13784592.346255,
+              "p90": 17457488.250412
+            },
+            "probability_gt_zero": 1.0,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S03",
+          "name": "Сценарий 3. Каналы как были, гео ровно",
+          "description": "Сохраняем бюджет каждого канала, но внутри канала делим его поровну между его гео.",
+          "available": true,
+          "budget": {
+            "requested_budget_rub": 27373702.49,
+            "allocated_budget_rub": 27373702.49,
+            "unallocated_budget_rub": 0.0
+          },
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 78375585.902149,
+              "p50": 81474639.095295,
+              "p90": 84912150.663255
+            },
+            "turnover_roas": {
+              "unit": "ratio",
+              "p10": 2.863171,
+              "p50": 2.976384,
+              "p90": 3.101961
+            },
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 1651.600157,
+              "p50": 2768.3954,
+              "p90": 4448.661234
+            },
+            "incremental_orders_usage": "diagnostic_only",
+            "avg_basket_turnover_bridge": {
+              "unit": "turnover_bridge_from_avg_basket_rub",
+              "p10": 61219812.803127,
+              "p50": 62868440.983864,
+              "p90": 64399328.991982
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 71,
+            "strong_warnings": 28,
+            "hard_warnings": 235,
+            "policy_violations": 473
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.08022821375692972
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": -6058437.878984,
+              "p50": -3022031.832366,
+              "p90": 127593.311851
+            },
+            "probability_gt_zero": 0.105,
+            "probability_noninferior": 0.1733333333333333,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S04",
+          "name": "Сценарий 4. Гео как были, каналы ровно",
+          "description": "Сохраняем бюджет каждого гео, но внутри гео делим его поровну между доступными каналами.",
+          "available": true,
+          "budget": {
+            "requested_budget_rub": 27373702.49,
+            "allocated_budget_rub": 27373702.49,
+            "unallocated_budget_rub": 0.0
+          },
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 100240484.083932,
+              "p50": 103390327.356701,
+              "p90": 106305512.238209
+            },
+            "turnover_roas": {
+              "unit": "ratio",
+              "p10": 3.661926,
+              "p50": 3.776995,
+              "p90": 3.88349
+            },
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 3838.839815,
+              "p50": 5538.541029,
+              "p90": 7569.438775
+            },
+            "incremental_orders_usage": "diagnostic_only",
+            "avg_basket_turnover_bridge": {
+              "unit": "turnover_bridge_from_avg_basket_rub",
+              "p10": 104790787.381095,
+              "p50": 107385634.024196,
+              "p90": 109639599.43737
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "above_robust_upper",
+            "display_text": "Вне надежной наблюдаемой зоны"
+          },
+          "optimizer_status": {
+            "code": "no_safe_candidate",
+            "display_text": "Только ручное распределение"
+          },
+          "support": {
+            "elevated_warnings": 171,
+            "strong_warnings": 2,
+            "hard_warnings": 179,
+            "policy_violations": 358
+          },
+          "quality": {
+            "status": {
+              "code": "not_for_automatic_reallocation",
+              "display_text": "Не использовать для автоматического перераспределения"
+            },
+            "explanation": "Прогноз рассчитан, но хотя бы одна geo x channel ячейка выше robust observed upper. Это не запрет кампании: автоматическое перераспределение блокируется, медиаплан проверяется вручную.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.058661465819256575
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 16234212.54734,
+              "p50": 18816628.030963,
+              "p90": 21214025.382509
+            },
+            "probability_gt_zero": 1.0,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S05",
+          "name": "Сценарий 5. Осторожный support-safe",
+          "description": "Распределяем максимум бюджета внутри p95 support-zone. Если весь бюджет не помещается, остаток явно остается нераспределенным для ручного решения.",
+          "available": true,
+          "budget": {
+            "requested_budget_rub": 27373702.49,
+            "allocated_budget_rub": 27373702.49,
+            "unallocated_budget_rub": 0.0
+          },
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 76361645.357564,
+              "p50": 78187246.517496,
+              "p90": 80032553.295987
+            },
+            "turnover_roas": {
+              "unit": "ratio",
+              "p10": 2.789599,
+              "p50": 2.856291,
+              "p90": 2.923702
+            },
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2303.018259,
+              "p50": 3546.422929,
+              "p90": 5327.779838
+            },
+            "incremental_orders_usage": "diagnostic_only",
+            "avg_basket_turnover_bridge": {
+              "unit": "turnover_bridge_from_avg_basket_rub",
+              "p10": 73410941.724457,
+              "p50": 74789903.302422,
+              "p90": 76086382.542527
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "within_p95",
+            "display_text": "Внутри p95 support-zone"
+          },
+          "optimizer_status": {
+            "code": "best_safe_available",
+            "display_text": "Автоматический план доступен"
+          },
+          "support": {
+            "elevated_warnings": 0,
+            "strong_warnings": 0,
+            "hard_warnings": 0,
+            "policy_violations": 0
+          },
+          "quality": {
+            "status": {
+              "code": "elevated_uncertainty",
+              "display_text": "Повышенная неопределенность"
+            },
+            "explanation": "Расчет выполнен, но часть channel/fit evidence имеет caution или diagnostic ограничения.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.04695021377433617
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": -6627142.171909,
+              "p50": -6391929.425025,
+              "p90": -6152830.364484
+            },
+            "probability_gt_zero": 0.0,
+            "probability_noninferior": 0.0,
+            "moved_budget_rub": null,
+            "posterior_draws": 600
+          }
+        },
+        {
+          "scenario_id": "S06",
+          "name": "Сценарий 6. Адаптивный поиск",
+          "description": "Лучший безопасный вариант адаптивного поиска после support и gate constraints.",
+          "available": true,
+          "budget": {
+            "requested_budget_rub": 27373702.49,
+            "allocated_budget_rub": 27373702.49,
+            "unallocated_budget_rub": 0.0
+          },
+          "metrics": {
+            "incremental_turnover": {
+              "unit": "RUB",
+              "p10": 82571072.973182,
+              "p50": 84627166.710673,
+              "p90": 86629038.862796
+            },
+            "turnover_roas": {
+              "unit": "ratio",
+              "p10": 3.016438,
+              "p50": 3.09155,
+              "p90": 3.164681
+            },
+            "incremental_orders": {
+              "unit": "orders",
+              "p10": 2335.46916,
+              "p50": 3580.444799,
+              "p90": 5377.484627
+            },
+            "incremental_orders_usage": "diagnostic_only",
+            "avg_basket_turnover_bridge": {
+              "unit": "turnover_bridge_from_avg_basket_rub",
+              "p10": 78165341.304598,
+              "p50": 79673922.328632,
+              "p90": 81061895.902406
+            }
+          },
+          "calculation_status": {
+            "code": "calculated",
+            "display_text": "Рассчитано"
+          },
+          "cell_support_status": {
+            "code": "between_p95_p99",
+            "display_text": "Между p95 и p99"
+          },
+          "optimizer_status": {
+            "code": "best_safe_available",
+            "display_text": "Автоматический план доступен"
+          },
+          "support": {
+            "elevated_warnings": 479,
+            "strong_warnings": 0,
+            "hard_warnings": 0,
+            "policy_violations": 0
+          },
+          "quality": {
+            "status": {
+              "code": "elevated_uncertainty",
+              "display_text": "Повышенная неопределенность"
+            },
+            "explanation": "Есть ячейки между historical p95 и p99: расчет допустим, но неопределенность выше обычной.",
+            "coverage_share": 1.0,
+            "uncertainty_width_share": 0.0479511018428269
+          },
+          "paired_comparison": {
+            "delta_incremental_turnover": {
+              "unit": "RUB",
+              "p10": 1719.312655,
+              "p50": 14771.403233,
+              "p90": 41964.127987
+            },
+            "probability_gt_zero": 0.935,
+            "probability_noninferior": 1.0,
+            "moved_budget_rub": 1417361.78,
+            "posterior_draws": null
+          }
+        }
+      ],
+      "recommendation": {
+        "scenario_id": "S06",
+        "scenario_name": "Сценарий 6. Адаптивный поиск",
+        "recommendation_type": {
+          "code": "reallocate_for_reliability",
+          "display_text": "Перераспределить ради надежности"
+        },
+        "reason": "S6 выбран не из-за микроскопического роста p50, а потому что уменьшает support/model risk без содержательного ухудшения downside.",
+        "plan_status": {
+          "code": "recommended_media_plan",
+          "display_text": "Рекомендованный медиаплан"
+        },
+        "optimizer_available": true,
+        "metrics": {
+          "incremental_turnover": {
+            "unit": "RUB",
+            "p10": 82571072.973182,
+            "p50": 84627166.710673,
+            "p90": 86629038.862796
+          },
+          "turnover_roas": {
+            "unit": "ratio",
+            "p10": 3.016438,
+            "p50": 3.09155,
+            "p90": 3.164681
+          },
+          "incremental_orders": {
+            "unit": "orders",
+            "p10": 2335.46916,
+            "p50": 3580.444799,
+            "p90": 5377.484627
+          },
+          "incremental_orders_usage": "diagnostic_only",
+          "avg_basket_turnover_bridge": {
+            "unit": "turnover_bridge_from_avg_basket_rub",
+            "p10": 78165341.304598,
+            "p50": 79673922.328632,
+            "p90": 81061895.902406
+          }
+        },
+        "versus_uploaded_plan": {
+          "delta_incremental_turnover_p50_rub": 10192.31,
+          "delta_incremental_turnover_p50_share": 0.00012045232746687098,
+          "moved_budget_rub": 1417361.8
+        }
+      },
+      "scenario6": {
+        "audit": {
+          "run_status": {
+            "code": "completed_best_safe",
+            "display_text": "Лучший безопасный вариант найден"
+          },
+          "method": "adaptive_marginal_posterior",
+          "attempt_budget": 2048,
+          "attempts_evaluated": 1706,
+          "kernel_evaluations": 48172,
+          "unique_allocations": 60,
+          "candidates_generated": 11,
+          "candidates_scored": 11,
+          "candidates_rejected": 0,
+          "finalists": 11,
+          "search_posterior_draws": 128,
+          "final_posterior_draws": 600,
+          "search_converged": false,
+          "search_budget_exhausted": true,
+          "best_raw_candidate_id": "candidate_4aad496b4667864d6604",
+          "best_safe_candidate_id": "candidate_fe5b6f7644b108ef030d",
+          "explanation": "S6 выбран не из-за микроскопического роста p50, а потому что уменьшает support/model risk без содержательного ухудшения downside."
+        },
+        "best_raw": {
+          "candidate_id": "candidate_4aad496b4667864d6604",
+          "evaluation_level": "final_posterior",
+          "eligible_for_automatic_recommendation": false,
+          "incremental_turnover": {
+            "unit": "RUB",
+            "p10": 82573263.105563,
+            "p50": 84627282.934031,
+            "p90": 86627616.226308
+          },
+          "turnover_roas": {
+            "unit": "ratio",
+            "p10": 3.016518,
+            "p50": 3.091554,
+            "p90": 3.164629
+          },
+          "support": {
+            "elevated_warnings": 323,
+            "strong_warnings": 112,
+            "hard_warnings": 0,
+            "policy_violations": 0
+          },
+          "rejection_reasons": [
+            "SUPPORT_NOT_SAFE"
+          ],
+          "explanation": "Кандидат показан для аудита, но не может быть выбран автоматически."
+        },
+        "best_safe": {
+          "candidate_id": "candidate_fe5b6f7644b108ef030d",
+          "evaluation_level": "final_posterior",
+          "eligible_for_automatic_recommendation": true,
+          "incremental_turnover": {
+            "unit": "RUB",
+            "p10": 82571072.973182,
+            "p50": 84627166.710673,
+            "p90": 86629038.862796
+          },
+          "turnover_roas": {
+            "unit": "ratio",
+            "p10": 3.016438,
+            "p50": 3.09155,
+            "p90": 3.164681
+          },
+          "support": {
+            "elevated_warnings": 479,
+            "strong_warnings": 0,
+            "hard_warnings": 0,
+            "policy_violations": 0
+          },
+          "rejection_reasons": [],
+          "explanation": "Кандидат прошел support и policy gates."
+        },
+        "raw_differs_from_safe": true
+      },
+      "allocation_comparison": [
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 3688342.33,
+          "recommended_budget_rub": 2835900.0,
+          "delta_budget_rub": -852442.33,
+          "uploaded_budget_share": 0.13474035281932453,
+          "recommended_budget_share": 0.10359943092693247,
+          "action": "decrease",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_14",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 297393.4,
+          "recommended_budget_rub": 0.0,
+          "delta_budget_rub": -297393.4,
+          "uploaded_budget_share": 0.010864200808030767,
+          "recommended_budget_share": 0.0,
+          "action": "decrease",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_13",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 63321.66,
+          "recommended_budget_rub": 315100.0,
+          "delta_budget_rub": 251778.34,
+          "uploaded_budget_share": 0.0023132298041097865,
+          "recommended_budget_share": 0.011511047880770273,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_15",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 192161.44,
+          "recommended_budget_rub": 68417.97,
+          "delta_budget_rub": -123743.47,
+          "uploaded_budget_share": 0.007019928539421917,
+          "recommended_budget_share": 0.0024994051683157924,
+          "action": "decrease",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_16",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 27060.54,
+          "recommended_budget_rub": 137000.0,
+          "delta_budget_rub": 109939.46,
+          "uploaded_budget_share": 0.0009885597453460624,
+          "recommended_budget_share": 0.005004803426421858,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_17",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 263989.45,
+          "recommended_budget_rub": 164400.0,
+          "delta_budget_rub": -99589.45,
+          "uploaded_budget_share": 0.009643907276860961,
+          "recommended_budget_share": 0.00600576411170623,
+          "action": "decrease",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_18",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 123301.48,
+          "recommended_budget_rub": 205500.0,
+          "delta_budget_rub": 82198.52,
+          "uploaded_budget_share": 0.004504377191968787,
+          "recommended_budget_share": 0.007507205139632787,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_19",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 41190.01,
+          "recommended_budget_rub": 90315.92,
+          "delta_budget_rub": 49125.91,
+          "uploaded_budget_share": 0.0015047291552374709,
+          "recommended_budget_share": 0.0032993680439966414,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_20",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 195871.85,
+          "recommended_budget_rub": 243140.72,
+          "delta_budget_rub": 47268.87,
+          "uploaded_budget_share": 0.0071554753259509005,
+          "recommended_budget_share": 0.008882273867881374,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_20",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 14999.27,
+          "recommended_budget_rub": 54800.0,
+          "delta_budget_rub": 39800.73,
+          "uploaded_budget_share": 0.0005479445445632461,
+          "recommended_budget_share": 0.002001921370568743,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_21",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 28877.46,
+          "recommended_budget_rub": 63318.62,
+          "delta_budget_rub": 34441.16,
+          "uploaded_budget_share": 0.0010549344711050126,
+          "recommended_budget_share": 0.0023131186568423187,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_22",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 242638.22,
+          "recommended_budget_rub": 274000.0,
+          "delta_budget_rub": 31361.78,
+          "uploaded_budget_share": 0.008863916715312753,
+          "recommended_budget_share": 0.010009606852843717,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_23",
+          "channel": "CHANNEL_10",
+          "uploaded_budget_rub": 229942.86,
+          "recommended_budget_rub": 260300.0,
+          "delta_budget_rub": 30357.14,
+          "uploaded_budget_share": 0.008400137500462253,
+          "recommended_budget_share": 0.00950912651020153,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_24",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 20474.2,
+          "recommended_budget_rub": 44893.07,
+          "delta_budget_rub": 24418.87,
+          "uploaded_budget_share": 0.0007479513644698692,
+          "recommended_budget_share": 0.0016400073207899772,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_25",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 19995.81,
+          "recommended_budget_rub": 43844.12,
+          "delta_budget_rub": 23848.31,
+          "uploaded_budget_share": 0.0007304750404003584,
+          "recommended_budget_share": 0.0016016875840049387,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_26",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 19290.3,
+          "recommended_budget_rub": 42297.18,
+          "delta_budget_rub": 23006.88,
+          "uploaded_budget_share": 0.0007047018756109789,
+          "recommended_budget_share": 0.0015451756489482155,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_27",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 18860.23,
+          "recommended_budget_rub": 41354.18,
+          "delta_budget_rub": 22493.95,
+          "uploaded_budget_share": 0.0006889908368010147,
+          "recommended_budget_share": 0.0015107265926465145,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_22",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 5112.51,
+          "recommended_budget_rub": 27400.0,
+          "delta_budget_rub": 22287.49,
+          "uploaded_budget_share": 0.00018676718046002397,
+          "recommended_budget_share": 0.0010009606852843715,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_28",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 5416.94,
+          "recommended_budget_rub": 27400.0,
+          "delta_budget_rub": 21983.06,
+          "uploaded_budget_share": 0.00019788847759516718,
+          "recommended_budget_share": 0.0010009606852843715,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_23",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 7422.32,
+          "recommended_budget_rub": 27400.0,
+          "delta_budget_rub": 19977.68,
+          "uploaded_budget_share": 0.0002711478158663486,
+          "recommended_budget_share": 0.0010009606852843715,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_29",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 16477.94,
+          "recommended_budget_rub": 36130.61,
+          "delta_budget_rub": 19652.67,
+          "uploaded_budget_share": 0.0006019622735053703,
+          "recommended_budget_share": 0.00131990204481799,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_18",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 7900.71,
+          "recommended_budget_rub": 27400.0,
+          "delta_budget_rub": 19499.29,
+          "uploaded_budget_share": 0.0002886241399358593,
+          "recommended_budget_share": 0.0010009606852843715,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_30",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 15052.43,
+          "recommended_budget_rub": 33004.94,
+          "delta_budget_rub": 17952.51,
+          "uploaded_budget_share": 0.0005498863583487474,
+          "recommended_budget_share": 0.001205716970559542,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_01",
+          "geo": "GEO_31",
+          "channel": "CHANNEL_06",
+          "uploaded_budget_rub": 13520.61,
+          "recommended_budget_rub": 29646.17,
+          "delta_budget_rub": 16125.56,
+          "uploaded_budget_share": 0.000493926815621122,
+          "recommended_budget_share": 0.0010830163992377527,
+          "action": "increase",
+          "optimizer_policy": "optimize",
+          "allowed_use": "primary",
+          "gate_reason_codes": []
+        },
+        {
+          "segment": "SEGMENT_02",
+          "geo": "GEO_32",
+          "channel": "CHANNEL_12",
+          "uploaded_budget_rub": 1669856.4,
+          "recommended_budget_rub": 2179700.04,
+          "delta_budget_rub": 509843.64,
+          "uploaded_budget_share": 0.06100221168326312,
+          "recommended_budget_share": 0.0796275181861589,
+          "action": "increase",
+          "optimizer_policy": "sanitized_aggregate",
+          "allowed_use": "mixed",
+          "gate_reason_codes": [
+            "SANITIZED_AGGREGATE"
+          ]
+        },
+        {
+          "segment": "SEGMENT_03",
+          "geo": "GEO_33",
+          "channel": "CHANNEL_13",
+          "uploaded_budget_rub": 263393.14,
+          "recommended_budget_rub": 219200.0,
+          "delta_budget_rub": -44193.14,
+          "uploaded_budget_share": 0.009622123167117776,
+          "recommended_budget_share": 0.008007685482274972,
+          "action": "decrease",
+          "optimizer_policy": "sanitized_aggregate",
+          "allowed_use": "mixed",
+          "gate_reason_codes": [
+            "SANITIZED_AGGREGATE"
+          ]
+        },
+        {
+          "segment": "SEGMENT_04",
+          "geo": "GEO_34",
+          "channel": "CHANNEL_14",
+          "uploaded_budget_rub": 19881838.96,
+          "recommended_budget_rub": 19881838.96,
+          "delta_budget_rub": 0.0,
+          "uploaded_budget_share": 0.7263116490733097,
+          "recommended_budget_share": 0.7263116490733099,
+          "action": "keep",
+          "optimizer_policy": "sanitized_aggregate",
+          "allowed_use": "mixed",
+          "gate_reason_codes": [
+            "SANITIZED_AGGREGATE"
+          ]
+        }
+      ],
+      "warnings": [
+        {
+          "code": "cell_support_risk",
+          "severity": "caution",
+          "display_text": "Support warnings: elevated=479, strong=0, hard=0. Проверьте отмеченные geo x channel перед изменением медиаплана.",
+          "scope": "recommended_scenario",
+          "affected_cells": []
+        },
+        {
+          "code": "quality_elevated_uncertainty",
+          "severity": "caution",
+          "display_text": "Есть ячейки между historical p95 и p99: расчет допустим, но неопределенность выше обычной.",
+          "scope": "campaign",
+          "affected_cells": []
+        },
+        {
+          "code": "business_hurdle_not_approved",
+          "severity": "info",
+          "display_text": "Результат помогает распределить бюджет, но не принимает решение о запуске кампании: ROAS/contribution-margin threshold не утвержден.",
+          "scope": "campaign",
+          "affected_cells": []
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "artifact_d840037c2fdaab0af0d6",
+      "kind": "marketer_report_xlsx",
+      "display_name": "Отчет для маркетолога",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "4bf3088e392982a83b541dd27b2d5745983f77b3206f1874f2a91b69d5b1e9a8",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-01",
+      "download_path": "/api/v1/artifacts/artifact_d840037c2fdaab0af0d6/download"
+    },
+    {
+      "artifact_id": "artifact_2685df17f6b7cd596f29",
+      "kind": "scenario_results_csv",
+      "display_name": "Результаты сценариев",
+      "media_type": "text/csv",
+      "sha256": "9c5b93e61b7540425614d95101c74d89b52d779155238e96f138020e56b2461e",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-02",
+      "download_path": "/api/v1/artifacts/artifact_2685df17f6b7cd596f29/download"
+    },
+    {
+      "artifact_id": "artifact_e63cdc7cb06b285d554d",
+      "kind": "recommendations_csv",
+      "display_name": "Рекомендации",
+      "media_type": "text/csv",
+      "sha256": "bd9c8b623e59ad2e2d4658f5b42007d2720493a931c9baf501a4795c17aad868",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-03",
+      "download_path": "/api/v1/artifacts/artifact_e63cdc7cb06b285d554d/download"
+    },
+    {
+      "artifact_id": "artifact_b278337de65f0fb25a54",
+      "kind": "best_plan_csv",
+      "display_name": "Рекомендованный медиаплан",
+      "media_type": "text/csv",
+      "sha256": "2488d95b87edb6d4e7dae673c1f9c3e2ae2b0546263937987d5a05e5d5b8f567",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-04",
+      "download_path": "/api/v1/artifacts/artifact_b278337de65f0fb25a54/download"
+    },
+    {
+      "artifact_id": "artifact_151736c63e67febc61ca",
+      "kind": "decision_pool_csv",
+      "display_name": "Пул сценариев для решения",
+      "media_type": "text/csv",
+      "sha256": "3848fd0ab18fa865f79b7324de56f51bac1d7d9bdbe45cd36d69b58c351ccd4c",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-05",
+      "download_path": "/api/v1/artifacts/artifact_151736c63e67febc61ca/download"
+    },
+    {
+      "artifact_id": "artifact_7d0681c560d85d667d7a",
+      "kind": "candidate_scores_csv",
+      "display_name": "Оценки кандидатов optimizer",
+      "media_type": "text/csv",
+      "sha256": "c84729e83ca66830b3055182dbb27f6495ab3049f9f42d1b4a10345bfa2caac3",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-06",
+      "download_path": "/api/v1/artifacts/artifact_7d0681c560d85d667d7a/download"
+    },
+    {
+      "artifact_id": "artifact_d6342b8ab88ae8448adb",
+      "kind": "finalist_summary_csv",
+      "display_name": "Результаты финалистов",
+      "media_type": "text/csv",
+      "sha256": "41482fa4bcc5a44c29cf9513d949bc97c4a9c94f4e040d48d3e63e25385d6392",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-07",
+      "download_path": "/api/v1/artifacts/artifact_d6342b8ab88ae8448adb/download"
+    },
+    {
+      "artifact_id": "artifact_ac5cd59b7aff50d25947",
+      "kind": "recommended_allocations_csv",
+      "display_name": "Техническое распределение бюджета",
+      "media_type": "text/csv",
+      "sha256": "021da4c4eabb6e6db136be684c9e7ac28687f7ba28d54b65600b8f38ec640607",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-08",
+      "download_path": "/api/v1/artifacts/artifact_ac5cd59b7aff50d25947/download"
+    },
+    {
+      "artifact_id": "artifact_344854c4b63414c483c5",
+      "kind": "paired_comparisons_csv",
+      "display_name": "Парные posterior-сравнения",
+      "media_type": "text/csv",
+      "sha256": "e2a7b726da1b08eda1c844e3671fe7e1aaf416c6bb2f06dcaeaf25adf21fe9ae",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-09",
+      "download_path": "/api/v1/artifacts/artifact_344854c4b63414c483c5/download"
+    },
+    {
+      "artifact_id": "artifact_e32c40ca358104591df1",
+      "kind": "search_trace_csv",
+      "display_name": "Трассировка Scenario 6",
+      "media_type": "text/csv",
+      "sha256": "abbfdd09b9ba1632fd769033886e97b42486b3317b9ec4cdeb7c4f674353e665",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-10",
+      "download_path": "/api/v1/artifacts/artifact_e32c40ca358104591df1/download"
+    },
+    {
+      "artifact_id": "artifact_85857c9523201766e2f9",
+      "kind": "technical_optimizer_xlsx",
+      "display_name": "Технический отчет optimizer",
+      "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "sha256": "842d7fa5bcf947d260d8a03e040a0dea7ff4dea5846b5761d86636c0e1bb6cf5",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-11",
+      "download_path": "/api/v1/artifacts/artifact_85857c9523201766e2f9/download"
+    },
+    {
+      "artifact_id": "artifact_87e0b0e4ba27c617dbe2",
+      "kind": "optimizer_run_card",
+      "display_name": "Run card optimizer",
+      "media_type": "application/json",
+      "sha256": "3e94952f2fc8bc0fcf5a4cca582a58fb1dc3f8b7092f251812e1e4b8e0aa0510",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-12",
+      "download_path": "/api/v1/artifacts/artifact_87e0b0e4ba27c617dbe2/download"
+    },
+    {
+      "artifact_id": "artifact_5271728b34a35f7ce072",
+      "kind": "marketer_report_card",
+      "display_name": "Run card marketer report",
+      "media_type": "application/json",
+      "sha256": "c2b9aef28cadad4b22410a45b192c3550ddfc217e159a0e9899e78afac10d6b0",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-13",
+      "download_path": "/api/v1/artifacts/artifact_5271728b34a35f7ce072/download"
+    },
+    {
+      "artifact_id": "artifact_582abe8d91d8c1f7a87d",
+      "kind": "campaign_prepare_card",
+      "display_name": "Run card подготовки кампании",
+      "media_type": "application/json",
+      "sha256": "e9316621c950c7e82d9130703c0c37654f299e1bba4f6bc4551a84e8a0a8d077",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-14",
+      "download_path": "/api/v1/artifacts/artifact_582abe8d91d8c1f7a87d/download"
+    },
+    {
+      "artifact_id": "artifact_df8909858fa551840b40",
+      "kind": "model_resolution",
+      "display_name": "Разрешение model package",
+      "media_type": "application/json",
+      "sha256": "572aa78f1ad30d1f6534e69f4d3df54fdc8b8b72821126bfcac86b66d5742b87",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-15",
+      "download_path": "/api/v1/artifacts/artifact_df8909858fa551840b40/download"
+    },
+    {
+      "artifact_id": "artifact_6d74a94bc206f3f5af81",
+      "kind": "optimizer_policy_snapshot",
+      "display_name": "Снимок optimizer policy",
+      "media_type": "application/json",
+      "sha256": "200b7165a9610615f77a583be56cfbcfd286c04519ce637b650ae60aff4c3b85",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-16",
+      "download_path": "/api/v1/artifacts/artifact_6d74a94bc206f3f5af81/download"
+    },
+    {
+      "artifact_id": "artifact_724e534782b094141d6f",
+      "kind": "business_policy_snapshot",
+      "display_name": "Снимок business policy",
+      "media_type": "application/json",
+      "sha256": "ca95c080d119e0e18c46873ebd34fa2902206e42eebc19239ba691962cd1856b",
+      "size_bytes": 0,
+      "storage_key": "fixtures/result-overview-v1/artifact-17",
+      "download_path": "/api/v1/artifacts/artifact_724e534782b094141d6f/download"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "model_preprod_restricted",
+      "severity": "caution",
+      "display_text": "Расчет выполнен preprod-моделью. Production activation ожидает обязательную OOT-валидацию.",
+      "scope": "model",
+      "affected_cells": []
+    },
+    {
+      "code": "missing_or_failed_oot_validation",
+      "severity": "caution",
+      "display_text": "Production blocker модели: MISSING_OR_FAILED_OOT_VALIDATION.",
+      "scope": "model",
+      "affected_cells": []
+    }
+  ]
+}

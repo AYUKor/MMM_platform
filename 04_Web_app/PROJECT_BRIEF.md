@@ -73,6 +73,10 @@ A support warning must not be translated into a blanket statement that advertisi
 - The UI never hides warnings, but translates them into business language.
 - Production activation remains fail-closed when mandatory model gates are not passed.
 
+The browser consumes the versioned `ResultOverview v1` projection. The
+canonical `DecisionResult v1` remains the completed-job source of truth; React
+must not join optimizer CSV files or derive alternative metric semantics.
+
 ## Initial Enterprise MVP
 
 The first usable version should include:

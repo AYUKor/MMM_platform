@@ -287,6 +287,12 @@ one million. The basket metric now carries the explicit unit
 `turnover_bridge_from_avg_basket_rub`; it is an aggregate turnover bridge, not
 an average-basket delta. See ADR 0004.
 
+`ResultOverview v1` is now the browser-facing projection over DecisionResult.
+It adds ROAS p10/p50/p90, uploaded-versus-recommended allocation deltas,
+UI-safe `best_raw`/`best_safe` summaries, canonical artifact download paths,
+and an explicit diagnostic-only label for orders. It contains no model math
+and never exposes raw candidate names or workstation paths. See ADR 0005.
+
 ## Implemented Local Execution Worker V1
 
 The local worker uses the tested composite optimizer CLI as its process
