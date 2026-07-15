@@ -4,7 +4,7 @@
 
 This handoff defines the frozen integration boundary for the future enterprise application. Current package, run, QA, and blocker facts live only in `04_Web_app/CURRENT_TRUTH.md` and must be verified from its cited evidence before implementation.
 
-As of 2026-07-15:
+As of 2026-07-16:
 
 - the verified serving channel is `preprod`;
 - that pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b` with fingerprint `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`;
@@ -35,9 +35,14 @@ As of 2026-07-15:
 - cross-stack pull-request CI now runs both the Python contract suite and a
   locked Node 22 frontend pipeline with generated-contract drift detection,
   TypeScript, ESLint, unit tests and production build;
-- the standalone Model Passport page is still a controlled frontend shell;
-  Product API v1.1 already supplies `GET /api/v1/models/active`, so the
-  remaining work is browser integration rather than a missing backend contract;
+- the standalone Model Passport page consumes `GET /api/v1/models/active`
+  through a typed, fail-closed client and keeps research/preprod and
+  allocation-only boundaries explicit;
+- current `main` through PR #11 has passed a combined post-merge source and
+  real localhost acceptance; the release-candidate fixes sparse target
+  counters, makes Playwright HTTP mode self-contained, and keeps the
+  real-package campaign-service test valid for a panel-free serving bundle
+  without weakening registry or clean-source guardrails. See ADR 0016;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -394,10 +399,9 @@ Each item is a separate reviewable milestone:
    readiness, error catalog, OpenAPI/schema discovery, paginated history,
    research-pilot configuration boundary and safe local retention. See ADR
    0014.
-9. Completed in PR #7 for result pages: integrate the Phase 2 frontend against
-    ResultOverview without copying status, metric or model-policy logic. The
-    Model Passport shell still needs a typed client for the already implemented
-    Product API v1.1 endpoint.
+9. Completed in PR #7 and PR #11: integrate the Phase 2 result pages against
+    ResultOverview and connect standalone Model Passport to Product API v1.1
+    without copying status, metric or model-policy logic.
 10. Completed on PR #9: require clean Python and frontend integration checks
     before merge, including generated-contract drift detection and production
     frontend build.
@@ -408,7 +412,14 @@ Each item is a separate reviewable milestone:
     live browser campaign there. Implementation commit `9a3d517` is published
     in PR #10; clean GitHub run `29451316495` passed both backend and frontend
     jobs.
-12. When company-contour or multi-node scale is approved, replace file-backed
+12. Completed in the post-merge release-candidate: rerun combined backend,
+    model-core, frontend and browser checks against current `main`; execute one
+    real pinned-package localhost job through validation, worker, result views
+    and hash-checked Excel download; normalize zero target-policy counters and
+    remove Playwright's dependency on ambient `VITE_*` variables; make the
+    real-package service fixture explicitly exercise panel-free
+    `serving_bundle` verification. See ADR 0016.
+13. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 

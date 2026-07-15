@@ -11,8 +11,9 @@ retention, research-pilot deployment tooling, source-only tests, canonical
 architecture documents and the merged
 Phase 2 React product-result frontend. The browser includes campaign result,
 Scenarios 1-6, reliability, warning, media-plan and report views. The
-standalone Model Passport route is still a controlled shell and has not yet
-been connected to the implemented `GET /api/v1/models/active` endpoint.
+standalone Model Passport route is connected to
+`GET /api/v1/models/active` through a typed, fail-closed client and exposes
+training period, coverage, replay/OOT status, channel policy and caveats.
 Panel-free model transfer, reverse-proxy/systemd rendering, health, retention
 and backup/restore are implemented. There is still no provisioned hosted
 VM/domain/TLS secret, durable company queue, PostgreSQL runtime, approved

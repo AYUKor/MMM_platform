@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import sys
 import tempfile
 import time
@@ -11,6 +10,7 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -54,16 +54,38 @@ class LocalCampaignServiceTest(unittest.TestCase):
             registry_root = root / "registry"
             (registry_root / "channels").mkdir(parents=True)
             (registry_root / "registrations").mkdir(parents=True)
-            shutil.copy2(
-                REGISTRY_ROOT / "channels" / "preprod.json",
-                registry_root / "channels" / "preprod.json",
+            channel_pointer = json.loads(
+                (REGISTRY_ROOT / "channels" / "preprod.json").read_text(encoding="utf-8")
             )
             source_registration = REGISTRY_ROOT / "registrations" / f"{PACKAGE_ID}.json"
             registration = json.loads(source_registration.read_text(encoding="utf-8"))
             registration["run_dir"] = str((EVIDENCE_ROOT / registration["run_dir"]).resolve())
             registration["panel"]["path"] = str((EVIDENCE_ROOT / registration["panel"]["path"]).resolve())
+            immutable_registration = dict(registration)
+            for key in (
+                "registered_at_utc",
+                "registered_by",
+                "reason",
+                "registration_content_sha256",
+            ):
+                immutable_registration.pop(key, None)
+            registration_sha256 = hashlib.sha256(
+                json.dumps(
+                    immutable_registration,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    default=str,
+                ).encode("utf-8")
+            ).hexdigest()
+            registration["registration_content_sha256"] = registration_sha256
+            channel_pointer["run_dir"] = registration["run_dir"]
+            channel_pointer["registration_content_sha256"] = registration_sha256
             (registry_root / "registrations" / f"{PACKAGE_ID}.json").write_text(
                 json.dumps(registration, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            (registry_root / "channels" / "preprod.json").write_text(
+                json.dumps(channel_pointer, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
 
@@ -76,6 +98,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
             expected_package_id=PACKAGE_ID,
             optimizer_policy_path=PROJECT_ROOT / "02_Code" / "02_Budget_optimizer" / "optimizer_decision_policy_v2.yaml",
             business_policy_path=PROJECT_ROOT / "02_Code" / "02_Budget_optimizer" / "business_threshold_policy_v1.yaml",
+            model_verification_mode="serving_bundle",
             default_sampling=SamplingProfile(64, 16, 32, 42, 10042),
         )
         self.service = LocalCampaignService(
@@ -170,7 +193,17 @@ class LocalCampaignServiceTest(unittest.TestCase):
         )
         self.assertTrue(created)
         final = self._wait_validation(validation["validation_id"])
-        self.assertEqual(final["status"]["code"], "valid", final.get("blocking_errors"))
+        validation_log = (
+            self.settings.validation_runtime_root
+            / validation["validation_id"]
+            / "protected_validation.log"
+        )
+        failure_detail = (
+            validation_log.read_text(encoding="utf-8")
+            if validation_log.is_file()
+            else final.get("blocking_errors")
+        )
+        self.assertEqual(final["status"]["code"], "valid", failure_detail)
         self.assertEqual(final["model"]["package_id"], PACKAGE_ID)
         self.assertTrue(final["job_creation_allowed"])
         self.assertTrue(final["campaigns"])
@@ -182,11 +215,16 @@ class LocalCampaignServiceTest(unittest.TestCase):
             self.assertTrue(path.is_file())
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), final[key]["sha256"])
 
-        job, job_created = self.service.create_job(
-            final["validation_id"],
-            "job-real-validation-0001",
-            {"sampling": {"scenario6_attempt_budget": 64}},
-        )
+        with patch.object(
+            self.service,
+            "_code_reference",
+            return_value="git:synthetic-test",
+        ):
+            job, job_created = self.service.create_job(
+                final["validation_id"],
+                "job-real-validation-0001",
+                {"sampling": {"scenario6_attempt_budget": 64}},
+            )
         self.assertTrue(job_created)
         parsed_job = parse_lifecycle_contract(job)
         self.assertIsInstance(parsed_job, DecisionJobV1)
