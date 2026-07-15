@@ -23,8 +23,8 @@ export function SearchStats({ model }: SearchStatsProps) {
         <div><dt>Отклонено кандидатов</dt><dd>{formatInteger(model.search.candidatesRejected)}</dd></div>
         <div><dt>Финалистов</dt><dd>{formatInteger(model.search.finalists)}</dd></div>
       </dl>
-      <p className={styles.searchStatus}>{model.search.status}</p>
-      {!model.s6.available ? <p className={styles.unavailableReason}>{model.s6.explanation}</p> : null}
+      <p className={styles.searchStatus}>{model.search.status.label}. {model.search.status.description}</p>
+      {!model.s6.available ? <p className={styles.unavailableReason}>{model.s6.message}</p> : null}
     </Card>
   );
 }

@@ -1,19 +1,19 @@
 import type {
-  CampaignResult,
-  DecisionResultV1,
-} from "../../entities/decision-result/types";
+  OverviewCampaign,
+  ResultOverviewV1,
+} from "../../entities/result-overview/types";
 
 export type CampaignSelection =
-  | { status: "selected"; campaign: CampaignResult }
+  | { status: "selected"; campaign: OverviewCampaign }
   | { status: "empty" }
-  | { status: "selection-required"; campaigns: CampaignResult[] }
+  | { status: "selection-required"; campaigns: OverviewCampaign[] }
   | { status: "not-found"; requestedCampaignId: string };
 
 export function selectCampaign(
-  result: DecisionResultV1,
+  result: ResultOverviewV1,
   requestedCampaignId?: string | null,
 ): CampaignSelection {
-  const campaigns = result.campaign_results;
+  const campaigns = result.campaigns;
 
   if (campaigns.length === 0) return { status: "empty" };
 

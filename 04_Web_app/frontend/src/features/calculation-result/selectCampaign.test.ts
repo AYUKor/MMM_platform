@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import fixture from "../../../../tests/fixtures/decision_result_v1_real_sanitized.json";
-import type { DecisionResultV1 } from "../../entities/decision-result/types";
+import fixture from "../../../../tests/fixtures/result_overview_v1_real_sanitized.json";
+import type { ResultOverviewV1 } from "../../entities/result-overview/types";
 import { selectCampaign } from "./selectCampaign";
 
-const result = fixture as unknown as DecisionResultV1;
+const result = fixture as unknown as ResultOverviewV1;
 
 describe("selectCampaign", () => {
   it("selects the only campaign", () => {
@@ -12,11 +12,11 @@ describe("selectCampaign", () => {
   });
 
   it("requires an explicit selection for a multi-campaign result", () => {
-    const [campaign] = result.campaign_results;
+    const [campaign] = result.campaigns;
     if (!campaign) throw new Error("Sanitized fixture must contain a campaign");
-    const multiCampaignResult: DecisionResultV1 = {
+    const multiCampaignResult: ResultOverviewV1 = {
       ...result,
-      campaign_results: [
+      campaigns: [
         campaign,
         { ...campaign, campaign_id: "campaign_second_sanitized" },
       ],

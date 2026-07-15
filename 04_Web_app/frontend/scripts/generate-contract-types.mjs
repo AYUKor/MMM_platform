@@ -15,6 +15,11 @@ const contracts = [
     typeName: "ApplicationLifecycleV1",
     output: "application-lifecycle-v1.ts",
   },
+  {
+    schema: "result_overview_v1.schema.json",
+    typeName: "ResultOverviewV1",
+    output: "result-overview-v1.ts",
+  },
 ];
 
 for (const contract of contracts) {

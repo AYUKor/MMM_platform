@@ -1,10 +1,10 @@
-import type { DecisionResultV1 } from "../../entities/decision-result/types";
+import type { ResultOverviewV1 } from "../../entities/result-overview/types";
 
 export type ResultProviderKind = "fixture" | "http" | "unavailable";
 
 export interface ResultProvider {
   readonly kind: ResultProviderKind;
-  getResult(resultId: string): Promise<DecisionResultV1>;
+  getOverview(jobId: string): Promise<ResultOverviewV1>;
 }
 
 export class ResultProviderUnavailableError extends Error {
@@ -17,7 +17,7 @@ export class ResultProviderUnavailableError extends Error {
 export function createUnavailableResultProvider(message: string): ResultProvider {
   return {
     kind: "unavailable",
-    async getResult() {
+    async getOverview() {
       throw new ResultProviderUnavailableError(message);
     },
   };
