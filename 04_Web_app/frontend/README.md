@@ -6,6 +6,13 @@ it does not contain MMM, optimizer, reliability, or allocation mathematics.
 The HTTP provider reads an immutable completed result from the local backend by
 `job_id`; fixture mode remains available for isolated visual development.
 
+The local core marketer flow is also available:
+
+- `/calculations/new`: upload and model-aware validation;
+- `/calculations/:id/progress`: background-job progress and cancellation;
+- `/calculations/:id/result`: completed forecast and optimizer result;
+- `/calculations`: server-side local job history.
+
 ## Local development
 
 ```bash

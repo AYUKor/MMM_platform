@@ -76,6 +76,7 @@ Runtime-данные находятся в игнорируемой Git папк
 | Проверка | `POST /api/v1/uploads/{upload_id}/validations` | `ValidationResult v1` |
 | Статус проверки | `GET /api/v1/validations/{validation_id}` | `running`, `valid` или `invalid` |
 | Расчет | `POST /api/v1/validations/{validation_id}/jobs` | `DecisionJob v1` |
+| История | `GET /api/v1/jobs` | jobs с campaign preview из validation |
 | Статус | `GET /api/v1/jobs/{job_id}` | lifecycle job status |
 | Прогресс | `GET /api/v1/jobs/{job_id}/progress` | browser-safe progress events |
 | Экран результата | `GET /api/v1/jobs/{job_id}/overview` | `ResultOverview v1` |

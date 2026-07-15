@@ -261,6 +261,12 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(payload["status"]["code"], "queued")
         self.assertTrue(self.started.wait(timeout=1))
 
+        status, listing, _ = self._request("GET", "/api/v1/jobs")
+        self.assertEqual(status, 200)
+        self.assertEqual(listing["total"], 1)
+        self.assertEqual(listing["items"][0]["job"]["job_id"], self.job.job_id)
+        self.assertEqual(listing["items"][0]["campaigns"], [])
+
         status, _, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}/result")
         self.assertEqual(status, 404)
         status, duplicate, _ = self._request("POST", "/api/v1/jobs", self.job_payload)

@@ -1,4 +1,7 @@
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
+import { CalculationsPage } from "../pages/CalculationsPage";
+import { JobProgressPage } from "../pages/JobProgressPage";
+import { NewCalculationPage } from "../pages/NewCalculationPage";
 import { PermissionDeniedPage } from "../pages/PermissionDeniedPage";
 import { PlaceholderPage } from "../pages/PlaceholderPage";
 import { ResultOverviewPage } from "../pages/ResultOverviewPage";
@@ -20,22 +23,14 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: (
-          <PlaceholderPage
-            title="Главная"
-            description="Dashboard будет реализован после core marketer flow."
-          />
-        ),
+        element: <CalculationsPage />,
       },
       {
         path: "calculations",
-        element: (
-          <PlaceholderPage
-            title="Мои расчёты"
-            description="История расчётов не входит в Phase 1."
-          />
-        ),
+        element: <CalculationsPage />,
       },
+      { path: "calculations/new", element: <NewCalculationPage /> },
+      { path: "calculations/:id/progress", element: <JobProgressPage /> },
       {
         path: "calculations/:id/result",
         element: <ResultOverviewPage />,

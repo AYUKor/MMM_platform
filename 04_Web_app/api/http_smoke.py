@@ -401,6 +401,31 @@ class LocalApiState:
             raise FileNotFoundError(job_id)
         return _read_json(path)
 
+    def list_jobs(self) -> list[dict[str, Any]]:
+        jobs_root = _safe_child(self.root, "jobs")
+        if not jobs_root.is_dir():
+            return []
+        records: list[dict[str, Any]] = []
+        for path in jobs_root.glob("*/job.json"):
+            if not path.is_file():
+                continue
+            job = _read_json(path)
+            try:
+                validation = self.read_validation(str(job["validation_id"]))
+            except FileNotFoundError:
+                validation = {}
+            records.append(
+                {
+                    "job": job,
+                    "campaigns": list(validation.get("campaigns") or []),
+                }
+            )
+        return sorted(
+            records,
+            key=lambda record: str(record["job"].get("created_at_utc") or ""),
+            reverse=True,
+        )
+
     def recover_jobs_after_restart(
         self,
     ) -> tuple[tuple[DecisionJobV1, ...], tuple[str, ...]]:
@@ -1004,6 +1029,10 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         "recovery": application.recovery_summary,
                     },
                 )
+                return
+            if path == "/api/v1/jobs":
+                jobs = application.state.list_jobs()
+                self._json(HTTPStatus.OK, {"items": jobs, "total": len(jobs)})
                 return
             upload_match = _UPLOAD_PATH_RE.fullmatch(path)
             if upload_match and upload_match.group("resource") is None:

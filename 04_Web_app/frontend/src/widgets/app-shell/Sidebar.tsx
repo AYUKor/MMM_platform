@@ -4,7 +4,7 @@ import styles from "./app-shell.module.css";
 
 const primaryItems = [
   { to: "/", label: "Главная", icon: "M" },
-  { to: "/calculations", label: "Новый расчёт", icon: "+" },
+  { to: "/calculations/new", label: "Новый расчёт", icon: "+" },
   { to: "/calculations", label: "Мои расчёты", icon: "R" },
   { to: "/model", label: "Модель", icon: "O" },
   { to: "/help", label: "Справка", icon: "?" },
