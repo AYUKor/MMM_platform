@@ -147,6 +147,8 @@ class HttpSmokeSettings:
     max_workers: int = 1
     max_upload_bytes: int = 50 * 1024 * 1024
     allowed_origins: tuple[str, ...] = (
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )

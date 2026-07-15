@@ -318,6 +318,18 @@ class HttpSmokeV1Test(unittest.TestCase):
         status, payload, _ = self._request("GET", "/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["mode"], "local_development_only")
+
+        frontend_request = urllib.request.Request(
+            self.base_url + "/health",
+            headers={"Origin": "http://127.0.0.1:4173"},
+            method="GET",
+        )
+        with urllib.request.urlopen(frontend_request, timeout=3) as response:
+            self.assertEqual(
+                response.headers.get("Access-Control-Allow-Origin"),
+                "http://127.0.0.1:4173",
+            )
+
         with self.assertRaisesRegex(ValueError, "localhost"):
             serve(self.application, "0.0.0.0", 0)
 

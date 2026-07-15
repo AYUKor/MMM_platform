@@ -94,7 +94,7 @@ export interface JobLineage {
   workflow_config_sha256: Sha256;
   input_flighting_sha256: Sha256;
   adapter_name: "optimizer_result_adapter";
-  adapter_version: "1.0.0";
+  adapter_version: "1.0.2";
   adapter_sha256: Sha256;
 }
 export interface ModelLineage {
@@ -178,7 +178,7 @@ export interface ScenarioMetrics {
   avg_basket_bridge: NullableQuantileMetric;
 }
 export interface QuantileMetric {
-  unit: "RUB" | "orders";
+  unit: "RUB" | "orders" | "turnover_bridge_from_avg_basket_rub";
   p10: number;
   p50: number;
   p90: number;
