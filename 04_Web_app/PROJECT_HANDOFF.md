@@ -405,7 +405,9 @@ Each item is a separate reviewable milestone:
     systemd render, service supervision, disk monitoring, quiesced backup,
     scheduled retention and restore verification. Remaining infrastructure
     acceptance is to provision one VM/domain/TLS/basic-auth setup and pass a
-    live browser campaign there.
+    live browser campaign there. Implementation commit `9a3d517` is published
+    in PR #10; clean GitHub run `29451316495` passed both backend and frontend
+    jobs.
 12. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
