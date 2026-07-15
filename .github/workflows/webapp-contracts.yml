@@ -9,7 +9,6 @@ name: Web app contracts
   push:
     branches:
       - main
-      - "codex/**"
     paths:
       - "04_Web_app/**"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
@@ -36,3 +35,41 @@ jobs:
 
       - name: Run source-only web contract tests
         run: python -B -m unittest discover -s 04_Web_app/tests -p "test_*.py" -v
+
+  frontend-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: 04_Web_app/frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: 04_Web_app/frontend/package-lock.json
+
+      - name: Install locked frontend dependencies
+        run: npm ci
+
+      - name: Generate contract types
+        run: npm run generate:contracts
+
+      - name: Verify generated contract types are committed
+        run: git diff --exit-code -- src/shared/api/generated
+
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run frontend unit tests
+        run: npm run test
+
+      - name: Build production frontend
+        run: npm run build
