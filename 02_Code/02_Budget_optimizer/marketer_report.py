@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from dataclasses import dataclass
@@ -1699,6 +1700,26 @@ def _write_table(
     return header_row + len(table) + 2, header_row
 
 
+def _fit_wrapped_row_heights(ws: Any) -> None:
+    """Give wrapped marketer-facing text enough vertical space to stay visible."""
+    for row_idx in range(1, ws.max_row + 1):
+        wrapped_lines = 1
+        for cell in ws[row_idx]:
+            if not cell.alignment.wrap_text or cell.value in (None, ""):
+                continue
+            column_width = ws.column_dimensions[get_column_letter(cell.column)].width or 12
+            usable_characters = max(int(column_width * 0.9), 1)
+            text_lines = sum(
+                max(1, math.ceil(len(line) / usable_characters))
+                for line in str(cell.value).splitlines() or [""]
+            )
+            wrapped_lines = max(wrapped_lines, text_lines)
+        if wrapped_lines > 1:
+            current_height = ws.row_dimensions[row_idx].height or 15
+            estimated_height = min(18 * wrapped_lines + 6, 180)
+            ws.row_dimensions[row_idx].height = max(current_height, estimated_height)
+
+
 def _campaign_allocation_matrix(
     campaign_name: str,
     allocation: pd.DataFrame,
@@ -2149,6 +2170,7 @@ def _write_dynamic_workbook(
                 default=10,
             )
             ws.column_dimensions[letter].width = min(max(max_length + 2, 12), 38)
+        _fit_wrapped_row_heights(ws)
     wb.save(paths.output_xlsx)
 
 
