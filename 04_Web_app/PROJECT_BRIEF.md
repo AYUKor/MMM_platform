@@ -26,6 +26,10 @@ The product is an internal browser-based tool for marketers and media planners. 
 
 The application will first run locally for development and then move into the company infrastructure without changing the MMM calculation logic.
 
+The local development backend now has an asynchronous HTTP smoke boundary for
+immutable jobs, progress polling, verified results and artifact downloads. It
+is localhost-only and is not the future company deployment runtime.
+
 ## User Journey
 
 1. The marketer uploads CSV/XLSX campaign data.

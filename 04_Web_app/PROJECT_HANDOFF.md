@@ -336,11 +336,14 @@ Each item is a separate reviewable milestone:
 3. Completed: implement local Execution Worker v1 around the existing composite
    optimizer/report boundary, including immutable preflight, progress,
    cancellation, timeout, lineage verification, and DecisionResult composition.
-4. Next: add a local HTTP smoke path against in-memory or file-backed
-   development state; do not introduce a second calculation engine.
-5. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
-6. Implement API endpoints and asynchronous event delivery against the frozen contracts.
-7. Build the marketer workflow on the real-derived fixtures and stable API.
-8. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
+4. Completed: add a localhost-only HTTP smoke path with file-backed state,
+   bounded background execution, idempotency, progress polling,
+   ResultOverview delivery and hash-checked artifact downloads.
+5. Next: implement marketer upload, background campaign validation and
+   immutable DecisionJob creation over the same lifecycle contracts.
+6. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
+7. Implement production API adapters and asynchronous event delivery against the frozen contracts.
+8. Build the marketer workflow on the real-derived fixtures and stable API.
+9. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
 
 Do not start a later milestone while an earlier contract or evidence gate is unresolved. Decisions requiring owner approval are listed only in `04_Web_app/OPEN_DECISIONS.md`.
