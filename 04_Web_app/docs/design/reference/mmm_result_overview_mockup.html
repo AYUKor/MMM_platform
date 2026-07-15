@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MMM Forecast & Optimizer — Result Overview Mockup</title>
+  <style>
+    :root {
+      --bg: #050505;
+      --surface: #111111;
+      --surface-2: #191919;
+      --text: #f7f7f7;
+      --muted: #a8a8a8;
+      --border: #303030;
+      --accent: #c7fd72;
+      --accent-soft: rgba(199,253,114,.12);
+      --warning: #f5b85a;
+      --danger: #ff6262;
+      --neutral-bar: #555b62;
+      --shadow: rgba(0,0,0,.55);
+      --grid: rgba(255,255,255,.04);
+    }
+    html[data-theme="light"] {
+      --bg: #f7f7f4;
+      --surface: #ffffff;
+      --surface-2: #e9e9e6;
+      --text: #090909;
+      --muted: #656565;
+      --border: #161616;
+      --accent: #c7fd72;
+      --accent-soft: rgba(160,220,75,.18);
+      --warning: #cc7a10;
+      --danger: #d83e3e;
+      --neutral-bar: #b6bac0;
+      --shadow: rgba(0,0,0,.18);
+      --grid: rgba(0,0,0,.04);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
+    body { overflow-x: hidden; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 228px 1fr; position: relative; }
+    .background {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 40px 40px;
+      mask-image: linear-gradient(to bottom, black 0%, rgba(0,0,0,.8) 36%, transparent 76%);
+    }
+    .contours { position: absolute; width: 1100px; height: 700px; right: -180px; top: -220px; opacity: .42; animation: drift 52s ease-in-out infinite alternate; }
+    .contours path { fill: none; stroke: var(--muted); stroke-width: 1.2; opacity: .18; }
+    .contours path:nth-child(4n) { stroke: var(--accent); opacity: .17; }
+    @keyframes drift { from { transform: translate3d(-10px,0,0) rotate(-2deg) scale(1); } to { transform: translate3d(45px,25px,0) rotate(3deg) scale(1.06); } }
+    @media (prefers-reduced-motion: reduce) { .contours { animation: none; } }
+
+    aside { position: relative; z-index: 3; background: color-mix(in srgb, var(--surface) 94%, transparent); border-right: 1px solid var(--border); padding: 24px 16px; display: flex; flex-direction: column; min-height: 100vh; }
+    .brand { display: flex; gap: 12px; align-items: center; padding: 4px 8px 24px; }
+    .brand-mark { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; color: #090909; font-weight: 900; border: 1px solid #090909; box-shadow: 4px 4px 0 #090909; }
+    .brand-title { font-size: 14px; font-weight: 800; line-height: 1.1; }
+    .brand-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    nav { display: grid; gap: 7px; }
+    .nav-item { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 11px; color: var(--muted); font-size: 14px; font-weight: 650; }
+    .nav-item.active { background: var(--accent); color: #090909; }
+    .nav-item .icon { width: 20px; text-align: center; }
+    .nav-sep { height: 1px; background: var(--border); margin: 18px 8px; }
+    .admin-label { padding: 0 12px 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+    .user { margin-top: auto; border-top: 1px solid var(--border); padding: 18px 8px 0; display: flex; gap: 10px; align-items: center; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); font-weight: 800; }
+    .user-name { font-size: 13px; font-weight: 750; }
+    .user-role { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    main { position: relative; z-index: 2; min-width: 0; }
+    .topbar { height: 62px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 28px; position: sticky; top: 0; z-index: 5; }
+    .system-status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 12px rgba(199,253,114,.55); }
+    .theme-switch { display: flex; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .theme-btn { border: 0; width: 32px; height: 28px; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+    .theme-btn.active { background: var(--surface-2); color: var(--text); }
+
+    .content { max-width: 1320px; margin: 0 auto; padding: 26px 32px 56px; }
+    .page-head { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 20px; }
+    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); font-weight: 800; }
+    h1 { font-size: 34px; margin: 7px 0 8px; line-height: 1.08; }
+    .meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px 14px; }
+    .head-actions { display: flex; gap: 10px; align-items: center; }
+    .btn { border: 1px solid var(--border); border-radius: 11px; padding: 11px 15px; font-weight: 800; font-size: 13px; background: var(--surface); color: var(--text); cursor: pointer; }
+    .btn.primary { background: var(--accent); color: #090909; border-color: #090909; box-shadow: 4px 4px 0 #090909; }
+    .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 22px; overflow-x: auto; }
+    .tab { padding: 12px 2px 13px; color: var(--muted); font-size: 14px; font-weight: 750; position: relative; white-space: nowrap; cursor: pointer; }
+    .tab.active { color: var(--text); }
+    .tab.active:after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:3px; border-radius:4px 4px 0 0; background:var(--accent); }
+
+    .decision-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(300px, .9fr); gap: 18px; margin-bottom: 18px; }
+    .card { background: color-mix(in srgb, var(--surface) 97%, transparent); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+    .recommendation { background: var(--accent); color: #090909; border-color: #090909; box-shadow: 8px 8px 0 #090909; padding: 24px; position: relative; overflow: hidden; }
+    .recommendation:after { content:""; width: 220px; height: 220px; position:absolute; right:-72px; top:-84px; border-radius:50%; border:1px solid rgba(0,0,0,.22); box-shadow: 0 0 0 24px rgba(0,0,0,.05), 0 0 0 48px rgba(0,0,0,.035); }
+    .label { font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 900; opacity: .7; }
+    .recommendation h2 { margin: 9px 0 4px; font-size: 27px; max-width: 760px; line-height: 1.08; }
+    .scenario-name { font-size: 13px; font-weight: 800; opacity: .72; }
+    .main-metrics { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px; margin-top: 22px; max-width: 790px; }
+    .metric-mini { border-left: 1px solid rgba(0,0,0,.35); padding-left: 13px; }
+    .metric-mini:first-child { border-left: 0; padding-left: 0; }
+    .metric-mini .v { font-size: 27px; font-weight: 900; white-space: nowrap; }
+    .metric-mini .k { font-size: 11px; font-weight: 750; opacity: .72; margin-top: 3px; }
+    .recommendation .reason { margin-top: 20px; max-width: 740px; font-size: 13px; line-height: 1.5; font-weight: 650; }
+    .recommendation .cta { margin-top: 17px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #090909; border-radius: 10px; padding: 9px 12px; font-weight: 900; font-size: 12px; background: rgba(255,255,255,.15); }
+
+    .safe-card { border-color: var(--accent); display: flex; flex-direction: column; justify-content: space-between; }
+    .safe-title { font-size: 20px; margin: 8px 0 4px; }
+    .safe-sub { color: var(--muted); font-size: 12px; }
+    .safe-number { font-size: 30px; font-weight: 900; margin-top: 22px; }
+    .safe-meta { display: grid; gap: 9px; margin-top: 17px; }
+    .safe-row { display:flex; justify-content:space-between; gap:12px; font-size:12px; }
+    .safe-row span:first-child { color: var(--muted); }
+    .badge { display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:var(--accent-soft); color:var(--text); font-weight:800; font-size:11px; margin-top:16px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .kpi { min-height: 155px; }
+    .kpi-title { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .kpi-main { font-size: 27px; font-weight: 900; margin-top: 11px; }
+    .range { margin-top: 13px; display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); }
+    .range-track { height: 4px; border-radius: 4px; background: var(--surface-2); position: relative; margin-top: 8px; }
+    .range-fill { position: absolute; left: 15%; right: 10%; top:0; bottom:0; background: color-mix(in srgb, var(--accent) 62%, var(--surface-2)); border-radius:4px; }
+    .range-dot { position:absolute; left:58%; top:50%; transform:translate(-50%,-50%); width:10px; height:10px; border-radius:50%; background:var(--accent); border:2px solid #090909; }
+    .note { margin-top: 11px; font-size: 10.5px; color: var(--muted); line-height:1.4; }
+    .note.warning { color: var(--warning); font-weight: 750; }
+
+    .why { display: grid; grid-template-columns: 1.5fr .8fr; gap: 18px; margin-bottom: 18px; }
+    .why h3, .charts h3, .caveats h3 { margin: 0 0 14px; font-size: 18px; }
+    .reasons { display:grid; gap:10px; }
+    .reason-item { display:grid; grid-template-columns: 28px 1fr; gap:10px; align-items:start; }
+    .num { width:24px; height:24px; border-radius:8px; display:grid; place-items:center; background:var(--accent); color:#090909; font-weight:900; font-size:11px; }
+    .reason-text { font-size:12.5px; line-height:1.5; }
+    .search-stats { display:grid; gap:10px; }
+    .stat-line { display:flex; justify-content:space-between; gap:10px; border-bottom:1px dashed var(--border); padding-bottom:8px; font-size:12px; }
+    .stat-line span:first-child { color:var(--muted); }
+
+    .charts { display:grid; grid-template-columns: 1.15fr .85fr; gap:18px; margin-bottom:18px; }
+    .bar-list { display:grid; gap:13px; }
+    .bar-row { display:grid; grid-template-columns: 150px 1fr 66px; gap:10px; align-items:center; font-size:11px; }
+    .bar-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
+    .bar-stack { display:grid; gap:5px; }
+    .bar { height:7px; border-radius:8px; background:var(--surface-2); overflow:hidden; }
+    .bar > i { display:block; height:100%; border-radius:8px; }
+    .bar.old > i { background:var(--neutral-bar); }
+    .bar.new > i { background:var(--accent); }
+    .bar-value { text-align:right; font-weight:800; }
+    .legend { display:flex; gap:13px; margin-top:12px; color:var(--muted); font-size:10.5px; }
+    .legend span { display:flex; align-items:center; gap:6px; }
+    .swatch { width:9px; height:9px; border-radius:3px; }
+    .delta-list { display:grid; gap:10px; }
+    .delta-row { display:grid; grid-template-columns: 105px 1fr 78px; gap:10px; align-items:center; font-size:11px; }
+    .delta-track { height:8px; border-radius:8px; background:var(--surface-2); position:relative; overflow:hidden; }
+    .delta-track i { position:absolute; height:100%; border-radius:8px; }
+    .delta-track i.plus { left:50%; background:var(--accent); }
+    .delta-track i.minus { right:50%; background:var(--warning); }
+    .delta-value { text-align:right; font-weight:850; }
+    .positive { color:var(--accent); }
+    .negative { color:var(--warning); }
+
+    .caveats { display:flex; gap:16px; align-items:flex-start; border-left:4px solid var(--accent); }
+    .caveats ul { margin:0; padding-left:18px; display:grid; gap:7px; color:var(--muted); font-size:12px; line-height:1.45; }
+    .footer-demo { text-align:right; color:var(--muted); font-size:10px; margin-top:13px; }
+
+    .panel { display:none; }
+    .panel.active { display:block; }
+    .placeholder { min-height:380px; display:grid; place-items:center; text-align:center; color:var(--muted); }
+    .placeholder strong { color:var(--text); font-size:22px; display:block; margin-bottom:8px; }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 82px 1fr; }
+      .brand-copy, .nav-item span:last-child, .admin-label, .user-copy { display:none; }
+      aside { align-items:center; }
+      .nav-item { justify-content:center; width:50px; }
+      .decision-grid, .why, .charts { grid-template-columns:1fr; }
+      .kpis { grid-template-columns:repeat(2,1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="background" aria-hidden="true">
+    <svg class="contours" viewBox="0 0 1000 650">
+      <path d="M40 330 C130 140, 280 120, 370 250 S610 510, 810 390 S930 180, 980 250"/>
+      <path d="M10 360 C120 120, 310 90, 405 245 S610 560, 835 420 S930 140, 1010 220"/>
+      <path d="M-25 395 C100 95, 330 50, 445 238 S625 610, 865 455 S960 110, 1040 200"/>
+      <path d="M75 295 C155 175, 270 165, 340 267 S570 460, 770 360 S895 215, 955 278"/>
+      <path d="M115 275 C185 205, 265 210, 325 285 S545 420, 710 338 S840 255, 920 300"/>
+      <path d="M155 255 C215 225, 278 240, 325 304 S520 392, 665 323 S785 285, 885 318"/>
+      <path d="M230 210 C360 120, 510 155, 570 260 S720 455, 910 345"/>
+      <path d="M205 185 C360 70, 550 120, 620 245 S780 500, 955 360"/>
+      <path d="M180 155 C360 20, 590 75, 675 225 S830 550, 1000 378"/>
+      <path d="M305 520 C430 430, 545 450, 630 505 S790 625, 960 525"/>
+      <path d="M270 550 C420 420, 570 410, 680 485 S820 665, 1000 545"/>
+    </svg>
+  </div>
+
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <div class="brand-copy">
+          <div class="brand-title">MMM Forecast<br>& Optimizer</div>
+          <div class="brand-sub">decision system</div>
+        </div>
+      </div>
+      <nav>
+        <div class="nav-item"><span class="icon">⌂</span><span>Главная</span></div>
+        <div class="nav-item"><span class="icon">＋</span><span>Новый расчет</span></div>
+        <div class="nav-item active"><span class="icon">◫</span><span>Мои расчеты</span></div>
+        <div class="nav-item"><span class="icon">◉</span><span>Модель</span></div>
+        <div class="nav-item"><span class="icon">?</span><span>Справка</span></div>
+      </nav>
+      <div class="nav-sep"></div>
+      <div class="admin-label">Администрирование</div>
+      <nav>
+        <div class="nav-item"><span class="icon">◎</span><span>Система</span></div>
+        <div class="nav-item"><span class="icon">≋</span><span>Очередь</span></div>
+      </nav>
+      <div class="user">
+        <div class="avatar">АК</div>
+        <div class="user-copy">
+          <div class="user-name">Александр</div>
+          <div class="user-role">Аналитик</div>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div class="system-status"><span class="dot"></span>Система работает</div>
+        <div class="theme-switch" aria-label="Переключение темы">
+          <button class="theme-btn" data-theme-choice="light" title="Светлая">☀</button>
+          <button class="theme-btn" data-theme-choice="system" title="Системная">◐</button>
+          <button class="theme-btn active" data-theme-choice="dark" title="Темная">☾</button>
+        </div>
+        <button class="btn">Профиль</button>
+      </div>
+
+      <div class="content">
+        <header class="page-head">
+          <div>
+            <div class="eyebrow">Результат расчета · демонстрационные данные</div>
+            <h1>Regional Mix — июнь 2026</h1>
+            <div class="meta">
+              <span>ТС5 / Оффлайн</span><span>01–30 июня</span><span>75,3 млн ₽</span><span>4 канала</span><span>18 гео</span><span>Модель Q1 2026</span>
+            </div>
+          </div>
+          <div class="head-actions">
+            <button class="btn">Поделиться</button>
+            <button class="btn primary">Скачать Excel</button>
+          </div>
+        </header>
+
+        <div class="tabs">
+          <div class="tab active" data-panel="overview">Обзор</div>
+          <div class="tab" data-panel="scenarios">Сценарии и надежность</div>
+          <div class="tab" data-panel="plan">Медиаплан</div>
+          <div class="tab" data-panel="report">Отчет</div>
+        </div>
+
+        <section class="panel active" id="overview">
+          <div class="decision-grid">
+            <article class="card recommendation">
+              <div class="label">Рекомендация</div>
+              <h2>Использовать оптимизированный медиаплан</h2>
+              <div class="scenario-name">Сценарий 6 · Адаптивный поиск</div>
+              <div class="main-metrics">
+                <div class="metric-mini"><div class="v">2 161 млн ₽</div><div class="k">Доп. оборот · p50</div></div>
+                <div class="metric-mini"><div class="v">28,7</div><div class="k">ROAS · p50</div></div>
+                <div class="metric-mini"><div class="v">8 / 10</div><div class="k">Надежность</div></div>
+              </div>
+              <div class="reason">Это лучший вариант среди медиапланов, которые не выходят за зону похожих исторических трат. Новые каналы и гео не добавлялись.</div>
+              <div class="cta">Посмотреть изменения медиаплана →</div>
+            </article>
+
+            <article class="card safe-card">
+              <div>
+                <div class="label">Самая устойчивая база</div>
+                <div class="safe-title">Сценарий 5</div>
+                <div class="safe-sub">Исторически устойчивый план</div>
+                <div class="safe-number">2 090 млн ₽</div>
+                <div class="safe-sub">Дополнительный оборот · p50</div>
+              </div>
+              <div class="safe-meta">
+                <div class="safe-row"><span>ROAS</span><strong>27,7</strong></div>
+                <div class="safe-row"><span>Надежность</span><strong>9 / 10</strong></div>
+                <div class="safe-row"><span>Разница с рекомендацией</span><strong>−71 млн ₽</strong></div>
+              </div>
+              <div class="badge">◈ Устойчивый ориентир</div>
+            </article>
+          </div>
+
+          <div class="kpis">
+            <article class="card kpi">
+              <div class="kpi-title">Дополнительный оборот</div>
+              <div class="kpi-main">2 161 млн ₽</div>
+              <div class="range"><span>1 740</span><span>p50</span><span>2 620</span></div>
+              <div class="range-track"><div class="range-fill"></div><div class="range-dot"></div></div>
+              <div class="note">Осторожная · базовая · оптимистичная оценка</div>
+            </article>
+            <article class="card kpi">
+              <div class="kpi-title">ROAS по обороту</div>
+              <div class="kpi-main">28,7</div>
+              <div class="range"><span>23,1</span><span>p50</span><span>34,8</span></div>
+              <div class="range-track"><div class="range-fill" style="left:20%;right:14%"></div><div class="range-dot" style="left:59%"></div></div>
+              <div class="note">Доп. оборот на 1 ₽ рекламного бюджета</div>
+            </article>
+            <article class="card kpi">
+              <div class="kpi-title">Заказы на 100 000 пользователей</div>
+              <div class="kpi-main">+58</div>
+              <div class="range"><span>+35</span><span>p50</span><span>+82</span></div>
+              <div class="range-track"><div class="range-fill" style="left:18%;right:18%"></div><div class="range-dot" style="left:55%"></div></div>
+              <div class="note warning">Дополнительный ориентир · не главный KPI</div>
+            </article>
+            <article class="card kpi">
+              <div class="kpi-title">Изменение среднего чека</div>
+              <div class="kpi-main">+60 ₽</div>
+              <div class="range"><span>+40</span><span>p50</span><span>+100</span></div>
+              <div class="range-track"><div class="range-fill" style="left:22%;right:9%"></div><div class="range-dot" style="left:48%"></div></div>
+              <div class="note">Изменение относительно сценария без рекламы</div>
+            </article>
+          </div>
+
+          <div class="why">
+            <article class="card">
+              <h3>Почему выбран этот план</h3>
+              <div class="reasons">
+                <div class="reason-item"><div class="num">1</div><div class="reason-text">Лучший ожидаемый дополнительный оборот среди вариантов, доступных для автоматической рекомендации.</div></div>
+                <div class="reason-item"><div class="num">2</div><div class="reason-text">Все рекомендованные бюджеты остаются в зоне похожих исторических трат.</div></div>
+                <div class="reason-item"><div class="num">3</div><div class="reason-text">Перераспределение использует только каналы, гео и связки исходного медиаплана.</div></div>
+              </div>
+            </article>
+            <article class="card">
+              <h3>Адаптивный поиск</h3>
+              <div class="search-stats">
+                <div class="stat-line"><span>Проверено вариантов</span><strong>150</strong></div>
+                <div class="stat-line"><span>Безопасных вариантов</span><strong>43</strong></div>
+                <div class="stat-line"><span>Финалистов</span><strong>6</strong></div>
+                <div class="stat-line"><span>Выбран</span><strong>S6</strong></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="charts">
+            <article class="card">
+              <h3>Бюджет по каналам · было / рекомендуется</h3>
+              <div class="bar-list">
+                <div class="bar-row"><div class="bar-name">Digital_Performance</div><div class="bar-stack"><div class="bar old"><i style="width:55%"></i></div><div class="bar new"><i style="width:76%"></i></div></div><div class="bar-value positive">+7,2 млн</div></div>
+                <div class="bar-row"><div class="bar-name">OOH_Total</div><div class="bar-stack"><div class="bar old"><i style="width:82%"></i></div><div class="bar new"><i style="width:63%"></i></div></div><div class="bar-value negative">−6,1 млн</div></div>
+                <div class="bar-row"><div class="bar-name">Радио</div><div class="bar-stack"><div class="bar old"><i style="width:36%"></i></div><div class="bar new"><i style="width:44%"></i></div></div><div class="bar-value positive">+1,4 млн</div></div>
+                <div class="bar-row"><div class="bar-name">Рег_ТВ</div><div class="bar-stack"><div class="bar old"><i style="width:52%"></i></div><div class="bar new"><i style="width:48%"></i></div></div><div class="bar-value negative">−0,9 млн</div></div>
+              </div>
+              <div class="legend"><span><i class="swatch" style="background:var(--neutral-bar)"></i>Исходный план</span><span><i class="swatch" style="background:var(--accent)"></i>Рекомендованный</span></div>
+            </article>
+            <article class="card">
+              <h3>Гео с наибольшими изменениями</h3>
+              <div class="delta-list">
+                <div class="delta-row"><span>Москва</span><div class="delta-track"><i class="plus" style="width:42%"></i></div><strong class="delta-value positive">+5,4 млн</strong></div>
+                <div class="delta-row"><span>Раменское</span><div class="delta-track"><i class="minus" style="width:26%"></i></div><strong class="delta-value negative">−1,7 млн</strong></div>
+                <div class="delta-row"><span>Тула</span><div class="delta-track"><i class="plus" style="width:21%"></i></div><strong class="delta-value positive">+1,2 млн</strong></div>
+                <div class="delta-row"><span>Калуга</span><div class="delta-track"><i class="minus" style="width:16%"></i></div><strong class="delta-value negative">−0,8 млн</strong></div>
+                <div class="delta-row"><span>Липецк</span><div class="delta-track"><i class="plus" style="width:13%"></i></div><strong class="delta-value positive">+0,6 млн</strong></div>
+              </div>
+            </article>
+          </div>
+
+          <article class="card caveats">
+            <div>
+              <h3>Что важно учитывать</h3>
+              <ul>
+                <li>Прогноз показывает дополнительный эффект рекламы, а не весь оборот бизнеса.</li>
+                <li>ROAS рассчитан по обороту, а не по прибыли.</li>
+                <li>Заказы на пользователя являются дополнительным ориентиром.</li>
+                <li>Рекомендованный план не выходит за историческую зону трат.</li>
+              </ul>
+            </div>
+          </article>
+          <div class="footer-demo">Концептуальный UI-макет · значения демонстрационные</div>
+        </section>
+
+        <section class="panel" id="scenarios"><div class="card placeholder"><div><strong>Сценарии и надежность</strong>В этой версии прототипа детализирован только утвержденный экран «Обзор».</div></div></section>
+        <section class="panel" id="plan"><div class="card placeholder"><div><strong>Медиаплан</strong>Следующий визуальный экран: каналы, гео, heatmap и календарь.</div></div></section>
+        <section class="panel" id="report"><div class="card placeholder"><div><strong>Отчет</strong>Полный Excel и рабочий медиаплан будут представлены отдельными файлами.</div></div></section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const root = document.documentElement;
+    const buttons = [...document.querySelectorAll('.theme-btn')];
+    const initial = new URLSearchParams(location.search).get('theme') || 'dark';
+    function applyTheme(choice) {
+      let value = choice;
+      if (choice === 'system') value = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      root.dataset.theme = value;
+      buttons.forEach(b => b.classList.toggle('active', b.dataset.themeChoice === choice));
+    }
+    buttons.forEach(b => b.addEventListener('click', () => applyTheme(b.dataset.themeChoice)));
+    applyTheme(initial);
+
+    const tabs = [...document.querySelectorAll('.tab')];
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+    }));
+  </script>
+</body>
+</html>

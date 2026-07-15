@@ -1,0 +1,89 @@
+.page { display: grid; gap: var(--space-5); animation: page-enter var(--motion-enter) var(--ease-out) both; }
+.overviewPanel { display: grid; gap: var(--space-4); }
+.decisionGrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 0.95fr); gap: var(--space-4); }
+
+.recommendation,
+.benchmark { position: relative; min-height: 310px; padding: clamp(1.5rem, 3vw, 2.4rem); overflow: hidden; }
+.recommendation { display: flex; flex-direction: column; border-color: var(--accent-ink); background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-shifted); }
+.recommendationContour { position: absolute; top: -100px; right: -70px; width: 260px; height: 260px; border: 1px solid color-mix(in srgb, var(--accent-ink) 24%, transparent); border-radius: 50%; }
+.recommendationContour::before,
+.recommendationContour::after { content: ""; position: absolute; border: 1px solid color-mix(in srgb, var(--accent-ink) 16%, transparent); border-radius: 50%; }
+.recommendationContour::before { inset: 26px; }
+.recommendationContour::after { inset: 58px; }
+.panelLabel { position: relative; z-index: 1; font-size: 0.68rem; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.72; }
+.recommendation h2 { position: relative; z-index: 1; max-width: 760px; margin: 0.7rem 0 0.25rem; font-size: clamp(2rem, 3.6vw, 3.45rem); line-height: 0.96; letter-spacing: -0.055em; }
+.scenarioName { position: relative; z-index: 1; font-size: 0.9rem; }
+.heroMetrics { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, 1fr); margin-top: auto; padding-top: 2rem; }
+.heroMetrics > div { display: grid; gap: 0.3rem; padding: 0 1rem; border-left: 1px solid color-mix(in srgb, var(--accent-ink) 25%, transparent); }
+.heroMetrics > div:first-child { padding-left: 0; border-left: 0; }
+.heroMetrics strong { font-size: clamp(1.35rem, 2.4vw, 2.1rem); letter-spacing: -0.04em; }
+.heroMetrics span { font-size: 0.68rem; opacity: 0.72; }
+.recommendationReason { position: relative; z-index: 1; max-width: 88ch; margin: 1.2rem 0 0; font-size: 0.84rem; line-height: 1.5; }
+.allocationNotice { position: relative; z-index: 1; margin: 0.65rem 0 0; padding-left: 0.75rem; border-left: 3px solid var(--accent-ink); font-size: 0.72rem; font-weight: 700; line-height: 1.45; }
+.recommendationFooter { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.recommendationFooter span { padding: 0.35rem 0.65rem; border: 1px solid color-mix(in srgb, var(--accent-ink) 42%, transparent); border-radius: var(--radius-pill); font-size: 0.68rem; font-weight: 800; }
+
+.benchmark { display: flex; flex-direction: column; border-color: var(--accent-strong); }
+.benchmark h2 { margin: 0.7rem 0 0.2rem; font-size: clamp(1.45rem, 2.5vw, 2.1rem); letter-spacing: -0.04em; }
+.benchmark > p { margin: 0; color: var(--text-secondary); font-size: 0.78rem; line-height: 1.5; }
+.benchmarkValue { margin-top: auto; padding-top: 1.4rem; font-size: clamp(1.7rem, 3vw, 2.5rem); letter-spacing: -0.04em; }
+.benchmarkCaption { color: var(--text-secondary); font-size: 0.72rem; }
+.benchmarkList { display: grid; gap: 0.5rem; margin: 1.2rem 0; }
+.benchmarkList div { display: flex; justify-content: space-between; gap: 1rem; }
+.benchmarkList dt { color: var(--text-secondary); font-size: 0.72rem; }
+.benchmarkList dd { margin: 0; max-width: 55%; text-align: right; font-size: 0.72rem; font-weight: 750; }
+
+.metricsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+.explanationGrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 0.95fr); gap: var(--space-4); }
+.whySection,
+.searchCard { padding: var(--space-5); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.sectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.sectionHeading h2 { margin: 0; font-size: clamp(1.05rem, 2vw, 1.35rem); letter-spacing: -0.025em; }
+.reasons { display: grid; gap: 0.9rem; margin: 1.2rem 0 0; padding: 0; list-style: none; }
+.reasons li { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: start; gap: 0.75rem; }
+.reasons span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font: 900 0.72rem/1 var(--font-mono); }
+.reasons p { margin: 0; color: var(--text-secondary); font-size: 0.82rem; line-height: 1.5; }
+.searchStats { display: grid; gap: 0; margin: 1rem 0 0; }
+.searchStats div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.55rem 0; border-bottom: 1px dashed var(--border-default); }
+.searchStats dt { color: var(--text-secondary); font-size: 0.74rem; }
+.searchStats dd { margin: 0; font: 800 0.78rem/1.3 var(--font-mono); }
+.searchStatus { margin: 0.85rem 0 0; color: var(--text-secondary); font-size: 0.72rem; }
+.unavailableReason { margin: 0.65rem 0 0; padding: 0.65rem; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, transparent); font-size: 0.72rem; line-height: 1.45; }
+
+.dataGapGrid { display: grid; grid-template-columns: 1.55fr 1fr; gap: var(--space-4); }
+.dataGapCard { min-height: 230px; padding: var(--space-5); }
+.dataGapCard > p { max-width: 64ch; margin: 1rem 0 0; color: var(--text-secondary); font-size: 0.75rem; line-height: 1.5; }
+.dataGapVisual { display: grid; gap: 0.75rem; margin-top: 1.5rem; }
+.dataGapVisual i { position: relative; display: block; height: 8px; border-radius: 8px; background: var(--surface-secondary); overflow: hidden; }
+.dataGapVisual i::after { content: ""; display: block; width: 42%; height: 100%; border-radius: inherit; background: var(--border-strong); opacity: 0.65; }
+.dataGapVisual i:nth-child(2)::after { width: 68%; }
+.dataGapVisual i:nth-child(3)::after { width: 35%; }
+.dataGapVisual i:nth-child(4)::after { width: 54%; }
+
+.caveats { padding: var(--space-5); border-left: 4px solid var(--accent); }
+.caveats h2 { margin: 0; font-size: 1.2rem; }
+.caveats ul { display: grid; gap: 0.5rem; margin: 1rem 0 0; padding-left: 1.2rem; }
+.caveats li { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.5; }
+.demoFooter { padding-top: 0.5rem; color: var(--text-tertiary); text-align: right; font-size: 0.68rem; }
+
+@keyframes page-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 1180px) {
+  .metricsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .decisionGrid,
+  .explanationGrid,
+  .dataGapGrid { grid-template-columns: 1fr; }
+  .recommendation,
+  .benchmark { min-height: auto; }
+  .benchmarkValue { margin-top: 1.2rem; }
+}
+
+@media (max-width: 620px) {
+  .metricsGrid { grid-template-columns: 1fr; }
+  .heroMetrics { grid-template-columns: 1fr; gap: 0.75rem; }
+  .heroMetrics > div { padding: 0 0 0.75rem; border-left: 0; border-bottom: 1px solid color-mix(in srgb, var(--accent-ink) 22%, transparent); }
+  .heroMetrics > div:last-child { border-bottom: 0; }
+}
