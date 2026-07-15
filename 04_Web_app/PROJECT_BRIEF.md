@@ -8,7 +8,11 @@ application lifecycle v1 and Product API v1.1 contracts, the completed-result
 adapter, local Execution Worker v1, localhost HTTP API, marketer
 upload/validation service, model passport, runtime launcher/recovery and
 retention, source-only tests, canonical architecture documents and the merged
-Phase 1 React frontend. There is still no hosted research VM, reverse-proxy
+Phase 2 React product-result frontend. The browser includes campaign result,
+Scenarios 1-6, reliability, warning, media-plan and report views. The
+standalone Model Passport route is still a controlled shell and has not yet
+been connected to the implemented `GET /api/v1/models/active` endpoint. There
+is still no hosted research VM, reverse-proxy
 configuration, durable company queue, PostgreSQL runtime, approved object
 storage or corporate authentication. The
 previous mock/stub prototype was

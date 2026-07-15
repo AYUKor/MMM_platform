@@ -23,9 +23,14 @@ As of 2026-07-15:
 - Product API v1.1 now adds readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
-- frontend Phase 1 is merged without replacing its design or history; the
-  browser now covers upload and validation review, immutable job creation,
-  progress and cancellation, result, server-backed history, and Excel download;
+- frontend Phase 2 is merged without replacing its design or history; the
+  browser covers upload and validation review, immutable job creation,
+  progress and cancellation, server-backed history, campaign-level Scenarios
+  1-6, reliability and warnings, row-level media-plan comparison, reports and
+  Excel download;
+- the standalone Model Passport page is still a controlled frontend shell;
+  Product API v1.1 already supplies `GET /api/v1/models/active`, so the
+  remaining work is browser integration rather than a missing backend contract;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; hosted VM/reverse-proxy deployment is not implemented yet;
 - company queue, PostgreSQL/object-storage adapters, corporate authentication,
@@ -377,15 +382,17 @@ Each item is a separate reviewable milestone:
    `job_66ae8290e5d41b825808` passed validation review, browser job creation,
    progress, result redirect, server-backed history, reopen, and hash-checked
    Excel download. See ADR 0013.
-8. Completed in backend branch: Product API v1.1, verified ModelPassport,
+8. Completed and merged in PR #6: Product API v1.1, verified ModelPassport,
    readiness, error catalog, OpenAPI/schema discovery, paginated history,
    research-pilot configuration boundary and safe local retention. See ADR
    0014.
 9. Package and accept one research-pilot server deployment: reverse proxy,
    HTTPS, simple access control, service supervision, disk monitoring, backup,
    scheduled retention and live browser acceptance.
-10. Integrate the next frontend phase against Product API v1.1 without copying
-    status or model-policy logic.
+10. Completed in PR #7 for result pages: integrate the Phase 2 frontend against
+    ResultOverview without copying status, metric or model-policy logic. The
+    Model Passport shell still needs a typed client for the already implemented
+    Product API v1.1 endpoint.
 11. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
