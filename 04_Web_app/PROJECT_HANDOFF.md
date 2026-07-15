@@ -17,8 +17,11 @@ As of 2026-07-15:
 - local Execution Worker v1 now verifies immutable inputs and package/policy
   pins, launches the existing optimizer/report CLI in a subprocess, publishes
   lifecycle progress, and composes DecisionResult with the original `job_id`;
-- HTTP API, queue, PostgreSQL/object-storage adapters, authentication, and
-  frontend are not implemented yet.
+- localhost HTTP API, canonical upload, model-aware validation, recoverable
+  local runtime, ResultOverview delivery, and hash-checked downloads are
+  implemented and have passed a real preprod-package E2E job;
+- company queue, PostgreSQL/object-storage adapters, authentication, and
+  frontend are not implemented in this backend branch.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
@@ -347,10 +350,13 @@ Each item is a separate reviewable milestone:
 5. Completed: implement canonical marketer upload, background campaign parsing
    and model-aware validation, isolated flighting artifacts and immutable
    DecisionJob creation over the same lifecycle contracts.
-6. In progress: the versioned local runtime launcher, registry preflight,
-   single-process lock and restart/recovery guardrails are implemented. The
-   remaining acceptance step is one complete localhost job against the real
-   preprod package.
+6. Completed: the versioned local runtime launcher, registry preflight,
+   single-process lock and restart/recovery guardrails are implemented. Real
+   localhost job `job_85c4b1ac16afa1a5e165` completed against pinned preprod
+   package `pkg_807d3ddbae57a52a_9aacd3beb350725b`; DecisionResult,
+   ResultOverview and the hash-checked marketer Excel were accepted. See ADR
+   0010. Smoke sampling proves application integration only, not business
+   effectiveness or production model readiness.
 7. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
 8. Implement production API adapters and asynchronous event delivery against the frozen contracts.
 9. Build the marketer workflow on the real-derived fixtures and stable API.
