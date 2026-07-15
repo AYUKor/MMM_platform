@@ -7,14 +7,16 @@ The folder contains implemented DecisionResult v1, ResultOverview v1,
 application lifecycle v1 and Product API v1.1 contracts, the completed-result
 adapter, local Execution Worker v1, localhost HTTP API, marketer
 upload/validation service, model passport, runtime launcher/recovery and
-retention, source-only tests, canonical architecture documents and the merged
+retention, research-pilot deployment tooling, source-only tests, canonical
+architecture documents and the merged
 Phase 2 React product-result frontend. The browser includes campaign result,
 Scenarios 1-6, reliability, warning, media-plan and report views. The
 standalone Model Passport route is still a controlled shell and has not yet
-been connected to the implemented `GET /api/v1/models/active` endpoint. There
-is still no hosted research VM, reverse-proxy
-configuration, durable company queue, PostgreSQL runtime, approved object
-storage or corporate authentication. The
+been connected to the implemented `GET /api/v1/models/active` endpoint.
+Panel-free model transfer, reverse-proxy/systemd rendering, health, retention
+and backup/restore are implemented. There is still no provisioned hosted
+VM/domain/TLS secret, durable company queue, PostgreSQL runtime, approved
+object storage or corporate authentication. The
 previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
@@ -42,6 +44,12 @@ publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
 and paginated history. The Python process remains loopback-only in both local
 and research profiles; a research server must place HTTPS/auth at a reverse
 proxy.
+
+The trained model remains outside Git. A verified serving bundle transfers the
+registered model inventory and registry evidence while retaining the training
+panel hash as provenance and excluding the panel itself. Model-development
+work continues to use full source-lineage checks; the server uses the explicit
+`serving_bundle` verification mode.
 
 The local marketer path also accepts a canonical campaign CSV/XLSX, parses and
 validates it in the background against the pinned preprod package, then creates

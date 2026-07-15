@@ -157,6 +157,7 @@ class HttpSmokeSettings:
     registry_root: Path | None = None
     registry_channel: str = "preprod"
     expected_package_id: str | None = None
+    model_verification_mode: str = "full_lineage"
     optimizer_policy_path: Path | None = None
     business_policy_path: Path | None = None
     timeout_seconds: float = 7200.0
@@ -183,6 +184,8 @@ class HttpSmokeSettings:
             raise ValueError("max_upload_bytes must be positive")
         if self.retention_days <= 0:
             raise ValueError("retention_days must be positive")
+        if self.model_verification_mode not in {"full_lineage", "serving_bundle"}:
+            raise ValueError("Unknown model_verification_mode")
         if self.deployment_profile not in {"local_development", "research_pilot"}:
             raise ValueError("Unknown deployment_profile")
         if not self.allowed_origins:
@@ -743,6 +746,7 @@ class HttpSmokeApplication:
                     ).expanduser().resolve(),
                     registry_channel=settings.registry_channel,
                     expected_package_id=settings.expected_package_id,
+                    model_verification_mode=settings.model_verification_mode,
                     optimizer_policy_path=(
                         settings.optimizer_policy_path
                         or project_root / "02_Code" / "02_Budget_optimizer" / "optimizer_decision_policy_v2.yaml"
@@ -865,6 +869,7 @@ class HttpSmokeApplication:
                 project_root=self.settings.project_root,
                 python_executable=self.settings.python_executable,
                 registry_root=self.settings.registry_root,
+                model_verification_mode=self.settings.model_verification_mode,
             ),
             LocalArtifactStore(self.settings.artifact_root),
             journal_factory=lambda attempt_root: MirroredWorkerJournal(

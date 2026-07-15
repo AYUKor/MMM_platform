@@ -23,6 +23,10 @@ As of 2026-07-15:
 - Product API v1.1 now adds readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
+- Research Pilot Deployment v1 now packages the registered serving inventory
+  without the training panel, renders Nginx/systemd configuration, supervises
+  loopback execution, checks readiness/disk, and provides idle-only verified
+  backup/restore;
 - frontend Phase 2 is merged without replacing its design or history; the
   browser covers upload and validation review, immutable job creation,
   progress and cancellation, server-backed history, campaign-level Scenarios
@@ -35,7 +39,8 @@ As of 2026-07-15:
   Product API v1.1 already supplies `GET /api/v1/models/active`, so the
   remaining work is browser integration rather than a missing backend contract;
 - the owner-approved near-term scope is a research pilot with allocation-only
-  decisions; hosted VM/reverse-proxy deployment is not implemented yet;
+  decisions; deployment source is ready, while the actual VM, domain, TLS and
+  live remote acceptance are not provisioned yet;
 - company queue, PostgreSQL/object-storage adapters, corporate authentication,
   and company-contour deployment remain future work.
 
@@ -396,9 +401,13 @@ Each item is a separate reviewable milestone:
 10. Completed on PR #9: require clean Python and frontend integration checks
     before merge, including generated-contract drift detection and production
     frontend build.
-11. Package and accept one research-pilot server deployment: reverse proxy,
-    HTTPS, simple access control, service supervision, disk monitoring, backup,
-    scheduled retention and live browser acceptance.
+11. Source implementation completed: panel-free model bundle, reverse-proxy and
+    systemd render, service supervision, disk monitoring, quiesced backup,
+    scheduled retention and restore verification. Remaining infrastructure
+    acceptance is to provision one VM/domain/TLS/basic-auth setup and pass a
+    live browser campaign there. Implementation commit `9a3d517` is published
+    in PR #10; clean GitHub run `29451316495` passed both backend and frontend
+    jobs.
 12. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.

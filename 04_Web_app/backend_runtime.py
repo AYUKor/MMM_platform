@@ -141,6 +141,9 @@ def build_settings(
         registry_root=_project_path(project_root, paths.get("registry_root"), "paths.registry_root"),
         registry_channel=str(model.get("registry_channel") or "preprod"),
         expected_package_id=str(model.get("expected_package_id") or ""),
+        model_verification_mode=str(
+            model.get("verification_mode") or "full_lineage"
+        ),
         optimizer_policy_path=_project_path(
             project_root,
             paths.get("optimizer_policy_path"),
@@ -192,6 +195,7 @@ def preflight(
         settings.registry_channel,
         expected_package_id=settings.expected_package_id,
         registry_root=settings.registry_root,
+        verification_mode=settings.model_verification_mode,
     )
     actual_package_id = str(resolved.get("package_id") or "")
     if actual_package_id != settings.expected_package_id:
@@ -217,6 +221,8 @@ def preflight(
         "package_id": actual_package_id,
         "package_fingerprint": resolved["registration"]["package_input_fingerprint"],
         "registry_channel": settings.registry_channel,
+        "model_verification_mode": settings.model_verification_mode,
+        "source_panel_status": resolved["verified"].get("source_panel_status"),
         "inventory_files_n": resolved["verified"]["inventory_files_n"],
         "git_commit": git_commit,
         "python_version": sys.version.split()[0],

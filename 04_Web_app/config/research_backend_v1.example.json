@@ -22,7 +22,8 @@
   },
   "model": {
     "registry_channel": "preprod",
-    "expected_package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b"
+    "expected_package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b",
+    "verification_mode": "serving_bundle"
   },
   "worker": {
     "python_executable": null,

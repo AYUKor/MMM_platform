@@ -81,7 +81,11 @@ def main() -> None:
     write_json(output_dir / "model_resolution_forecast.json", model_resolution)
     campaign_input_dir, campaign_file = _campaign_input_from_config(config, config_path)
 
-    package = ModelPackage.from_run_dir(model_run_dir, require_posterior_ready=False)
+    package = ModelPackage.from_run_dir(
+        model_run_dir,
+        require_posterior_ready=False,
+        validate_hash=model_resolution.get("verification_mode", "full_lineage") == "full_lineage",
+    )
     check_card = package.check_card(purpose="forecast")
     check_path = output_dir / "model_package_check_forecast.json"
     write_json(check_path, check_card)
@@ -130,6 +134,9 @@ def main() -> None:
         n_samples=n_samples,
         seed=seed,
         future_controls=config.get("future_controls") or {},
+        validate_package_lineage=(
+            model_resolution.get("verification_mode", "full_lineage") == "full_lineage"
+        ),
     )
     print(f"Normalized campaign: {prep.normalized_path}")
     print(f"Daily flighting: {prep.flighting_path}")

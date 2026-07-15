@@ -51,12 +51,28 @@ class ModelRegistryTests(unittest.TestCase):
         files = {
             "model_manifest.json": manifest,
             "run_config.json": {"panel_path": str(panel)},
-            "posterior_index.json": {},
+            "posterior_index.json": {
+                "posterior_files_n": 1,
+                "posterior_by_fit": {
+                    "S::T": {
+                        "file_name": "posterior_S__T.nc",
+                        "sha256": "synthetic",
+                    }
+                },
+            },
             "gate_policy.json": {},
+            "fit_design_metadata.json": {},
         }
         for filename, payload in files.items():
             (run_dir / filename).write_text(json.dumps(payload), encoding="utf-8")
         for filename in ["capability_matrix.csv", "risk_registry.csv", "gate_results.csv"]:
+            (run_dir / filename).write_text("column\nvalue\n", encoding="utf-8")
+        for filename in [
+            "fit_design_media_scales.csv",
+            "target_denominator_metadata.csv",
+            "historical_support_bounds.csv",
+            "adstock_warm_start.csv",
+        ]:
             (run_dir / filename).write_text("column\nvalue\n", encoding="utf-8")
         (run_dir / "posterior_S__T.nc").write_bytes(f"posterior-{name}".encode())
         if activation == "production_ready":
@@ -111,6 +127,67 @@ class ModelRegistryTests(unittest.TestCase):
             (run_dir / "capability_matrix.csv").write_text("mutated\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "mutated"):
                 registry.verify_registration(first["package_id"], self.registry_root)
+
+    def test_serving_bundle_verifies_inventory_without_source_panel(self) -> None:
+        run_dir, manifest = self._package("serving", fingerprint="9" * 64)
+        panel_path = Path(json.loads((run_dir / "run_config.json").read_text())["panel_path"])
+        manifests = {run_dir.resolve(): manifest}
+        with patch.object(registry.ModelPackage, "from_run_dir", side_effect=self._package_stub(manifests)):
+            registration = registry.register_model(
+                run_dir,
+                registered_by="owner",
+                reason="serving bundle",
+                registry_root=self.registry_root,
+            )
+            panel_path.unlink()
+            with self.assertRaisesRegex(FileNotFoundError, "source panel"):
+                registry.verify_registration(registration["package_id"], self.registry_root)
+            verified = registry.verify_registration(
+                registration["package_id"],
+                self.registry_root,
+                verification_mode="serving_bundle",
+            )
+            self.assertEqual(verified["source_panel_status"], "provenance_only_not_copied")
+            self.assertEqual(verified["panel_sha256"], registration["panel"]["sha256"])
+
+    def test_serving_bundle_rejects_incomplete_runtime_inventory(self) -> None:
+        run_dir, manifest = self._package("incomplete", fingerprint="7" * 64)
+        (run_dir / "adstock_warm_start.csv").unlink()
+        manifests = {run_dir.resolve(): manifest}
+        with patch.object(registry.ModelPackage, "from_run_dir", side_effect=self._package_stub(manifests)):
+            registration = registry.register_model(
+                run_dir,
+                registered_by="owner",
+                reason="incomplete serving bundle",
+                registry_root=self.registry_root,
+            )
+            with self.assertRaisesRegex(ValueError, "serving-complete"):
+                registry.verify_registration(
+                    registration["package_id"],
+                    self.registry_root,
+                    verification_mode="serving_bundle",
+                )
+
+    def test_registration_metadata_tamper_is_detected(self) -> None:
+        run_dir, manifest = self._package("metadata", fingerprint="8" * 64)
+        manifests = {run_dir.resolve(): manifest}
+        with patch.object(registry.ModelPackage, "from_run_dir", side_effect=self._package_stub(manifests)):
+            registration = registry.register_model(
+                run_dir,
+                registered_by="owner",
+                reason="metadata",
+                registry_root=self.registry_root,
+            )
+            path = self.registry_root / "registrations" / f"{registration['package_id']}.json"
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["run_dir"] = str(self.root / "other")
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "metadata was mutated"):
+                registry.verify_registration(
+                    registration["package_id"],
+                    self.registry_root,
+                    verification_mode="serving_bundle",
+                )
 
     def test_legacy_schema_is_rejected(self) -> None:
         run_dir, manifest = self._package("legacy", fingerprint="b" * 64, schema="0.2.0")

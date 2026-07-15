@@ -115,6 +115,9 @@ class BackendRuntimeTest(unittest.TestCase):
             settings, host, _ = build_settings(config, project_root=PROJECT_ROOT)
             self.assertEqual(settings.deployment_profile, "research_pilot")
             self.assertEqual(host, "127.0.0.1")
+            config["model"]["verification_mode"] = "serving_bundle"
+            settings, _, _ = build_settings(config, project_root=PROJECT_ROOT)
+            self.assertEqual(settings.model_verification_mode, "serving_bundle")
             config["server"]["public_base_url"] = "http://mmm.example.test"
             with self.assertRaisesRegex(ValueError, "HTTPS"):
                 build_settings(config, project_root=PROJECT_ROOT)

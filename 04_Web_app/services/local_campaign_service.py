@@ -183,6 +183,7 @@ class LocalCampaignServiceSettings:
     expected_package_id: str
     optimizer_policy_path: Path
     business_policy_path: Path
+    model_verification_mode: str = "full_lineage"
     max_upload_bytes: int = 50 * 1024 * 1024
     default_sampling: SamplingProfile = SamplingProfile(
         scenario6_attempt_budget=2048,
@@ -197,6 +198,8 @@ class LocalCampaignServiceSettings:
             raise ValueError("max_upload_bytes must be positive")
         if not self.registry_channel or not self.expected_package_id:
             raise ValueError("Pinned registry channel and package ID are required")
+        if self.model_verification_mode not in {"full_lineage", "serving_bundle"}:
+            raise ValueError("Unknown model verification mode")
         for path in (self.optimizer_policy_path, self.business_policy_path):
             if not path.expanduser().resolve().is_file():
                 raise FileNotFoundError(path)
@@ -436,6 +439,7 @@ class LocalCampaignService:
                 "registry_root": str(self.settings.registry_root.resolve()),
                 "channel": self.settings.registry_channel,
                 "expected_package_id": self.settings.expected_package_id,
+                "verification_mode": self.settings.model_verification_mode,
             },
             "paths": {
                 "campaign_input_dir": str(parsed_path.parent),
@@ -479,7 +483,13 @@ class LocalCampaignService:
                 kind="workflow_config",
             )
             run_dir, resolution = resolve_model_reference(config, config_path, purpose="optimizer")
-            package = ModelPackage.from_run_dir(run_dir, require_posterior_ready=False)
+            package = ModelPackage.from_run_dir(
+                run_dir,
+                require_posterior_ready=False,
+                validate_hash=(
+                    resolution.get("verification_mode", "full_lineage") == "full_lineage"
+                ),
+            )
             preparation_dir = Path(config["paths"]["output_dir"])
             prep = prepare_campaign_from_config(
                 config,
