@@ -1,4 +1,7 @@
-import type { ResultOverviewViewModel } from "../../features/calculation-result/buildResultOverviewModel";
+import type {
+  DownloadViewModel,
+  ResultOverviewViewModel,
+} from "../../features/calculation-result/buildResultOverviewModel";
 import { appEnv } from "../../shared/config/env";
 import { formatDate, formatRub } from "../../shared/formatters/metrics";
 import { Button } from "../../shared/ui/Button";
@@ -7,19 +10,20 @@ import { StatusBadge } from "../../shared/ui/StatusBadge";
 
 interface CampaignHeaderProps {
   model: ResultOverviewViewModel;
-  reportArtifactId: string | null;
+  reportDownload: DownloadViewModel | null;
 }
 
-export function CampaignHeader({ model, reportArtifactId }: CampaignHeaderProps) {
-  const [startDate, endDate] = model.campaign.dateRange.split(" — ");
+function artifactUrl(path: string): string {
+  const baseUrl = appEnv.apiBaseUrl.replace(/\/+$/, "");
+  return path.startsWith("http") ? path : `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+export function CampaignHeader({ model, reportDownload }: CampaignHeaderProps) {
   const downloadAvailable =
-    appEnv.resultProvider === "http" && reportArtifactId !== null;
+    appEnv.resultProvider === "http" && !model.demoData && reportDownload !== null;
   const downloadReport = () => {
-    if (!downloadAvailable) return;
-    const baseUrl = appEnv.apiBaseUrl.replace(/\/+$/, "");
-    window.location.assign(
-      `${baseUrl}/api/v1/artifacts/${encodeURIComponent(reportArtifactId)}/download`,
-    );
+    if (!downloadAvailable || !reportDownload) return;
+    window.location.assign(artifactUrl(reportDownload.downloadPath));
   };
   return (
     <PageHeader
@@ -35,7 +39,7 @@ export function CampaignHeader({ model, reportArtifactId }: CampaignHeaderProps)
       meta={
         <>
           <span>{model.campaign.segment}</span>
-          <span>{formatDate(startDate ?? "")} — {formatDate(endDate ?? "")}</span>
+          <span>{formatDate(model.campaign.sourceStartDate)} — {formatDate(model.campaign.sourceEndDate)}</span>
           <span>{formatRub(model.campaign.budgetRub)}</span>
           <span>{model.campaign.channelsCount} каналов</span>
           <span>{model.campaign.geographiesCount} гео</span>
@@ -43,14 +47,14 @@ export function CampaignHeader({ model, reportArtifactId }: CampaignHeaderProps)
       }
       actions={
         <>
-          <Button disabled title="Публикация ссылки будет подключена после authentication">
+          <Button disabled title="Публикация ссылки пока недоступна">
             Поделиться
           </Button>
           <Button
             variant="primary"
             disabled={!downloadAvailable}
             onClick={downloadReport}
-            title={downloadAvailable ? "Скачать отчет для маркетолога" : "Excel-отчет недоступен"}
+            title={downloadAvailable ? "Скачать отчет для маркетолога" : "Excel-отчет недоступен или открыт демонстрационный результат"}
           >
             Скачать Excel
           </Button>

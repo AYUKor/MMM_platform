@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { CalculationsPage } from "../pages/CalculationsPage";
 import { JobProgressPage } from "../pages/JobProgressPage";
 import { NewCalculationPage } from "../pages/NewCalculationPage";
+import { ModelPassportPage } from "../pages/ModelPassportPage";
 import { PermissionDeniedPage } from "../pages/PermissionDeniedPage";
 import { PlaceholderPage } from "../pages/PlaceholderPage";
 import { ResultOverviewPage } from "../pages/ResultOverviewPage";
@@ -37,12 +38,7 @@ export const routes: RouteObject[] = [
       },
       {
         path: "model",
-        element: (
-          <PlaceholderPage
-            title="Модель"
-            description="Model passport будет реализован после marketer flow."
-          />
-        ),
+        element: <ModelPassportPage />,
       },
       {
         path: "help",

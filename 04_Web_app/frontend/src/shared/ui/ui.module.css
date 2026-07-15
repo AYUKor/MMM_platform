@@ -1,5 +1,5 @@
 .button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0.65rem 1rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);

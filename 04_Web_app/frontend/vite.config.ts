@@ -9,16 +9,15 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 
 function sanitizedFixturePlugin(): Plugin {
   const fixtures = {
-    "/safe.json": "decision_result_v1_real_sanitized.json",
-    "/gate-blocked.json": "decision_result_v1_gate_blocked_sanitized.json",
+    "/safe.json": "result_overview_v1_real_sanitized.json",
   } as const;
 
   return {
-    name: "sanitized-decision-result-fixtures",
+    name: "sanitized-result-overview-fixtures",
     apply: "serve",
     configureServer(server) {
       server.middlewares.use(
-        "/__fixtures/decision-result",
+        "/__fixtures/result-overview",
         async (request, response, next) => {
           const fixtureName = fixtures[request.url as keyof typeof fixtures];
           if (!fixtureName) {

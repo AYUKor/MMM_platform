@@ -15,16 +15,16 @@ export function BenchmarkPanel({ scenario }: BenchmarkPanelProps) {
       <div className={styles.panelLabel}>
         {isS5 ? "Устойчивый benchmark" : "Исходный benchmark"}
       </div>
-      <h2>{scenario.name}</h2>
+      <h2>{scenario.title}</h2>
       <p>{scenario.description}</p>
       <strong className={styles.benchmarkValue}>
         {formatRub(scenario.turnover?.p50 ?? null)}
       </strong>
       <span className={styles.benchmarkCaption}>Дополнительный оборот · p50</span>
       <dl className={styles.benchmarkList}>
-        <div><dt>ROAS · p50</dt><dd>{formatDecimal(scenario.roasP50)}</dd></div>
-        <div><dt>Качество</dt><dd>{scenario.quality}</dd></div>
-        <div><dt>Сравнение</dt><dd>Без frontend delta</dd></div>
+        <div><dt>ROAS · p50</dt><dd>{formatDecimal(scenario.roas?.p50 ?? null)}</dd></div>
+        <div><dt>Качество</dt><dd>{scenario.quality.label}</dd></div>
+        <div><dt>Сравнение</dt><dd>Абсолютные значения</dd></div>
       </dl>
       <StatusBadge tone={isS5 ? "accent" : "neutral"}>
         {isS5 ? "Устойчивый benchmark" : "Как загрузили"}
