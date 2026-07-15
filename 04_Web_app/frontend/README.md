@@ -4,6 +4,8 @@ Phase 1 implements the application foundation and the core marketer flow.
 Phase 2 extends the completed-result workspace with scenario comparison,
 status-based reliability, warnings, line-level media-plan comparison, report
 downloads, and controlled incomplete/error states.
+The Model Passport milestone connects `/model` to the versioned Product API
+without reading registry, documentation, or model files in the browser.
 
 The browser prioritizes `GET /api/v1/jobs/{job_id}/overview` and keeps the full
 `/result` payload as an audit contract outside the product presentation. It does
@@ -16,8 +18,8 @@ The local core marketer flow is also available:
 - `/calculations/:id/progress`: background-job progress and cancellation;
 - `/calculations/:id/result`: completed forecast and optimizer result;
 - `/calculations`: server-side local job history.
-- `/model`: prepared Model Passport shell. It remains intentionally empty until
-  a dedicated backend API contract is available.
+- `/model`: active `ModelPassport v1` from `GET /api/v1/models/active`, with
+  fail-closed runtime validation and explicit research/preprod boundaries.
 
 The result workspace contains five tabs:
 
@@ -27,9 +29,9 @@ The result workspace contains five tabs:
 - Media plan (`segment × geo × channel` line items);
 - Report downloads.
 
-Channel/geo aggregates, report preview/status, and Model Passport data are
-explicit contract gaps. The frontend shows controlled `Нет данных` states and
-does not reconstruct them.
+Channel/geo aggregates and report preview/status remain explicit contract
+gaps. The Model Passport page shows loading, ready, unavailable, error and
+unsupported-contract states and never reconstructs missing values.
 
 ## Local development
 
@@ -59,9 +61,9 @@ npm run build
 npm run test:e2e
 ```
 
-Browser tests intercept the existing API routes with the checked-in sanitized
-overview fixture. They cover desktop/mobile, dark/light themes, S6 unavailable,
-partial coverage, failed/invalid/empty/loading states, keyboard tabs, document
-overflow, and raw internal-name leakage.
+Browser tests intercept the existing API routes with explicit sanitized or
+synthetic responses. They cover desktop/mobile, dark/light themes, S6
+unavailable, partial coverage, result failure states, all Model Passport
+states, keyboard tabs, document overflow, and raw internal-name leakage.
 
 The approved visual references live under `../docs/design/reference/`.

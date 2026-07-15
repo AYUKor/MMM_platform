@@ -6,10 +6,11 @@
 (`52d8d03`).
 
 Post-merge update, 2026-07-15: этот документ был написан до Product API v1.1.
-В текущем `main` (`61901af`) backend уже публикует versioned
+В актуальном после PR #9 `main` (`15518cb`) backend публикует versioned
 `GET /api/v1/models/active` с `ModelPassport v1`. Поэтому прежний gap
-Standalone Model Passport закрыт на backend-стороне; frontend route `/model`
-пока остается controlled shell и требует отдельного typed-client integration.
+Standalone Model Passport закрыт на backend-стороне. Текущий frontend
+milestone подключает route `/model` через typed client и fail-closed runtime
+validation, не читая registry, `CURRENT_TRUTH.md` или локальные model files.
 
 ## 1. Источники истины и граница frontend
 
@@ -65,7 +66,7 @@ Frontend:
 | Empty / not found | Job existence и readiness | `GET /api/v1/jobs/{job_id}`; затем overview | Частично поддержано. `JOB_NOT_FOUND` — отдельный not-found state. `RESOURCE_NOT_READY` нужно интерпретировать только вместе со статусом job: queued/running → ожидание; succeeded без overview → server inconsistency/unavailable. Нельзя считать любой HTTP 404 «пустым результатом». |
 | Invalid contract | `contract_name="result_overview_v1"`, `schema_version="1.0.0"`, обязательные collections и вложенные поля | `GET /api/v1/jobs/{job_id}/overview` | Поддерживается fail-closed client validation. Неизвестная версия, отсутствующая обязательная коллекция, duplicate/missing scenarios или нарушение shape дают controlled state `Результат имеет неподдерживаемый формат`; значения не достраиваются. |
 | Model Passport: модель конкретного job | `job.*`, `model.registry_channel`, `registry_event_id`, `package_id`, `package_fingerprint`, `package_manifest_sha256`, `activation_status`, `production_blockers`; `policies.*` | `GET /api/v1/jobs/{job_id}/result` | Audit contract поддерживает job-scoped паспорт. Он может быть показан только в контексте выбранного `job_id` и не доказывает, что пакет сейчас активен. Идентификаторы и SHA допустимы в раскрываемом audit-блоке, но не как основной пользовательский текст. |
-| Standalone Model Passport `/model` | Текущий разрешённый пакет, display-name/version, activation/readiness, blockers с человекочитаемым текстом, период модели, model quality/validation summary, lineage | `GET /api/v1/models/active` | **Backend contract поддержан Product API v1.1.** Payload строится из registry-verified package, сохраняет policy на уровне `segment x channel x target`, показывает replay/OOT/blockers и запрещает production claim. Frontend route пока не подключен: нужен typed client, runtime validation и loading/error/unavailable states без чтения registry/docs/local files. |
+| Standalone Model Passport `/model` | `contract_name`, `schema_version`, `record_origin`; `serving.*`; безопасные поля `package.*`; `data.training_period`, `development_shadow_period`; `coverage.*`; `validation.historical_replay`, `sealed_oot`, `production_blockers`; `caveats` | `GET /api/v1/models/active` | **Поддержано.** Typed client принимает только `ModelPassport v1`, проверяет shape и semantic invariants, разделяет loading/ready/unavailable/error/unsupported-contract. Policy остаётся на уровне `segment × channel × target`; raw `package_stage`, `activation_status`, action/role/reason codes скрыты. `synthetic_fixture` всегда помечается `Демонстрационные данные`. Research/preprod и allocation-only границы показаны явно. |
 
 ## 3. Политика человекочитаемых названий
 
@@ -109,9 +110,9 @@ UI не выводит raw backend names как пользовательские
 4. вкладку отчёта с metadata и hash-checked Excel download по `download_path`;
 5. loading, waiting, not-found, failed, timed-out, invalid-contract,
    unavailable и partial-coverage states;
-6. controlled shell standalone Model Passport; после Phase 2 backend уже
-   предоставляет ModelPassport v1, но подключение endpoint остается отдельной
-   frontend integration задачей.
+6. standalone Model Passport из Product API v1.1 с периодом обучения,
+   research-serving status, coverage, replay/OOT, blockers, target-specific
+   channel policies, caveats и полным набором fail-closed states.
 
 Все перечисленные экраны должны сохранять Phase 1 shell, tokens, themes,
 типографику, responsive behavior и motion/reduced-motion правила.
@@ -138,8 +139,9 @@ UI не выводит raw backend names как пользовательские
 Закрытый после первоначального Phase 2 анализа gap:
 
 - **Standalone Model Passport backend contract.** Product API v1.1 добавил
-  `GET /api/v1/models/active`; остается только frontend integration, а не
-  проектирование нового backend endpoint.
+  `GET /api/v1/models/active`; текущий milestone также завершает frontend
+  integration. Свободные package/action/role codes остаются скрытыми, пока
+  backend contract не добавит для них enum и browser labels.
 
 Эти gaps фиксируются документацией и UI unavailable states. Они не являются
 разрешением менять Python backend, `mmm_core`, optimizer, model package, API
@@ -162,6 +164,11 @@ lifecycle или JSON schemas в рамках Phase 2 frontend PR.
   не считается реальным job result;
 - unknown enum/version: controlled unsupported/invalid state, без optimistic
   fallback.
+- `ModelPassport unavailable`: только подтвержденный
+  `503 MODEL_PASSPORT_UNAVAILABLE`; неизвестный endpoint/version/shape даёт
+  отдельный unsupported-contract, а не пустой ready state;
+- `ModelPassport synthetic_fixture`: готовая структура может быть показана
+  только с badge `Демонстрационные данные`.
 
 ## 7. Неприкосновенная domain boundary
 
