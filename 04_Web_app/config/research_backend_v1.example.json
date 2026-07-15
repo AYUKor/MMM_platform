@@ -1,22 +1,21 @@
 {
   "schema_version": "1.1.0",
   "server": {
-    "deployment_profile": "local_development",
+    "deployment_profile": "research_pilot",
     "host": "127.0.0.1",
     "port": 8765,
-    "public_base_url": null,
-    "access_control_mode": "local_only",
+    "public_base_url": "https://mmm-research.example.invalid",
+    "access_control_mode": "reverse_proxy_basic_auth",
     "allowed_origins": [
+      "https://mmm-research.example.invalid",
       "http://localhost:4173",
-      "http://127.0.0.1:4173",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
+      "http://127.0.0.1:4173"
     ]
   },
   "paths": {
-    "state_root": "04_Web_app/var/local/state",
-    "runtime_root": "04_Web_app/var/local/runtime",
-    "artifact_root": "04_Web_app/var/local/artifacts",
+    "state_root": "04_Web_app/var/research/state",
+    "runtime_root": "04_Web_app/var/research/runtime",
+    "artifact_root": "04_Web_app/var/research/artifacts",
     "registry_root": "03_Outputs/01_PyMC_outputs/00_Model_registry",
     "optimizer_policy_path": "02_Code/02_Budget_optimizer/optimizer_decision_policy_v2.yaml",
     "business_policy_path": "02_Code/02_Budget_optimizer/business_threshold_policy_v1.yaml"
