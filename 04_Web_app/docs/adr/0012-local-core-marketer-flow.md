@@ -24,6 +24,8 @@ progress, or return to previous jobs from the browser.
    validation record.
 7. Keep calculation, model selection, support policy, optimization, and report
    generation outside React.
+8. Persist the completed validation identity in the page URL so refresh and
+   recovery reload the server record instead of losing the validation preview.
 
 ## Local routes
 

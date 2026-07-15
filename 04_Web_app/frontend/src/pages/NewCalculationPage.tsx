@@ -1,5 +1,5 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { CampaignUpload, ValidationResult } from "../entities/lifecycle/types";
 import {
   createJob,
@@ -33,11 +33,39 @@ function stepState(stage: PreparationStage, step: number): string {
 
 export function NewCalculationPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [file, setFile] = useState<File | null>(null);
   const [stage, setStage] = useState<PreparationStage>("idle");
   const [upload, setUpload] = useState<CampaignUpload | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const validationId = searchParams.get("validationId");
+    if (!validationId) return;
+    let active = true;
+    pollUntil(
+      () => getValidation(validationId),
+      (record) => record.status.code !== "running",
+      (record) => {
+        if (!active) return;
+        setValidation(record);
+        setError(null);
+        if (record.status.code === "running") setStage("validation");
+      },
+    )
+      .then((record) => {
+        if (!active) return;
+        setValidation(record);
+        setStage("review");
+      })
+      .catch((caught: unknown) => {
+        if (!active) return;
+        setError(caught instanceof Error ? caught.message : "Не удалось загрузить validation.");
+        setStage("idle");
+      });
+    return () => { active = false; };
+  }, [searchParams]);
 
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
     setFile(event.target.files?.[0] ?? null);
@@ -74,6 +102,7 @@ export function NewCalculationPage() {
         setValidation,
       );
       setStage("review");
+      navigate(`/calculations/new?validationId=${encodeURIComponent(checked.validation_id)}`, { replace: true });
       if (checked.status.code === "invalid" && checked.blocking_errors.length === 0) {
         throw new Error("План не прошел validation, но backend не вернул причину.");
       }
