@@ -42,3 +42,4 @@ progress, or return to previous jobs from the browser.
 - The local list endpoint has no pagination, ownership filtering, or RBAC.
   The enterprise adapter must add those controls while preserving the route
   semantics and lifecycle contracts.
+- Standard-profile browser acceptance evidence is recorded in ADR 0013.

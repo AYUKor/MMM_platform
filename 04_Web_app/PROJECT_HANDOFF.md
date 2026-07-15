@@ -20,8 +20,9 @@ As of 2026-07-15:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
-- frontend Phase 1 is merged and its existing Result Overview page can read a
-  real completed DecisionResult by `job_id` and download the marketer Excel;
+- frontend Phase 1 is merged without replacing its design or history; the
+  browser now covers upload and validation review, immutable job creation,
+  progress and cancellation, result, server-backed history, and Excel download;
 - company queue, PostgreSQL/object-storage adapters, authentication, and
   production deployment are not implemented.
 
@@ -359,9 +360,13 @@ Each item is a separate reviewable milestone:
    ResultOverview and the hash-checked marketer Excel were accepted. See ADR
    0010. Smoke sampling proves application integration only, not business
    effectiveness or production model readiness.
-7. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
-8. Implement production API adapters and asynchronous event delivery against the frozen contracts.
-9. Build the marketer workflow on the real-derived fixtures and stable API.
+7. Completed for localhost: preserve the merged Phase 1 presentation and add
+   the core marketer workflow over the stable API. Standard-profile job
+   `job_66ae8290e5d41b825808` passed validation review, browser job creation,
+   progress, result redirect, server-backed history, reopen, and hash-checked
+   Excel download. See ADR 0013.
+8. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
+9. Implement production API adapters and asynchronous event delivery against the frozen contracts.
 10. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
 
 Do not start a later milestone while an earlier contract or evidence gate is unresolved. Decisions requiring owner approval are listed only in `04_Web_app/OPEN_DECISIONS.md`.
