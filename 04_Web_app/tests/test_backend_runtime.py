@@ -63,7 +63,11 @@ class BackendRuntimeTest(unittest.TestCase):
                 "registration": {"package_input_fingerprint": "f" * 64},
                 "verified": {"inventory_files_n": 55},
             }
-            with patch("backend_runtime.resolve_channel", return_value=resolved):
+            with patch(
+                "backend_runtime.resolve_channel",
+                autospec=True,
+                return_value=resolved,
+            ):
                 result = preflight(settings, config_sha256=_config_sha256(config))
             self.assertEqual(result["status"], "ready")
             self.assertEqual(result["package_id"], PACKAGE_ID)
@@ -78,7 +82,11 @@ class BackendRuntimeTest(unittest.TestCase):
                 "registration": {"package_input_fingerprint": "f" * 64},
                 "verified": {"inventory_files_n": 55},
             }
-            with patch("backend_runtime.resolve_channel", return_value=resolved):
+            with patch(
+                "backend_runtime.resolve_channel",
+                autospec=True,
+                return_value=resolved,
+            ):
                 with self.assertRaisesRegex(ValueError, "mismatch"):
                     preflight(settings, config_sha256=_config_sha256(config))
 

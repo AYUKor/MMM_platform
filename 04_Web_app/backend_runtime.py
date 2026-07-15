@@ -133,7 +133,11 @@ def preflight(
         raise FileNotFoundError(f"Local backend preflight is missing required files: {missing}")
     if not settings.expected_package_id:
         raise ValueError("model.expected_package_id must pin one immutable package")
-    resolved = resolve_channel(settings.registry_channel, settings.registry_root)
+    resolved = resolve_channel(
+        settings.registry_channel,
+        expected_package_id=settings.expected_package_id,
+        registry_root=settings.registry_root,
+    )
     actual_package_id = str(resolved.get("package_id") or "")
     if actual_package_id != settings.expected_package_id:
         raise ValueError(
