@@ -28,6 +28,9 @@ As of 2026-07-15:
   progress and cancellation, server-backed history, campaign-level Scenarios
   1-6, reliability and warnings, row-level media-plan comparison, reports and
   Excel download;
+- cross-stack pull-request CI now runs both the Python contract suite and a
+  locked Node 22 frontend pipeline with generated-contract drift detection,
+  TypeScript, ESLint, unit tests and production build;
 - the standalone Model Passport page is still a controlled frontend shell;
   Product API v1.1 already supplies `GET /api/v1/models/active`, so the
   remaining work is browser integration rather than a missing backend contract;
@@ -386,14 +389,17 @@ Each item is a separate reviewable milestone:
    readiness, error catalog, OpenAPI/schema discovery, paginated history,
    research-pilot configuration boundary and safe local retention. See ADR
    0014.
-9. Package and accept one research-pilot server deployment: reverse proxy,
-   HTTPS, simple access control, service supervision, disk monitoring, backup,
-   scheduled retention and live browser acceptance.
-10. Completed in PR #7 for result pages: integrate the Phase 2 frontend against
+9. Completed in PR #7 for result pages: integrate the Phase 2 frontend against
     ResultOverview without copying status, metric or model-policy logic. The
     Model Passport shell still needs a typed client for the already implemented
     Product API v1.1 endpoint.
-11. When company-contour or multi-node scale is approved, replace file-backed
+10. Completed on PR #9: require clean Python and frontend integration checks
+    before merge, including generated-contract drift detection and production
+    frontend build.
+11. Package and accept one research-pilot server deployment: reverse proxy,
+    HTTPS, simple access control, service supervision, disk monitoring, backup,
+    scheduled retention and live browser acceptance.
+12. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 
