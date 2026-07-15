@@ -13,7 +13,8 @@ Adstock, saturation, posterior forecast и Scenario 6 в HTTP-слое не
 3. Отдельный запрос запускает validation против закрепленного model package.
 4. Успешная validation создает неизменяемый `DecisionJob v1`.
 5. Worker запускает Scenarios 1-5, Scenario 6 и marketer report.
-6. Frontend опрашивает статус/progress и получает `ResultOverview v1`.
+6. Frontend опрашивает статус/progress, получает `ResultOverview v1` для
+   компактных экранов или полный `DecisionResult v1` для Phase 1 Result Overview.
 7. Excel скачивается по opaque artifact ID с повторной проверкой SHA-256.
 
 ## Предварительная проверка
@@ -39,12 +40,25 @@ python -B 04_Web_app/backend_runtime.py \
 ```
 
 По умолчанию API доступен на `http://127.0.0.1:8765`, а frontend dev server
-может обращаться к нему с `http://localhost:5173` или
-`http://127.0.0.1:5173`.
+может обращаться к нему с `http://localhost:4173` или
+`http://127.0.0.1:4173`. Порт `5173` также оставлен в локальном allowlist для
+совместимости с альтернативным Vite-конфигом.
 
 ```bash
 curl http://127.0.0.1:8765/health
 ```
+
+Во втором терминале:
+
+```bash
+cd 04_Web_app/frontend
+cp .env.example .env.local
+npm ci
+npm run dev
+```
+
+Реальный завершенный расчет открывается по адресу
+`http://127.0.0.1:4173/calculations/{job_id}/result`.
 
 Runtime-данные находятся в игнорируемой Git папке `04_Web_app/var/local/`:
 

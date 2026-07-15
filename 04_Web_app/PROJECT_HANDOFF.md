@@ -20,8 +20,10 @@ As of 2026-07-15:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
+- frontend Phase 1 is merged and its existing Result Overview page can read a
+  real completed DecisionResult by `job_id` and download the marketer Excel;
 - company queue, PostgreSQL/object-storage adapters, authentication, and
-  frontend are not implemented in this backend branch.
+  production deployment are not implemented.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 

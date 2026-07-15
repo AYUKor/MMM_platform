@@ -21,6 +21,9 @@ backend localhost CORS allowlist originally covered only port `5173`.
    backend configuration.
 6. Treat the route parameter in
    `/calculations/{id}/result` as `job_id` for this local integration stage.
+7. Enable the marketer Excel action only when a real HTTP result contains a
+   `marketer_report_xlsx` artifact; build the download route from its opaque
+   `artifact_id`, never from `storage_key` or a local filesystem path.
 
 ## Why DecisionResult remains the Phase 1 input
 
