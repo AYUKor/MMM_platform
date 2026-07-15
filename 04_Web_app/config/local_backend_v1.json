@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "allowed_origins": [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ]
+  },
+  "paths": {
+    "state_root": "04_Web_app/var/local/state",
+    "runtime_root": "04_Web_app/var/local/runtime",
+    "artifact_root": "04_Web_app/var/local/artifacts",
+    "registry_root": "03_Outputs/01_PyMC_outputs/00_Model_registry",
+    "optimizer_policy_path": "02_Code/02_Budget_optimizer/optimizer_decision_policy_v2.yaml",
+    "business_policy_path": "02_Code/02_Budget_optimizer/business_threshold_policy_v1.yaml"
+  },
+  "model": {
+    "registry_channel": "preprod",
+    "expected_package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b"
+  },
+  "worker": {
+    "python_executable": null,
+    "timeout_seconds": 7200,
+    "max_workers": 1,
+    "max_upload_mb": 50
+  }
+}

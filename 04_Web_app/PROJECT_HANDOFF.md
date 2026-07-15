@@ -342,8 +342,10 @@ Each item is a separate reviewable milestone:
 5. Completed: implement canonical marketer upload, background campaign parsing
    and model-aware validation, isolated flighting artifacts and immutable
    DecisionJob creation over the same lifecycle contracts.
-6. Next: package the local backend runtime, add restart/recovery guardrails and
-   run one complete localhost job against the real preprod package.
+6. In progress: the versioned local runtime launcher, registry preflight,
+   single-process lock and restart/recovery guardrails are implemented. The
+   remaining acceptance step is one complete localhost job against the real
+   preprod package.
 7. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
 8. Implement production API adapters and asynchronous event delivery against the frozen contracts.
 9. Build the marketer workflow on the real-derived fixtures and stable API.

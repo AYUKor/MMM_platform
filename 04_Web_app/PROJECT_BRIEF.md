@@ -4,10 +4,12 @@
 
 Contract and local execution foundation for the future enterprise application.
 The folder contains implemented DecisionResult v1 and application lifecycle v1
-contracts, the completed-result adapter, local Execution Worker v1, synthetic
-lifecycle/worker fixtures, sanitized real-derived result fixtures, tests, and
-canonical architecture documents. There is still no HTTP API, queue,
-PostgreSQL runtime, approved object storage, authentication, or frontend. The
+contracts, the completed-result adapter, local Execution Worker v1, localhost
+HTTP API, marketer upload/validation service, runtime launcher/recovery,
+synthetic lifecycle/worker fixtures, sanitized real-derived result fixtures,
+tests, and canonical architecture documents. There is still no durable company
+queue, PostgreSQL runtime, approved object storage, authentication, or
+frontend. The
 previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
@@ -34,6 +36,11 @@ The local marketer path also accepts a canonical campaign CSV/XLSX, parses and
 validates it in the background against the pinned preprod package, then creates
 the immutable DecisionJob. Specialized agency workbooks require an explicit
 future input profile and are not auto-detected.
+
+`backend_runtime.py` provides a versioned preflight and one-command localhost
+launch. Local restart recovery resumes deterministic preparation, requeues
+jobs that never started and fails interrupted attempts with a retryable,
+auditable error instead of leaving stale `running` state.
 
 ## User Journey
 

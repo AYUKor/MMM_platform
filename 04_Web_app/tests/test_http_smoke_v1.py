@@ -22,6 +22,7 @@ if str(WEB_APP_DIR) not in sys.path:
 from api.http_smoke import (  # noqa: E402
     HttpSmokeApplication,
     HttpSmokeSettings,
+    LocalApiState,
     MirroredWorkerJournal,
     make_handler,
     serve,
@@ -378,6 +379,95 @@ class HttpSmokeV1Test(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as context:
             urllib.request.urlopen(job_request, timeout=3)
         self.assertEqual(context.exception.code, 409)
+
+
+class HttpSmokeRecoveryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        fixture = json.loads(LIFECYCLE_FIXTURE.read_text(encoding="utf-8"))
+        payload = dict(fixture["jobs"][0])
+        payload.update(
+            {
+                "status": {"code": "queued", "display_text": "В очереди"},
+                "started_at_utc": None,
+                "cancel_requested_at_utc": None,
+                "finished_at_utc": None,
+                "attempt_number": 0,
+                "result_id": None,
+                "terminal_error_id": None,
+            }
+        )
+        parsed = parse_lifecycle_contract(payload)
+        assert isinstance(parsed, DecisionJobV1)
+        self.job = parsed
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _settings(self) -> HttpSmokeSettings:
+        return HttpSmokeSettings(
+            state_root=self.root / "state",
+            runtime_root=self.root / "runtime",
+            artifact_root=self.root / "artifacts",
+            project_root=WEB_APP_DIR.parent,
+            timeout_seconds=5,
+        )
+
+    def test_queued_job_is_dispatched_after_restart(self) -> None:
+        state = LocalApiState(self.root / "state")
+        state.create_job(self.job, "a" * 64)
+        started = threading.Event()
+        release = threading.Event()
+        release.set()
+
+        def worker_factory(job: DecisionJobV1, cancellation_probe: Any) -> _BlockingRunner:
+            del cancellation_probe
+            return _BlockingRunner(job, self.root / "runtime", started, release)
+
+        application = HttpSmokeApplication(
+            self._settings(),
+            worker_factory=worker_factory,
+            overview_builder=lambda *_: {"contract_name": "result_overview_v1"},
+        )
+        try:
+            self.assertEqual(application.recovery_summary["queued_jobs_resumed"], 1)
+            self.assertTrue(started.wait(timeout=1))
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                record = application.state.read_job(self.job.job_id)
+                if record["status"]["code"] == "succeeded":
+                    break
+                time.sleep(0.02)
+            else:
+                self.fail("Recovered queued job did not finish")
+        finally:
+            application.close()
+
+    def test_interrupted_running_job_becomes_retryable_failure(self) -> None:
+        state = LocalApiState(self.root / "state")
+        state.create_job(self.job, "b" * 64)
+        running = replace(
+            self.job,
+            status=LifecycleStatus("running", "Выполняется"),
+            started_at_utc="2026-07-15T10:00:01+00:00",
+            attempt_number=1,
+        )
+        running.validate()
+        state.write_job(running)
+        application = HttpSmokeApplication(
+            self._settings(),
+            worker_factory=lambda *_: self.fail("Interrupted job must not be dispatched"),
+        )
+        try:
+            self.assertEqual(application.recovery_summary["interrupted_jobs_failed"], 1)
+            final = application.state.read_job(self.job.job_id)
+            self.assertEqual(final["status"]["code"], "failed")
+            errors = application.state.read_resource(self.job.job_id, "errors")
+            self.assertEqual(errors[-1]["code"], "LOCAL_BACKEND_RESTARTED")
+            self.assertTrue(errors[-1]["retryable"])
+        finally:
+            application.close()
 
 
 if __name__ == "__main__":

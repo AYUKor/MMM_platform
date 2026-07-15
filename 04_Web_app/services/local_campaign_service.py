@@ -37,6 +37,7 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     CampaignPreview,
     CampaignUploadV1,
     DecisionJobV1,
+    LifecycleContractValidationError,
     LifecycleStatus,
     ModelSelector,
     PolicySelection,
@@ -64,6 +65,16 @@ PARSER_VERSION = "1.0.0"
 VALIDATOR_NAME = "model_package_campaign_validator"
 VALIDATOR_VERSION = "1.0.0"
 SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".tsv", ".xlsx", ".xls"}
+CALCULATION_SOURCE_PATHS = (
+    "02_Code/01_PyMC",
+    "02_Code/02_Budget_optimizer",
+    "02_Code/03_AC_forecast",
+    "04_Web_app/adapters",
+    "04_Web_app/api",
+    "04_Web_app/contracts",
+    "04_Web_app/services",
+    "04_Web_app/worker",
+)
 
 
 def _utc_now() -> str:
@@ -149,9 +160,11 @@ class ApplicationState(Protocol):
     def create_upload(self, upload: CampaignUploadV1, idempotency_key: str, request_sha256: str) -> tuple[dict[str, Any], bool]: ...
     def write_upload(self, upload: CampaignUploadV1) -> None: ...
     def read_upload(self, upload_id: str) -> dict[str, Any]: ...
+    def list_uploads(self) -> tuple[dict[str, Any], ...]: ...
     def create_validation(self, validation: ValidationResultV1, idempotency_key: str, request_sha256: str) -> tuple[dict[str, Any], bool]: ...
     def write_validation(self, validation: ValidationResultV1) -> None: ...
     def read_validation(self, validation_id: str) -> dict[str, Any]: ...
+    def list_validations(self) -> tuple[dict[str, Any], ...]: ...
     def write_validation_inputs(self, validation_id: str, payload: Mapping[str, Any]) -> None: ...
     def read_validation_inputs(self, validation_id: str) -> dict[str, Any]: ...
     def find_job_by_idempotency(self, idempotency_key: str) -> dict[str, Any] | None: ...
@@ -207,6 +220,67 @@ class LocalCampaignService:
         self.job_submitter = job_submitter
         self.settings.artifact_root.mkdir(parents=True, exist_ok=True)
         self.settings.validation_runtime_root.mkdir(parents=True, exist_ok=True)
+
+    def recover_pending_resources(self) -> dict[str, int]:
+        """Resubmit deterministic upload parsing and validation after restart."""
+
+        uploads_resumed = 0
+        validations_resumed = 0
+        uploads: dict[str, CampaignUploadV1] = {}
+        for payload in self.state.list_uploads():
+            parsed = parse_lifecycle_contract(payload)
+            if not isinstance(parsed, CampaignUploadV1):
+                raise LifecycleContractValidationError(
+                    "Upload state contains an unexpected lifecycle record"
+                )
+            uploads[parsed.upload_id] = parsed
+            if parsed.status.code == "received":
+                self.executor.submit(self._parse_upload, parsed)
+                uploads_resumed += 1
+        for payload in self.state.list_validations():
+            validation = parse_lifecycle_contract(payload)
+            if not isinstance(validation, ValidationResultV1):
+                raise LifecycleContractValidationError(
+                    "Validation state contains an unexpected lifecycle record"
+                )
+            if validation.status.code != "running":
+                continue
+            upload = uploads.get(validation.upload_id)
+            if upload is None:
+                upload_payload = self.state.read_upload(validation.upload_id)
+                parsed_upload = parse_lifecycle_contract(upload_payload)
+                if not isinstance(parsed_upload, CampaignUploadV1):
+                    raise LifecycleContractValidationError(
+                        "Validation references an invalid upload record"
+                    )
+                upload = parsed_upload
+            if upload.status.code != "parsed":
+                invalid = replace(
+                    validation,
+                    status=LifecycleStatus("invalid", "План нельзя отправить в расчет"),
+                    finished_at_utc=_utc_now(),
+                    blocking_errors=(
+                        ValidationIssue(
+                            code="UPLOAD_NOT_PARSED_AFTER_RESTART",
+                            severity="blocking",
+                            display_text=(
+                                "Backend был перезапущен до завершения разбора файла. "
+                                "Повторите загрузку и validation."
+                            ),
+                            scope="upload",
+                            recoverable=True,
+                        ),
+                    ),
+                )
+                invalid.validate()
+                self.state.write_validation(invalid)
+                continue
+            self.executor.submit(self._validate_campaign, upload, validation)
+            validations_resumed += 1
+        return {
+            "uploads_resumed": uploads_resumed,
+            "validations_resumed": validations_resumed,
+        }
 
     def create_upload(
         self,
@@ -754,7 +828,14 @@ class LocalCampaignService:
             stderr=subprocess.DEVNULL,
         ).strip()
         tracked_changes = subprocess.check_output(
-            ["git", "status", "--porcelain", "--untracked-files=no"],
+            [
+                "git",
+                "status",
+                "--porcelain",
+                "--untracked-files=no",
+                "--",
+                *CALCULATION_SOURCE_PATHS,
+            ],
             cwd=root,
             text=True,
             stderr=subprocess.DEVNULL,

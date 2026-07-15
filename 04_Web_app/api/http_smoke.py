@@ -17,7 +17,8 @@ import re
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from email.parser import BytesParser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,8 +34,14 @@ if str(WEB_APP_DIR) not in sys.path:
 
 from adapters.result_overview_adapter import build_result_overview  # noqa: E402
 from contracts.application_lifecycle_v1 import (  # noqa: E402
+    APPLICATION_ERROR_CONTRACT,
+    JOB_EVENT_CONTRACT,
+    SCHEMA_VERSION,
+    ApplicationErrorV1,
     CampaignUploadV1,
     DecisionJobV1,
+    JobEventV1,
+    LifecycleStatus,
     LifecycleContractValidationError,
     ValidationResultV1,
     parse_lifecycle_contract,
@@ -81,6 +88,14 @@ def _sha256(path: Path) -> str:
 def _json_sha256(payload: Mapping[str, Any]) -> str:
     encoded = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _opaque_id(prefix: str, seed: str) -> str:
+    return f"{prefix}_{hashlib.sha256(seed.encode('utf-8')).hexdigest()[:20]}"
 
 
 def _write_json_atomic(path: Path, payload: Any) -> None:
@@ -219,6 +234,12 @@ class LocalApiState:
             raise FileNotFoundError(upload_id)
         return _read_json(path)
 
+    def list_uploads(self) -> tuple[dict[str, Any], ...]:
+        root = _safe_child(self.root, "uploads")
+        if not root.is_dir():
+            return ()
+        return tuple(_read_json(path) for path in sorted(root.glob("*/upload.json")))
+
     def create_validation(
         self,
         validation: ValidationResultV1,
@@ -247,6 +268,14 @@ class LocalApiState:
         if not path.is_file():
             raise FileNotFoundError(validation_id)
         return _read_json(path)
+
+    def list_validations(self) -> tuple[dict[str, Any], ...]:
+        root = _safe_child(self.root, "validations")
+        if not root.is_dir():
+            return ()
+        return tuple(
+            _read_json(path) for path in sorted(root.glob("*/validation.json"))
+        )
 
     def write_validation_inputs(self, validation_id: str, payload: Mapping[str, Any]) -> None:
         with self._lock:
@@ -369,6 +398,97 @@ class LocalApiState:
             raise FileNotFoundError(job_id)
         return _read_json(path)
 
+    def recover_jobs_after_restart(
+        self,
+    ) -> tuple[tuple[DecisionJobV1, ...], tuple[str, ...]]:
+        """Resume queued jobs and fail interrupted attempts with an auditable error."""
+
+        queued: list[DecisionJobV1] = []
+        interrupted: list[str] = []
+        jobs_root = _safe_child(self.root, "jobs")
+        if not jobs_root.is_dir():
+            return (), ()
+        with self._lock:
+            for path in sorted(jobs_root.glob("*/job.json")):
+                parsed = parse_lifecycle_contract(_read_json(path))
+                if not isinstance(parsed, DecisionJobV1):
+                    raise LifecycleContractValidationError(
+                        f"Unexpected lifecycle record in job state: {path.name}"
+                    )
+                if parsed.status.code == "queued":
+                    queued.append(parsed)
+                    continue
+                if parsed.status.code not in {"running", "cancel_requested"}:
+                    continue
+                now = _utc_now()
+                error_id = _opaque_id(
+                    "error",
+                    f"{parsed.job_id}:local-backend-restarted:{now}",
+                )
+                error = ApplicationErrorV1(
+                    contract_name=APPLICATION_ERROR_CONTRACT,
+                    schema_version=SCHEMA_VERSION,
+                    record_origin="application_runtime",
+                    error_id=error_id,
+                    resource_type="job",
+                    resource_id=parsed.job_id,
+                    occurred_at_utc=now,
+                    component="worker",
+                    stage=None,
+                    code="LOCAL_BACKEND_RESTARTED",
+                    category="infrastructure",
+                    severity="error",
+                    retryable=True,
+                    display_text=(
+                        "Локальный backend был перезапущен во время расчета. "
+                        "Запустите кампанию повторно из завершенной validation."
+                    ),
+                    support_reference=None,
+                )
+                error.validate()
+                event_path = path.parent / "job_events.json"
+                events = _read_json(event_path) if event_path.is_file() else []
+                sequence = max(
+                    (int(item.get("sequence") or 0) for item in events),
+                    default=0,
+                ) + 1
+                event = JobEventV1(
+                    contract_name=JOB_EVENT_CONTRACT,
+                    schema_version=SCHEMA_VERSION,
+                    record_origin="application_runtime",
+                    event_id=_opaque_id(
+                        "event",
+                        f"{parsed.job_id}:local-backend-restarted:{now}",
+                    ),
+                    job_id=parsed.job_id,
+                    sequence=sequence,
+                    attempt_number=parsed.attempt_number,
+                    emitted_at_utc=now,
+                    actor_type="system",
+                    actor_id=None,
+                    from_status_code=parsed.status.code,
+                    to_status=LifecycleStatus("failed", "Ошибка"),
+                    reason_code="LOCAL_BACKEND_RESTARTED",
+                    display_text=error.display_text,
+                )
+                event.validate()
+                final_job = replace(
+                    parsed,
+                    status=LifecycleStatus("failed", "Расчет прерван перезапуском"),
+                    finished_at_utc=now,
+                    terminal_error_id=error.error_id,
+                )
+                final_job.validate()
+                errors_path = path.parent / "errors.json"
+                errors = _read_json(errors_path) if errors_path.is_file() else []
+                errors.append(error.to_dict())
+                events.append(event.to_dict())
+                _write_json_atomic(errors_path, errors)
+                _write_json_atomic(event_path, events)
+                _write_json_atomic(path, final_job.to_dict())
+                interrupted.append(parsed.job_id)
+        return tuple(queued), tuple(interrupted)
+
     def read_resource(self, job_id: str, resource: str) -> Any:
         filename = {
             "progress": "progress.json",
@@ -448,8 +568,24 @@ class HttpSmokeApplication:
                 self._executor,
                 self.submit_job,
             )
+        queued_jobs, interrupted_jobs = self.state.recover_jobs_after_restart()
+        resource_recovery = (
+            self.campaign_service.recover_pending_resources()
+            if self.campaign_service is not None
+            else {"uploads_resumed": 0, "validations_resumed": 0}
+        )
+        self.recovery_summary = {
+            **resource_recovery,
+            "queued_jobs_resumed": len(queued_jobs),
+            "interrupted_jobs_failed": len(interrupted_jobs),
+        }
+        for job in queued_jobs:
+            self._dispatch_job(job)
 
     def close(self) -> None:
+        with self._lock:
+            for event in self._cancel_events.values():
+                event.set()
         self._executor.shutdown(wait=True, cancel_futures=False)
 
     def submit_job(self, payload: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -460,11 +596,16 @@ class HttpSmokeApplication:
             raise LifecycleContractValidationError("POST /jobs accepts only queued jobs")
         record, created = self.state.create_job(parsed, _json_sha256(payload))
         if created:
-            cancel_event = threading.Event()
-            with self._lock:
-                self._cancel_events[parsed.job_id] = cancel_event
-            self._executor.submit(self._execute, parsed, cancel_event)
+            self._dispatch_job(parsed)
         return record, created
+
+    def _dispatch_job(self, job: DecisionJobV1) -> None:
+        cancel_event = threading.Event()
+        with self._lock:
+            if job.job_id in self._cancel_events:
+                raise RuntimeError(f"Job is already dispatched: {job.job_id}")
+            self._cancel_events[job.job_id] = cancel_event
+        self._executor.submit(self._execute, job, cancel_event)
 
     def _execute(self, job: DecisionJobV1, cancel_event: threading.Event) -> None:
         try:
@@ -770,6 +911,7 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                             "campaign_upload": application.campaign_service is not None,
                             "campaign_validation": application.campaign_service is not None,
                         },
+                        "recovery": application.recovery_summary,
                     },
                 )
                 return
