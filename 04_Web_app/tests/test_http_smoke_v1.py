@@ -142,6 +142,8 @@ class HttpSmokeV1Test(unittest.TestCase):
         assert isinstance(self.job, DecisionJobV1)
         self.started = threading.Event()
         self.release = threading.Event()
+        self.overview_started = threading.Event()
+        self.overview_release = threading.Event()
 
         def worker_factory(
             job: DecisionJobV1, cancellation_probe: Any
@@ -155,6 +157,9 @@ class HttpSmokeV1Test(unittest.TestCase):
             workflow_config_sha256: str,
             storage_prefix: str,
         ) -> Mapping[str, Any]:
+            self.overview_started.set()
+            if not self.overview_release.wait(timeout=5):
+                raise TimeoutError("test overview release was not set")
             self.assertTrue(output_dir.is_dir())
             self.assertEqual(job_id, self.job.job_id)
             self.assertEqual(workflow_config_sha256, self.job.workflow_config.sha256)
@@ -212,6 +217,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.release.set()
+        self.overview_release.set()
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
@@ -282,6 +288,13 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(error["error"]["code"], "IDEMPOTENCY_CONFLICT")
 
         self.release.set()
+        self.assertTrue(self.overview_started.wait(timeout=1))
+        status, in_flight, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}")
+        self.assertEqual(status, 200)
+        self.assertNotEqual(in_flight["status"]["code"], "succeeded")
+        status, _, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}/overview")
+        self.assertEqual(status, 404)
+        self.overview_release.set()
         final_job = self._wait_for_status("succeeded")
         self.assertEqual(final_job["result_id"], "result_999999999999")
         status, result, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}/result")

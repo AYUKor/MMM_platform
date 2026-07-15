@@ -395,10 +395,14 @@ class LocalApiState:
             _write_json_atomic(index_path, index)
             return job.to_dict(), True
 
-    def write_outcome(self, outcome: ExecutionOutcome) -> None:
+    def write_outcome(
+        self,
+        outcome: ExecutionOutcome,
+        *,
+        overview: Mapping[str, Any] | None = None,
+    ) -> None:
         with self._lock:
             job_dir = self._job_dir(outcome.final_job.job_id)
-            _write_json_atomic(job_dir / "job.json", outcome.final_job.to_dict())
             _write_json_atomic(
                 job_dir / "job_events.json",
                 [event.to_dict() for event in outcome.job_events],
@@ -415,6 +419,11 @@ class LocalApiState:
                 payload = outcome.decision_result.to_dict()
                 _write_json_atomic(job_dir / "result.json", payload)
                 self._write_artifact_index(outcome, payload)
+            if overview is not None:
+                _write_json_atomic(job_dir / "overview.json", dict(overview))
+            # Terminal state is the publication barrier: once the browser sees
+            # succeeded, all completed-result resources already exist.
+            _write_json_atomic(job_dir / "job.json", outcome.final_job.to_dict())
 
     def write_job(self, job: DecisionJobV1) -> None:
         with self._lock:
@@ -815,7 +824,7 @@ class HttpSmokeApplication:
         try:
             worker = self._worker_factory(job, cancel_event.is_set)
             outcome = worker.run(job)
-            self.state.write_outcome(outcome)
+            overview: Mapping[str, Any] | None = None
             if outcome.succeeded:
                 storage_prefix = f"optimizer-runs/{job.job_id}/attempt-{outcome.final_job.attempt_number:03d}"
                 overview = self._overview_builder(
@@ -824,7 +833,7 @@ class HttpSmokeApplication:
                     job.workflow_config.sha256,
                     storage_prefix,
                 )
-                self.state.write_overview(job.job_id, overview)
+            self.state.write_outcome(outcome, overview=overview)
         except Exception:
             log_path = (
                 self.settings.runtime_root
@@ -912,7 +921,8 @@ class MirroredWorkerJournal:
 
     def write_job(self, job: DecisionJobV1) -> None:
         self.local.write_job(job)
-        self.state.write_job(job)
+        if job.status.code not in {"succeeded", "failed", "cancelled", "timed_out"}:
+            self.state.write_job(job)
 
     def write_result(self, payload: Mapping[str, Any]) -> None:
         self.local.write_result(payload)
