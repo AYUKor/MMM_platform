@@ -275,14 +275,33 @@ def _metric_from_mln(row: dict[str, Any], prefix: str, unit: str) -> QuantileMet
     )
 
 
+def _metric_from_raw(row: dict[str, Any], prefix: str, unit: str) -> QuantileMetric | None:
+    """Read quantiles whose legacy column suffix does not match their stored unit."""
+
+    values = [_optional_float(row, f"{prefix}_{quantile}_mln") for quantile in ("p10", "p50", "p90")]
+    if all(value is None for value in values):
+        return None
+    if any(value is None for value in values):
+        raise OptimizerResultAdapterError(f"Incomplete quantiles for {prefix}")
+    return QuantileMetric(
+        unit=unit,
+        p10=float(values[0]),
+        p50=float(values[1]),
+        p90=float(values[2]),
+    )
+
+
 def _scenario_metrics(row: dict[str, Any]) -> ScenarioMetrics:
     return ScenarioMetrics(
         incremental_turnover=_metric_from_mln(row, "rto", "RUB"),
         roas_p50=_optional_float(row, "rto_roas_p50")
         if row.get("rto_roas_p50") not in (None, "")
         else _optional_float(row, "roas_p50"),
-        incremental_orders=_metric_from_mln(row, "orders", "orders"),
-        avg_basket_bridge=_metric_from_mln(row, "basket", "RUB"),
+        # The marketer CSV keeps raw order counts in legacy *_mln columns.
+        incremental_orders=_metric_from_raw(row, "orders", "orders"),
+        avg_basket_bridge=_metric_from_mln(
+            row, "basket", "turnover_bridge_from_avg_basket_rub"
+        ),
     )
 
 
@@ -329,7 +348,10 @@ def _scenario_metrics_with_finalists(
             finalist_rows, candidate_name, "orders_per_user", "orders"
         ),
         avg_basket_bridge=_finalist_total_metric(
-            finalist_rows, candidate_name, "avg_basket", "RUB"
+            finalist_rows,
+            candidate_name,
+            "avg_basket",
+            "turnover_bridge_from_avg_basket_rub",
         ),
     )
 
@@ -1105,7 +1127,7 @@ def sanitized_fixture_payload(result: DecisionResultV1) -> dict[str, Any]:
 
     def scale_fixture_values(node: Any) -> None:
         if isinstance(node, dict):
-            if node.get("unit") == "RUB":
+            if node.get("unit") in {"RUB", "turnover_bridge_from_avg_basket_rub"}:
                 for quantile in ("p10", "p50", "p90"):
                     if isinstance(node.get(quantile), (int, float)):
                         node[quantile] = round(float(node[quantile]) * effect_scale, 2)

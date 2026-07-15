@@ -281,6 +281,12 @@ The adapter is not the future execution worker. It starts only after optimizer a
 
 Scenario 6 is read from the marketer decision pool and enriched from finalist totals. Therefore a safe S6 remains visible with p10/p50/p90, ROAS, orders, basket bridge, best-safe ID and search audit even when materiality policy recommends S01. Gate-blocked S6 is represented as unavailable with no invented metrics. Search audit distinguishes configured attempt budget, attempts actually evaluated, kernel evaluations, unique allocations, scored/rejected candidates, convergence and budget-exhaustion state.
 
+Adapter `1.0.1` fixes a verified legacy-unit defect: marketer-report
+`orders_*_mln` columns contain raw order counts and must not be multiplied by
+one million. The basket metric now carries the explicit unit
+`turnover_bridge_from_avg_basket_rub`; it is an aggregate turnover bridge, not
+an average-basket delta. See ADR 0004.
+
 ## Implemented Local Execution Worker V1
 
 The local worker uses the tested composite optimizer CLI as its process
