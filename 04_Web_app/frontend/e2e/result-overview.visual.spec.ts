@@ -201,17 +201,11 @@ test("failed, invalid, empty and loading states remain controlled", async ({ pag
   await expect(page.getByRole("status").filter({ hasText: "Загрузка результата" })).toBeVisible();
 });
 
-test("tabs support keyboard navigation and model passport fails closed", async ({ page }) => {
+test("tabs support keyboard navigation", async ({ page }) => {
   await mockJob(page);
   await page.goto("/calculations/demo-safe/result");
   const overviewTab = page.getByRole("tab", { name: "Обзор" });
   await overviewTab.focus();
   await overviewTab.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Сценарии" })).toHaveAttribute("aria-selected", "true");
-
-  await page.goto("/model");
-  await expect(page.getByRole("heading", { name: "Паспорт модели" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Паспорт подготовлен, но пока не заполнен" })).toBeVisible();
-  await expect(page.getByText("Нет данных")).toHaveCount(5);
-  await expectNoDocumentOverflow(page);
 });

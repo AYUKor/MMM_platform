@@ -20,6 +20,11 @@ const contracts = [
     typeName: "ResultOverviewV1",
     output: "result-overview-v1.ts",
   },
+  {
+    schema: "product_api_v1.schema.json",
+    typeName: "ProductApiV1",
+    output: "product-api-v1.ts",
+  },
 ];
 
 for (const contract of contracts) {
