@@ -13,7 +13,7 @@
     "workflow_config_sha256": "2afe3a214a4e6126c50d8a2fac4059f29bbfd0edb3a974f56119dc8a0c88086c",
     "input_flighting_sha256": "c96cbfea72e3106b6d294b0426e100c650cf585e87179c09fa88a154dcbcc26f",
     "adapter_name": "optimizer_result_adapter",
-    "adapter_version": "1.0.1",
+    "adapter_version": "1.0.2",
     "adapter_sha256": "d32949914d712689db00e1f85cd15c17aabf8b3e9333e3bb33472292afa351e3"
   },
   "model": {

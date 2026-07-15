@@ -94,11 +94,13 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
         "Бизнес-решение не оценено": "not_evaluated",
     },
     "quality_status": {
+        "Сопоставимо с историей": "reliable",
         "Надежный расчет": "reliable",
         "Надёжный расчёт": "reliable",
         "Повышенная неопределенность": "elevated_uncertainty",
         "Требуется ручная проверка": "manual_review_required",
         "Не использовать для автоматического перераспределения": "not_for_automatic_reallocation",
+        "Расчет невозможен": "not_calculated",
         "Расчет не выполнен": "not_calculated",
     },
     "recommendation_type": {

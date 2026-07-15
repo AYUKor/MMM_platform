@@ -89,7 +89,7 @@ class DecisionResultV1ContractTest(unittest.TestCase):
         self.assertEqual(self.fixture["schema_version"], "1.0.0")
         self.assertEqual(self.fixture["result_origin"], "sanitized_fixture")
         self.assertEqual(self.fixture["job"]["adapter_name"], "optimizer_result_adapter")
-        self.assertEqual(self.fixture["job"]["adapter_version"], "1.0.1")
+        self.assertEqual(self.fixture["job"]["adapter_version"], "1.0.2")
         self.assertTrue(self.fixture["campaign_results"])
 
         warning_codes = {warning["code"] for warning in self.fixture["warnings"]}
@@ -268,6 +268,14 @@ class DecisionResultV1ContractTest(unittest.TestCase):
                 build_decision_result(copied_run)
 
     def test_status_mapping_is_fail_closed(self) -> None:
+        self.assertEqual(
+            _status("quality_status", "Сопоставимо с историей").code,
+            "reliable",
+        )
+        self.assertEqual(
+            _status("quality_status", "Расчет невозможен").code,
+            "not_calculated",
+        )
         with self.assertRaisesRegex(OptimizerResultAdapterError, "Unmapped quality_status"):
             _status("quality_status", "Неизвестный новый статус")
 

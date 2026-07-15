@@ -287,6 +287,11 @@ one million. The basket metric now carries the explicit unit
 `turnover_bridge_from_avg_basket_rub`; it is an aggregate turnover bridge, not
 an average-basket delta. See ADR 0004.
 
+Adapter `1.0.2` maps the report generator's best-rank quality label
+`Сопоставимо с историей` to stable code `reliable` and its blocked label
+`Расчет невозможен` to `not_calculated`. Unknown display text remains
+fail-closed. See ADR 0009.
+
 `ResultOverview v1` is now the browser-facing projection over DecisionResult.
 It adds ROAS p10/p50/p90, uploaded-versus-recommended allocation deltas,
 UI-safe `best_raw`/`best_safe` summaries, canonical artifact download paths,
