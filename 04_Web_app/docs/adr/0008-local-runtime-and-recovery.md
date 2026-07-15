@@ -27,6 +27,9 @@ Restart recovery is fail-closed:
   `LOCAL_BACKEND_RESTARTED` and an auditable lifecycle event;
 - an interrupted attempt is never represented as still running and is never
   silently resumed;
+- an unexpected background exception writes a protected traceback and moves
+  the browser-safe job to a retryable terminal failure instead of leaving a
+  stale queued/running status;
 - a second process cannot own the same local state directory.
 
 Git cleanliness for new real jobs is scoped to calculation/backend source.

@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import threading
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -420,74 +421,147 @@ class LocalApiState:
                     continue
                 if parsed.status.code not in {"running", "cancel_requested"}:
                     continue
-                now = _utc_now()
-                error_id = _opaque_id(
-                    "error",
-                    f"{parsed.job_id}:local-backend-restarted:{now}",
-                )
-                error = ApplicationErrorV1(
-                    contract_name=APPLICATION_ERROR_CONTRACT,
-                    schema_version=SCHEMA_VERSION,
-                    record_origin="application_runtime",
-                    error_id=error_id,
-                    resource_type="job",
-                    resource_id=parsed.job_id,
-                    occurred_at_utc=now,
-                    component="worker",
-                    stage=None,
+                self._fail_active_job_locked(
+                    parsed,
                     code="LOCAL_BACKEND_RESTARTED",
+                    component="worker",
                     category="infrastructure",
-                    severity="error",
                     retryable=True,
                     display_text=(
                         "Локальный backend был перезапущен во время расчета. "
                         "Запустите кампанию повторно из завершенной validation."
                     ),
-                    support_reference=None,
-                )
-                error.validate()
-                event_path = path.parent / "job_events.json"
-                events = _read_json(event_path) if event_path.is_file() else []
-                sequence = max(
-                    (int(item.get("sequence") or 0) for item in events),
-                    default=0,
-                ) + 1
-                event = JobEventV1(
-                    contract_name=JOB_EVENT_CONTRACT,
-                    schema_version=SCHEMA_VERSION,
-                    record_origin="application_runtime",
-                    event_id=_opaque_id(
-                        "event",
-                        f"{parsed.job_id}:local-backend-restarted:{now}",
-                    ),
-                    job_id=parsed.job_id,
-                    sequence=sequence,
-                    attempt_number=parsed.attempt_number,
-                    emitted_at_utc=now,
                     actor_type="system",
-                    actor_id=None,
-                    from_status_code=parsed.status.code,
-                    to_status=LifecycleStatus("failed", "Ошибка"),
-                    reason_code="LOCAL_BACKEND_RESTARTED",
-                    display_text=error.display_text,
+                    terminal_display_text="Расчет прерван перезапуском",
                 )
-                event.validate()
-                final_job = replace(
-                    parsed,
-                    status=LifecycleStatus("failed", "Расчет прерван перезапуском"),
-                    finished_at_utc=now,
-                    terminal_error_id=error.error_id,
-                )
-                final_job.validate()
-                errors_path = path.parent / "errors.json"
-                errors = _read_json(errors_path) if errors_path.is_file() else []
-                errors.append(error.to_dict())
-                events.append(event.to_dict())
-                _write_json_atomic(errors_path, errors)
-                _write_json_atomic(event_path, events)
-                _write_json_atomic(path, final_job.to_dict())
                 interrupted.append(parsed.job_id)
         return tuple(queued), tuple(interrupted)
+
+    def fail_background_job(
+        self,
+        job_id: str,
+        *,
+        code: str,
+        display_text: str,
+    ) -> bool:
+        """Make an unexpected API/background failure visible and terminal."""
+
+        with self._lock:
+            parsed = parse_lifecycle_contract(self.read_job(job_id))
+            if not isinstance(parsed, DecisionJobV1):
+                raise LifecycleContractValidationError("Job state is not decision_job_v1")
+            if parsed.status.code in {"succeeded", "failed", "cancelled", "timed_out"}:
+                return False
+            self._fail_active_job_locked(
+                parsed,
+                code=code,
+                component="api",
+                category="internal",
+                retryable=True,
+                display_text=display_text,
+                actor_type="system",
+                terminal_display_text="Техническая ошибка backend",
+            )
+            return True
+
+    def _fail_active_job_locked(
+        self,
+        job: DecisionJobV1,
+        *,
+        code: str,
+        component: str,
+        category: str,
+        retryable: bool,
+        display_text: str,
+        actor_type: str,
+        terminal_display_text: str,
+    ) -> DecisionJobV1:
+        job_dir = self._job_dir(job.job_id)
+        event_path = job_dir / "job_events.json"
+        events = _read_json(event_path) if event_path.is_file() else []
+        sequence = max(
+            (int(item.get("sequence") or 0) for item in events),
+            default=0,
+        ) + 1
+        now = _utc_now()
+        current = job
+        if current.status.code == "queued":
+            current = replace(
+                current,
+                status=LifecycleStatus("running", "Выполняется"),
+                started_at_utc=now,
+                attempt_number=1,
+            )
+            current.validate()
+            started_event = JobEventV1(
+                contract_name=JOB_EVENT_CONTRACT,
+                schema_version=SCHEMA_VERSION,
+                record_origin="application_runtime",
+                event_id=_opaque_id("event", f"{job.job_id}:{code}:running:{now}"),
+                job_id=job.job_id,
+                sequence=sequence,
+                attempt_number=current.attempt_number,
+                emitted_at_utc=now,
+                actor_type=actor_type,
+                actor_id=None,
+                from_status_code="queued",
+                to_status=LifecycleStatus("running", "Выполняется"),
+                reason_code=None,
+                display_text="Backend принял фоновую задачу в обработку.",
+            )
+            started_event.validate()
+            events.append(started_event.to_dict())
+            sequence += 1
+        error = ApplicationErrorV1(
+            contract_name=APPLICATION_ERROR_CONTRACT,
+            schema_version=SCHEMA_VERSION,
+            record_origin="application_runtime",
+            error_id=_opaque_id("error", f"{job.job_id}:{code}:{now}"),
+            resource_type="job",
+            resource_id=job.job_id,
+            occurred_at_utc=now,
+            component=component,
+            stage=None,
+            code=code,
+            category=category,
+            severity="error",
+            retryable=retryable,
+            display_text=display_text,
+            support_reference=None,
+        )
+        error.validate()
+        failed_event = JobEventV1(
+            contract_name=JOB_EVENT_CONTRACT,
+            schema_version=SCHEMA_VERSION,
+            record_origin="application_runtime",
+            event_id=_opaque_id("event", f"{job.job_id}:{code}:failed:{now}"),
+            job_id=job.job_id,
+            sequence=sequence,
+            attempt_number=current.attempt_number,
+            emitted_at_utc=now,
+            actor_type=actor_type,
+            actor_id=None,
+            from_status_code=current.status.code,
+            to_status=LifecycleStatus("failed", "Ошибка"),
+            reason_code=code,
+            display_text=display_text,
+        )
+        failed_event.validate()
+        final_job = replace(
+            current,
+            status=LifecycleStatus("failed", terminal_display_text),
+            finished_at_utc=now,
+            terminal_error_id=error.error_id,
+        )
+        final_job.validate()
+        errors_path = job_dir / "errors.json"
+        errors = _read_json(errors_path) if errors_path.is_file() else []
+        errors.append(error.to_dict())
+        events.append(failed_event.to_dict())
+        _write_json_atomic(errors_path, errors)
+        _write_json_atomic(event_path, events)
+        _write_json_atomic(job_dir / "job.json", final_job.to_dict())
+        return final_job
 
     def read_resource(self, job_id: str, resource: str) -> Any:
         filename = {
@@ -622,6 +696,21 @@ class HttpSmokeApplication:
                 )
                 self.state.write_overview(job.job_id, overview)
         except Exception:
+            log_path = (
+                self.settings.runtime_root
+                / "api_internal_errors"
+                / f"{job.job_id}.log"
+            )
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(traceback.format_exc(), encoding="utf-8")
+            self.state.fail_background_job(
+                job.job_id,
+                code="HTTP_BACKGROUND_FAILURE",
+                display_text=(
+                    "Backend не смог завершить фоновую обработку. "
+                    "Попробуйте повторить расчет после технической проверки."
+                ),
+            )
             self.state.write_internal_error(job.job_id)
         finally:
             with self._lock:
@@ -630,7 +719,6 @@ class HttpSmokeApplication:
     def _default_worker_factory(
         self, job: DecisionJobV1, cancellation_probe: Callable[[], bool]
     ) -> ExecutionWorker:
-        del job
         return ExecutionWorker(
             ExecutionWorkerSettings(
                 runtime_root=self.settings.runtime_root,

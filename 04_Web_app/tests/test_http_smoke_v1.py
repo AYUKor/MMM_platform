@@ -109,6 +109,12 @@ class _BlockingRunner:
         )
 
 
+class _FailingRunner:
+    def run(self, job: DecisionJobV1) -> ExecutionOutcome:
+        del job
+        raise RuntimeError("synthetic unexpected background failure")
+
+
 class HttpSmokeV1Test(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -466,6 +472,44 @@ class HttpSmokeRecoveryTest(unittest.TestCase):
             errors = application.state.read_resource(self.job.job_id, "errors")
             self.assertEqual(errors[-1]["code"], "LOCAL_BACKEND_RESTARTED")
             self.assertTrue(errors[-1]["retryable"])
+        finally:
+            application.close()
+
+    def test_unexpected_runner_failure_is_terminal_and_auditable(self) -> None:
+        application = HttpSmokeApplication(
+            self._settings(),
+            worker_factory=lambda *_: _FailingRunner(),
+        )
+        try:
+            application.submit_job(self.job.to_dict())
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                final = application.state.read_job(self.job.job_id)
+                if final["status"]["code"] == "failed":
+                    break
+                time.sleep(0.02)
+            else:
+                self.fail("Unexpected background failure left a non-terminal job")
+            errors = application.state.read_resource(self.job.job_id, "errors")
+            self.assertEqual(errors[-1]["code"], "HTTP_BACKGROUND_FAILURE")
+            self.assertTrue(errors[-1]["retryable"])
+            protected_log = (
+                self.root
+                / "runtime"
+                / "api_internal_errors"
+                / f"{self.job.job_id}.log"
+            )
+            self.assertIn("synthetic unexpected", protected_log.read_text(encoding="utf-8"))
+        finally:
+            application.close()
+
+    def test_default_worker_factory_keeps_job_identity_for_journal(self) -> None:
+        application = HttpSmokeApplication(self._settings())
+        try:
+            worker = application._default_worker_factory(self.job, lambda: False)
+            journal = worker.journal_factory(self.root / "runtime" / "journal_probe")
+            self.assertIsInstance(journal, MirroredWorkerJournal)
+            self.assertEqual(journal.job_id, self.job.job_id)
         finally:
             application.close()
 
