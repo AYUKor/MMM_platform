@@ -37,6 +37,7 @@ from mmm_core.model_package_reader import ModelPackage  # noqa: E402
 TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled", "timed_out"}
 TERMINAL_UPLOAD_STATUSES = {"parsed", "rejected"}
 TERMINAL_VALIDATION_STATUSES = {"valid", "invalid"}
+ALLOWED_USE_CODES = ("primary", "caution", "diagnostic", "unavailable")
 _RESOURCE_ID_RE = re.compile(
     r"^(?:job|validation|upload)_[0-9a-f]{12,64}$"
 )
@@ -131,6 +132,8 @@ def _target_summaries(rows: Iterable[Mapping[str, str]]) -> list[dict[str, Any]]
     output = []
     for target, target_rows in sorted(grouped.items()):
         counts = Counter(str(row.get("allowed_use") or "unavailable") for row in target_rows)
+        for code in ALLOWED_USE_CODES:
+            counts.setdefault(code, 0)
         output.append(
             {
                 "target": target,
@@ -200,7 +203,7 @@ def build_model_passport(
     allowed_use_counts = Counter(
         str(row.get("allowed_use") or "unavailable") for row in package.capability_rows
     )
-    for code in ("primary", "caution", "diagnostic", "unavailable"):
+    for code in ALLOWED_USE_CODES:
         allowed_use_counts.setdefault(code, 0)
     geographies = {
         str(row.get("geo_label") or "")
@@ -265,7 +268,7 @@ def build_model_passport(
             "capability_cells_n": len(package.capability_rows),
             "allowed_use_counts": {
                 code: int(allowed_use_counts[code])
-                for code in ("primary", "caution", "diagnostic", "unavailable")
+                for code in ALLOWED_USE_CODES
             },
             "channel_policies": _channel_policies(package.capability_rows),
         },

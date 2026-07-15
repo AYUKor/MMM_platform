@@ -161,6 +161,27 @@ class ProductApiContractTest(unittest.TestCase):
             {row["target"]: row["allowed_use"] for row in policies},
             {"orders_per_user": "diagnostic", "turnover_per_user": "primary"},
         )
+        target_counts = {
+            row["target"]: row["allowed_use_counts"]
+            for row in payload["coverage"]["targets"]
+        }
+        self.assertEqual(
+            target_counts,
+            {
+                "orders_per_user": {
+                    "caution": 0,
+                    "diagnostic": 1,
+                    "primary": 0,
+                    "unavailable": 0,
+                },
+                "turnover_per_user": {
+                    "caution": 0,
+                    "diagnostic": 0,
+                    "primary": 1,
+                    "unavailable": 0,
+                },
+            },
+        )
         self.assertEqual(payload["validation"]["sealed_oot"]["status"], "failed")
         self.assertEqual(payload["caveats"][-1]["code"], "sealed_oot_failed")
 
