@@ -1,0 +1,75 @@
+body {
+  position: relative;
+  overflow-x: hidden;
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  transition: background-color var(--motion-fast), color var(--motion-fast);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  top: 7vh;
+  right: -22vw;
+  width: 70vw;
+  height: 70vw;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at center,
+      transparent 0 34px,
+      color-mix(in srgb, var(--accent) 7%, transparent) 35px 36px,
+      transparent 37px 63px
+    );
+  opacity: 0.45;
+  animation: contour-drift 28s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.campaign-selection {
+  max-width: 780px;
+  margin: 8vh auto;
+  padding: clamp(1.5rem, 5vw, 3rem);
+}
+.campaign-selection h1 { margin: 0; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -0.045em; }
+.campaign-selection p { color: var(--text-secondary); line-height: 1.55; }
+.campaign-selection__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
+.campaign-selection__actions a { display: inline-flex; min-height: 44px; align-items: center; padding: 0.65rem 1rem; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: var(--surface-primary); text-decoration: none; font-weight: 750; }
+.campaign-selection__actions a:hover { background: var(--surface-hover); }
+
+@keyframes contour-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-2vw, 2vh, 0) scale(1.03); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
