@@ -896,6 +896,8 @@ def build_decision_result(
     optimizer_output_dir: Path | str,
     *,
     storage_prefix: str = "optimizer-runs",
+    job_id: str | None = None,
+    workflow_config_sha256: str | None = None,
 ) -> DecisionResultV1:
     output_dir = Path(optimizer_output_dir).expanduser().resolve()
     if not output_dir.is_dir():
@@ -992,10 +994,23 @@ def build_decision_result(
         )
 
     adapter_sha256 = _sha256(Path(__file__).resolve())
-    result_seed = (
-        f"{CONTRACT_NAME}:{SCHEMA_VERSION}:{RESULT_ADAPTER_VERSION}:{adapter_sha256}:"
-        f"{run_id}:{model_resolution['package_id']}:{report_card.get('output_sha256', {}).get('xlsx', '')}"
+    resolved_job_id = job_id or _opaque_id("job", run_id)
+    resolved_workflow_config_sha256 = (
+        workflow_config_sha256 or str(run_card.get("workflow_config_sha256") or "")
     )
+    if job_id is None and workflow_config_sha256 is None:
+        result_seed = (
+            f"{CONTRACT_NAME}:{SCHEMA_VERSION}:{RESULT_ADAPTER_VERSION}:{adapter_sha256}:"
+            f"{run_id}:{model_resolution['package_id']}:"
+            f"{report_card.get('output_sha256', {}).get('xlsx', '')}"
+        )
+    else:
+        result_seed = (
+            f"{CONTRACT_NAME}:{SCHEMA_VERSION}:{RESULT_ADAPTER_VERSION}:{adapter_sha256}:"
+            f"{resolved_job_id}:{resolved_workflow_config_sha256}:{run_id}:"
+            f"{model_resolution['package_id']}:"
+            f"{report_card.get('output_sha256', {}).get('xlsx', '')}"
+        )
     result = DecisionResultV1(
         contract_name=CONTRACT_NAME,
         schema_version=SCHEMA_VERSION,
@@ -1003,12 +1018,12 @@ def build_decision_result(
         result_origin="verified_optimizer_artifacts",
         created_at_utc=str(run_card.get("finished_at_utc") or ""),
         job=JobLineage(
-            job_id=_opaque_id("job", run_id),
+            job_id=resolved_job_id,
             source_run_id=run_id,
             job_type="forecast_optimizer_report",
             started_at_utc=str(run_card.get("started_at_utc") or ""),
             finished_at_utc=str(run_card.get("finished_at_utc") or ""),
-            workflow_config_sha256=str(run_card.get("workflow_config_sha256") or ""),
+            workflow_config_sha256=resolved_workflow_config_sha256,
             input_flighting_sha256=str(run_card.get("flighting_sha256") or ""),
             adapter_name=RESULT_ADAPTER_NAME,
             adapter_version=RESULT_ADAPTER_VERSION,
@@ -1206,10 +1221,17 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--optimizer-output-dir", required=True, type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--storage-prefix", default="optimizer-runs")
+    parser.add_argument("--job-id")
+    parser.add_argument("--workflow-config-sha256")
     parser.add_argument("--sanitized-fixture-output", type=Path)
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    result = build_decision_result(args.optimizer_output_dir, storage_prefix=args.storage_prefix)
+    result = build_decision_result(
+        args.optimizer_output_dir,
+        storage_prefix=args.storage_prefix,
+        job_id=args.job_id,
+        workflow_config_sha256=args.workflow_config_sha256,
+    )
     output_path = args.output or Path(args.optimizer_output_dir) / "decision_result_manifest_v1.json"
     write_json_atomic(output_path, result.to_dict())
     if args.sanitized_fixture_output is not None:

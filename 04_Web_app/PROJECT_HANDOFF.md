@@ -14,7 +14,11 @@ As of 2026-07-15:
 - DecisionResult v1 and its completed-result adapter are implemented under `04_Web_app`;
 - application lifecycle v1 now defines upload, validation, immutable jobs,
   legal transitions, progress, and browser-safe errors;
-- the execution worker, HTTP API, database, and frontend are not implemented yet.
+- local Execution Worker v1 now verifies immutable inputs and package/policy
+  pins, launches the existing optimizer/report CLI in a subprocess, publishes
+  lifecycle progress, and composes DecisionResult with the original `job_id`;
+- HTTP API, queue, PostgreSQL/object-storage adapters, authentication, and
+  frontend are not implemented yet.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
@@ -277,21 +281,37 @@ The adapter is not the future execution worker. It starts only after optimizer a
 
 Scenario 6 is read from the marketer decision pool and enriched from finalist totals. Therefore a safe S6 remains visible with p10/p50/p90, ROAS, orders, basket bridge, best-safe ID and search audit even when materiality policy recommends S01. Gate-blocked S6 is represented as unavailable with no invented metrics. Search audit distinguishes configured attempt budget, attempts actually evaluated, kernel evaluations, unique allocations, scored/rejected candidates, convergence and budget-exhaustion state.
 
-## Worker Integration Rule
+## Implemented Local Execution Worker V1
 
-The first worker adapter must use the tested CLI workflows as process boundaries:
+The local worker uses the tested composite optimizer CLI as its process
+boundary:
 
-1. Load the immutable job by `job_id` from PostgreSQL.
-2. Resolve upload, normalized-plan, configuration, and artifact references.
+1. Accept and semantically validate one queued immutable `DecisionJobV1`.
+2. Resolve and SHA-256-check normalized-plan, daily-flighting, and source-config
+   artifacts through an artifact-store port.
 3. Load the package pinned by the job through the existing registry and verify
    package ID, fingerprint, registration, inventory, and serving permission;
    never replace it silently with a newer channel pointer.
-4. Create an immutable run configuration with versions and seeds.
-5. Launch the existing forecast, optimizer, and marketer-report workflows in a separate process.
-6. Read their run cards and artifacts, verify hashes, and map completed values into DecisionResult.
-7. Persist application state and artifact metadata; keep large artifacts outside PostgreSQL.
+4. Verify gate, optimizer, business-policy, draws, seeds, and code pins.
+5. Materialize an attempt-local execution config without changing the source
+   job/config, then launch `budget_optimizer.py` in a separate process group.
+6. Translate real JSON stdout into lifecycle progress; keep raw logs protected.
+7. Handle cancellation, timeout, non-zero exit, and unexpected failures with
+   distinct lifecycle outcomes.
+8. Verify completed run lineage and call the existing result adapter with the
+   original job ID and source-config SHA-256.
+9. Persist local development events, errors, state, result, and worker run card
+   through `LocalWorkerJournal`.
 
-No notebooks run in this flow. No existing calculation function is copied into the application.
+`budget_optimizer.py` already performs campaign preparation, Scenarios 1-5,
+Scenario 6, posterior finalist scoring, and marketer report generation. The
+worker therefore does not launch a second standalone forecast process for the
+same job. No notebooks run and no calculation function is copied into the web
+layer.
+
+`LocalArtifactStore` and `LocalWorkerJournal` are development adapters. Future
+queue, PostgreSQL, and object-storage adapters must preserve their frozen
+contract behavior. See `04_Web_app/docs/adr/0003-local-execution-worker-v1.md`.
 
 ## Next Milestones
 
@@ -301,9 +321,11 @@ Each item is a separate reviewable milestone:
 2. Completed: define versioned CampaignUpload, ValidationResult, DecisionJob,
    JobEvent, progress, and error contracts with happy/failure fixtures and
    semantic validation.
-3. Next: implement the execution worker around the existing calculation
-   boundary and compose the completed result adapter into it.
-4. Add a local HTTP smoke path against in-memory or file-backed development state; do not introduce a second calculation engine.
+3. Completed: implement local Execution Worker v1 around the existing composite
+   optimizer/report boundary, including immutable preflight, progress,
+   cancellation, timeout, lineage verification, and DecisionResult composition.
+4. Next: add a local HTTP smoke path against in-memory or file-backed
+   development state; do not introduce a second calculation engine.
 5. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
 6. Implement API endpoints and asynchronous event delivery against the frozen contracts.
 7. Build the marketer workflow on the real-derived fixtures and stable API.

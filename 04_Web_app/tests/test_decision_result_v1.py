@@ -211,6 +211,20 @@ class DecisionResultV1ContractTest(unittest.TestCase):
                 ["S01", "S02", "S03", "S04", "S05", "S06"],
             )
 
+    @unittest.skipUnless(RUN_18.is_dir(), "canonical optimizer run 18 is unavailable")
+    def test_worker_can_preserve_preexisting_job_identity(self) -> None:
+        job_id = "job_1234567890ab"
+        workflow_sha256 = "f" * 64
+
+        payload = build_decision_result(
+            RUN_18,
+            job_id=job_id,
+            workflow_config_sha256=workflow_sha256,
+        ).to_dict()
+
+        self.assertEqual(payload["job"]["job_id"], job_id)
+        self.assertEqual(payload["job"]["workflow_config_sha256"], workflow_sha256)
+
     @unittest.skipUnless(RUN_17.is_dir(), "canonical optimizer run 17 is unavailable")
     def test_adapter_rejects_tampered_hashed_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
