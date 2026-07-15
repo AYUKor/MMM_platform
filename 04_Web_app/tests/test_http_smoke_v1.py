@@ -32,6 +32,10 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     parse_lifecycle_contract,
 )
 from worker.execution_worker import ExecutionOutcome  # noqa: E402
+from services.local_campaign_service import (  # noqa: E402
+    LocalCampaignService,
+    LocalCampaignServiceSettings,
+)
 
 
 LIFECYCLE_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "application_lifecycle_v1_happy_path_synthetic.json"
@@ -164,6 +168,31 @@ class HttpSmokeV1Test(unittest.TestCase):
             worker_factory=worker_factory,
             overview_builder=overview_builder,
         )
+        self.application.campaign_service = LocalCampaignService(
+            LocalCampaignServiceSettings(
+                project_root=WEB_APP_DIR.parent,
+                artifact_root=self.artifact_root,
+                validation_runtime_root=self.runtime_root / "validations",
+                registry_root=root / "missing_registry",
+                registry_channel="preprod",
+                expected_package_id="pkg_local_http_smoke",
+                optimizer_policy_path=(
+                    WEB_APP_DIR.parent
+                    / "02_Code"
+                    / "02_Budget_optimizer"
+                    / "optimizer_decision_policy_v2.yaml"
+                ),
+                business_policy_path=(
+                    WEB_APP_DIR.parent
+                    / "02_Code"
+                    / "02_Budget_optimizer"
+                    / "business_threshold_policy_v1.yaml"
+                ),
+            ),
+            self.application.state,
+            self.application._executor,
+            self.application.submit_job,
+        )
         self.server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
             make_handler(self.application),
@@ -284,6 +313,71 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(payload["mode"], "local_development_only")
         with self.assertRaisesRegex(ValueError, "localhost"):
             serve(self.application, "0.0.0.0", 0)
+
+    def test_multipart_upload_parse_and_invalid_validation_are_fail_closed(self) -> None:
+        boundary = "----x5-http-upload-boundary"
+        campaign = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "HTTP test,ТС5/Онлайн,МОСКВА,Рег_ТВ,2026-08-01,2026-08-07,1000000\n"
+        ).encode("utf-8")
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="campaign.csv"\r\n'
+            "Content-Type: text/csv\r\n\r\n"
+        ).encode() + campaign + f"\r\n--{boundary}--\r\n".encode()
+        request = urllib.request.Request(
+            self.base_url + "/api/v1/uploads",
+            data=body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+                "Idempotency-Key": "http-upload-key-0001",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(response.status, 202)
+            upload = json.loads(response.read())
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            status, current, _ = self._request("GET", f"/api/v1/uploads/{upload['upload_id']}")
+            if status == 200 and current["status"]["code"] == "parsed":
+                break
+            time.sleep(0.02)
+        else:
+            self.fail("Upload was not parsed")
+
+        validation_request = urllib.request.Request(
+            self.base_url + f"/api/v1/uploads/{upload['upload_id']}/validations",
+            data=b"",
+            headers={"Idempotency-Key": "http-validation-key-0001"},
+            method="POST",
+        )
+        with urllib.request.urlopen(validation_request, timeout=3) as response:
+            self.assertEqual(response.status, 202)
+            validation = json.loads(response.read())
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            status, current, _ = self._request(
+                "GET", f"/api/v1/validations/{validation['validation_id']}"
+            )
+            if status == 200 and current["status"]["code"] == "invalid":
+                break
+            time.sleep(0.02)
+        else:
+            self.fail("Validation did not fail closed")
+
+        job_request = urllib.request.Request(
+            self.base_url + f"/api/v1/validations/{validation['validation_id']}/jobs",
+            data=b"{}",
+            headers={
+                "Content-Type": "application/json",
+                "Idempotency-Key": "http-job-key-0000001",
+            },
+            method="POST",
+        )
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(job_request, timeout=3)
+        self.assertEqual(context.exception.code, 409)
 
 
 if __name__ == "__main__":

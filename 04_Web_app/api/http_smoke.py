@@ -8,6 +8,7 @@ lifecycle/result contracts plus hash-checked artifact downloads.
 from __future__ import annotations
 
 import argparse
+import email.policy
 import hashlib
 import json
 import mimetypes
@@ -17,6 +18,7 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from email.parser import BytesParser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,8 +33,10 @@ if str(WEB_APP_DIR) not in sys.path:
 
 from adapters.result_overview_adapter import build_result_overview  # noqa: E402
 from contracts.application_lifecycle_v1 import (  # noqa: E402
+    CampaignUploadV1,
     DecisionJobV1,
     LifecycleContractValidationError,
+    ValidationResultV1,
     parse_lifecycle_contract,
 )
 from worker.execution_worker import (  # noqa: E402
@@ -41,6 +45,10 @@ from worker.execution_worker import (  # noqa: E402
     ExecutionWorkerSettings,
     LocalArtifactStore,
     LocalWorkerJournal,
+)
+from services.local_campaign_service import (  # noqa: E402
+    LocalCampaignService,
+    LocalCampaignServiceSettings,
 )
 
 
@@ -53,6 +61,13 @@ _JOB_PATH_RE = re.compile(
 _ARTIFACT_PATH_RE = re.compile(
     r"^/api/v1/artifacts/(?P<artifact_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})/download$"
 )
+_UPLOAD_PATH_RE = re.compile(
+    r"^/api/v1/uploads/(?P<upload_id>upload_[0-9a-f]{12,64})(?:/(?P<resource>validations))?$"
+)
+_VALIDATION_PATH_RE = re.compile(
+    r"^/api/v1/validations/(?P<validation_id>validation_[0-9a-f]{12,64})(?:/(?P<resource>jobs))?$"
+)
+_IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9._:-]{16,128}$")
 
 
 def _sha256(path: Path) -> str:
@@ -108,8 +123,13 @@ class HttpSmokeSettings:
     project_root: Path = DEFAULT_PROJECT_ROOT
     python_executable: Path = Path(sys.executable)
     registry_root: Path | None = None
+    registry_channel: str = "preprod"
+    expected_package_id: str | None = None
+    optimizer_policy_path: Path | None = None
+    business_policy_path: Path | None = None
     timeout_seconds: float = 7200.0
     max_workers: int = 1
+    max_upload_bytes: int = 50 * 1024 * 1024
     allowed_origins: tuple[str, ...] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -120,6 +140,8 @@ class HttpSmokeSettings:
             raise ValueError("timeout_seconds must be positive")
         if self.max_workers <= 0:
             raise ValueError("max_workers must be positive")
+        if self.max_upload_bytes <= 0:
+            raise ValueError("max_upload_bytes must be positive")
         for origin in self.allowed_origins:
             if not origin.startswith(("http://localhost:", "http://127.0.0.1:")):
                 raise ValueError("HTTP Smoke v1 accepts localhost CORS origins only")
@@ -135,6 +157,116 @@ class LocalApiState:
 
     def _job_dir(self, job_id: str) -> Path:
         return _safe_child(self.root, "jobs", job_id)
+
+    def _upload_dir(self, upload_id: str) -> Path:
+        return _safe_child(self.root, "uploads", upload_id)
+
+    def _validation_dir(self, validation_id: str) -> Path:
+        return _safe_child(self.root, "validations", validation_id)
+
+    def _create_indexed_record(
+        self,
+        *,
+        index_name: str,
+        idempotency_key: str,
+        request_sha256: str,
+        resource_id: str,
+        record_path: Path,
+        payload: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], bool]:
+        index_path = _safe_child(self.root, index_name)
+        index = _read_json(index_path) if index_path.is_file() else {}
+        existing = index.get(idempotency_key)
+        if existing is not None:
+            if existing["request_sha256"] != request_sha256:
+                raise FileExistsError("Idempotency key already belongs to a different request")
+            existing_path = _safe_child(self.root, *str(existing["record_path"]).split("/"))
+            return _read_json(existing_path), False
+        if record_path.exists():
+            raise FileExistsError(f"Resource ID already exists: {resource_id}")
+        _write_json_atomic(record_path, dict(payload))
+        index[idempotency_key] = {
+            "resource_id": resource_id,
+            "request_sha256": request_sha256,
+            "record_path": str(record_path.relative_to(self.root)),
+        }
+        _write_json_atomic(index_path, index)
+        return dict(payload), True
+
+    def create_upload(
+        self,
+        upload: CampaignUploadV1,
+        idempotency_key: str,
+        request_sha256: str,
+    ) -> tuple[dict[str, Any], bool]:
+        with self._lock:
+            return self._create_indexed_record(
+                index_name="upload_idempotency.json",
+                idempotency_key=idempotency_key,
+                request_sha256=request_sha256,
+                resource_id=upload.upload_id,
+                record_path=self._upload_dir(upload.upload_id) / "upload.json",
+                payload=upload.to_dict(),
+            )
+
+    def write_upload(self, upload: CampaignUploadV1) -> None:
+        with self._lock:
+            _write_json_atomic(self._upload_dir(upload.upload_id) / "upload.json", upload.to_dict())
+
+    def read_upload(self, upload_id: str) -> dict[str, Any]:
+        path = self._upload_dir(upload_id) / "upload.json"
+        if not path.is_file():
+            raise FileNotFoundError(upload_id)
+        return _read_json(path)
+
+    def create_validation(
+        self,
+        validation: ValidationResultV1,
+        idempotency_key: str,
+        request_sha256: str,
+    ) -> tuple[dict[str, Any], bool]:
+        with self._lock:
+            return self._create_indexed_record(
+                index_name="validation_idempotency.json",
+                idempotency_key=idempotency_key,
+                request_sha256=request_sha256,
+                resource_id=validation.validation_id,
+                record_path=self._validation_dir(validation.validation_id) / "validation.json",
+                payload=validation.to_dict(),
+            )
+
+    def write_validation(self, validation: ValidationResultV1) -> None:
+        with self._lock:
+            _write_json_atomic(
+                self._validation_dir(validation.validation_id) / "validation.json",
+                validation.to_dict(),
+            )
+
+    def read_validation(self, validation_id: str) -> dict[str, Any]:
+        path = self._validation_dir(validation_id) / "validation.json"
+        if not path.is_file():
+            raise FileNotFoundError(validation_id)
+        return _read_json(path)
+
+    def write_validation_inputs(self, validation_id: str, payload: Mapping[str, Any]) -> None:
+        with self._lock:
+            _write_json_atomic(
+                self._validation_dir(validation_id) / "job_inputs.json",
+                dict(payload),
+            )
+
+    def read_validation_inputs(self, validation_id: str) -> dict[str, Any]:
+        path = self._validation_dir(validation_id) / "job_inputs.json"
+        if not path.is_file():
+            raise FileNotFoundError(f"{validation_id}/job_inputs")
+        return _read_json(path)
+
+    def find_job_by_idempotency(self, idempotency_key: str) -> dict[str, Any] | None:
+        with self._lock:
+            index_path = _safe_child(self.root, "idempotency.json")
+            index = _read_json(index_path) if index_path.is_file() else {}
+            existing = index.get(idempotency_key)
+            return self.read_job(str(existing["job_id"])) if existing else None
 
     def create_job(self, job: DecisionJobV1, request_sha256: str) -> tuple[dict[str, Any], bool]:
         with self._lock:
@@ -288,6 +420,34 @@ class HttpSmokeApplication:
         )
         self._worker_factory = worker_factory or self._default_worker_factory
         self._overview_builder = overview_builder or self._default_overview_builder
+        self.campaign_service: LocalCampaignService | None = None
+        if settings.expected_package_id:
+            project_root = settings.project_root.expanduser().resolve()
+            self.campaign_service = LocalCampaignService(
+                LocalCampaignServiceSettings(
+                    project_root=project_root,
+                    artifact_root=settings.artifact_root.expanduser().resolve(),
+                    validation_runtime_root=(settings.runtime_root / "validations").expanduser().resolve(),
+                    registry_root=(
+                        settings.registry_root
+                        or project_root / "03_Outputs" / "01_PyMC_outputs" / "00_Model_registry"
+                    ).expanduser().resolve(),
+                    registry_channel=settings.registry_channel,
+                    expected_package_id=settings.expected_package_id,
+                    optimizer_policy_path=(
+                        settings.optimizer_policy_path
+                        or project_root / "02_Code" / "02_Budget_optimizer" / "optimizer_decision_policy_v2.yaml"
+                    ).expanduser().resolve(),
+                    business_policy_path=(
+                        settings.business_policy_path
+                        or project_root / "02_Code" / "02_Budget_optimizer" / "business_threshold_policy_v1.yaml"
+                    ).expanduser().resolve(),
+                    max_upload_bytes=settings.max_upload_bytes,
+                ),
+                self.state,
+                self._executor,
+                self.submit_job,
+            )
 
     def close(self) -> None:
         self._executor.shutdown(wait=True, cancel_futures=False)
@@ -403,6 +563,28 @@ class MirroredWorkerJournal:
         self.local.write_worker_card(payload)
 
 
+def _multipart_file(content_type: str, body: bytes) -> tuple[str, bytes]:
+    if not content_type.lower().startswith("multipart/form-data"):
+        raise ValueError("multipart/form-data is required")
+    message = BytesParser(policy=email.policy.default).parsebytes(
+        b"MIME-Version: 1.0\r\n"
+        + f"Content-Type: {content_type}\r\n\r\n".encode("utf-8")
+        + body
+    )
+    files = [part for part in message.iter_attachments() if part.get_param("name", header="content-disposition") == "file"]
+    if len(files) != 1:
+        raise ValueError("Exactly one multipart field named 'file' is required")
+    filename = files[0].get_filename() or ""
+    content = files[0].get_payload(decode=True)
+    if not isinstance(content, bytes):
+        raise ValueError("Multipart file payload is invalid")
+    return filename, content
+
+
+def _local_actor_id() -> str:
+    return "actor_" + hashlib.sha256(b"local-development-actor").hexdigest()[:20]
+
+
 def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = f"X5MMMHTTP/{SERVER_VERSION}"
@@ -444,6 +626,95 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
 
         def do_POST(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
+            if path == "/api/v1/uploads":
+                if application.campaign_service is None:
+                    self._error(HTTPStatus.SERVICE_UNAVAILABLE, "UPLOAD_SERVICE_DISABLED", "Upload service не настроен.")
+                    return
+                idempotency_key = self.headers.get("Idempotency-Key", "")
+                if not _IDEMPOTENCY_RE.fullmatch(idempotency_key):
+                    self._error(HTTPStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Нужен Idempotency-Key длиной не менее 16 символов.")
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    length = -1
+                if length <= 0 or length > application.settings.max_upload_bytes + 1024 * 1024:
+                    self._error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "INVALID_UPLOAD_SIZE", "Размер файла недопустим.")
+                    return
+                try:
+                    filename, content = _multipart_file(
+                        self.headers.get("Content-Type", ""),
+                        self.rfile.read(length),
+                    )
+                    record, created = application.campaign_service.create_upload(
+                        filename=filename,
+                        content=content,
+                        idempotency_key=idempotency_key,
+                        actor_id=_local_actor_id(),
+                    )
+                except FileExistsError as exc:
+                    self._error(HTTPStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", str(exc))
+                    return
+                except ValueError as exc:
+                    self._error(HTTPStatus.UNPROCESSABLE_ENTITY, "INVALID_UPLOAD", str(exc))
+                    return
+                self._json(HTTPStatus.ACCEPTED if created else HTTPStatus.OK, record)
+                return
+
+            upload_match = _UPLOAD_PATH_RE.fullmatch(path)
+            if upload_match and upload_match.group("resource") == "validations":
+                if application.campaign_service is None:
+                    self._error(HTTPStatus.SERVICE_UNAVAILABLE, "UPLOAD_SERVICE_DISABLED", "Upload service не настроен.")
+                    return
+                idempotency_key = self.headers.get("Idempotency-Key", "")
+                if not _IDEMPOTENCY_RE.fullmatch(idempotency_key):
+                    self._error(HTTPStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Нужен Idempotency-Key длиной не менее 16 символов.")
+                    return
+                try:
+                    record, created = application.campaign_service.request_validation(
+                        upload_match.group("upload_id"),
+                        idempotency_key,
+                    )
+                except FileNotFoundError:
+                    self._error(HTTPStatus.NOT_FOUND, "UPLOAD_NOT_FOUND", "Загрузка не найдена.")
+                    return
+                except FileExistsError as exc:
+                    self._error(HTTPStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", str(exc))
+                    return
+                except ValueError as exc:
+                    self._error(HTTPStatus.CONFLICT, "UPLOAD_NOT_READY", str(exc))
+                    return
+                self._json(HTTPStatus.ACCEPTED if created else HTTPStatus.OK, record)
+                return
+
+            validation_match = _VALIDATION_PATH_RE.fullmatch(path)
+            if validation_match and validation_match.group("resource") == "jobs":
+                if application.campaign_service is None:
+                    self._error(HTTPStatus.SERVICE_UNAVAILABLE, "UPLOAD_SERVICE_DISABLED", "Upload service не настроен.")
+                    return
+                idempotency_key = self.headers.get("Idempotency-Key", "")
+                if not _IDEMPOTENCY_RE.fullmatch(idempotency_key):
+                    self._error(HTTPStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Нужен Idempotency-Key длиной не менее 16 символов.")
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    options = json.loads(self.rfile.read(length)) if length > 0 else {}
+                    if not isinstance(options, dict):
+                        raise ValueError("Job options must be a JSON object")
+                    record, created = application.campaign_service.create_job(
+                        validation_match.group("validation_id"),
+                        idempotency_key,
+                        options,
+                    )
+                except FileNotFoundError:
+                    self._error(HTTPStatus.NOT_FOUND, "VALIDATION_NOT_FOUND", "Validation не найдена.")
+                    return
+                except (ValueError, LifecycleContractValidationError) as exc:
+                    self._error(HTTPStatus.CONFLICT, "JOB_CREATION_BLOCKED", str(exc))
+                    return
+                self._json(HTTPStatus.ACCEPTED if created else HTTPStatus.OK, record)
+                return
+
             if path == "/api/v1/jobs":
                 content_type = self.headers.get("Content-Type", "")
                 if not content_type.lower().startswith("application/json"):
@@ -494,8 +765,31 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         "service": "x5-mmm-http-smoke",
                         "version": SERVER_VERSION,
                         "mode": "local_development_only",
+                        "capabilities": {
+                            "job_execution": True,
+                            "campaign_upload": application.campaign_service is not None,
+                            "campaign_validation": application.campaign_service is not None,
+                        },
                     },
                 )
+                return
+            upload_match = _UPLOAD_PATH_RE.fullmatch(path)
+            if upload_match and upload_match.group("resource") is None:
+                try:
+                    payload = application.state.read_upload(upload_match.group("upload_id"))
+                except FileNotFoundError:
+                    self._error(HTTPStatus.NOT_FOUND, "UPLOAD_NOT_FOUND", "Загрузка не найдена.")
+                    return
+                self._json(HTTPStatus.OK, payload)
+                return
+            validation_match = _VALIDATION_PATH_RE.fullmatch(path)
+            if validation_match and validation_match.group("resource") is None:
+                try:
+                    payload = application.state.read_validation(validation_match.group("validation_id"))
+                except FileNotFoundError:
+                    self._error(HTTPStatus.NOT_FOUND, "VALIDATION_NOT_FOUND", "Validation не найдена.")
+                    return
+                self._json(HTTPStatus.OK, payload)
                 return
             artifact_match = _ARTIFACT_PATH_RE.fullmatch(path)
             if artifact_match:
@@ -565,6 +859,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--artifact-root", required=True, type=Path)
     parser.add_argument("--project-root", type=Path, default=DEFAULT_PROJECT_ROOT)
     parser.add_argument("--registry-root", type=Path)
+    parser.add_argument("--registry-channel", default="preprod")
+    parser.add_argument("--expected-package-id")
+    parser.add_argument("--optimizer-policy-path", type=Path)
+    parser.add_argument("--business-policy-path", type=Path)
     parser.add_argument("--python-executable", type=Path, default=Path(sys.executable))
     parser.add_argument("--timeout-seconds", type=float, default=7200.0)
     parser.add_argument("--max-workers", type=int, default=1)
@@ -579,6 +877,10 @@ def main(argv: list[str] | None = None) -> int:
             project_root=args.project_root,
             python_executable=args.python_executable,
             registry_root=args.registry_root,
+            registry_channel=args.registry_channel,
+            expected_package_id=args.expected_package_id,
+            optimizer_policy_path=args.optimizer_policy_path,
+            business_policy_path=args.business_policy_path,
             timeout_seconds=args.timeout_seconds,
             max_workers=args.max_workers,
         )

@@ -339,11 +339,14 @@ Each item is a separate reviewable milestone:
 4. Completed: add a localhost-only HTTP smoke path with file-backed state,
    bounded background execution, idempotency, progress polling,
    ResultOverview delivery and hash-checked artifact downloads.
-5. Next: implement marketer upload, background campaign validation and
-   immutable DecisionJob creation over the same lifecycle contracts.
-6. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
-7. Implement production API adapters and asynchronous event delivery against the frozen contracts.
-8. Build the marketer workflow on the real-derived fixtures and stable API.
-9. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
+5. Completed: implement canonical marketer upload, background campaign parsing
+   and model-aware validation, isolated flighting artifacts and immutable
+   DecisionJob creation over the same lifecycle contracts.
+6. Next: package the local backend runtime, add restart/recovery guardrails and
+   run one complete localhost job against the real preprod package.
+7. Add PostgreSQL application-state persistence and approved external artifact storage/download delivery.
+8. Implement production API adapters and asynchronous event delivery against the frozen contracts.
+9. Build the marketer workflow on the real-derived fixtures and stable API.
+10. Add approved SSO/RBAC, security controls, observability, backup/restore, and company deployment configuration.
 
 Do not start a later milestone while an earlier contract or evidence gate is unresolved. Decisions requiring owner approval are listed only in `04_Web_app/OPEN_DECISIONS.md`.

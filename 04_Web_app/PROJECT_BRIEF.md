@@ -30,6 +30,11 @@ The local development backend now has an asynchronous HTTP smoke boundary for
 immutable jobs, progress polling, verified results and artifact downloads. It
 is localhost-only and is not the future company deployment runtime.
 
+The local marketer path also accepts a canonical campaign CSV/XLSX, parses and
+validates it in the background against the pinned preprod package, then creates
+the immutable DecisionJob. Specialized agency workbooks require an explicit
+future input profile and are not auto-detected.
+
 ## User Journey
 
 1. The marketer uploads CSV/XLSX campaign data.

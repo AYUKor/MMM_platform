@@ -1173,8 +1173,18 @@ def prepare_campaign_from_config(
 
     run_id = str(config.get("run_id") or campaign_path.stem)
     stem = _safe_id(run_id)
-    validated_dir = ensure_dir(project_root() / VALIDATED_DIR)
-    flighting_dir = ensure_dir(project_root() / FLIGHTING_DIR)
+    validated_dir_value = paths.get("validated_output_dir")
+    flighting_dir_value = paths.get("flighting_output_dir")
+    validated_dir = ensure_dir(
+        resolve_path(validated_dir_value, base_dir=config_path.parent)
+        if validated_dir_value
+        else project_root() / VALIDATED_DIR
+    )
+    flighting_dir = ensure_dir(
+        resolve_path(flighting_dir_value, base_dir=config_path.parent)
+        if flighting_dir_value
+        else project_root() / FLIGHTING_DIR
+    )
     output_dir = ensure_dir(output_dir)
 
     adapter_config = dict(config.get("campaign_adapter") or {})
