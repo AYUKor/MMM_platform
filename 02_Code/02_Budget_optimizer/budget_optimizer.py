@@ -115,7 +115,11 @@ def main() -> None:
     campaign_input_dir, campaign_file = _campaign_input_from_config(config, config_path)
     optimizer_policy = ((config.get("objective") or {}).get("model_risk_policy") or "balanced")
 
-    package = ModelPackage.from_run_dir(model_run_dir, require_posterior_ready=False)
+    package = ModelPackage.from_run_dir(
+        model_run_dir,
+        require_posterior_ready=False,
+        validate_hash=model_resolution.get("verification_mode", "full_lineage") == "full_lineage",
+    )
     check_card = package.check_card(purpose="optimizer", optimizer_policy=optimizer_policy)
     check_path = output_dir / "model_package_check_optimizer.json"
     write_json(check_path, check_card)

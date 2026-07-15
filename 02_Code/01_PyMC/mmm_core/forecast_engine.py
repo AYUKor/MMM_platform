@@ -864,11 +864,21 @@ class ForecastEngine:
             values.sort(key=lambda item: item[0])
 
     @classmethod
-    def from_run_dir(cls, run_dir: str | Path, *, auto_export: bool = True) -> "ForecastEngine":
+    def from_run_dir(
+        cls,
+        run_dir: str | Path,
+        *,
+        auto_export: bool = True,
+        validate_package_lineage: bool = True,
+    ) -> "ForecastEngine":
         run_dir = resolve_path(run_dir)
         if auto_export and not (run_dir / "fit_design_metadata.json").exists():
             export_fit_design_metadata(run_dir)
-        package = ModelPackage.from_run_dir(run_dir, require_posterior_ready=True)
+        package = ModelPackage.from_run_dir(
+            run_dir,
+            require_posterior_ready=True,
+            validate_hash=validate_package_lineage,
+        )
         metadata = read_json(run_dir / "fit_design_metadata.json") or {}
         media_scales = pd.read_csv(run_dir / "fit_design_media_scales.csv")
         denominators = pd.read_csv(run_dir / "target_denominator_metadata.csv")
@@ -1710,10 +1720,15 @@ def run_forecast_from_flighting(
     n_samples: int = DEFAULT_FORECAST_SAMPLES,
     seed: int = 42,
     future_controls: dict[str, Any] | None = None,
+    validate_package_lineage: bool = True,
 ) -> dict[str, Any]:
     started_at = datetime.now(timezone.utc)
     started_perf = time.monotonic()
-    engine = ForecastEngine.from_run_dir(model_run_dir, auto_export=True)
+    engine = ForecastEngine.from_run_dir(
+        model_run_dir,
+        auto_export=validate_package_lineage,
+        validate_package_lineage=validate_package_lineage,
+    )
     daily_rows = read_daily_flighting(flighting_path)
     analog_year = _future_controls_analog_year(future_controls)
     analog_missing_geo_policy = _future_controls_missing_geo_policy(future_controls)
@@ -3374,7 +3389,15 @@ def run_optimizer_from_flighting(
     analog_missing_geo_policy = _future_controls_missing_geo_policy(
         workflow_config.get("future_controls") or {}
     )
-    engine = ForecastEngine.from_run_dir(model_run_dir, auto_export=True)
+    verification_mode = str(
+        ((workflow_config.get("model_ref") or {}).get("verification_mode"))
+        or "full_lineage"
+    )
+    engine = ForecastEngine.from_run_dir(
+        model_run_dir,
+        auto_export=verification_mode == "full_lineage",
+        validate_package_lineage=verification_mode == "full_lineage",
+    )
     plan = pd.DataFrame(read_daily_flighting(flighting_path))
     plan["date"] = pd.to_datetime(plan["date"]).dt.date
     output_dir = ensure_dir(output_dir)

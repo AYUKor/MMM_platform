@@ -155,6 +155,13 @@ token.
 - `MMM_BACKEND_PORT`;
 - `MMM_BACKEND_RETENTION_DAYS`.
 
+Готовая упаковка для одного Linux-сервера описана в
+`04_Web_app/deployment/README_RESEARCH_PILOT.md`. Скрипт
+`04_Web_app/deployment/research_pilot.py` отдельно переносит зарегистрированный
+model inventory без training panel, генерирует Nginx/systemd-конфигурацию и
+обслуживает health, disk, retention и backup/restore. Model archive и секреты
+не попадают в GitHub.
+
 ## Граница research pilot
 
 File-backed runtime подходит для одного research server и одного worker, но не заменяет PostgreSQL, durable queue, object storage,

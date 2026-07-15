@@ -229,6 +229,7 @@ class ExecutionWorkerSettings:
     optimizer_cli: Path | None = None
     policy_dir: Path | None = None
     registry_root: Path | None = None
+    model_verification_mode: str = "full_lineage"
     terminate_grace_seconds: float = 10.0
     poll_seconds: float = 0.1
     next_sequence: int = 2
@@ -241,6 +242,8 @@ class ExecutionWorkerSettings:
             raise ValueError("Worker polling and termination intervals must be positive")
         if self.next_sequence <= 0:
             raise ValueError("next_sequence must be positive")
+        if self.model_verification_mode not in {"full_lineage", "serving_bundle"}:
+            raise ValueError("Unknown model_verification_mode")
         if Path(self.result_storage_prefix).is_absolute() or ".." in Path(
             self.result_storage_prefix
         ).parts:
@@ -641,6 +644,7 @@ class ExecutionWorker:
             normalized_plan_path=normalized_copy,
             output_dir=output_dir,
             registry_root=self.settings.resolved_registry_root,
+            model_verification_mode=self.settings.model_verification_mode,
             optimizer_policy_path=optimizer_policy_path,
             business_policy_path=business_policy_path,
         )
@@ -1513,9 +1517,10 @@ def _verify_model_package(
             str(job.model_selector.registry_channel),
             expected_package_id=job.model_selector.package_id,
             registry_root=settings.resolved_registry_root,
+            verification_mode=settings.model_verification_mode,
         )
         registration = resolved["registration"]
-        run_dir = Path(registration["run_dir"]).expanduser().resolve()
+        run_dir = Path(resolved["verified"]["run_dir"]).expanduser().resolve()
         manifest_path = run_dir / "model_manifest.json"
         manifest = _read_json(manifest_path)
     except Exception as exc:
@@ -1585,6 +1590,7 @@ def _materialize_execution_config(
     normalized_plan_path: Path,
     output_dir: Path,
     registry_root: Path,
+    model_verification_mode: str,
     optimizer_policy_path: Path,
     business_policy_path: Path,
 ) -> dict[str, Any]:
@@ -1597,6 +1603,7 @@ def _materialize_execution_config(
         "registry_root": str(registry_root),
         "channel": job.model_selector.registry_channel,
         "expected_package_id": job.model_selector.package_id,
+        "verification_mode": model_verification_mode,
     }
     paths = config.setdefault("paths", {})
     paths["campaign_input_dir"] = str(normalized_plan_path.parent)

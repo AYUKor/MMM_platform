@@ -4,14 +4,22 @@ name: Web app contracts
   pull_request:
     paths:
       - "04_Web_app/**"
+      - "02_Code/01_PyMC/mmm_core/model_registry.py"
+      - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
+      - "02_Code/01_PyMC/tests/test_model_registry.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
+      - "02_Code/03_AC_forecast/ac_forecast.py"
       - ".github/workflows/webapp-contracts.yml"
   push:
     branches:
       - main
     paths:
       - "04_Web_app/**"
+      - "02_Code/01_PyMC/mmm_core/model_registry.py"
+      - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
+      - "02_Code/01_PyMC/tests/test_model_registry.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
+      - "02_Code/03_AC_forecast/ac_forecast.py"
       - ".github/workflows/webapp-contracts.yml"
 
 permissions:
@@ -35,6 +43,9 @@ jobs:
 
       - name: Run source-only web contract tests
         run: python -B -m unittest discover -s 04_Web_app/tests -p "test_*.py" -v
+
+      - name: Run model registry serving-mode tests
+        run: python -B -m unittest 02_Code/01_PyMC/tests/test_model_registry.py -v
 
   frontend-quality:
     runs-on: ubuntu-latest

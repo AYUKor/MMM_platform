@@ -18,6 +18,21 @@ from .model_package_reader import ModelPackage
 
 REGISTRY_SCHEMA_VERSION = "1.0.0"
 MIN_PACKAGE_SCHEMA = (0, 3, 0)
+REGISTRY_VERIFICATION_MODES = {"full_lineage", "serving_bundle"}
+SERVING_RUNTIME_REQUIRED_FILES = {
+    "model_manifest.json",
+    "run_config.json",
+    "capability_matrix.csv",
+    "risk_registry.csv",
+    "gate_policy.json",
+    "gate_results.csv",
+    "posterior_index.json",
+    "fit_design_metadata.json",
+    "fit_design_media_scales.csv",
+    "target_denominator_metadata.csv",
+    "historical_support_bounds.csv",
+    "adstock_warm_start.csv",
+}
 CORE_INVENTORY_FILES = [
     "model_manifest.json",
     "run_config.json",
@@ -194,12 +209,51 @@ def load_registration(package_id: str, registry_root: str | Path | None = None) 
     return registration
 
 
-def verify_registration(package_id: str, registry_root: str | Path | None = None) -> dict[str, Any]:
+def _assert_registration_content_current(registration: dict[str, Any]) -> None:
+    expected = str(registration.get("registration_content_sha256") or "")
+    immutable = dict(registration)
+    for key in (
+        "registered_at_utc",
+        "registered_by",
+        "reason",
+        "registration_content_sha256",
+    ):
+        immutable.pop(key, None)
+    current = _canonical_hash(immutable)
+    if not expected or current != expected:
+        raise ValueError("Registered package metadata was mutated after registration")
+
+
+def _assert_serving_inventory_complete(registration: dict[str, Any]) -> None:
+    inventory = registration.get("inventory_sha256")
+    if not isinstance(inventory, dict):
+        raise ValueError("Registered serving inventory is missing")
+    missing = sorted(SERVING_RUNTIME_REQUIRED_FILES - set(inventory))
+    if missing:
+        raise ValueError(f"Registered package is not serving-complete. Missing: {missing}")
+    posterior_files = [
+        name for name in inventory if name.startswith("posterior_") and name.endswith(".nc")
+    ]
+    if not posterior_files:
+        raise ValueError("Registered package is not serving-complete: no posterior NetCDF files")
+
+
+def verify_registration(
+    package_id: str,
+    registry_root: str | Path | None = None,
+    *,
+    verification_mode: str = "full_lineage",
+) -> dict[str, Any]:
+    if verification_mode not in REGISTRY_VERIFICATION_MODES:
+        raise ValueError(f"Unknown registry verification mode: {verification_mode!r}")
     registration = load_registration(package_id, registry_root)
+    _assert_registration_content_current(registration)
     run_dir = _resolve_recorded_path(registration["run_dir"])
     panel_path = _resolve_recorded_path(registration["panel"]["path"])
-    if not run_dir.exists() or not panel_path.exists():
-        raise FileNotFoundError("Registered run directory or panel is missing")
+    if not run_dir.exists():
+        raise FileNotFoundError("Registered run directory is missing")
+    if verification_mode == "full_lineage" and not panel_path.exists():
+        raise FileNotFoundError("Registered source panel is missing")
     current_inventory = _inventory(run_dir)
     if current_inventory != registration["inventory_sha256"]:
         expected = registration["inventory_sha256"]
@@ -209,15 +263,35 @@ def verify_registration(package_id: str, registry_root: str | Path | None = None
             if expected.get(name) != current_inventory.get(name)
         )
         raise ValueError(f"Registered package was mutated after registration: {changed}")
-    panel_sha256 = sha256_file(panel_path)
-    if panel_sha256 != registration["panel"]["sha256"]:
-        raise ValueError("Registered panel hash mismatch")
-    ModelPackage.from_run_dir(run_dir, require_posterior_ready=True, validate_hash=True)
+    panel_sha256 = str(registration["panel"]["sha256"])
+    if verification_mode == "full_lineage":
+        current_panel_sha256 = sha256_file(panel_path)
+        if current_panel_sha256 != panel_sha256:
+            raise ValueError("Registered panel hash mismatch")
+        ModelPackage.from_run_dir(run_dir, require_posterior_ready=True, validate_hash=True)
+        panel_status = "verified"
+    else:
+        # Serving bundles intentionally omit the training panel. Their immutable
+        # registration still binds the package ID to the original panel hash,
+        # while the registered serving inventory is verified byte-for-byte.
+        _assert_serving_inventory_complete(registration)
+        package = ModelPackage.from_run_dir(
+            run_dir,
+            require_posterior_ready=True,
+            validate_hash=False,
+        )
+        if package.manifest.get("package_input_fingerprint") != registration.get(
+            "package_input_fingerprint"
+        ):
+            raise ValueError("Serving package fingerprint differs from registration")
+        panel_status = "provenance_only_not_copied"
     return {
         "status": "verified",
+        "verification_mode": verification_mode,
         "package_id": package_id,
         "run_dir": str(run_dir),
         "panel_sha256": panel_sha256,
+        "source_panel_status": panel_status,
         "inventory_files_n": len(current_inventory),
         "registration_content_sha256": registration["registration_content_sha256"],
     }
@@ -391,6 +465,7 @@ def resolve_channel(
     *,
     expected_package_id: str | None = None,
     registry_root: str | Path | None = None,
+    verification_mode: str = "full_lineage",
 ) -> dict[str, Any]:
     root = resolve_path(registry_root) if registry_root else default_registry_root()
     pointer = _channel_pointer(root, channel)
@@ -401,7 +476,15 @@ def resolve_channel(
         raise ValueError(
             f"Resolved package differs from expected package: expected={expected_package_id}, actual={package_id}"
         )
-    verified = verify_registration(package_id, root)
+    verified = verify_registration(
+        package_id,
+        root,
+        verification_mode=verification_mode,
+    )
+    if pointer.get("registration_content_sha256") != verified.get(
+        "registration_content_sha256"
+    ):
+        raise ValueError("Registry channel pointer is not bound to the verified registration")
     registration = load_registration(package_id, root)
     return {**pointer, "verified": verified, "registration": registration}
 
@@ -424,10 +507,12 @@ def resolve_model_reference(
             else default_registry_root()
         )
         channel = str(reference.get("channel") or "production")
+        verification_mode = str(reference.get("verification_mode") or "full_lineage")
         resolved = resolve_channel(
             channel,
             expected_package_id=reference.get("expected_package_id"),
             registry_root=registry_root,
+            verification_mode=verification_mode,
         )
         registration = resolved["registration"]
         run_dir = _resolve_recorded_path(registration["run_dir"])
@@ -436,6 +521,7 @@ def resolve_model_reference(
             "purpose": purpose,
             "source": "registry",
             "channel": channel,
+            "verification_mode": verification_mode,
             "package_id": resolved["package_id"],
             "event_id": resolved["event_id"],
             "run_dir": str(run_dir),
