@@ -54,6 +54,7 @@ from contracts.product_api_v1 import (  # noqa: E402
     load_openapi_document,
     validate_model_passport,
 )
+from contracts.mmm_fact_catalog_v1 import build_mmm_fact_catalog  # noqa: E402
 from worker.execution_worker import (  # noqa: E402
     ExecutionOutcome,
     ExecutionWorker,
@@ -70,13 +71,17 @@ from services.campaign_template import (  # noqa: E402
     build_campaign_plan_template,
 )
 from services.product_api_service import paginate_jobs  # noqa: E402
+from services.job_progress_view import (  # noqa: E402
+    ProgressProjectionError,
+    build_job_progress_view,
+)
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.3.0"
+SERVER_VERSION = "0.4.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
-    r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|errors|result|overview|cancel))?$"
+    r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|cancel))?$"
 )
 _ARTIFACT_PATH_RE = re.compile(
     r"^/api/v1/artifacts/(?P<artifact_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})/download$"
@@ -96,6 +101,8 @@ _CONTRACT_SCHEMA_FILES = {
     "decision-result-v1": WEB_APP_DIR / "contracts" / "decision_result_v1.schema.json",
     "result-overview-v1": WEB_APP_DIR / "contracts" / "result_overview_v1.schema.json",
     "product-api-v1": WEB_APP_DIR / "contracts" / "product_api_v1.schema.json",
+    "job-progress-view-v1": WEB_APP_DIR / "contracts" / "job_progress_view_v1.schema.json",
+    "mmm-fact-catalog-v1": WEB_APP_DIR / "contracts" / "mmm_fact_catalog_v1.schema.json",
 }
 
 
@@ -493,6 +500,29 @@ class LocalApiState:
         if not path.is_file():
             raise FileNotFoundError(job_id)
         return _read_json(path)
+
+    def queue_snapshot(self, job_id: str) -> tuple[int | None, int]:
+        """Return a one-based position among queued jobs without mutating state."""
+
+        jobs_root = _safe_child(self.root, "jobs")
+        if not jobs_root.is_dir():
+            return None, 0
+        with self._lock:
+            queued = []
+            for path in jobs_root.glob("*/job.json"):
+                payload = _read_json(path)
+                if ((payload.get("status") or {}).get("code")) == "queued":
+                    queued.append(payload)
+            queued.sort(
+                key=lambda payload: (
+                    str(payload.get("queued_at_utc") or ""),
+                    str(payload.get("job_id") or ""),
+                )
+            )
+            for index, payload in enumerate(queued, start=1):
+                if payload.get("job_id") == job_id:
+                    return index, len(queued)
+            return None, len(queued)
 
     def list_jobs(self) -> list[dict[str, Any]]:
         jobs_root = _safe_child(self.root, "jobs")
@@ -938,6 +968,41 @@ class HttpSmokeApplication:
             storage_prefix=storage_prefix,
         )
 
+    def progress_view(self, job_id: str) -> dict[str, Any]:
+        """Build one deterministic product snapshot for browser polling."""
+
+        job = self.state.read_job(job_id)
+        try:
+            validation = self.state.read_validation(str(job["validation_id"]))
+        except (KeyError, FileNotFoundError) as exc:
+            raise ProgressProjectionError(
+                "Job validation is unavailable"
+            ) from exc
+
+        def optional_resource(name: str, default: Any) -> Any:
+            try:
+                return self.state.read_resource(job_id, name)
+            except FileNotFoundError:
+                return default
+
+        progress = optional_resource("progress", [])
+        errors = optional_resource("errors", [])
+        result = optional_resource("result", None)
+        if not isinstance(progress, list) or not isinstance(errors, list):
+            raise ProgressProjectionError("Progress resources have an invalid shape")
+        if result is not None and not isinstance(result, Mapping):
+            raise ProgressProjectionError("Result resource has an invalid shape")
+        queue_position, queued_total = self.state.queue_snapshot(job_id)
+        return build_job_progress_view(
+            job_payload=job,
+            validation_payload=validation,
+            progress_payloads=progress,
+            error_payloads=errors,
+            result_payload=result,
+            queue_position=queue_position,
+            queued_jobs_total=queued_total,
+        ).to_dict()
+
     def cancel(self, job_id: str) -> bool:
         self.state.read_job(job_id)
         with self._lock:
@@ -1293,6 +1358,9 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if path == "/api/v1/meta/errors":
                 self._json(HTTPStatus.OK, build_error_catalog_payload())
                 return
+            if path == "/api/v1/meta/mmm-facts":
+                self._json(HTTPStatus.OK, build_mmm_fact_catalog())
+                return
             if path == "/api/v1/models/active":
                 if application.model_passport is None:
                     self._error(
@@ -1396,6 +1464,32 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if match:
                 job_id = match.group("job_id")
                 resource = match.group("resource")
+                if resource == "progress-view":
+                    try:
+                        payload = application.progress_view(job_id)
+                    except FileNotFoundError:
+                        self._error(
+                            HTTPStatus.NOT_FOUND,
+                            "JOB_NOT_FOUND",
+                            "Расчет не найден.",
+                        )
+                        return
+                    except ProgressProjectionError:
+                        self._error(
+                            HTTPStatus.CONFLICT,
+                            "PROGRESS_STATE_INCONSISTENT",
+                            "Не удалось согласовать состояние расчета. Обновите страницу.",
+                        )
+                        return
+                    except Exception:
+                        self._error(
+                            HTTPStatus.SERVICE_UNAVAILABLE,
+                            "PROGRESS_VIEW_UNAVAILABLE",
+                            "Сведения о ходе расчета временно недоступны.",
+                        )
+                        return
+                    self._json(HTTPStatus.OK, payload)
+                    return
                 try:
                     payload = (
                         application.state.read_job(job_id)

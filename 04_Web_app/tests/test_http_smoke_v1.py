@@ -13,6 +13,7 @@ from dataclasses import replace
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Mapping
+from unittest.mock import patch
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -33,6 +34,9 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     ValidationIssue,
     ValidationResultV1,
     parse_lifecycle_contract,
+)
+from contracts.job_progress_view_v1 import (  # noqa: E402
+    validate_job_progress_view_payload,
 )
 from worker.execution_worker import ExecutionOutcome  # noqa: E402
 from services.local_campaign_service import (  # noqa: E402
@@ -304,6 +308,17 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(final_job["result_id"], "result_999999999999")
         status, result, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}/result")
         self.assertEqual(status, 200)
+        status, progress_view, _ = self._request(
+            "GET", f"/api/v1/jobs/{self.job.job_id}/progress-view"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            validate_job_progress_view_payload(progress_view),
+            progress_view,
+        )
+        self.assertTrue(progress_view["result_available"])
+        self.assertEqual(progress_view["report"]["status"], "completed")
+        self.assertEqual(progress_view["current_stage_id"], "P09")
         status, overview, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}/overview")
         self.assertEqual(status, 200)
         self.assertEqual(overview["contract_name"], "result_overview_v1")
@@ -367,6 +382,48 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertNotIn("/Users/", serialized)
         self.assertNotIn(str(self.runtime_root), serialized)
 
+    def test_progress_view_http_queue_polling_and_safe_failures(self) -> None:
+        self.application.state.create_job(self.job, "d" * 64)
+        path = f"/api/v1/jobs/{self.job.job_id}/progress-view"
+        status, first, _ = self._request("GET", path)
+        self.assertEqual(status, 200)
+        self.assertEqual(first["queue"]["position"], 1)
+        self.assertEqual(first["current_stage_id"], "P01")
+        self.assertEqual(len(first["stages"]), 9)
+        status, second, _ = self._request("GET", path)
+        self.assertEqual(status, 200)
+        self.assertEqual(first, second)
+
+        status, error, _ = self._request(
+            "GET", "/api/v1/jobs/job_aaaaaaaaaaaa/progress-view"
+        )
+        self.assertEqual(status, 404)
+        self.assertEqual(error["error"]["code"], "JOB_NOT_FOUND")
+
+        succeeded_without_resources = replace(
+            self.job,
+            status=LifecycleStatus("succeeded", "Расчет завершен"),
+            started_at_utc="2026-07-15T10:00:01+00:00",
+            finished_at_utc="2026-07-15T10:00:02+00:00",
+            attempt_number=1,
+            result_id="result_aaaaaaaaaaaa",
+        )
+        self.application.state.write_job(succeeded_without_resources)
+        status, error, _ = self._request("GET", path)
+        self.assertEqual(status, 409)
+        self.assertEqual(error["error"]["code"], "PROGRESS_STATE_INCONSISTENT")
+        self.assertNotIn("worker", json.dumps(error, ensure_ascii=False).lower())
+
+        with patch.object(
+            self.application,
+            "progress_view",
+            side_effect=RuntimeError("synthetic protected detail"),
+        ):
+            status, error, _ = self._request("GET", path)
+        self.assertEqual(status, 503)
+        self.assertEqual(error["error"]["code"], "PROGRESS_VIEW_UNAVAILABLE")
+        self.assertNotIn("synthetic protected detail", json.dumps(error, ensure_ascii=False))
+
     def test_health_cors_and_localhost_bind_guard(self) -> None:
         status, payload, _ = self._request("GET", "/health")
         self.assertEqual(status, 200)
@@ -418,14 +475,22 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(catalog["contract_name"], "http_error_catalog_v1")
 
+        status, facts, _ = self._request("GET", "/api/v1/meta/mmm-facts")
+        self.assertEqual(status, 200)
+        self.assertEqual(facts["contract_name"], "mmm_fact_catalog_v1")
+        self.assertGreaterEqual(len(facts["facts"]), 20)
+
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.2.1")
+        self.assertEqual(openapi["info"]["version"], "1.3.0")
+        self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         for contract in (
             "application-lifecycle-v1",
             "decision-result-v1",
             "result-overview-v1",
             "product-api-v1",
+            "job-progress-view-v1",
+            "mmm-fact-catalog-v1",
         ):
             status, schema, _ = self._request(
                 "GET", f"/api/v1/contracts/{contract}.json"

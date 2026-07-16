@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example/contracts/mmm_fact_catalog_v1.schema.json",
+  "title": "MMM Fact Catalog V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "facts"],
+  "properties": {
+    "contract_name": {"const": "mmm_fact_catalog_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "facts": {
+      "type": "array",
+      "minItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fact_id", "category", "text", "source_label"],
+        "properties": {
+          "fact_id": {"type": "string", "pattern": "^fact_[a-z0-9_]{3,64}$"},
+          "category": {
+            "enum": [
+              "adstock",
+              "saturation",
+              "forecast",
+              "uncertainty",
+              "support",
+              "scenarios",
+              "quality",
+              "decision"
+            ]
+          },
+          "text": {"type": "string", "minLength": 1, "maxLength": 280},
+          "source_label": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

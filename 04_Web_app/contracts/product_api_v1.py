@@ -131,6 +131,18 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
             "ответственному за сервис."
         ),
     },
+    "PROGRESS_STATE_INCONSISTENT": {
+        "http_status": 409,
+        "retryable": True,
+        "display_text": "Не удалось согласовать состояние расчета.",
+        "user_action": "Обновите страницу. Если проблема сохраняется, сообщите номер расчета ответственному за сервис.",
+    },
+    "PROGRESS_VIEW_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Сведения о ходе расчета временно недоступны.",
+        "user_action": "Повторите запрос позже.",
+    },
     "RESOURCE_NOT_READY": {
         "http_status": 404,
         "retryable": True,

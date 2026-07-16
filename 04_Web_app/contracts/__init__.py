@@ -13,6 +13,17 @@ from .application_lifecycle_v1 import (
     validate_lifecycle_payload,
 )
 from .decision_result_v1 import DecisionResultV1
+from .job_progress_view_v1 import (
+    JobProgressViewContractError,
+    JobProgressViewV1,
+    job_progress_view_from_dict,
+    validate_job_progress_view_payload,
+)
+from .mmm_fact_catalog_v1 import (
+    MmmFactCatalogError,
+    build_mmm_fact_catalog,
+    validate_mmm_fact_catalog,
+)
 
 __all__ = [
     "ApplicationErrorV1",
@@ -20,10 +31,17 @@ __all__ = [
     "DecisionJobV1",
     "DecisionResultV1",
     "JobEventV1",
+    "JobProgressViewContractError",
+    "JobProgressViewV1",
     "LifecycleContractValidationError",
+    "MmmFactCatalogError",
     "ProgressEventV1",
     "ValidationResultV1",
     "parse_lifecycle_contract",
+    "job_progress_view_from_dict",
+    "build_mmm_fact_catalog",
     "validate_lifecycle_contract",
     "validate_lifecycle_payload",
+    "validate_job_progress_view_payload",
+    "validate_mmm_fact_catalog",
 ]

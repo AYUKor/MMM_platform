@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example/contracts/job_progress_view_v1.schema.json",
+  "title": "Job Progress View V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "job_id",
+    "job_status",
+    "queue",
+    "campaign",
+    "current_stage_id",
+    "stages",
+    "scenario6",
+    "report",
+    "errors",
+    "can_cancel",
+    "result_available",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "contract_name": {"const": "job_progress_view_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "record_origin": {"enum": ["application_runtime", "synthetic_fixture"]},
+    "job_id": {"$ref": "#/$defs/opaqueId"},
+    "job_status": {"$ref": "#/$defs/jobStatus"},
+    "queue": {"$ref": "#/$defs/queueSummary"},
+    "campaign": {"$ref": "#/$defs/campaignSummary"},
+    "current_stage_id": {"$ref": "#/$defs/stageId"},
+    "stages": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {"$ref": "#/$defs/productStage"}
+    },
+    "scenario6": {"$ref": "#/$defs/scenario6Progress"},
+    "report": {"$ref": "#/$defs/reportProgress"},
+    "errors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/progressError"}
+    },
+    "can_cancel": {"type": "boolean"},
+    "result_available": {"type": "boolean"},
+    "updated_at_utc": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"
+    },
+    "nullableDateTime": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "nullableNonNegativeInteger": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "stageId": {
+      "enum": ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09"]
+    },
+    "jobStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {
+          "enum": [
+            "queued",
+            "running",
+            "cancel_requested",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timed_out"
+          ]
+        },
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "queueSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "queued_jobs_total", "display_text"],
+      "properties": {
+        "position": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "queued_jobs_total": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "campaignSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "campaign_name",
+        "segment",
+        "start_date",
+        "end_date",
+        "total_budget_rub",
+        "channels_n",
+        "geographies_n"
+      ],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/opaqueId"},
+        "campaign_name": {"type": "string", "minLength": 1},
+        "segment": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"},
+        "total_budget_rub": {"type": "number", "minimum": 0},
+        "channels_n": {"type": "integer", "minimum": 1},
+        "geographies_n": {"type": "integer", "minimum": 1}
+      }
+    },
+    "stageProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current", "total", "unit"],
+      "properties": {
+        "current": {"type": "integer", "minimum": 0},
+        "total": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "unit": {"type": "string", "minLength": 1}
+      }
+    },
+    "productStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage_id",
+        "order",
+        "title",
+        "status",
+        "started_at_utc",
+        "finished_at_utc",
+        "display_text",
+        "progress"
+      ],
+      "properties": {
+        "stage_id": {"$ref": "#/$defs/stageId"},
+        "order": {"type": "integer", "minimum": 1, "maximum": 9},
+        "title": {"type": "string", "minLength": 1},
+        "status": {
+          "enum": ["pending", "active", "completed", "warning", "failed", "skipped"]
+        },
+        "started_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "finished_at_utc": {"$ref": "#/$defs/nullableDateTime"},
+        "display_text": {"type": "string", "minLength": 1},
+        "progress": {
+          "oneOf": [
+            {"$ref": "#/$defs/stageProgress"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "scenario6Progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "attempt_budget",
+        "attempts_checked",
+        "safe_candidates",
+        "blocked_candidates",
+        "finalists_scored",
+        "finalists_total"
+      ],
+      "properties": {
+        "status": {"enum": ["pending", "running", "completed", "unavailable", "failed"]},
+        "attempt_budget": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "attempts_checked": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "safe_candidates": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "blocked_candidates": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "finalists_scored": {"$ref": "#/$defs/nullableNonNegativeInteger"},
+        "finalists_total": {"$ref": "#/$defs/nullableNonNegativeInteger"}
+      }
+    },
+    "reportProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "retryable"],
+      "properties": {
+        "status": {"enum": ["pending", "running", "completed", "failed", "not_required"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "retryable": {"type": "boolean"}
+      }
+    },
+    "progressError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error_id",
+        "stage_id",
+        "severity",
+        "blocking",
+        "retryable",
+        "display_text",
+        "recommended_action"
+      ],
+      "properties": {
+        "error_id": {"$ref": "#/$defs/opaqueId"},
+        "stage_id": {"$ref": "#/$defs/stageId"},
+        "severity": {"enum": ["warning", "error"]},
+        "blocking": {"type": "boolean"},
+        "retryable": {"type": "boolean"},
+        "display_text": {"type": "string", "minLength": 1},
+        "recommended_action": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
