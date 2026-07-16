@@ -411,7 +411,44 @@ test.describe("job progress product states", () => {
     await expect(page.getByText("Проверено вариантов").locator("..")).toContainText("1 536 / 2 048");
     await expect(page.getByText("Пересчитано финалистов").locator("..")).toContainText("11 / 600");
     await expect(page.getByText("Прошли проверку")).toHaveCount(0);
+    await expect(page.getByText("Требуют проверки")).toHaveCount(0);
     expect(calls.rawProgressCalls()).toBe(0);
+  });
+
+  test("safe_candidates null hides its row", async ({ page }) => {
+    const payload = scenario6View();
+    payload.scenario6.safe_candidates = null;
+    await mockProductEndpoints(page, payload);
+    await openProgress(page, payload);
+    await expect(page.getByText("Прошли проверку", { exact: true })).toHaveCount(0);
+  });
+
+  test("safe_candidates zero renders a known zero", async ({ page }) => {
+    const payload = scenario6View();
+    payload.scenario6.safe_candidates = 0;
+    await mockProductEndpoints(page, payload);
+    await openProgress(page, payload);
+    await expect(
+      page.getByText("Прошли проверку", { exact: true }).locator("..").locator("dd"),
+    ).toHaveText("0");
+  });
+
+  test("blocked_candidates null hides its row", async ({ page }) => {
+    const payload = scenario6View();
+    payload.scenario6.blocked_candidates = null;
+    await mockProductEndpoints(page, payload);
+    await openProgress(page, payload);
+    await expect(page.getByText("Требуют проверки", { exact: true })).toHaveCount(0);
+  });
+
+  test("blocked_candidates zero renders a known zero", async ({ page }) => {
+    const payload = scenario6View();
+    payload.scenario6.blocked_candidates = 0;
+    await mockProductEndpoints(page, payload);
+    await openProgress(page, payload);
+    await expect(
+      page.getByText("Требуют проверки", { exact: true }).locator("..").locator("dd"),
+    ).toHaveText("0");
   });
 
   for (const [name, payload, text] of [

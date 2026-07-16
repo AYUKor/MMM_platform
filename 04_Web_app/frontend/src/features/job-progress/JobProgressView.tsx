@@ -179,10 +179,10 @@ function Scenario6Panel({ view }: { view: JobProgressViewV1 }) {
               </dd>
             </div>
           ) : null}
-          {state.safe_candidates !== null && state.safe_candidates > 0 ? (
+          {state.safe_candidates !== null ? (
             <div><dt>Прошли проверку</dt><dd>{formatCount(state.safe_candidates)}</dd></div>
           ) : null}
-          {state.blocked_candidates !== null && state.blocked_candidates > 0 ? (
+          {state.blocked_candidates !== null ? (
             <div><dt>Требуют проверки</dt><dd>{formatCount(state.blocked_candidates)}</dd></div>
           ) : null}
         </dl>

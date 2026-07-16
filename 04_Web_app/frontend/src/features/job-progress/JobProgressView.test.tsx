@@ -136,7 +136,7 @@ describe("JobProgressView", () => {
     expect(screen.queryByText(/Позиция в очереди: 0/)).not.toBeInTheDocument();
   });
 
-  it("renders only real Scenario 6 counters and hides zero safe count", () => {
+  it("renders only real Scenario 6 progress counters", () => {
     renderView(view("running"));
     expect(screen.getByText("Проверено вариантов").parentElement).toHaveTextContent(
       "1 536 / 2 048",
@@ -144,8 +144,36 @@ describe("JobProgressView", () => {
     expect(screen.getByText("Пересчитано финалистов").parentElement).toHaveTextContent(
       "11 / 600",
     );
-    expect(screen.queryByText("Прошли проверку")).not.toBeInTheDocument();
     expect(screen.queryByText("нет безопасных вариантов", { exact: false })).not.toBeInTheDocument();
+  });
+
+  it("hides safe candidates when the contract value is null", () => {
+    const payload = view("running");
+    payload.scenario6.safe_candidates = null;
+    renderView(payload);
+    expect(screen.queryByText("Прошли проверку")).not.toBeInTheDocument();
+  });
+
+  it("renders a known safe candidates value of zero", () => {
+    const payload = view("running");
+    payload.scenario6.safe_candidates = 0;
+    renderView(payload);
+    expect(screen.getByText("Прошли проверку").nextElementSibling).toHaveTextContent(/^0$/);
+  });
+
+  it("hides blocked candidates when the contract value is null", () => {
+    const payload = view("running");
+    payload.scenario6.blocked_candidates = null;
+    renderView(payload);
+    expect(screen.queryByText("Требуют проверки")).not.toBeInTheDocument();
+  });
+
+  it("renders a known blocked candidates value of zero", () => {
+    const payload = view("running");
+    payload.scenario6.safe_candidates = null;
+    payload.scenario6.blocked_candidates = 0;
+    renderView(payload);
+    expect(screen.getByText("Требуют проверки").nextElementSibling).toHaveTextContent(/^0$/);
   });
 
   it("keeps available Scenario 6 current counters when totals are absent", () => {
