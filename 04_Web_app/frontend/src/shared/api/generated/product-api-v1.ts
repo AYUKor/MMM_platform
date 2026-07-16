@@ -1,6 +1,6 @@
 /* Generated from ../../contracts/product_api_v1.schema.json. Do not edit manually. */
 
-export type X5MMMProductAPIV1 = ModelPassport | HttpErrorCatalog | JobList;
+export type X5MMMProductAPIV1 = ModelPassport | HttpErrorCatalog | JobList | CalculationProfile;
 export type NullableString = string | null;
 
 export interface ModelPassport {
@@ -107,4 +107,11 @@ export interface JobList {
   limit: number;
   offset: number;
   next_offset: number | null;
+}
+export interface CalculationProfile {
+  contract_name: "calculation_profile_v1";
+  schema_version: "1.0.0";
+  scenario6_attempt_budget: number;
+  profile_label: string;
+  model_version_label: string;
 }

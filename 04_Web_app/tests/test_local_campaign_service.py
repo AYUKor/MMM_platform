@@ -208,6 +208,19 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertTrue(final["job_creation_allowed"])
         self.assertTrue(final["campaigns"])
         self.assertTrue(final["warnings"])
+        self.assertNotIn("geo_points", final["preview"])
+        self.assertAlmostEqual(
+            sum(row["total_budget_rub"] for row in final["preview"]["budget_by_channel"]),
+            final["totals"]["model_input_budget_rub"],
+        )
+        self.assertAlmostEqual(
+            sum(row["total_budget_rub"] for row in final["preview"]["budget_by_geo"]),
+            final["totals"]["model_input_budget_rub"],
+        )
+        self.assertAlmostEqual(
+            sum(row["daily_budget_rub"] for row in final["preview"]["channel_flighting"]),
+            final["totals"]["daily_budget_rub"],
+        )
         serialized = json.dumps(final, ensure_ascii=False)
         self.assertNotIn("/Users/", serialized)
         for key in ("normalized_plan", "daily_flighting", "model_validation"):

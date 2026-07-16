@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.1.0",
+    "version": "1.2.1",
     "description": "Versioned HTTP boundary for campaign upload, validation, asynchronous forecast and optimizer jobs, browser-safe results, model passport and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -52,6 +52,33 @@
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ModelPassport"}}}
           },
           "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/calculation-profile": {
+      "get": {
+        "operationId": "getCalculationProfile",
+        "responses": {
+          "200": {
+            "description": "Safe public calculation profile for the new-calculation flow",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CalculationProfile"}}}
+          },
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/templates/campaign-plan.xlsx": {
+      "get": {
+        "operationId": "downloadCampaignPlanTemplate",
+        "responses": {
+          "200": {
+            "description": "Synthetic XLSX template with daily and interval campaign layouts",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {"type": "string", "format": "binary"}
+              }
+            }
+          }
         }
       }
     },
@@ -233,7 +260,7 @@
     "responses": {
       "ApiError": {"description": "Browser-safe API error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
       "CampaignUpload": {"description": "CampaignUpload v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CampaignUpload"}}}},
-      "ValidationResult": {"description": "ValidationResult v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationResult"}}}},
+      "ValidationResult": {"description": "ValidationResult v1 with optional actionable issue guidance and deterministic preview", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationResult"}}}},
       "DecisionJob": {"description": "DecisionJob v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionJob"}}}}
     },
     "schemas": {
@@ -260,6 +287,7 @@
       "DecisionResult": {"$ref": "./contracts/decision-result-v1.json"},
       "ResultOverview": {"$ref": "./contracts/result-overview-v1.json"},
       "ModelPassport": {"$ref": "./contracts/product-api-v1.json#/$defs/modelPassport"},
+      "CalculationProfile": {"$ref": "./contracts/product-api-v1.json#/$defs/calculationProfile"},
       "HttpErrorCatalog": {"$ref": "./contracts/product-api-v1.json#/$defs/httpErrorCatalog"},
       "JobList": {"$ref": "./contracts/product-api-v1.json#/$defs/jobList"}
     }
