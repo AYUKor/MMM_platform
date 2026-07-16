@@ -4,6 +4,7 @@ import {
   createJob,
   listJobs,
   LifecycleApiError,
+  pollUntil,
   uploadCampaign,
 } from "./lifecycle-client";
 
@@ -88,5 +89,22 @@ describe("lifecycle client", () => {
 
   it("creates backend-safe idempotency keys", () => {
     expect(createIdempotencyKey("upload")).toMatch(/^[A-Za-z0-9._:-]{16,128}$/);
+  });
+
+  it("cancels an active polling interval without another request", async () => {
+    const controller = new AbortController();
+    const load = vi.fn().mockResolvedValue({ complete: false });
+    const polling = pollUntil(
+      load,
+      (value) => value.complete,
+      vi.fn(),
+      { intervalMs: 60_000, signal: controller.signal },
+    );
+
+    await Promise.resolve();
+    controller.abort();
+
+    await expect(polling).rejects.toMatchObject({ name: "AbortError" });
+    expect(load).toHaveBeenCalledTimes(1);
   });
 });

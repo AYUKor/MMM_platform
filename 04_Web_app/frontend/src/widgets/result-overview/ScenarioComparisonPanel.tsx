@@ -26,7 +26,7 @@ function ScenarioCard({ scenario }: { scenario: ScenarioViewModel }) {
         </div>
         <div className={styles.scenarioBadges}>
           {scenario.recommended ? <StatusBadge tone="accent">Рекомендация</StatusBadge> : null}
-          {scenario.stableBenchmark ? <StatusBadge>Устойчивый benchmark</StatusBadge> : null}
+          {scenario.stableBenchmark ? <StatusBadge>Ориентир по устойчивости</StatusBadge> : null}
           {!scenario.available ? <StatusBadge tone="warning">Недоступно</StatusBadge> : null}
         </div>
       </header>

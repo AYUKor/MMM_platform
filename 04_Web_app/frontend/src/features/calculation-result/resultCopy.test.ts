@@ -72,12 +72,12 @@ describe("resultCopy", () => {
     });
   });
 
-  it("uses S5 only as a stable benchmark and never calls it the best plan", () => {
+  it("uses S5 only as a stability reference and never calls it the best plan", () => {
     const copy = getScenarioCopy("S05");
 
     expect(copy).toMatchObject({
       number: "Сценарий 5",
-      badge: "Устойчивый benchmark",
+      badge: "Ориентир по устойчивости",
       available: true,
       known: true,
     });
