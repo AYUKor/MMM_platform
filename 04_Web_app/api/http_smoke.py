@@ -75,13 +75,20 @@ from services.job_progress_view import (  # noqa: E402
     ProgressProjectionError,
     build_job_progress_view,
 )
+from services.job_result_view import (  # noqa: E402
+    ResultProjectionStateError,
+    ResultProjectionUnavailableError,
+    UnsupportedMediaPlanQuery,
+    build_job_result_view,
+    build_scenario_media_plan,
+)
 
 
 API_VERSION = "v1"
 SERVER_VERSION = "0.4.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
-    r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|cancel))?$"
+    r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|result-view|media-plan|cancel))?$"
 )
 _ARTIFACT_PATH_RE = re.compile(
     r"^/api/v1/artifacts/(?P<artifact_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})/download$"
@@ -102,6 +109,8 @@ _CONTRACT_SCHEMA_FILES = {
     "result-overview-v1": WEB_APP_DIR / "contracts" / "result_overview_v1.schema.json",
     "product-api-v1": WEB_APP_DIR / "contracts" / "product_api_v1.schema.json",
     "job-progress-view-v1": WEB_APP_DIR / "contracts" / "job_progress_view_v1.schema.json",
+    "job-result-view-v1": WEB_APP_DIR / "contracts" / "job_result_view_v1.schema.json",
+    "scenario-media-plan-v1": WEB_APP_DIR / "contracts" / "scenario_media_plan_v1.schema.json",
     "mmm-fact-catalog-v1": WEB_APP_DIR / "contracts" / "mmm_fact_catalog_v1.schema.json",
 }
 
@@ -1003,6 +1012,60 @@ class HttpSmokeApplication:
             queued_jobs_total=queued_total,
         ).to_dict()
 
+    def result_view(self, job_id: str) -> dict[str, Any]:
+        """Build the browser result projection from published job resources."""
+
+        job = self.state.read_job(job_id)
+        result = self.state.read_resource(job_id, "result")
+        overview = self.state.read_resource(job_id, "overview")
+        if not isinstance(result, Mapping) or not isinstance(overview, Mapping):
+            raise ResultProjectionStateError("Published result resources have an invalid shape")
+        return build_job_result_view(
+            job_id=job_id,
+            job=job,
+            result=result,
+            overview=overview,
+            artifact_resolver=lambda artifact_id: self.state.resolve_artifact(
+                artifact_id,
+                self.settings.runtime_root,
+            ),
+        )
+
+    def media_plan(
+        self,
+        job_id: str,
+        *,
+        scenario_id: str,
+        page: int,
+        page_size: int,
+        channel: str | None,
+        geo: str | None,
+        date: str | None,
+    ) -> dict[str, Any]:
+        """Build one paginated scenario media-plan projection."""
+
+        job = self.state.read_job(job_id)
+        result = self.state.read_resource(job_id, "result")
+        overview = self.state.read_resource(job_id, "overview")
+        if not isinstance(result, Mapping) or not isinstance(overview, Mapping):
+            raise ResultProjectionStateError("Published result resources have an invalid shape")
+        return build_scenario_media_plan(
+            job_id=job_id,
+            job=job,
+            result=result,
+            overview=overview,
+            artifact_resolver=lambda artifact_id: self.state.resolve_artifact(
+                artifact_id,
+                self.settings.runtime_root,
+            ),
+            scenario_id=scenario_id,
+            page=page,
+            page_size=page_size,
+            channel=channel,
+            geo=geo,
+            date=date,
+        )
+
     def cancel(self, job_id: str) -> bool:
         self.state.read_job(job_id)
         with self._lock:
@@ -1084,6 +1147,45 @@ def _job_list_parameters(query: str) -> tuple[int, int, str | None]:
     if status == "":
         raise ValueError("status must not be empty")
     return limit, offset, status
+
+
+def _media_plan_parameters(
+    query: str,
+) -> tuple[str, int, int, str | None, str | None, str | None]:
+    parameters = parse_qs(query, keep_blank_values=True)
+    allowed = {"scenario_id", "page", "page_size", "channel", "geo", "date"}
+    if unknown := set(parameters) - allowed:
+        raise UnsupportedMediaPlanQuery(
+            f"Неподдерживаемые параметры медиаплана: {', '.join(sorted(unknown))}."
+        )
+    if any(len(values) != 1 for values in parameters.values()):
+        raise UnsupportedMediaPlanQuery("Каждый параметр медиаплана можно указать только один раз.")
+    scenario_id = parameters.get("scenario_id", [""])[0].strip()
+    if not scenario_id:
+        raise UnsupportedMediaPlanQuery("Укажите scenario_id от S01 до S06.")
+    try:
+        page = int(parameters.get("page", ["1"])[0])
+        page_size = int(parameters.get("page_size", ["100"])[0])
+    except ValueError as exc:
+        raise UnsupportedMediaPlanQuery("page и page_size должны быть целыми числами.") from exc
+
+    def optional_text(key: str) -> str | None:
+        value = parameters.get(key, [None])[0]
+        if value is None:
+            return None
+        value = value.strip()
+        if not value or len(value) > 200:
+            raise UnsupportedMediaPlanQuery(f"Параметр {key} заполнен некорректно.")
+        return value
+
+    return (
+        scenario_id,
+        page,
+        page_size,
+        optional_text("channel"),
+        optional_text("geo"),
+        optional_text("date"),
+    )
 
 
 def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandler]:
@@ -1464,6 +1566,93 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if match:
                 job_id = match.group("job_id")
                 resource = match.group("resource")
+                if resource in {"result-view", "media-plan"}:
+                    try:
+                        application.state.read_job(job_id)
+                    except FileNotFoundError:
+                        self._error(
+                            HTTPStatus.NOT_FOUND,
+                            "JOB_NOT_FOUND",
+                            "Расчет не найден.",
+                        )
+                        return
+                    if resource == "result-view" and request_url.query:
+                        self._error(
+                            HTTPStatus.BAD_REQUEST,
+                            "INVALID_QUERY",
+                            "Этот запрос не поддерживает параметры.",
+                        )
+                        return
+                    try:
+                        if resource == "result-view":
+                            payload = application.result_view(job_id)
+                        else:
+                            (
+                                scenario_id,
+                                page,
+                                page_size,
+                                channel,
+                                geo,
+                                date,
+                            ) = _media_plan_parameters(request_url.query)
+                            payload = application.media_plan(
+                                job_id,
+                                scenario_id=scenario_id,
+                                page=page,
+                                page_size=page_size,
+                                channel=channel,
+                                geo=geo,
+                                date=date,
+                            )
+                    except FileNotFoundError:
+                        self._error(
+                            HTTPStatus.NOT_FOUND,
+                            "RESOURCE_NOT_READY",
+                            "Результат еще не готов.",
+                        )
+                        return
+                    except UnsupportedMediaPlanQuery as exc:
+                        self._error(
+                            HTTPStatus.UNPROCESSABLE_ENTITY,
+                            "MEDIA_PLAN_QUERY_UNSUPPORTED",
+                            str(exc),
+                        )
+                        return
+                    except ResultProjectionStateError:
+                        self._error(
+                            HTTPStatus.CONFLICT,
+                            "RESULT_VIEW_INCONSISTENT",
+                            "Опубликованные данные результата не согласованы между собой.",
+                        )
+                        return
+                    except ResultProjectionUnavailableError:
+                        code = (
+                            "MEDIA_PLAN_VIEW_UNAVAILABLE"
+                            if resource == "media-plan"
+                            else "RESULT_VIEW_UNAVAILABLE"
+                        )
+                        text = (
+                            "Медиаплан временно недоступен."
+                            if resource == "media-plan"
+                            else "Представление результата временно недоступно."
+                        )
+                        self._error(HTTPStatus.SERVICE_UNAVAILABLE, code, text)
+                        return
+                    except Exception:
+                        code = (
+                            "MEDIA_PLAN_VIEW_UNAVAILABLE"
+                            if resource == "media-plan"
+                            else "RESULT_VIEW_UNAVAILABLE"
+                        )
+                        text = (
+                            "Медиаплан временно недоступен."
+                            if resource == "media-plan"
+                            else "Представление результата временно недоступно."
+                        )
+                        self._error(HTTPStatus.SERVICE_UNAVAILABLE, code, text)
+                        return
+                    self._json(HTTPStatus.OK, payload)
+                    return
                 if resource == "progress-view":
                     try:
                         payload = application.progress_view(job_id)

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Versioned HTTP boundary for campaign upload, validation, asynchronous calculation jobs, browser-safe progress and results, model passport and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -255,6 +255,45 @@
         }
       }
     },
+    "/api/v1/jobs/{job_id}/result-view": {
+      "get": {
+        "operationId": "getJobResultView",
+        "parameters": [{"$ref": "#/components/parameters/JobId"}],
+        "responses": {
+          "200": {
+            "description": "Browser-safe four-tab product result projection",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/JobResultView"}}}
+          },
+          "404": {"$ref": "#/components/responses/ApiError"},
+          "409": {"$ref": "#/components/responses/ApiError"},
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/media-plan": {
+      "get": {
+        "operationId": "getScenarioMediaPlan",
+        "parameters": [
+          {"$ref": "#/components/parameters/JobId"},
+          {"$ref": "#/components/parameters/ScenarioId"},
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/PageSize"},
+          {"$ref": "#/components/parameters/ChannelFilter"},
+          {"$ref": "#/components/parameters/GeoFilter"},
+          {"$ref": "#/components/parameters/DateFilter"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Hash-verified paginated scenario media plan at geo-by-channel total grain",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScenarioMediaPlan"}}}
+          },
+          "404": {"$ref": "#/components/responses/ApiError"},
+          "409": {"$ref": "#/components/responses/ApiError"},
+          "422": {"$ref": "#/components/responses/ApiError"},
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
     "/api/v1/jobs/{job_id}/cancel": {
       "post": {
         "operationId": "requestJobCancellation",
@@ -277,11 +316,17 @@
   "components": {
     "parameters": {
       "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 16, "maxLength": 128}},
-      "ContractName": {"name": "contract_name", "in": "path", "required": true, "schema": {"enum": ["application-lifecycle-v1", "decision-result-v1", "result-overview-v1", "product-api-v1", "job-progress-view-v1", "mmm-fact-catalog-v1"]}},
+      "ContractName": {"name": "contract_name", "in": "path", "required": true, "schema": {"enum": ["application-lifecycle-v1", "decision-result-v1", "result-overview-v1", "product-api-v1", "job-progress-view-v1", "job-result-view-v1", "scenario-media-plan-v1", "mmm-fact-catalog-v1"]}},
       "UploadId": {"name": "upload_id", "in": "path", "required": true, "schema": {"type": "string"}},
       "ValidationId": {"name": "validation_id", "in": "path", "required": true, "schema": {"type": "string"}},
       "JobId": {"name": "job_id", "in": "path", "required": true, "schema": {"type": "string"}},
-      "ArtifactId": {"name": "artifact_id", "in": "path", "required": true, "schema": {"type": "string"}}
+      "ArtifactId": {"name": "artifact_id", "in": "path", "required": true, "schema": {"type": "string"}},
+      "ScenarioId": {"name": "scenario_id", "in": "query", "required": true, "schema": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]}},
+      "Page": {"name": "page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "default": 1}},
+      "PageSize": {"name": "page_size", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}},
+      "ChannelFilter": {"name": "channel", "in": "query", "required": false, "schema": {"type": "string", "minLength": 1}},
+      "GeoFilter": {"name": "geo", "in": "query", "required": false, "schema": {"type": "string", "minLength": 1}},
+      "DateFilter": {"name": "date", "in": "query", "required": false, "description": "Reserved; currently returns 422 because scenario daily plans are unavailable.", "schema": {"type": "string", "format": "date"}}
     },
     "responses": {
       "ApiError": {"description": "Browser-safe API error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
@@ -317,6 +362,8 @@
       "HttpErrorCatalog": {"$ref": "./contracts/product-api-v1.json#/$defs/httpErrorCatalog"},
       "JobList": {"$ref": "./contracts/product-api-v1.json#/$defs/jobList"},
       "JobProgressView": {"$ref": "./contracts/job-progress-view-v1.json"},
+      "JobResultView": {"$ref": "./contracts/job-result-view-v1.json"},
+      "ScenarioMediaPlan": {"$ref": "./contracts/scenario-media-plan-v1.json"},
       "MmmFactCatalog": {"$ref": "./contracts/mmm-fact-catalog-v1.json"}
     }
   }

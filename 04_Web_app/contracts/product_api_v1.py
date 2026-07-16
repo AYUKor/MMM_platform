@@ -143,6 +143,30 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "display_text": "Сведения о ходе расчета временно недоступны.",
         "user_action": "Повторите запрос позже.",
     },
+    "RESULT_VIEW_INCONSISTENT": {
+        "http_status": 409,
+        "retryable": False,
+        "display_text": "Опубликованные данные результата не согласованы между собой.",
+        "user_action": "Не используйте результат и сообщите номер расчета ответственному за сервис.",
+    },
+    "RESULT_VIEW_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Представление результата временно недоступно.",
+        "user_action": "Повторите запрос позже. Если ошибка сохраняется, сообщите номер расчета ответственному за сервис.",
+    },
+    "MEDIA_PLAN_QUERY_UNSUPPORTED": {
+        "http_status": 422,
+        "retryable": True,
+        "display_text": "Запрошенный сценарий или фильтр медиаплана недоступен.",
+        "user_action": "Выберите доступный сценарий или уберите неподдерживаемый фильтр.",
+    },
+    "MEDIA_PLAN_VIEW_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Медиаплан временно недоступен.",
+        "user_action": "Повторите запрос позже. Если ошибка сохраняется, сообщите номер расчета ответственному за сервис.",
+    },
     "RESOURCE_NOT_READY": {
         "http_status": 404,
         "retryable": True,

@@ -99,6 +99,18 @@ UI не выводит raw backend names как пользовательские
 
 ## 4. Поддерживаемый scope Phase 2
 
+Backend Phase C дополняет этот исторический Phase 2 map двумя source-of-truth
+endpoints:
+
+- `GET /api/v1/jobs/{job_id}/result-view` (`job_result_view_v1`);
+- `GET /api/v1/jobs/{job_id}/media-plan` (`scenario_media_plan_v1`).
+
+Для нового frontend result milestone приоритет имеют эти projections. Старый
+`/overview` остается backward-compatible, но frontend больше не должен сам
+выбирать default recommendation, извлекать ranks, строить reliability copy или
+суммировать channel/geo totals. Детальная семантика зафиксирована в
+`JOB_RESULT_VIEW_CONTRACT_V1.md` и `SCENARIO_MEDIA_PLAN_CONTRACT_V1.md`.
+
 Текущий contract позволяет реализовать:
 
 1. вкладку подробного сравнения S1–S6 с backend p10/p50/p90, ROAS,
@@ -121,9 +133,9 @@ UI не выводит raw backend names как пользовательские
 
 До отдельного backend contract не реализуются:
 
-1. **Агрегированные channel-only и geo-only decision totals/charts.** Overview
-   содержит строки `segment × geo × channel`; если нужны отдельные backend-
-   сверенные totals, их должна предоставить новая projection.
+1. **Агрегированные channel-only и geo-only decision totals/charts закрыты
+   Backend Phase C.** `job_result_view_v1` и `scenario_media_plan_v1` возвращают
+   reconciled `by_channel`, `by_geo` и `by_geo_channel`.
 2. **Excel browser preview.** Contract предоставляет metadata и download, но не
    безопасное структурированное содержимое отчёта для browser rendering.
 3. **Полная browser-copy projection каждого row-level gate/rejection code.** В
@@ -135,6 +147,13 @@ UI не выводит raw backend names как пользовательские
    coverage, uncertainty и warnings.
 5. **Словарь технических geo/channel/segment codes.** Если backend отдаёт не
    утверждённые display names, нужен versioned dictionary/API projection.
+6. **Daily scenario media plans и calendar/matrix by date.** Текущие artifacts
+   содержат scenario totals по `geo × channel`, но не immutable S01-S06 daily
+   rows. Backend Phase C возвращает controlled unavailable.
+7. **Approved map coordinates.** Versioned coordinate catalog отсутствует;
+   backend не использует внешний geocoder и возвращает controlled unavailable.
+8. **Working media-plan XLSX.** Реального отдельного artifact kind нет. CSV не
+   маскируется под XLSX; marketer report XLSX остается доступен.
 
 Закрытый после первоначального Phase 2 анализа gap:
 

@@ -19,10 +19,18 @@ from .job_progress_view_v1 import (
     job_progress_view_from_dict,
     validate_job_progress_view_payload,
 )
+from .job_result_view_v1 import (
+    JobResultViewContractError,
+    validate_job_result_view_payload,
+)
 from .mmm_fact_catalog_v1 import (
     MmmFactCatalogError,
     build_mmm_fact_catalog,
     validate_mmm_fact_catalog,
+)
+from .scenario_media_plan_v1 import (
+    ScenarioMediaPlanContractError,
+    validate_scenario_media_plan_payload,
 )
 
 __all__ = [
@@ -33,9 +41,11 @@ __all__ = [
     "JobEventV1",
     "JobProgressViewContractError",
     "JobProgressViewV1",
+    "JobResultViewContractError",
     "LifecycleContractValidationError",
     "MmmFactCatalogError",
     "ProgressEventV1",
+    "ScenarioMediaPlanContractError",
     "ValidationResultV1",
     "parse_lifecycle_contract",
     "job_progress_view_from_dict",
@@ -43,5 +53,7 @@ __all__ = [
     "validate_lifecycle_contract",
     "validate_lifecycle_payload",
     "validate_job_progress_view_payload",
+    "validate_job_result_view_payload",
     "validate_mmm_fact_catalog",
+    "validate_scenario_media_plan_payload",
 ]

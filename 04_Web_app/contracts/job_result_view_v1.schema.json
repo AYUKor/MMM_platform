@@ -1,0 +1,547 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example/contracts/job_result_view_v1.schema.json",
+  "title": "Job Result View V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "job_id",
+    "result_id",
+    "source_overview_id",
+    "updated_at_utc",
+    "campaign",
+    "recommendation",
+    "overview",
+    "scenarios",
+    "reliability",
+    "warnings",
+    "best_raw",
+    "media_plan",
+    "report",
+    "limitations"
+  ],
+  "properties": {
+    "contract_name": {"const": "job_result_view_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "record_origin": {"enum": ["application_runtime", "sanitized_fixture"]},
+    "job_id": {"$ref": "#/$defs/opaqueId"},
+    "result_id": {"$ref": "#/$defs/opaqueId"},
+    "source_overview_id": {"$ref": "#/$defs/opaqueId"},
+    "updated_at_utc": {"type": "string", "format": "date-time"},
+    "campaign": {"$ref": "#/$defs/campaign"},
+    "recommendation": {"$ref": "#/$defs/recommendation"},
+    "overview": {"$ref": "#/$defs/overview"},
+    "scenarios": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {"$ref": "#/$defs/scenario"}
+    },
+    "reliability": {"$ref": "#/$defs/reliability"},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/warning"}},
+    "best_raw": {"$ref": "#/$defs/bestRaw"},
+    "media_plan": {"$ref": "#/$defs/mediaPlanSummary"},
+    "report": {"$ref": "#/$defs/report"},
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/limitation"}
+    }
+  },
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"
+    },
+    "nullableNumber": {"type": ["number", "null"]},
+    "nullablePositiveInteger": {"type": ["integer", "null"], "minimum": 1},
+    "nullableString": {"type": ["string", "null"]},
+    "scenarioId": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]},
+    "qualityStatus": {"enum": ["safe", "caution", "blocked", "unavailable"]},
+    "metricUnit": {
+      "enum": [
+        "RUB",
+        "orders",
+        "orders_per_100k_RUB",
+        "RUB_per_order",
+        "turnover_bridge_from_avg_basket_rub",
+        "ratio"
+      ]
+    },
+    "quantileMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "unit",
+        "p10",
+        "p50",
+        "p90",
+        "usage",
+        "display_text",
+        "formula_version"
+      ],
+      "properties": {
+        "status": {"enum": ["available", "unavailable"]},
+        "unit": {"$ref": "#/$defs/metricUnit"},
+        "p10": {"$ref": "#/$defs/nullableNumber"},
+        "p50": {"$ref": "#/$defs/nullableNumber"},
+        "p90": {"$ref": "#/$defs/nullableNumber"},
+        "usage": {"enum": ["primary", "diagnostic_only", "unavailable", "audit_only"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "formula_version": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "scenarioMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incremental_turnover_rub",
+        "incremental_orders",
+        "orders_per_100k_rub",
+        "avg_basket_delta_rub",
+        "avg_basket_turnover_bridge_rub",
+        "roas"
+      ],
+      "properties": {
+        "incremental_turnover_rub": {"$ref": "#/$defs/quantileMetric"},
+        "incremental_orders": {"$ref": "#/$defs/quantileMetric"},
+        "orders_per_100k_rub": {"$ref": "#/$defs/quantileMetric"},
+        "avg_basket_delta_rub": {"$ref": "#/$defs/quantileMetric"},
+        "avg_basket_turnover_bridge_rub": {"$ref": "#/$defs/quantileMetric"},
+        "roas": {"$ref": "#/$defs/quantileMetric"}
+      }
+    },
+    "reliabilityComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component_id", "title", "status", "score", "observed_value", "display_text"],
+      "properties": {
+        "component_id": {
+          "enum": [
+            "historical_support",
+            "model_support",
+            "extrapolation",
+            "posterior_uncertainty",
+            "business_constraints",
+            "data_completeness"
+          ]
+        },
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["good", "caution", "poor", "unavailable"]},
+        "score": {"type": "null"},
+        "observed_value": {"type": ["number", "string", "null"]},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "reliability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "status", "display_text", "components"],
+      "properties": {
+        "score": {"type": "null"},
+        "status": {"const": "unavailable"},
+        "display_text": {"type": "string", "minLength": 1},
+        "components": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/reliabilityComponent"}
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "title", "display_text", "recommended_action", "scope"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]+$"},
+        "severity": {"enum": ["info", "caution", "manual_review", "blocking"]},
+        "title": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1},
+        "recommended_action": {"type": "string", "minLength": 1},
+        "scope": {"enum": ["campaign", "selected_scenario", "recommendation", "scenario6"]}
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "campaign_name",
+        "segments",
+        "start_date",
+        "end_date",
+        "total_budget_rub",
+        "channels_n",
+        "geographies_n",
+        "model_coverage_share"
+      ],
+      "properties": {
+        "campaign_id": {"$ref": "#/$defs/opaqueId"},
+        "campaign_name": {"type": "string", "minLength": 1},
+        "segments": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"},
+        "total_budget_rub": {"type": "number", "minimum": 0},
+        "channels_n": {"type": "integer", "minimum": 1},
+        "geographies_n": {"type": "integer", "minimum": 1},
+        "model_coverage_share": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "bestSafe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available", "scenario_id", "safe_rank", "raw_rank", "display_text"],
+      "properties": {
+        "available": {"type": "boolean"},
+        "scenario_id": {"oneOf": [{"$ref": "#/$defs/scenarioId"}, {"type": "null"}]},
+        "safe_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "raw_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "scenario_id",
+        "title",
+        "display_text",
+        "decision_scope_text",
+        "safe_rank",
+        "raw_rank",
+        "best_safe"
+      ],
+      "properties": {
+        "status": {"enum": ["recommended", "no_safe_recommendation", "unavailable"]},
+        "scenario_id": {"oneOf": [{"$ref": "#/$defs/scenarioId"}, {"type": "null"}]},
+        "title": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1},
+        "decision_scope_text": {"type": "string", "minLength": 1},
+        "safe_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "raw_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "best_safe": {"$ref": "#/$defs/bestSafe"}
+      }
+    },
+    "scenarioBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested_budget_rub", "allocated_budget_rub", "unallocated_budget_rub"],
+      "properties": {
+        "requested_budget_rub": {"type": "number", "minimum": 0},
+        "allocated_budget_rub": {"type": "number", "minimum": 0},
+        "unallocated_budget_rub": {"type": "number", "minimum": 0}
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "title",
+        "description",
+        "role",
+        "status",
+        "is_recommended",
+        "is_best_safe",
+        "is_best_raw",
+        "safe_rank",
+        "raw_rank",
+        "quality_status",
+        "quality_display_text",
+        "budget",
+        "metrics",
+        "reliability"
+      ],
+      "properties": {
+        "scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "title": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "role": {"enum": ["source", "control", "benchmark", "adaptive"]},
+        "status": {"enum": ["completed", "unavailable", "failed"]},
+        "is_recommended": {"type": "boolean"},
+        "is_best_safe": {"type": "boolean"},
+        "is_best_raw": {"type": "boolean"},
+        "safe_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "raw_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1},
+        "budget": {"$ref": "#/$defs/scenarioBudget"},
+        "metrics": {"$ref": "#/$defs/scenarioMetrics"},
+        "reliability": {"$ref": "#/$defs/reliability"}
+      }
+    },
+    "budgetComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_budget_rub",
+        "selected_budget_rub",
+        "delta_rub",
+        "delta_pct",
+        "quality_status",
+        "quality_display_text"
+      ],
+      "properties": {
+        "channel": {"type": "string", "minLength": 1},
+        "geo": {"type": "string", "minLength": 1},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"},
+        "delta_pct": {"$ref": "#/$defs/nullableNumber"},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1}
+      },
+      "anyOf": [
+        {"required": ["channel"]},
+        {"required": ["geo"]},
+        {"required": ["geo", "channel"]}
+      ]
+    },
+    "headlineMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "title", "status", "unit", "p10", "p50", "p90", "value", "display_text"],
+      "properties": {
+        "metric_id": {
+          "enum": [
+            "incremental_turnover_rub",
+            "incremental_orders",
+            "orders_per_100k_rub",
+            "avg_basket_delta_rub",
+            "total_budget_rub",
+            "reliability_score",
+            "safe_rank"
+          ]
+        },
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["available", "unavailable"]},
+        "unit": {
+          "enum": ["RUB", "orders", "orders_per_100k_RUB", "RUB_per_order", "score_1_10", "rank"]
+        },
+        "p10": {"$ref": "#/$defs/nullableNumber"},
+        "p50": {"$ref": "#/$defs/nullableNumber"},
+        "p90": {"$ref": "#/$defs/nullableNumber"},
+        "value": {"$ref": "#/$defs/nullableNumber"},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "rangeRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "p10", "p50", "p90", "quality_status"],
+      "properties": {
+        "scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "p10": {"type": "number"},
+        "p50": {"type": "number"},
+        "p90": {"type": "number"},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"}
+      }
+    },
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected_scenario_id",
+        "source_scenario_id",
+        "benchmark_scenario_id",
+        "headline_metrics",
+        "scenario_range",
+        "channel_summary",
+        "geo_summary",
+        "geo_channel_summary"
+      ],
+      "properties": {
+        "selected_scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "source_scenario_id": {"const": "S01"},
+        "benchmark_scenario_id": {"const": "S05"},
+        "headline_metrics": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {"$ref": "#/$defs/headlineMetric"}
+        },
+        "scenario_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["metric_id", "unit", "rows"],
+          "properties": {
+            "metric_id": {"const": "incremental_turnover_rub"},
+            "unit": {"const": "RUB"},
+            "rows": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/rangeRow"}}
+          }
+        },
+        "channel_summary": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/budgetComparison"}},
+        "geo_summary": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/budgetComparison"}},
+        "geo_channel_summary": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/budgetComparison"}}
+      }
+    },
+    "auditMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["incremental_turnover_rub", "roas"],
+      "properties": {
+        "incremental_turnover_rub": {"$ref": "#/$defs/quantileMetric"},
+        "roas": {"$ref": "#/$defs/quantileMetric"}
+      }
+    },
+    "blockingCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segment", "geo", "channel", "reason"],
+      "properties": {
+        "segment": {"type": "string", "minLength": 1},
+        "geo": {"type": "string", "minLength": 1},
+        "channel": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "bestRaw": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "scenario_id",
+        "raw_rank",
+        "safe_rank",
+        "reason_not_recommended",
+        "metrics",
+        "blocking_cells_status",
+        "blocking_cells"
+      ],
+      "properties": {
+        "available": {"type": "boolean"},
+        "scenario_id": {"oneOf": [{"$ref": "#/$defs/scenarioId"}, {"type": "null"}]},
+        "raw_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "safe_rank": {"$ref": "#/$defs/nullablePositiveInteger"},
+        "reason_not_recommended": {"$ref": "#/$defs/nullableString"},
+        "metrics": {"oneOf": [{"$ref": "#/$defs/auditMetric"}, {"type": "null"}]},
+        "blocking_cells_status": {"enum": ["available", "unavailable", "not_applicable"]},
+        "blocking_cells": {"type": "array", "items": {"$ref": "#/$defs/blockingCell"}}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "display_name", "media_type", "size_bytes", "sha256", "download_path"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "display_name": {"type": "string", "minLength": 1},
+        "media_type": {"type": "string", "minLength": 1},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "download_path": {"type": "string", "pattern": "^/api/v1/artifacts/[a-z][a-z0-9_]*_[0-9a-f]{12,64}/download$"}
+      }
+    },
+    "artifactAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "artifact"],
+      "properties": {
+        "status": {"enum": ["ready", "unavailable"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "artifact": {"oneOf": [{"$ref": "#/$defs/artifact"}, {"type": "null"}]}
+      }
+    },
+    "map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "geo_points", "coordinate_catalog_version"],
+      "properties": {
+        "status": {"const": "unavailable"},
+        "display_text": {"type": "string", "minLength": 1},
+        "geo_points": {"type": "null"},
+        "coordinate_catalog_version": {"type": "null"}
+      }
+    },
+    "scenarioOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "title", "status"],
+      "properties": {
+        "scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["completed", "unavailable", "failed"]}
+      }
+    },
+    "mediaPlanSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint",
+        "selected_scenario_id",
+        "grain",
+        "scenario_options",
+        "daily_plan",
+        "map",
+        "working_media_plan"
+      ],
+      "properties": {
+        "endpoint": {"type": "string", "pattern": "^/api/v1/jobs/[a-z][a-z0-9_]*_[0-9a-f]{12,64}/media-plan$"},
+        "selected_scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "grain": {"const": "geo_channel_total"},
+        "scenario_options": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {"$ref": "#/$defs/scenarioOption"}
+        },
+        "daily_plan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "display_text"],
+          "properties": {
+            "status": {"const": "unavailable"},
+            "display_text": {"type": "string", "minLength": 1}
+          }
+        },
+        "map": {"$ref": "#/$defs/map"},
+        "working_media_plan": {"$ref": "#/$defs/artifactAvailability"}
+      }
+    },
+    "sheet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheet_name", "title", "description"],
+      "properties": {
+        "sheet_name": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "description": {"$ref": "#/$defs/nullableString"}
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "display_text",
+        "generated_at_utc",
+        "artifact",
+        "sheets",
+        "working_media_plan"
+      ],
+      "properties": {
+        "status": {"enum": ["ready", "failed", "unavailable"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "generated_at_utc": {"type": ["string", "null"], "format": "date-time"},
+        "artifact": {"oneOf": [{"$ref": "#/$defs/artifact"}, {"type": "null"}]},
+        "sheets": {"type": "array", "items": {"$ref": "#/$defs/sheet"}},
+        "working_media_plan": {"$ref": "#/$defs/artifactAvailability"}
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

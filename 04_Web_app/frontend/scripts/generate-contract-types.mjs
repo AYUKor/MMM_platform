@@ -31,6 +31,16 @@ const contracts = [
     output: "job-progress-view-v1.ts",
   },
   {
+    schema: "job_result_view_v1.schema.json",
+    typeName: "JobResultViewV1",
+    output: "job-result-view-v1.ts",
+  },
+  {
+    schema: "scenario_media_plan_v1.schema.json",
+    typeName: "ScenarioMediaPlanV1",
+    output: "scenario-media-plan-v1.ts",
+  },
+  {
     schema: "mmm_fact_catalog_v1.schema.json",
     typeName: "MmmFactCatalogV1",
     output: "mmm-fact-catalog-v1.ts",

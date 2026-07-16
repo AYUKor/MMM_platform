@@ -43,6 +43,10 @@ from services.local_campaign_service import (  # noqa: E402
     LocalCampaignService,
     LocalCampaignServiceSettings,
 )
+from services.job_result_view import (  # noqa: E402
+    ResultProjectionStateError,
+    UnsupportedMediaPlanQuery,
+)
 
 
 LIFECYCLE_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "application_lifecycle_v1_happy_path_synthetic.json"
@@ -482,14 +486,18 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.3.0")
+        self.assertEqual(openapi["info"]["version"], "1.4.0")
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/media-plan", openapi["paths"])
         for contract in (
             "application-lifecycle-v1",
             "decision-result-v1",
             "result-overview-v1",
             "product-api-v1",
             "job-progress-view-v1",
+            "job-result-view-v1",
+            "scenario-media-plan-v1",
             "mmm-fact-catalog-v1",
         ):
             status, schema, _ = self._request(
@@ -514,6 +522,104 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(error["error"]["code"], "INVALID_QUERY")
         self.assertIn("user_action", error["error"])
+
+    def test_product_result_routes_and_controlled_failures(self) -> None:
+        self.application.state.create_job(self.job, "a" * 64)
+        result_view_payload = {
+            "contract_name": "job_result_view_v1",
+            "schema_version": "1.0.0",
+        }
+        with patch.object(
+            self.application,
+            "result_view",
+            return_value=result_view_payload,
+        ):
+            status, payload, _ = self._request(
+                "GET", f"/api/v1/jobs/{self.job.job_id}/result-view"
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, result_view_payload)
+
+        status, error, _ = self._request(
+            "GET", f"/api/v1/jobs/{self.job.job_id}/result-view?unknown=1"
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "INVALID_QUERY")
+
+        media_plan_payload = {
+            "contract_name": "scenario_media_plan_v1",
+            "schema_version": "1.0.0",
+        }
+        with patch.object(
+            self.application,
+            "media_plan",
+            return_value=media_plan_payload,
+        ) as projection:
+            status, payload, _ = self._request(
+                "GET",
+                f"/api/v1/jobs/{self.job.job_id}/media-plan"
+                "?scenario_id=S05&page=2&page_size=25&channel=RegionalTV&geo=Moscow",
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, media_plan_payload)
+        projection.assert_called_once_with(
+            self.job.job_id,
+            scenario_id="S05",
+            page=2,
+            page_size=25,
+            channel="RegionalTV",
+            geo="Moscow",
+            date=None,
+        )
+
+        status, error, _ = self._request(
+            "GET", f"/api/v1/jobs/{self.job.job_id}/media-plan"
+        )
+        self.assertEqual(status, 422)
+        self.assertEqual(error["error"]["code"], "MEDIA_PLAN_QUERY_UNSUPPORTED")
+
+        with patch.object(
+            self.application,
+            "media_plan",
+            side_effect=UnsupportedMediaPlanQuery("Дневная разбивка недоступна."),
+        ):
+            status, error, _ = self._request(
+                "GET",
+                f"/api/v1/jobs/{self.job.job_id}/media-plan"
+                "?scenario_id=S01&date=2026-08-01",
+            )
+        self.assertEqual(status, 422)
+        self.assertEqual(error["error"]["code"], "MEDIA_PLAN_QUERY_UNSUPPORTED")
+
+        with patch.object(
+            self.application,
+            "result_view",
+            side_effect=ResultProjectionStateError("protected detail"),
+        ):
+            status, error, _ = self._request(
+                "GET", f"/api/v1/jobs/{self.job.job_id}/result-view"
+            )
+        self.assertEqual(status, 409)
+        self.assertEqual(error["error"]["code"], "RESULT_VIEW_INCONSISTENT")
+        self.assertNotIn("protected detail", json.dumps(error, ensure_ascii=False))
+
+        with patch.object(
+            self.application,
+            "result_view",
+            side_effect=RuntimeError("protected detail"),
+        ):
+            status, error, _ = self._request(
+                "GET", f"/api/v1/jobs/{self.job.job_id}/result-view"
+            )
+        self.assertEqual(status, 503)
+        self.assertEqual(error["error"]["code"], "RESULT_VIEW_UNAVAILABLE")
+        self.assertNotIn("protected detail", json.dumps(error, ensure_ascii=False))
+
+        status, error, _ = self._request(
+            "GET", "/api/v1/jobs/job_aaaaaaaaaaaa/result-view"
+        )
+        self.assertEqual(status, 404)
+        self.assertEqual(error["error"]["code"], "JOB_NOT_FOUND")
 
     def test_calculation_profile_unavailable_messages_are_user_facing(self) -> None:
         campaign_service = self.application.campaign_service
