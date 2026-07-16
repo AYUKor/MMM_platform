@@ -11,12 +11,14 @@ import subprocess
 import sys
 import traceback
 import uuid
+import zipfile
 from collections import defaultdict
 from concurrent.futures import Executor
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
+from xml.etree import ElementTree as ET
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -34,8 +36,11 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     VALIDATION_RESULT_CONTRACT,
     AffectedCell,
     ArtifactIdentity,
+    BudgetByChannelPreview,
+    BudgetByGeoPreview,
     CampaignPreview,
     CampaignUploadV1,
+    ChannelFlightingPreview,
     DecisionJobV1,
     LifecycleContractValidationError,
     LifecycleStatus,
@@ -44,6 +49,8 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     ResolvedModelReference,
     SamplingProfile,
     ValidationIssue,
+    ValidationPreview,
+    ValidationPreviewCheck,
     ValidationResultV1,
     ValidationTotals,
     parse_lifecycle_contract,
@@ -64,7 +71,23 @@ PARSER_NAME = "canonical_campaign_plan_parser"
 PARSER_VERSION = "1.0.0"
 VALIDATOR_NAME = "model_package_campaign_validator"
 VALIDATOR_VERSION = "1.0.0"
-SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".tsv", ".xlsx", ".xls"}
+SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".xlsx"}
+MAX_XLSX_ARCHIVE_ENTRIES = 4096
+MAX_XLSX_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
+MAX_XLSX_WORKBOOK_XML_BYTES = 1024 * 1024
+PARSED_CAMPAIGN_COLUMNS = (
+    "source_row_id",
+    "campaign_name",
+    "creative_name",
+    "segment",
+    "geo",
+    "channel",
+    "date",
+    "start_date",
+    "end_date",
+    "budget_rub",
+    "source_format",
+)
 CALCULATION_SOURCE_PATHS = (
     "02_Code/01_PyMC",
     "02_Code/02_Budget_optimizer",
@@ -111,11 +134,16 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
+def _write_csv(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    fieldnames: tuple[str, ...] | None = None,
+) -> None:
+    if not rows and fieldnames is None:
         raise CampaignPlanError("Campaign parser produced no rows")
     path.parent.mkdir(parents=True, exist_ok=True)
-    fields = list(rows[0])
+    fields = list(fieldnames or tuple(rows[0]))
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -127,6 +155,59 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
+
+
+def _xlsx_sheet_names(path: Path) -> tuple[str, ...]:
+    with zipfile.ZipFile(path) as archive:
+        entries = archive.infolist()
+        if len(entries) > MAX_XLSX_ARCHIVE_ENTRIES:
+            raise CampaignPlanError("XLSX contains too many archive entries")
+        if any(entry.flag_bits & 0x1 for entry in entries):
+            raise CampaignPlanError("Encrypted XLSX files are not supported")
+        if sum(entry.file_size for entry in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
+            raise CampaignPlanError("XLSX expands beyond the safe processing limit")
+        try:
+            workbook_entry = archive.getinfo("xl/workbook.xml")
+        except KeyError as exc:
+            raise CampaignPlanError("XLSX is missing xl/workbook.xml") from exc
+        if workbook_entry.file_size > MAX_XLSX_WORKBOOK_XML_BYTES:
+            raise CampaignPlanError("XLSX workbook metadata exceeds the safe limit")
+        workbook = ET.fromstring(archive.read(workbook_entry))
+    namespace = {
+        "x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    }
+    return tuple(
+        str(node.attrib["name"])
+        for node in workbook.findall("x:sheets/x:sheet", namespace)
+    )
+
+
+def _read_web_campaign_brief(path: Path) -> list[dict[str, Any]]:
+    if path.suffix.lower() != ".xlsx":
+        return read_campaign_brief(path)
+    sheet_names = set(_xlsx_sheet_names(path))
+    template_sheets = tuple(
+        name for name in ("01_Daily", "02_Interval") if name in sheet_names
+    )
+    if not template_sheets:
+        return read_campaign_brief(path)
+
+    active: list[tuple[str, list[dict[str, Any]]]] = []
+    for sheet_name in template_sheets:
+        rows = read_campaign_brief(path, sheet_name=sheet_name)
+        user_rows = [
+            row
+            for row in rows
+            if any(str(value or "").strip() for value in row.values())
+            and not str(row.get("campaign_name") or "").startswith("SYNTHETIC_")
+        ]
+        if user_rows:
+            active.append((sheet_name, user_rows))
+    if len(active) > 1:
+        raise CampaignPlanError(
+            "Заполните только один лист шаблона: 01_Daily или 02_Interval"
+        )
+    return active[0][1] if active else []
 
 
 def _artifact(
@@ -266,12 +347,15 @@ class LocalCampaignService:
                         ValidationIssue(
                             code="UPLOAD_NOT_PARSED_AFTER_RESTART",
                             severity="blocking",
-                            display_text=(
-                                "Backend был перезапущен до завершения разбора файла. "
-                                "Повторите загрузку и validation."
-                            ),
+                            display_text="Разбор файла был прерван. Загрузите файл повторно.",
                             scope="upload",
                             recoverable=True,
+                            what="Разбор загруженного файла не завершен.",
+                            why=(
+                                "Сервис был перезапущен до того, как структура файла "
+                                "успела пройти проверку."
+                            ),
+                            recommended_action="Загрузите исходный файл повторно.",
                         ),
                     ),
                 )
@@ -299,7 +383,7 @@ class LocalCampaignService:
             raise ValueError("Upload filename must not contain a path")
         suffix = Path(filename).suffix.lower()
         if suffix not in SUPPORTED_UPLOAD_SUFFIXES:
-            raise ValueError("Supported campaign files: CSV, TSV, XLSX and XLS")
+            raise ValueError("Поддерживаются только файлы CSV и XLSX")
         content_sha = hashlib.sha256(content).hexdigest()
         upload_id = _opaque_id("upload", f"{idempotency_key}:{filename}:{content_sha}")
         storage_key = f"uploads/{upload_id}/source/{filename}"
@@ -343,14 +427,27 @@ class LocalCampaignService:
     def _parse_upload(self, upload: CampaignUploadV1) -> None:
         try:
             source_path = _safe_child(self.settings.artifact_root, upload.original_file.storage_key)
-            raw_rows = read_campaign_brief(source_path)
-            normalized_rows, issues = normalize_campaign_rows(raw_rows)
+            raw_rows = _read_web_campaign_brief(source_path)
+            normalized_rows, issues = (
+                normalize_campaign_rows(raw_rows) if raw_rows else ([], [])
+            )
             if issues:
                 raise CampaignPlanError(f"Campaign contains {len(issues)} invalid row(s)")
+            if any(
+                str(row.get("campaign_name") or "") == "unknown_campaign"
+                for row in normalized_rows
+            ):
+                raise CampaignPlanError(
+                    "campaign_name is required for every campaign row"
+                )
             campaigns = sorted({str(row["campaign_name"]) for row in normalized_rows})
             parsed_key = f"uploads/{upload.upload_id}/parsed/campaign_upload_parsed.csv"
             parsed_path = _safe_child(self.settings.artifact_root, parsed_key)
-            _write_csv(parsed_path, normalized_rows)
+            _write_csv(
+                parsed_path,
+                normalized_rows,
+                fieldnames=PARSED_CAMPAIGN_COLUMNS,
+            )
             parsed_artifact = _artifact(
                 self.settings.artifact_root,
                 parsed_key,
@@ -473,6 +570,11 @@ class LocalCampaignService:
         validation: ValidationResultV1,
     ) -> None:
         try:
+            if upload.detected_campaigns_n != 1:
+                self.state.write_validation(
+                    self._campaign_count_block(validation, upload.detected_campaigns_n)
+                )
+                return
             config = self._workflow_config(validation)
             config_key = f"validations/{validation.validation_id}/config/source_workflow_config.json"
             config_path = _safe_child(self.settings.artifact_root, config_key)
@@ -539,6 +641,64 @@ class LocalCampaignService:
             invalid.validate()
             self.state.write_validation(invalid)
 
+    @staticmethod
+    def _campaign_count_block(
+        validation: ValidationResultV1,
+        detected_campaigns_n: int | None,
+    ) -> ValidationResultV1:
+        count = int(detected_campaigns_n or 0)
+        if count == 0:
+            why = (
+                "Без названия кампании система не может связать строки файла "
+                "с одним расчетом."
+            )
+            action = (
+                "Проверьте колонку campaign_name, укажите одно название кампании "
+                "во всех строках и загрузите файл повторно."
+            )
+        else:
+            why = (
+                "Один расчет предназначен для одной кампании; совместная обработка "
+                "смешала бы разные планы и результаты."
+            )
+            action = (
+                "Разделите файл: сохраните каждую кампанию в отдельный CSV или XLSX "
+                "и загрузите нужную кампанию повторно."
+            )
+        issue = ValidationIssue(
+            code="CAMPAIGN_COUNT_NOT_ONE",
+            severity="blocking",
+            display_text=(
+                f"В файле найдено кампаний: {count}. Для расчета требуется ровно "
+                "одна кампания."
+            ),
+            scope="upload",
+            recoverable=True,
+            what=f"В файле найдено кампаний: {count}.",
+            why=why,
+            recommended_action=action,
+        )
+        blocked = replace(
+            validation,
+            status=LifecycleStatus("invalid", "План нельзя отправить в расчет"),
+            finished_at_utc=_utc_now(),
+            blocking_errors=(issue,),
+            preview=ValidationPreview(
+                checks=(
+                    ValidationPreviewCheck(
+                        code="CAMPAIGN_COUNT",
+                        status="failed",
+                        display_text=(
+                            f"Найдено кампаний: {count}. Требуется ровно одна кампания."
+                        ),
+                    ),
+                ),
+            ),
+            job_creation_allowed=False,
+        )
+        blocked.validate()
+        return blocked
+
     def _validation_failure_issue(self, validation_id: str) -> ValidationIssue:
         preparation_dir = (
             self.settings.validation_runtime_root / validation_id / "preparation"
@@ -568,22 +728,40 @@ class LocalCampaignService:
                     code="UNSUPPORTED_MODEL_CELLS",
                     severity="blocking",
                     display_text=(
-                        f"Модель не поддерживает {len(unsupported)} связок campaign x geo x channel x target. "
-                        "Исправьте медиаплан или используйте подходящий model package."
+                        "Строк медиаплана, недоступных для расчета: "
+                        f"{len(unsupported)}."
                     ),
                     scope="cell",
                     recoverable=True,
                     affected_cells=affected,
+                    what=(
+                        f"Обнаружено неподдерживаемых сочетаний сегмента, географии, "
+                        f"канала и показателя: {len(unsupported)}."
+                    ),
+                    why=(
+                        "Для указанных сочетаний нет разрешенной оценки эффективности, "
+                        "поэтому включать их в расчет нельзя."
+                    ),
+                    recommended_action=(
+                        "Исправьте отмеченные строки: выберите доступные географии или "
+                        "каналы либо исключите эти строки из медиаплана."
+                    ),
                 )
         return ValidationIssue(
             code="CAMPAIGN_VALIDATION_FAILED",
             severity="blocking",
-            display_text=(
-                "Кампания не прошла model-aware validation. Проверьте обязательные поля, "
-                "поддержку geo x channel и формат бюджета."
-            ),
+            display_text="План не прошел проверку входных данных.",
             scope="upload",
             recoverable=True,
+            what="Во входном плане обнаружена ошибка, которая блокирует расчет.",
+            why=(
+                "Один или несколько обязательных параметров не распознаны либо "
+                "недоступны для расчета."
+            ),
+            recommended_action=(
+                "Проверьте названия колонок, даты, бюджет, сегменты, географии и "
+                "каналы, затем загрузите исправленный файл."
+            ),
         )
 
     def _policy_selection(self, package: ModelPackage) -> PolicySelection:
@@ -643,6 +821,7 @@ class LocalCampaignService:
             production_blockers=tuple(str(value) for value in model_summary.get("production_blockers") or []),
         )
         warnings = self._validation_warnings(validation_rows, campaigns)
+        preview = self._validation_preview(normalized_rows, daily_rows, warnings)
         valid = replace(
             validation,
             status=LifecycleStatus("valid", "План можно рассчитать"),
@@ -654,6 +833,7 @@ class LocalCampaignService:
             campaigns=campaigns,
             totals=totals,
             warnings=warnings,
+            preview=preview,
             job_creation_allowed=True,
         )
         valid.validate()
@@ -723,16 +903,168 @@ class LocalCampaignService:
         return tuple(previews), totals
 
     @staticmethod
+    def _validation_preview(
+        normalized_rows: list[dict[str, str]],
+        daily_rows: list[dict[str, str]],
+        warnings: tuple[ValidationIssue, ...],
+    ) -> ValidationPreview:
+        normalized_channel: dict[str, float] = defaultdict(float)
+        normalized_geo: dict[str, float] = defaultdict(float)
+        daily_channel_date: dict[tuple[str, str], float] = defaultdict(float)
+        daily_geo_date: dict[tuple[str, str], float] = defaultdict(float)
+        for row in normalized_rows:
+            budget = float(row["budget_rub"])
+            normalized_channel[str(row["channel"])] += budget
+            normalized_geo[str(row["geo"])] += budget
+        for row in daily_rows:
+            budget = float(row["budget_rub"])
+            daily_channel_date[(str(row["channel"]), str(row["date"]))] += budget
+            daily_geo_date[(str(row["geo"]), str(row["date"]))] += budget
+
+        warning_channels = {
+            cell.channel
+            for issue in warnings
+            for cell in issue.affected_cells
+        }
+        warning_geos = {
+            cell.geo
+            for issue in warnings
+            for cell in issue.affected_cells
+        }
+
+        def status(has_warning: bool) -> LifecycleStatus:
+            return LifecycleStatus(
+                "warning" if has_warning else "passed",
+                "Есть ограничения модели" if has_warning else "Проверено",
+            )
+
+        budget_by_channel = tuple(
+            BudgetByChannelPreview(
+                channel=channel,
+                total_budget_rub=total,
+                max_daily_budget_rub=max(
+                    amount
+                    for (candidate, _), amount in daily_channel_date.items()
+                    if candidate == channel
+                ),
+                status=status(channel in warning_channels),
+            )
+            for channel, total in sorted(normalized_channel.items())
+        )
+        budget_by_geo = tuple(
+            BudgetByGeoPreview(
+                geo=geo,
+                total_budget_rub=total,
+                max_daily_budget_rub=max(
+                    amount
+                    for (candidate, _), amount in daily_geo_date.items()
+                    if candidate == geo
+                ),
+                status=status(geo in warning_geos),
+            )
+            for geo, total in sorted(normalized_geo.items())
+        )
+        channel_flighting = tuple(
+            ChannelFlightingPreview(
+                channel=channel,
+                date=flight_date,
+                daily_budget_rub=amount,
+                status=status(channel in warning_channels),
+            )
+            for (channel, flight_date), amount in sorted(daily_channel_date.items())
+        )
+        model_status = "warning" if warnings else "passed"
+        return ValidationPreview(
+            budget_by_channel=budget_by_channel,
+            budget_by_geo=budget_by_geo,
+            channel_flighting=channel_flighting,
+            geo_points=None,
+            checks=(
+                ValidationPreviewCheck(
+                    code="FILE_STRUCTURE",
+                    status="passed",
+                    display_text="Структура файла и обязательные поля распознаны.",
+                ),
+                ValidationPreviewCheck(
+                    code="CAMPAIGN_COUNT",
+                    status="passed",
+                    display_text="В файле найдена ровно одна кампания.",
+                ),
+                ValidationPreviewCheck(
+                    code="BUDGET_RECONCILIATION",
+                    status="passed",
+                    display_text=(
+                        "Сумма бюджета в исходном плане совпадает с суммой после "
+                        "распределения по дням."
+                    ),
+                ),
+                ValidationPreviewCheck(
+                    code="DATES",
+                    status="passed",
+                    display_text="Даты кампании распознаны и имеют корректный порядок.",
+                ),
+                ValidationPreviewCheck(
+                    code="MODEL_SUPPORT",
+                    status=model_status,
+                    display_text=(
+                        "Для части строк есть ограничения по качеству и допустимому "
+                        "использованию оценок."
+                        if warnings
+                        else "Все сочетания сегментов, каналов и географий доступны для расчета."
+                    ),
+                ),
+                ValidationPreviewCheck(
+                    code="HISTORICAL_SPEND_SIMILARITY",
+                    status="unavailable",
+                    display_text=(
+                        "Сходство дневного бюджета с историческим диапазоном будет "
+                        "проверено во время расчета сценариев."
+                    ),
+                ),
+            ),
+        )
+
+    @staticmethod
     def _validation_warnings(
         validation_rows: list[dict[str, str]],
         campaigns: tuple[CampaignPreview, ...],
     ) -> tuple[ValidationIssue, ...]:
         campaign_ids = {campaign.campaign_name: campaign.campaign_id for campaign in campaigns}
         warnings: list[ValidationIssue] = []
-        for allowed_use, code, text in (
-            ("caution", "MODEL_CAUTION_CELLS", "Часть связок разрешена только с повышенной осторожностью."),
-            ("diagnostic", "MODEL_DIAGNOSTIC_CELLS", "Часть target-оценок доступна только как диагностика."),
-        ):
+        guidance = {
+            "caution": {
+                "code": "MODEL_CAUTION_CELLS",
+                "display": (
+                    "Строк, результаты которых требуют осторожной интерпретации: "
+                    "{count}."
+                ),
+                "what": (
+                    "Строк с ограничениями по использованию оценки: {count}."
+                ),
+                "why": (
+                    "Для указанных сочетаний оценка разрешена только с ограничениями "
+                    "качества."
+                ),
+                "action": (
+                    "Проверьте отмеченные строки и не используйте их как единственное "
+                    "основание для перераспределения бюджета."
+                ),
+            },
+            "diagnostic": {
+                "code": "MODEL_DIAGNOSTIC_CELLS",
+                "display": "Строк, для которых доступны только справочные оценки: {count}.",
+                "what": "Строк, доступных только в диагностическом режиме: {count}.",
+                "why": (
+                    "Эти оценки не допускаются как основа основной рекомендации по "
+                    "распределению бюджета."
+                ),
+                "action": (
+                    "Используйте их только как справочную информацию и не меняйте "
+                    "медиаплан только на их основании."
+                ),
+            },
+        }
+        for allowed_use, message in guidance.items():
             rows = [row for row in validation_rows if str(row.get("allowed_use") or "") == allowed_use]
             if not rows:
                 continue
@@ -748,12 +1080,15 @@ class LocalCampaignService:
             )
             warnings.append(
                 ValidationIssue(
-                    code=code,
+                    code=message["code"],
                     severity="warning",
-                    display_text=f"{text} Затронуто строк проверки: {len(rows)}.",
+                    display_text=message["display"].format(count=len(rows)),
                     scope="model",
                     recoverable=True,
                     affected_cells=cells,
+                    what=message["what"].format(count=len(rows)),
+                    why=message["why"],
+                    recommended_action=message["action"],
                 )
             )
         return tuple(warnings)
@@ -768,7 +1103,12 @@ class LocalCampaignService:
         if existing is not None:
             return existing, False
         validation = parse_lifecycle_contract(self.state.read_validation(validation_id))
-        if not isinstance(validation, ValidationResultV1) or validation.status.code != "valid":
+        if (
+            not isinstance(validation, ValidationResultV1)
+            or validation.status.code != "valid"
+            or not validation.job_creation_allowed
+            or len(validation.campaigns) != 1
+        ):
             raise ValueError("Only a valid validation can create a job")
         upload = parse_lifecycle_contract(self.state.read_upload(validation.upload_id))
         assert isinstance(upload, CampaignUploadV1)

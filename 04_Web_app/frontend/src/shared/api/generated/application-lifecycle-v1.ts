@@ -87,6 +87,7 @@ export interface ValidationResult {
   blocking_errors: ValidationIssue[];
   warnings: ValidationIssue[];
   job_creation_allowed: boolean;
+  preview?: ValidationPreview;
 }
 export interface ResolvedModelReference {
   registry_channel: string;
@@ -136,6 +137,9 @@ export interface ValidationIssue {
   code: StableCode;
   severity: "blocking" | "warning";
   display_text: string;
+  what?: string;
+  why?: string;
+  recommended_action?: string;
   scope: "upload" | "row" | "campaign" | "cell" | "model";
   recoverable: boolean;
   source_row_ids: number[];
@@ -147,6 +151,47 @@ export interface AffectedCell {
   geo: string;
   channel: string;
   target: string;
+}
+export interface ValidationPreview {
+  budget_by_channel?: BudgetByChannelPreview[];
+  budget_by_geo?: BudgetByGeoPreview[];
+  channel_flighting?: ChannelFlightingPreview[];
+  geo_points?: GeoPointPreview[];
+  checks?: ValidationPreviewCheck[];
+}
+export interface BudgetByChannelPreview {
+  channel: string;
+  total_budget_rub: number;
+  max_daily_budget_rub: number;
+  status?: PreviewStatus;
+}
+export interface PreviewStatus {
+  code: "passed" | "warning" | "failed" | "unavailable";
+  display_text: string;
+}
+export interface BudgetByGeoPreview {
+  geo: string;
+  total_budget_rub: number;
+  max_daily_budget_rub: number;
+  status?: PreviewStatus;
+}
+export interface ChannelFlightingPreview {
+  channel: string;
+  date: string;
+  daily_budget_rub: number;
+  status?: PreviewStatus;
+}
+export interface GeoPointPreview {
+  geo: string;
+  latitude: number;
+  longitude: number;
+  total_budget_rub: number;
+  status?: PreviewStatus;
+}
+export interface ValidationPreviewCheck {
+  code: StableCode;
+  status: "passed" | "warning" | "failed" | "unavailable";
+  display_text: string;
 }
 export interface DecisionJob {
   contract_name: "decision_job_v1";

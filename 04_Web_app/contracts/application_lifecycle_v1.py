@@ -49,6 +49,7 @@ PROGRESS_STATES = {"started", "running", "completed"}
 ACTOR_TYPES = {"system", "user", "worker", "admin"}
 VALIDATION_SEVERITIES = {"blocking", "warning"}
 VALIDATION_SCOPES = {"upload", "row", "campaign", "cell", "model"}
+PREVIEW_STATUS_CODES = {"passed", "warning", "failed", "unavailable"}
 ERROR_RESOURCE_TYPES = {"upload", "validation", "job"}
 ERROR_COMPONENTS = {
     "upload",
@@ -305,6 +306,9 @@ class ValidationIssue:
     recoverable: bool
     source_row_ids: tuple[int, ...] = field(default_factory=tuple)
     affected_cells: tuple[AffectedCell, ...] = field(default_factory=tuple)
+    what: str | None = None
+    why: str | None = None
+    recommended_action: str | None = None
 
     def validate(self, field_name: str) -> None:
         _code(self.code, f"{field_name}.code")
@@ -318,6 +322,18 @@ class ValidationIssue:
             )
         _required_text(self.display_text, f"{field_name}.display_text")
         _boolean(self.recoverable, f"{field_name}.recoverable")
+        guidance = (self.what, self.why, self.recommended_action)
+        if any(value is not None for value in guidance):
+            if any(value is None for value in guidance):
+                raise LifecycleContractValidationError(
+                    f"{field_name} guidance requires what, why and recommended_action"
+                )
+            for name, value in (
+                ("what", self.what),
+                ("why", self.why),
+                ("recommended_action", self.recommended_action),
+            ):
+                _required_text(value, f"{field_name}.{name}")
         for row_id in self.source_row_ids:
             _positive_int(row_id, f"{field_name}.source_row_ids")
         _unique(self.source_row_ids, f"{field_name}.source_row_ids")
@@ -327,6 +343,145 @@ class ValidationIssue:
             )
         for index, cell in enumerate(self.affected_cells):
             cell.validate(f"{field_name}.affected_cells[{index}]")
+
+
+@dataclass(frozen=True)
+class BudgetByChannelPreview:
+    channel: str
+    total_budget_rub: float
+    max_daily_budget_rub: float
+    status: LifecycleStatus | None = None
+
+    def validate(self, field_name: str) -> None:
+        _required_text(self.channel, f"{field_name}.channel")
+        _non_negative(self.total_budget_rub, f"{field_name}.total_budget_rub")
+        _non_negative(
+            self.max_daily_budget_rub,
+            f"{field_name}.max_daily_budget_rub",
+        )
+        if self.status is not None:
+            self.status.validate(PREVIEW_STATUS_CODES, f"{field_name}.status")
+
+
+@dataclass(frozen=True)
+class BudgetByGeoPreview:
+    geo: str
+    total_budget_rub: float
+    max_daily_budget_rub: float
+    status: LifecycleStatus | None = None
+
+    def validate(self, field_name: str) -> None:
+        _required_text(self.geo, f"{field_name}.geo")
+        _non_negative(self.total_budget_rub, f"{field_name}.total_budget_rub")
+        _non_negative(
+            self.max_daily_budget_rub,
+            f"{field_name}.max_daily_budget_rub",
+        )
+        if self.status is not None:
+            self.status.validate(PREVIEW_STATUS_CODES, f"{field_name}.status")
+
+
+@dataclass(frozen=True)
+class ChannelFlightingPreview:
+    channel: str
+    date: str
+    daily_budget_rub: float
+    status: LifecycleStatus | None = None
+
+    def validate(self, field_name: str) -> None:
+        _required_text(self.channel, f"{field_name}.channel")
+        _date(self.date, f"{field_name}.date")
+        _non_negative(self.daily_budget_rub, f"{field_name}.daily_budget_rub")
+        if self.status is not None:
+            self.status.validate(PREVIEW_STATUS_CODES, f"{field_name}.status")
+
+
+@dataclass(frozen=True)
+class GeoPointPreview:
+    geo: str
+    latitude: float
+    longitude: float
+    total_budget_rub: float
+    status: LifecycleStatus | None = None
+
+    def validate(self, field_name: str) -> None:
+        _required_text(self.geo, f"{field_name}.geo")
+        _finite(self.latitude, f"{field_name}.latitude")
+        _finite(self.longitude, f"{field_name}.longitude")
+        if not -90.0 <= float(self.latitude) <= 90.0:
+            raise LifecycleContractValidationError(
+                f"{field_name}.latitude must be between -90 and 90"
+            )
+        if not -180.0 <= float(self.longitude) <= 180.0:
+            raise LifecycleContractValidationError(
+                f"{field_name}.longitude must be between -180 and 180"
+            )
+        _non_negative(self.total_budget_rub, f"{field_name}.total_budget_rub")
+        if self.status is not None:
+            self.status.validate(PREVIEW_STATUS_CODES, f"{field_name}.status")
+
+
+@dataclass(frozen=True)
+class ValidationPreviewCheck:
+    code: str
+    status: str
+    display_text: str
+
+    def validate(self, field_name: str) -> None:
+        _code(self.code, f"{field_name}.code")
+        if self.status not in PREVIEW_STATUS_CODES:
+            raise LifecycleContractValidationError(
+                f"Unknown {field_name}.status: {self.status}"
+            )
+        _required_text(self.display_text, f"{field_name}.display_text")
+
+
+@dataclass(frozen=True)
+class ValidationPreview:
+    budget_by_channel: tuple[BudgetByChannelPreview, ...] | None = None
+    budget_by_geo: tuple[BudgetByGeoPreview, ...] | None = None
+    channel_flighting: tuple[ChannelFlightingPreview, ...] | None = None
+    geo_points: tuple[GeoPointPreview, ...] | None = None
+    checks: tuple[ValidationPreviewCheck, ...] | None = None
+
+    def validate(self, field_name: str) -> None:
+        collections = (
+            ("budget_by_channel", self.budget_by_channel),
+            ("budget_by_geo", self.budget_by_geo),
+            ("channel_flighting", self.channel_flighting),
+            ("geo_points", self.geo_points),
+            ("checks", self.checks),
+        )
+        for name, values in collections:
+            if values is None:
+                continue
+            for index, value in enumerate(values):
+                value.validate(f"{field_name}.{name}[{index}]")
+        if self.budget_by_channel is not None:
+            _unique(
+                tuple(row.channel for row in self.budget_by_channel),
+                f"{field_name}.budget_by_channel.channel",
+            )
+        if self.budget_by_geo is not None:
+            _unique(
+                tuple(row.geo for row in self.budget_by_geo),
+                f"{field_name}.budget_by_geo.geo",
+            )
+        if self.channel_flighting is not None:
+            _unique(
+                tuple((row.channel, row.date) for row in self.channel_flighting),
+                f"{field_name}.channel_flighting.channel_date",
+            )
+        if self.geo_points is not None:
+            _unique(
+                tuple(row.geo for row in self.geo_points),
+                f"{field_name}.geo_points.geo",
+            )
+        if self.checks is not None:
+            _unique(
+                tuple(row.code for row in self.checks),
+                f"{field_name}.checks.code",
+            )
 
 
 @dataclass(frozen=True)
@@ -681,6 +836,38 @@ class ValidationResultV1(_ContractMixin):
     blocking_errors: tuple[ValidationIssue, ...]
     warnings: tuple[ValidationIssue, ...]
     job_creation_allowed: bool
+    preview: ValidationPreview | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        for collection_name in ("blocking_errors", "warnings"):
+            for issue in payload.get(collection_name, ()):
+                for name in ("what", "why", "recommended_action"):
+                    if issue.get(name) is None:
+                        issue.pop(name, None)
+        preview = payload.get("preview")
+        if preview is None:
+            payload.pop("preview", None)
+        else:
+            for name in (
+                "budget_by_channel",
+                "budget_by_geo",
+                "channel_flighting",
+                "geo_points",
+                "checks",
+            ):
+                if preview.get(name) is None:
+                    preview.pop(name, None)
+            for name in (
+                "budget_by_channel",
+                "budget_by_geo",
+                "channel_flighting",
+                "geo_points",
+            ):
+                for row in preview.get(name, ()):
+                    if row.get("status") is None:
+                        row.pop("status", None)
+        return payload
 
     def validate(self) -> None:
         self._validate_header(VALIDATION_RESULT_CONTRACT)
@@ -714,6 +901,8 @@ class ValidationResultV1(_ContractMixin):
         _unique(campaign_ids, "campaigns.campaign_id")
         for index, campaign in enumerate(self.campaigns):
             campaign.validate(f"campaigns[{index}]")
+        if self.preview is not None:
+            self.preview.validate("preview")
         if self.totals is not None:
             self.totals.validate("totals")
             if self.campaigns:
@@ -735,6 +924,29 @@ class ValidationResultV1(_ContractMixin):
                     if abs(reported_total - campaign_total) > tolerance:
                         raise LifecycleContractValidationError(
                             f"totals.{name} does not match campaigns"
+                        )
+            if self.preview is not None:
+                preview_summaries = (
+                    ("budget_by_channel", self.preview.budget_by_channel),
+                    ("budget_by_geo", self.preview.budget_by_geo),
+                )
+                for name, rows in preview_summaries:
+                    if rows is None:
+                        continue
+                    preview_total = sum(row.total_budget_rub for row in rows)
+                    tolerance = max(1.0, abs(self.totals.model_input_budget_rub) * 1e-8)
+                    if abs(preview_total - self.totals.model_input_budget_rub) > tolerance:
+                        raise LifecycleContractValidationError(
+                            f"preview.{name} does not match normalized campaign budget"
+                        )
+                if self.preview.channel_flighting is not None:
+                    preview_total = sum(
+                        row.daily_budget_rub for row in self.preview.channel_flighting
+                    )
+                    tolerance = max(1.0, abs(self.totals.daily_budget_rub) * 1e-8)
+                    if abs(preview_total - self.totals.daily_budget_rub) > tolerance:
+                        raise LifecycleContractValidationError(
+                            "preview.channel_flighting does not match daily campaign budget"
                         )
         for index, issue in enumerate(self.blocking_errors):
             issue.validate(f"blocking_errors[{index}]")
@@ -762,9 +974,9 @@ class ValidationResultV1(_ContractMixin):
                 self.model_validation,
                 self.totals,
             )
-            if any(value is None for value in required) or not self.campaigns:
+            if any(value is None for value in required) or len(self.campaigns) != 1:
                 raise LifecycleContractValidationError(
-                    "valid validation requires completed artifacts, model, totals and campaigns"
+                    "valid validation requires completed artifacts, model, totals and exactly one campaign"
                 )
             if self.blocking_errors or not self.job_creation_allowed:
                 raise LifecycleContractValidationError(
@@ -1171,6 +1383,60 @@ def _campaign_preview_from_dict(payload: Mapping[str, Any]) -> CampaignPreview:
     return CampaignPreview(**data)
 
 
+def _optional_preview_status(payload: Any) -> LifecycleStatus | None:
+    return _status_from_dict(payload) if payload is not None else None
+
+
+def _validation_preview_from_dict(payload: Mapping[str, Any]) -> ValidationPreview:
+    data = dict(payload)
+    if data.get("budget_by_channel") is not None:
+        data["budget_by_channel"] = tuple(
+            BudgetByChannelPreview(
+                channel=str(item["channel"]),
+                total_budget_rub=float(item["total_budget_rub"]),
+                max_daily_budget_rub=float(item["max_daily_budget_rub"]),
+                status=_optional_preview_status(item.get("status")),
+            )
+            for item in data["budget_by_channel"]
+        )
+    if data.get("budget_by_geo") is not None:
+        data["budget_by_geo"] = tuple(
+            BudgetByGeoPreview(
+                geo=str(item["geo"]),
+                total_budget_rub=float(item["total_budget_rub"]),
+                max_daily_budget_rub=float(item["max_daily_budget_rub"]),
+                status=_optional_preview_status(item.get("status")),
+            )
+            for item in data["budget_by_geo"]
+        )
+    if data.get("channel_flighting") is not None:
+        data["channel_flighting"] = tuple(
+            ChannelFlightingPreview(
+                channel=str(item["channel"]),
+                date=str(item["date"]),
+                daily_budget_rub=float(item["daily_budget_rub"]),
+                status=_optional_preview_status(item.get("status")),
+            )
+            for item in data["channel_flighting"]
+        )
+    if data.get("geo_points") is not None:
+        data["geo_points"] = tuple(
+            GeoPointPreview(
+                geo=str(item["geo"]),
+                latitude=float(item["latitude"]),
+                longitude=float(item["longitude"]),
+                total_budget_rub=float(item["total_budget_rub"]),
+                status=_optional_preview_status(item.get("status")),
+            )
+            for item in data["geo_points"]
+        )
+    if data.get("checks") is not None:
+        data["checks"] = tuple(
+            ValidationPreviewCheck(**dict(item)) for item in data["checks"]
+        )
+    return ValidationPreview(**data)
+
+
 def _validation_result_from_dict(payload: Mapping[str, Any]) -> ValidationResultV1:
     data = dict(payload)
     data["status"] = _status_from_dict(data["status"])
@@ -1199,6 +1465,11 @@ def _validation_result_from_dict(payload: Mapping[str, Any]) -> ValidationResult
         data[name] = tuple(
             _validation_issue_from_dict(item) for item in data.get(name, ())
         )
+    data["preview"] = (
+        _validation_preview_from_dict(data["preview"])
+        if data.get("preview") is not None
+        else None
+    )
     return ValidationResultV1(**data)
 
 

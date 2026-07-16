@@ -1387,7 +1387,10 @@ def _validate_source_config(job: DecisionJobV1, config: Mapping[str, Any]) -> No
             category="model_policy",
             stage="prepare",
             retryable=False,
-            display_text="Registry channel в workflow config не совпадает с immutable job.",
+            display_text=(
+                "Выбранная версия модели не совпадает с версией, закрепленной "
+                "за расчетом."
+            ),
         )
     if configured_package not in {None, job.model_selector.package_id}:
         raise WorkerFailure(
@@ -1396,7 +1399,7 @@ def _validate_source_config(job: DecisionJobV1, config: Mapping[str, Any]) -> No
             category="model_policy",
             stage="prepare",
             retryable=False,
-            display_text="Model package в workflow config не совпадает с immutable job.",
+            display_text="Параметры расчета ссылаются на другую версию модели.",
         )
     scenario6 = ((config.get("optimizer") or {}).get("scenario_6") or {})
     if scenario6.get("enabled") is False:
@@ -1406,7 +1409,7 @@ def _validate_source_config(job: DecisionJobV1, config: Mapping[str, Any]) -> No
             category="input_validation",
             stage="prepare",
             retryable=False,
-            display_text="Полный forecast-optimizer job не может отключать Scenario 6.",
+            display_text="Для этого типа расчета требуется сценарий 6.",
         )
     expected = {
         "search_candidates": job.sampling.scenario6_attempt_budget,
@@ -1530,7 +1533,7 @@ def _verify_model_package(
             category="model_policy",
             stage="prepare",
             retryable=False,
-            display_text="Pinned model package не прошел registry integrity check.",
+            display_text="Не удалось подтвердить целостность выбранной версии модели.",
         ) from exc
     fingerprint = str(registration.get("package_input_fingerprint") or "")
     if fingerprint != job.model_selector.expected_package_fingerprint:
@@ -1540,7 +1543,10 @@ def _verify_model_package(
             category="model_policy",
             stage="prepare",
             retryable=False,
-            display_text="Fingerprint model package изменился или не совпадает с задачей.",
+            display_text=(
+                "Версия модели изменилась или не совпадает с версией, "
+                "закрепленной за расчетом."
+            ),
         )
     return VerifiedModel(
         package_id=str(resolved.get("package_id") or ""),

@@ -130,6 +130,11 @@
     "validationIssue": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "what": ["why", "recommended_action"],
+        "why": ["what", "recommended_action"],
+        "recommended_action": ["what", "why"]
+      },
       "required": [
         "code",
         "severity",
@@ -143,6 +148,9 @@
         "code": {"$ref": "#/$defs/stableCode"},
         "severity": {"enum": ["blocking", "warning"]},
         "display_text": {"type": "string", "minLength": 1},
+        "what": {"type": "string", "minLength": 1},
+        "why": {"type": "string", "minLength": 1},
+        "recommended_action": {"type": "string", "minLength": 1},
         "scope": {"enum": ["upload", "row", "campaign", "cell", "model"]},
         "recoverable": {"type": "boolean"},
         "source_row_ids": {
@@ -153,6 +161,96 @@
         "affected_cells": {
           "type": "array",
           "items": {"$ref": "#/$defs/affectedCell"}
+        }
+      }
+    },
+    "previewStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"enum": ["passed", "warning", "failed", "unavailable"]},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "budgetByChannelPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "total_budget_rub", "max_daily_budget_rub"],
+      "properties": {
+        "channel": {"type": "string", "minLength": 1},
+        "total_budget_rub": {"type": "number", "minimum": 0},
+        "max_daily_budget_rub": {"type": "number", "minimum": 0},
+        "status": {"$ref": "#/$defs/previewStatus"}
+      }
+    },
+    "budgetByGeoPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo", "total_budget_rub", "max_daily_budget_rub"],
+      "properties": {
+        "geo": {"type": "string", "minLength": 1},
+        "total_budget_rub": {"type": "number", "minimum": 0},
+        "max_daily_budget_rub": {"type": "number", "minimum": 0},
+        "status": {"$ref": "#/$defs/previewStatus"}
+      }
+    },
+    "channelFlightingPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "date", "daily_budget_rub"],
+      "properties": {
+        "channel": {"type": "string", "minLength": 1},
+        "date": {"type": "string", "format": "date"},
+        "daily_budget_rub": {"type": "number", "minimum": 0},
+        "status": {"$ref": "#/$defs/previewStatus"}
+      }
+    },
+    "geoPointPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo", "latitude", "longitude", "total_budget_rub"],
+      "properties": {
+        "geo": {"type": "string", "minLength": 1},
+        "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+        "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+        "total_budget_rub": {"type": "number", "minimum": 0},
+        "status": {"$ref": "#/$defs/previewStatus"}
+      }
+    },
+    "validationPreviewCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "status", "display_text"],
+      "properties": {
+        "code": {"$ref": "#/$defs/stableCode"},
+        "status": {"enum": ["passed", "warning", "failed", "unavailable"]},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "validationPreview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "budget_by_channel": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/budgetByChannelPreview"}
+        },
+        "budget_by_geo": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/budgetByGeoPreview"}
+        },
+        "channel_flighting": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/channelFlightingPreview"}
+        },
+        "geo_points": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/geoPointPreview"}
+        },
+        "checks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/validationPreviewCheck"}
         }
       }
     },
@@ -471,7 +569,8 @@
           "type": "array",
           "items": {"$ref": "#/$defs/validationIssue"}
         },
-        "job_creation_allowed": {"type": "boolean"}
+        "job_creation_allowed": {"type": "boolean"},
+        "preview": {"$ref": "#/$defs/validationPreview"}
       }
     },
     "decisionJob": {

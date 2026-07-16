@@ -30,6 +30,8 @@ from api.http_smoke import (  # noqa: E402
 from contracts.application_lifecycle_v1 import (  # noqa: E402
     DecisionJobV1,
     LifecycleStatus,
+    ValidationIssue,
+    ValidationResultV1,
     parse_lifecycle_contract,
 )
 from worker.execution_worker import ExecutionOutcome  # noqa: E402
@@ -140,6 +142,8 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.job_payload = payload
         self.job = parse_lifecycle_contract(payload)
         assert isinstance(self.job, DecisionJobV1)
+        self.validation = parse_lifecycle_contract(fixture["validations"][0])
+        assert isinstance(self.validation, ValidationResultV1)
         self.started = threading.Event()
         self.release = threading.Event()
         self.overview_started = threading.Event()
@@ -207,6 +211,7 @@ class HttpSmokeV1Test(unittest.TestCase):
             self.application._executor,
             self.application.submit_job,
         )
+        self.application.state.write_validation(self.validation)
         self.server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
             make_handler(self.application),
@@ -273,7 +278,7 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(listing["total"], 1)
         self.assertEqual(listing["items"][0]["job"]["job_id"], self.job.job_id)
-        self.assertEqual(listing["items"][0]["campaigns"], [])
+        self.assertEqual(len(listing["items"][0]["campaigns"]), 1)
 
         status, _, _ = self._request("GET", f"/api/v1/jobs/{self.job.job_id}/result")
         self.assertEqual(status, 404)
@@ -318,6 +323,33 @@ class HttpSmokeV1Test(unittest.TestCase):
         )
         self.assertEqual(status, 409)
         self.assertEqual(error["error"]["code"], "ARTIFACT_INTEGRITY_FAILED")
+
+    def test_direct_job_endpoint_cannot_bypass_one_campaign_validation(self) -> None:
+        invalid = replace(
+            self.validation,
+            status=LifecycleStatus("invalid", "План нельзя отправить в расчет"),
+            job_creation_allowed=False,
+            campaigns=(),
+            totals=None,
+            model=None,
+            normalized_plan=None,
+            daily_flighting=None,
+            model_validation=None,
+            blocking_errors=(
+                ValidationIssue(
+                    code="CAMPAIGN_COUNT_NOT_ONE",
+                    severity="blocking",
+                    display_text="Для расчета требуется ровно одна кампания.",
+                    scope="upload",
+                    recoverable=True,
+                ),
+            ),
+        )
+        invalid.validate()
+        self.application.state.write_validation(invalid)
+        status, error, _ = self._request("POST", "/api/v1/jobs", self.job_payload)
+        self.assertEqual(status, 422)
+        self.assertEqual(error["error"]["code"], "INVALID_JOB")
 
     def test_mirrored_journal_exposes_progress_without_paths(self) -> None:
         self.application.state.create_job(self.job, "f" * 64)
@@ -365,13 +397,30 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(passport["contract_name"], "model_passport_v1")
 
+        status, profile, _ = self._request("GET", "/api/v1/calculation-profile")
+        self.assertEqual(status, 200)
+        self.assertEqual(profile["contract_name"], "calculation_profile_v1")
+        self.assertEqual(profile["scenario6_attempt_budget"], 2048)
+        self.assertEqual(
+            profile["model_version_label"],
+            passport["serving"]["display_name"],
+        )
+
+        status, template, headers = self._request(
+            "GET",
+            "/api/v1/templates/campaign-plan.xlsx",
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(template.startswith(b"PK"))
+        self.assertIn("campaign-plan-template.xlsx", headers["Content-Disposition"])
+
         status, catalog, _ = self._request("GET", "/api/v1/meta/errors")
         self.assertEqual(status, 200)
         self.assertEqual(catalog["contract_name"], "http_error_catalog_v1")
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.1.0")
+        self.assertEqual(openapi["info"]["version"], "1.2.1")
         for contract in (
             "application-lifecycle-v1",
             "decision-result-v1",
@@ -400,6 +449,35 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(error["error"]["code"], "INVALID_QUERY")
         self.assertIn("user_action", error["error"])
+
+    def test_calculation_profile_unavailable_messages_are_user_facing(self) -> None:
+        campaign_service = self.application.campaign_service
+        model_passport = self.application.model_passport
+        try:
+            self.application.campaign_service = None
+            status, error, _ = self._request("GET", "/api/v1/calculation-profile")
+            self.assertEqual(status, 503)
+            self.assertEqual(error["error"]["code"], "UPLOAD_SERVICE_DISABLED")
+            self.assertEqual(
+                error["error"]["display_text"],
+                "Параметры расчета временно недоступны.",
+            )
+
+            self.application.campaign_service = campaign_service
+            self.application.model_passport = None
+            status, error, _ = self._request("GET", "/api/v1/calculation-profile")
+            self.assertEqual(status, 503)
+            self.assertEqual(
+                error["error"]["code"],
+                "MODEL_PASSPORT_UNAVAILABLE",
+            )
+            self.assertEqual(
+                error["error"]["display_text"],
+                "Сведения об активной модели временно недоступны.",
+            )
+        finally:
+            self.application.campaign_service = campaign_service
+            self.application.model_passport = model_passport
 
     def test_multipart_upload_parse_and_invalid_validation_are_fail_closed(self) -> None:
         boundary = "----x5-http-upload-boundary"
@@ -487,6 +565,9 @@ class HttpSmokeRecoveryTest(unittest.TestCase):
         parsed = parse_lifecycle_contract(payload)
         assert isinstance(parsed, DecisionJobV1)
         self.job = parsed
+        validation = parse_lifecycle_contract(fixture["validations"][0])
+        assert isinstance(validation, ValidationResultV1)
+        self.validation = validation
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -561,6 +642,7 @@ class HttpSmokeRecoveryTest(unittest.TestCase):
             worker_factory=lambda *_: _FailingRunner(),
         )
         try:
+            application.state.write_validation(self.validation)
             application.submit_job(self.job.to_dict())
             deadline = time.monotonic() + 2
             while time.monotonic() < deadline:

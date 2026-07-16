@@ -222,7 +222,10 @@ def build_model_passport(
     blockers = [
         {
             "code": str(code),
-            "display_text": blocker_text.get(str(code), "Ограничение model package требует проверки."),
+            "display_text": blocker_text.get(
+                str(code),
+                "Ограничение качества активной модели требует проверки.",
+            ),
         }
         for code in manifest.get("production_blockers") or []
     ]

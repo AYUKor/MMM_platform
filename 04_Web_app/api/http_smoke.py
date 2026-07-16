@@ -49,6 +49,7 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
 )
 from contracts.product_api_v1 import (  # noqa: E402
     HTTP_ERROR_CATALOG,
+    build_calculation_profile_payload,
     build_error_catalog_payload,
     load_openapi_document,
     validate_model_passport,
@@ -64,11 +65,15 @@ from services.local_campaign_service import (  # noqa: E402
     LocalCampaignService,
     LocalCampaignServiceSettings,
 )
+from services.campaign_template import (  # noqa: E402
+    TEMPLATE_FILENAME,
+    build_campaign_plan_template,
+)
 from services.product_api_service import paginate_jobs  # noqa: E402
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.2.0"
+SERVER_VERSION = "0.3.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
     r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|errors|result|overview|cancel))?$"
@@ -168,6 +173,7 @@ class HttpSmokeSettings:
     public_base_url: str | None = None
     access_control_mode: str = "local_only"
     retention_days: int = 30
+    calculation_profile_label: str = "Стандартный расчет"
     allowed_origins: tuple[str, ...] = (
         "http://localhost:4173",
         "http://127.0.0.1:4173",
@@ -178,6 +184,8 @@ class HttpSmokeSettings:
     def validate(self) -> None:
         if self.timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if not self.calculation_profile_label.strip():
+            raise ValueError("calculation_profile_label is required")
         if self.max_workers <= 0:
             raise ValueError("max_workers must be positive")
         if self.max_upload_bytes <= 0:
@@ -459,7 +467,7 @@ class LocalApiState:
                 path,
                 {
                     "code": "HTTP_SMOKE_BACKGROUND_FAILURE",
-                    "display_text": "Локальный backend не смог завершить фоновую обработку.",
+                    "display_text": "Не удалось завершить фоновую обработку.",
                 },
             )
 
@@ -540,8 +548,8 @@ class LocalApiState:
                     category="infrastructure",
                     retryable=True,
                     display_text=(
-                        "Локальный backend был перезапущен во время расчета. "
-                        "Запустите кампанию повторно из завершенной validation."
+                        "Сервис был перезапущен во время расчета. Запустите расчет "
+                        "повторно со страницы проверенного плана."
                     ),
                     actor_type="system",
                     terminal_display_text="Расчет прерван перезапуском",
@@ -572,7 +580,7 @@ class LocalApiState:
                 retryable=True,
                 display_text=display_text,
                 actor_type="system",
-                terminal_display_text="Техническая ошибка backend",
+                terminal_display_text="Техническая ошибка сервиса",
             )
             return True
 
@@ -619,7 +627,7 @@ class LocalApiState:
                 from_status_code="queued",
                 to_status=LifecycleStatus("running", "Выполняется"),
                 reason_code=None,
-                display_text="Backend принял фоновую задачу в обработку.",
+                display_text="Задача передана на выполнение.",
             )
             started_event.validate()
             events.append(started_event.to_dict())
@@ -811,10 +819,46 @@ class HttpSmokeApplication:
             raise LifecycleContractValidationError("POST /jobs requires decision_job_v1")
         if parsed.status.code != "queued":
             raise LifecycleContractValidationError("POST /jobs accepts only queued jobs")
+        self._verify_job_validation(parsed)
         record, created = self.state.create_job(parsed, _json_sha256(payload))
         if created:
             self._dispatch_job(parsed)
         return record, created
+
+    def _verify_job_validation(self, job: DecisionJobV1) -> None:
+        """Prevent the technical job endpoint from bypassing campaign validation."""
+
+        try:
+            payload = self.state.read_validation(job.validation_id)
+        except FileNotFoundError as exc:
+            raise LifecycleContractValidationError(
+                "Job references a validation that does not exist"
+            ) from exc
+        validation = parse_lifecycle_contract(payload)
+        if (
+            not isinstance(validation, ValidationResultV1)
+            or validation.status.code != "valid"
+            or not validation.job_creation_allowed
+            or len(validation.campaigns) != 1
+        ):
+            raise LifecycleContractValidationError(
+                "Job requires a valid one-campaign validation"
+            )
+        if validation.upload_id != job.upload_id:
+            raise LifecycleContractValidationError(
+                "Job upload_id does not match its validation"
+            )
+        if validation.normalized_plan is None or validation.daily_flighting is None:
+            raise LifecycleContractValidationError(
+                "Validated campaign artifacts are missing"
+            )
+        if (
+            validation.normalized_plan.sha256 != job.normalized_plan.sha256
+            or validation.daily_flighting.sha256 != job.daily_flighting.sha256
+        ):
+            raise LifecycleContractValidationError(
+                "Job campaign artifacts do not match its validation"
+            )
 
     def _dispatch_job(self, job: DecisionJobV1) -> None:
         cancel_event = threading.Event()
@@ -850,7 +894,7 @@ class HttpSmokeApplication:
                 job.job_id,
                 code="HTTP_BACKGROUND_FAILURE",
                 display_text=(
-                    "Backend не смог завершить фоновую обработку. "
+                    "Не удалось завершить фоновую обработку. "
                     "Попробуйте повторить расчет после технической проверки."
                 ),
             )
@@ -1002,6 +1046,25 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             self._common_headers()
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _binary(
+            self,
+            status: HTTPStatus,
+            body: bytes,
+            *,
+            media_type: str,
+            filename: str,
+        ) -> None:
+            self.send_response(status.value)
+            self._common_headers()
+            self.send_header("Content-Type", media_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header(
+                "Content-Disposition",
+                f"attachment; filename={json.dumps(filename)}",
+            )
             self.end_headers()
             self.wfile.write(body)
 
@@ -1204,6 +1267,17 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if path == "/api/v1/openapi.json":
                 self._json(HTTPStatus.OK, load_openapi_document())
                 return
+            if path == "/api/v1/templates/campaign-plan.xlsx":
+                self._binary(
+                    HTTPStatus.OK,
+                    build_campaign_plan_template(),
+                    media_type=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    ),
+                    filename=TEMPLATE_FILENAME,
+                )
+                return
             schema_match = _SCHEMA_PATH_RE.fullmatch(path)
             if schema_match:
                 schema_path = _CONTRACT_SCHEMA_FILES.get(schema_match.group("contract_name"))
@@ -1228,6 +1302,33 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     )
                     return
                 self._json(HTTPStatus.OK, application.model_passport)
+                return
+            if path == "/api/v1/calculation-profile":
+                if application.campaign_service is None:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "UPLOAD_SERVICE_DISABLED",
+                        "Параметры расчета временно недоступны.",
+                    )
+                    return
+                if application.model_passport is None:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "MODEL_PASSPORT_UNAVAILABLE",
+                        "Сведения об активной модели временно недоступны.",
+                    )
+                    return
+                serving = application.model_passport["serving"]
+                self._json(
+                    HTTPStatus.OK,
+                    build_calculation_profile_payload(
+                        scenario6_attempt_budget=(
+                            application.campaign_service.settings.default_sampling.scenario6_attempt_budget
+                        ),
+                        profile_label=application.settings.calculation_profile_label,
+                        model_version_label=str(serving["display_name"]),
+                    ),
+                )
                 return
             if path == "/api/v1/jobs":
                 jobs = application.state.list_jobs()
