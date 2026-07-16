@@ -1,126 +1,161 @@
-import { useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { JobProgressView } from "../features/job-progress/JobProgressView";
 import {
-  cancelJob,
-  getJob,
-  getJobErrors,
-  getJobProgress,
-} from "../shared/api/lifecycle-client";
+  isTerminalJobStatus,
+  selectFactForJob,
+} from "../features/job-progress/jobProgressModel";
+import progressStyles from "../features/job-progress/job-progress.module.css";
+import {
+  getJobProgressView,
+  getMmmFacts,
+  JobProgressInconsistentError,
+  JobProgressNotFoundError,
+  UnsupportedJobProgressContractError,
+} from "../shared/api/job-progress-client";
+import { cancelJob } from "../shared/api/lifecycle-client";
 import { Button } from "../shared/ui/Button";
-import { ErrorState } from "../shared/ui/ErrorState";
-import { LoadingSkeleton } from "../shared/ui/LoadingSkeleton";
-import { StatusBadge } from "../shared/ui/StatusBadge";
-import styles from "./lifecycle.module.css";
 
-const terminalStatuses = new Set(["succeeded", "failed", "cancelled", "timed_out"]);
+interface InitialStateCopy {
+  title: string;
+  description: string;
+  retryLabel: string | null;
+}
+
+function initialStateCopy(error: unknown): InitialStateCopy {
+  if (error instanceof JobProgressNotFoundError) {
+    return {
+      title: "Расчет не найден",
+      description: "Проверьте адрес или вернитесь к списку расчетов.",
+      retryLabel: null,
+    };
+  }
+  if (error instanceof JobProgressInconsistentError) {
+    return {
+      title: "Состояние расчета временно не согласовано",
+      description: "Данные обновляются. Запросите сведения еще раз через несколько секунд.",
+      retryLabel: "Обновить сведения",
+    };
+  }
+  if (error instanceof UnsupportedJobProgressContractError) {
+    return {
+      title: "Формат сведений не поддерживается",
+      description: "Версия интерфейса не может безопасно показать полученные данные.",
+      retryLabel: "Повторить",
+    };
+  }
+  return {
+    title: "Не удалось обновить сведения о расчете",
+    description: "Проверьте соединение и повторите попытку.",
+    retryLabel: "Повторить",
+  };
+}
+
+function ProgressPageState({
+  copy,
+  onRetry,
+}: {
+  copy: InitialStateCopy;
+  onRetry: () => void;
+}) {
+  return (
+    <section className={progressStyles.pageState} role="alert">
+      <span className={progressStyles.eyebrow}>Ход расчета</span>
+      <h1>{copy.title}</h1>
+      <p>{copy.description}</p>
+      <div className={progressStyles.pageStateActions}>
+        {copy.retryLabel ? <Button onClick={onRetry}>{copy.retryLabel}</Button> : null}
+        <Link className={progressStyles.secondaryLink} to="/calculations">Все расчеты</Link>
+      </div>
+    </section>
+  );
+}
 
 export function JobProgressPage() {
   const { id = "" } = useParams();
-  const navigate = useNavigate();
-  const jobQuery = useQuery({
-    queryKey: ["job", id],
-    queryFn: () => getJob(id),
-    enabled: Boolean(id),
-    refetchInterval: (query) =>
-      terminalStatuses.has(query.state.data?.status.code ?? "") ? false : 1000,
-  });
   const progressQuery = useQuery({
-    queryKey: ["job-progress", id],
-    queryFn: () => getJobProgress(id),
+    queryKey: ["job-progress-view", id],
+    queryFn: ({ signal }) => getJobProgressView(id, signal),
     enabled: Boolean(id),
-    refetchInterval: jobQuery.data && terminalStatuses.has(jobQuery.data.status.code) ? false : 1000,
+    retry: false,
+    staleTime: 0,
+    refetchInterval: (query) => {
+      const status = query.state.data?.job_status.code;
+      if (!status || isTerminalJobStatus(status)) return false;
+      return ["queued", "running", "cancel_requested"].includes(status) ? 1_500 : false;
+    },
+    refetchIntervalInBackground: false,
   });
-  const failed = jobQuery.data?.status.code === "failed" || jobQuery.data?.status.code === "timed_out";
-  const errorsQuery = useQuery({
-    queryKey: ["job-errors", id],
-    queryFn: () => getJobErrors(id),
-    enabled: Boolean(id) && failed,
+  const factsQuery = useQuery({
+    queryKey: ["mmm-facts-v1"],
+    queryFn: ({ signal }) => getMmmFacts(signal),
+    retry: false,
+    staleTime: Number.POSITIVE_INFINITY,
   });
   const cancelMutation = useMutation({
     mutationFn: () => cancelJob(id),
-    onSuccess: () => jobQuery.refetch(),
+    onSuccess: async () => {
+      await progressQuery.refetch();
+    },
   });
 
-  useEffect(() => {
-    if (jobQuery.data?.status.code !== "succeeded") return;
-    const timer = window.setTimeout(
-      () => navigate(`/calculations/${id}/result`, { replace: true }),
-      900,
+  if (!id) {
+    return (
+      <ProgressPageState
+        copy={initialStateCopy(new JobProgressNotFoundError())}
+        onRetry={() => undefined}
+      />
     );
-    return () => window.clearTimeout(timer);
-  }, [id, jobQuery.data?.status.code, navigate]);
-
-  if (jobQuery.isLoading) return <LoadingSkeleton />;
-  if (jobQuery.isError || !jobQuery.data) {
-    return <ErrorState title="Расчет не найден" description={jobQuery.error instanceof Error ? jobQuery.error.message : "Backend не вернул job."} />;
   }
 
-  const job = jobQuery.data;
-  const events = progressQuery.data ?? [];
-  const latest = events.at(-1);
-  const percent = latest?.percent_complete ?? (job.status.code === "succeeded" ? 100 : 0);
-  const cancellable = ["queued", "running"].includes(job.status.code);
+  if (progressQuery.isPending && !progressQuery.data) {
+    return (
+      <div className={progressStyles.loadingPage} aria-live="polite" aria-busy="true">
+        <span aria-hidden="true" />
+        <p>Получаем сведения о расчете…</p>
+      </div>
+    );
+  }
+
+  if (!progressQuery.data) {
+    return (
+      <ProgressPageState
+        copy={initialStateCopy(progressQuery.error)}
+        onRetry={() => {
+          void progressQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  const refreshNotice = progressQuery.error
+    ? {
+        description: progressQuery.error instanceof JobProgressInconsistentError
+          ? "Состояние расчета временно не согласовано. Последние полученные сведения сохранены."
+          : progressQuery.error instanceof UnsupportedJobProgressContractError
+            ? "Получен неподдерживаемый формат. Последние полученные сведения сохранены."
+            : "Не удалось обновить сведения о расчете. Последние полученные сведения сохранены.",
+        actionLabel: progressQuery.error instanceof JobProgressInconsistentError
+          ? "Обновить сведения"
+          : "Повторить",
+      }
+    : null;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.pageHeader}>
-        <div>
-          <span className={styles.eyebrow}>Расчет кампании</span>
-          <h1>{job.status.display_text}</h1>
-          <p className={styles.muted}>{latest?.display_text ?? "Задача поставлена в очередь"}</p>
-        </div>
-        <StatusBadge tone={failed ? "danger" : job.status.code === "succeeded" ? "accent" : "warning"}>
-          {job.status.display_text}
-        </StatusBadge>
-      </header>
-
-      <section className={styles.progressPanel} aria-live="polite">
-        <div className={styles.progressValue}>
-          <div>
-            <span className={styles.eyebrow}>{latest?.stage ?? "prepare"}</span>
-            <p className={styles.muted}>{latest?.phase ?? "waiting"}</p>
-          </div>
-          <strong>{Math.round(percent)}%</strong>
-        </div>
-        <div className={styles.progressTrack} aria-label={`Готово ${Math.round(percent)}%`}>
-          <span style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
-        </div>
-        <div className={styles.headerActions}>
-          {cancellable ? (
-            <Button disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate()}>
-              {cancelMutation.isPending ? "Отменяем..." : "Отменить расчет"}
-            </Button>
-          ) : null}
-          {job.status.code === "succeeded" ? (
-            <Button variant="primary" onClick={() => navigate(`/calculations/${id}/result`)}>
-              Открыть результат
-            </Button>
-          ) : null}
-          <Link className={styles.textLink} to="/calculations">Все расчеты</Link>
-        </div>
-      </section>
-
-      {errorsQuery.data?.length ? (
-        <div className={styles.errorBox} role="alert">
-          {errorsQuery.data.at(-1)?.display_text}
-        </div>
-      ) : null}
-
-      <section>
-        <div className={styles.validationHeader}>
-          <div><span className={styles.eyebrow}>Progress events</span><h2>Ход расчета</h2></div>
-        </div>
-        <ol className={styles.timeline}>
-          {events.map((event) => (
-            <li key={event.progress_event_id}>
-              <time>{new Date(event.emitted_at_utc).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
-              <p>{event.display_text}</p>
-              <span>{event.percent_complete == null ? "" : `${Math.round(event.percent_complete)}%`}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-    </div>
+    <JobProgressView
+      view={progressQuery.data}
+      fact={selectFactForJob(factsQuery.data, id)}
+      refreshNotice={refreshNotice}
+      onRefresh={() => {
+        void progressQuery.refetch();
+      }}
+      onCancel={async () => {
+        await cancelMutation.mutateAsync();
+      }}
+      cancelPending={cancelMutation.isPending}
+      cancelError={cancelMutation.isError
+        ? "Не удалось отправить запрос на отмену. Повторите попытку."
+        : null}
+    />
   );
 }
