@@ -85,7 +85,10 @@ Runtime-данные находятся в игнорируемой Git папк
 | История | `GET /api/v1/jobs` | jobs с campaign preview из validation |
 | Статус | `GET /api/v1/jobs/{job_id}` | lifecycle job status |
 | Прогресс | `GET /api/v1/jobs/{job_id}/progress` | browser-safe progress events |
+| Экран процесса | `GET /api/v1/jobs/{job_id}/progress-view` | `JobProgressView v1` |
 | Экран результата | `GET /api/v1/jobs/{job_id}/overview` | `ResultOverview v1` |
+| Product result | `GET /api/v1/jobs/{job_id}/result-view` | `JobResultView v1` для четырех вкладок |
+| Медиаплан сценария | `GET /api/v1/jobs/{job_id}/media-plan?scenario_id=S06` | paginated `ScenarioMediaPlan v1` |
 | Полный результат | `GET /api/v1/jobs/{job_id}/result` | `DecisionResult v1` |
 | Excel | `GET /api/v1/artifacts/{artifact_id}/download` | hash-checked файл |
 

@@ -86,9 +86,15 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/models/active", document["paths"])
         self.assertIn("/api/v1/calculation-profile", document["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", document["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/result-view", document["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/media-plan", document["paths"])
         self.assertIn("/api/v1/meta/mmm-facts", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
+        self.assertEqual(document["info"]["version"], "1.4.0")
+        error_codes = {row["code"] for row in catalog["errors"]}
+        self.assertIn("RESULT_VIEW_INCONSISTENT", error_codes)
+        self.assertIn("MEDIA_PLAN_QUERY_UNSUPPORTED", error_codes)
 
     def test_job_pagination_and_filter_are_deterministic(self) -> None:
         records = [

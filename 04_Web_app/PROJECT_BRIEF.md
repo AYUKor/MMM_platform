@@ -4,11 +4,12 @@
 
 Working local product foundation and research-pilot backend contract.
 The folder contains implemented DecisionResult v1, ResultOverview v1,
-application lifecycle v1 and Product API v1.1 contracts, the completed-result
+application lifecycle v1 and Product API v1 contracts, the completed-result
 adapter, local Execution Worker v1, localhost HTTP API, marketer
 upload/validation service, model passport, runtime launcher/recovery and
 retention, research-pilot deployment tooling, source-only tests, canonical
-architecture documents, the browser-safe JobProgressView v1 backend contract,
+architecture documents, the browser-safe JobProgressView v1,
+JobResultView v1 and ScenarioMediaPlan v1 backend contracts,
 and the merged
 Phase 2 React product-result frontend. The browser includes campaign result,
 Scenarios 1-6, reliability, warning, media-plan and report views. The
@@ -22,6 +23,14 @@ object storage or corporate authentication. The
 previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
+
+Backend Phase C adds additive `GET /api/v1/jobs/{job_id}/result-view` and
+`GET /api/v1/jobs/{job_id}/media-plan`. They provide canonical recommendation,
+S01-S06 metrics, source-backed ranks, backend budget aggregates, hash-checked
+report metadata and paginated `geo x channel` scenario plans. The new
+projections explicitly keep reliability score, average-basket delta, daily
+scenario plans, map coordinates and working-plan XLSX unavailable until real
+versioned evidence exists.
 
 ## Product Purpose
 

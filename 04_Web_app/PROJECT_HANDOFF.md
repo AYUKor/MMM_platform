@@ -14,17 +14,22 @@ As of 2026-07-16:
 - DecisionResult v1 and its completed-result adapter are implemented under `04_Web_app`;
 - application lifecycle v1 now defines upload, validation, immutable jobs,
   legal transitions, progress, and browser-safe errors;
-- backend Phase B adds `job_progress_view_v1`: one browser-safe snapshot with
+- backend Phase B added `job_progress_view_v1`: one browser-safe snapshot with
   queue state, one-campaign context, fixed P01-P09 stages, real Scenario 6
-  counters, report publication and actionable errors. Frontend Phase B is not
-  implemented in this backend branch;
+  counters, report publication and actionable errors. Frontend Phase B is
+  merged in PR #16 and consumes this contract;
+- backend Phase C adds `job_result_view_v1` and `scenario_media_plan_v1` for
+  canonical recommendation, S01-S06 metrics, source-backed ranks, honest
+  reliability availability, backend budget aggregates, scenario plan rows and
+  real report metadata. Its dedicated frontend integration follows after this
+  backend PR;
 - local Execution Worker v1 now verifies immutable inputs and package/policy
   pins, launches the existing optimizer/report CLI in a subprocess, publishes
   lifecycle progress, and composes DecisionResult with the original `job_id`;
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
-- Product API v1.1 now adds readiness, a verified target-grain model passport,
+- Product API v1 with OpenAPI `1.4.0` provides readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
 - Research Pilot Deployment v1 now packages the registered serving inventory
@@ -42,11 +47,10 @@ As of 2026-07-16:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current Phase B branch starts from `origin/main@766fe1b`, which includes
-  merged PRs through #14 and frontend Phase A. The earlier combined source and
-  real localhost acceptance remains recorded in ADR 0016; Phase B adds only
-  the backend progress contract and requires a new frontend integration after
-  review;
+- current Backend Phase C branch starts from
+  `origin/main@72b236f81d2d7a16845a2ea6dae8095f064bbb19`, which includes merged
+  PRs through #16 and frontend Phase B. Phase C changes only additive backend
+  result projections, generated contract types, tests and documentation;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -428,6 +432,14 @@ Each item is a separate reviewable milestone:
     separate report publication, expose only real Scenario 6 counters and keep
     unknown safe/blocked counts as `null`. See ADR 0017. The next frontend PR
     should consume this endpoint without reconstructing worker phases.
+14. Backend Phase C implemented for review: publish additive
+    `job_result_view_v1` and `scenario_media_plan_v1`; preserve `/result` and
+    `/overview`; expose canonical recommendation, S01-S06 metric availability,
+    artifact-backed safe/raw ranks, reliability components without a fake
+    score, backend channel/geo/geo-channel aggregates, paginated scenario
+    allocations and real marketer-report metadata. See ADR 0018. The next
+    frontend Phase C PR should consume these endpoints instead of selecting a
+    winner, calculating ranks/reliability or aggregating plan rows in React.
 14. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
