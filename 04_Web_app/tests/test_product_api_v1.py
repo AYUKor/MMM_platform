@@ -85,6 +85,8 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertEqual(document["openapi"], "3.1.0")
         self.assertIn("/api/v1/models/active", document["paths"])
         self.assertIn("/api/v1/calculation-profile", document["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/progress-view", document["paths"])
+        self.assertIn("/api/v1/meta/mmm-facts", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
 

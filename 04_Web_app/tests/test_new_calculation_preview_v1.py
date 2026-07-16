@@ -362,6 +362,7 @@ class NewCalculationPreviewV1Test(unittest.TestCase):
         paths = (
             WEB_APP_DIR / "api" / "http_smoke.py",
             WEB_APP_DIR / "services" / "local_campaign_service.py",
+            WEB_APP_DIR / "services" / "job_progress_view.py",
             WEB_APP_DIR / "services" / "product_api_service.py",
             WEB_APP_DIR / "worker" / "execution_worker.py",
         )

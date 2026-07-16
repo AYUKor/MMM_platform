@@ -21,6 +21,7 @@ from worker import (  # noqa: E402
     LocalArtifactStore,
     VerifiedModel,
 )
+from services.job_progress_view import build_job_progress_view  # noqa: E402
 
 
 FIXTURE_PATH = (
@@ -124,6 +125,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--config', required=True)
 args = parser.parse_args()
 config = json.loads(Path(args.config).read_text(encoding='utf-8'))
+scenario6 = config['optimizer']['scenario_6']
 mode = config.get('synthetic_test_mode', 'success')
 if mode == 'sleep':
     time.sleep(5)
@@ -136,14 +138,13 @@ events = []
 for campaign_index, campaign in enumerate(('Synthetic A', 'Synthetic B'), start=1):
     events.extend([
         {'event': 'optimizer_progress', 'phase': 'candidate_generation', 'campaign': campaign, 'campaign_index': campaign_index, 'campaigns_total': 2},
-        {'event': 'optimizer_progress', 'phase': 'adaptive_search_complete', 'campaign': campaign, 'search_attempts_evaluated_n': 12, 'search_max_evaluations_n': 20},
+        {'event': 'optimizer_progress', 'phase': 'adaptive_search_complete', 'campaign': campaign, 'search_attempts_evaluated_n': 12, 'search_max_evaluations_n': scenario6['search_candidates']},
         {'event': 'optimizer_progress', 'phase': 'search_scoring', 'campaign': campaign, 'candidates_to_score': 8},
         {'event': 'optimizer_progress', 'phase': 'finalist_scoring_complete', 'campaign': campaign, 'finalists_scored': 3},
     ])
 for event in events:
     print(json.dumps(event), flush=True)
 context = config['worker_execution']
-scenario6 = config['optimizer']['scenario_6']
 optimizer_policy = Path(config['decision_policy_file'])
 business_policy = Path(config['objective']['business_threshold_policy'])
 sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -313,6 +314,11 @@ run_card = {
             "report",
         ):
             self.assertIn(expected_stage, stages)
+        first_report_index = stages.index("report")
+        last_final_scoring_index = max(
+            index for index, stage in enumerate(stages) if stage == "final_scoring"
+        )
+        self.assertGreater(first_report_index, last_final_scoring_index)
         sequences = [event.sequence for event in outcome.job_events + outcome.progress_events]
         self.assertEqual(len(sequences), len(set(sequences)))
         percentages = [event.percent_complete for event in outcome.progress_events]
@@ -323,6 +329,44 @@ run_card = {
             if event.stage == "final_scoring"
         ]
         self.assertEqual(final_scoring, [55.0, 90.0])
+        scenario6_events = [
+            event for event in outcome.progress_events if event.stage == "scenario6"
+        ]
+        self.assertEqual(len(scenario6_events), 2)
+        for event in scenario6_events:
+            attempt_counter = next(
+                counter for counter in event.counters if counter.name == "attempts"
+            )
+            self.assertEqual(attempt_counter.current, 12)
+            self.assertEqual(
+                attempt_counter.total,
+                job["sampling"]["scenario6_attempt_budget"],
+            )
+
+        running_job = copy.deepcopy(job)
+        running_job.update(
+            {
+                "status": {"code": "running", "display_text": "Выполняется"},
+                "started_at_utc": outcome.final_job.started_at_utc,
+                "finished_at_utc": None,
+                "attempt_number": 1,
+                "result_id": None,
+            }
+        )
+        validation = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))["validations"][0]
+        progress_view = build_job_progress_view(
+            job_payload=running_job,
+            validation_payload=validation,
+            progress_payloads=[event.to_dict() for event in outcome.progress_events],
+            error_payloads=[],
+            result_payload=None,
+            queue_position=None,
+            queued_jobs_total=0,
+        ).to_dict()
+        self.assertEqual(progress_view["current_stage_id"], "P09")
+        self.assertEqual(progress_view["scenario6"]["attempts_checked"], 12)
+        self.assertIsNone(progress_view["scenario6"]["safe_candidates"])
+        self.assertFalse(progress_view["result_available"])
         self.assertEqual(_sha256(source_config_path), source_hash_before)
         execution_config = json.loads(
             (outcome.attempt_root / "config" / "execution_config.json").read_text(

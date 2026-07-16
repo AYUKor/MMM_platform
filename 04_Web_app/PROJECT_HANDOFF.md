@@ -14,6 +14,10 @@ As of 2026-07-16:
 - DecisionResult v1 and its completed-result adapter are implemented under `04_Web_app`;
 - application lifecycle v1 now defines upload, validation, immutable jobs,
   legal transitions, progress, and browser-safe errors;
+- backend Phase B adds `job_progress_view_v1`: one browser-safe snapshot with
+  queue state, one-campaign context, fixed P01-P09 stages, real Scenario 6
+  counters, report publication and actionable errors. Frontend Phase B is not
+  implemented in this backend branch;
 - local Execution Worker v1 now verifies immutable inputs and package/policy
   pins, launches the existing optimizer/report CLI in a subprocess, publishes
   lifecycle progress, and composes DecisionResult with the original `job_id`;
@@ -38,11 +42,11 @@ As of 2026-07-16:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current `main` through PR #11 has passed a combined post-merge source and
-  real localhost acceptance; the release-candidate fixes sparse target
-  counters, makes Playwright HTTP mode self-contained, and keeps the
-  real-package campaign-service test valid for a panel-free serving bundle
-  without weakening registry or clean-source guardrails. See ADR 0016;
+- current Phase B branch starts from `origin/main@766fe1b`, which includes
+  merged PRs through #14 and frontend Phase A. The earlier combined source and
+  real localhost acceptance remains recorded in ADR 0016; Phase B adds only
+  the backend progress contract and requires a new frontend integration after
+  review;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -419,7 +423,12 @@ Each item is a separate reviewable milestone:
     remove Playwright's dependency on ambient `VITE_*` variables; make the
     real-package service fixture explicitly exercise panel-free
     `serving_bundle` verification. See ADR 0016.
-13. When company-contour or multi-node scale is approved, replace file-backed
+13. Backend Phase B implemented for review: publish additive
+    `job_progress_view_v1` and `mmm_fact_catalog_v1`, preserve raw progress,
+    separate report publication, expose only real Scenario 6 counters and keep
+    unknown safe/blocked counts as `null`. See ADR 0017. The next frontend PR
+    should consume this endpoint without reconstructing worker phases.
+14. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 

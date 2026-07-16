@@ -8,7 +8,8 @@ application lifecycle v1 and Product API v1.1 contracts, the completed-result
 adapter, local Execution Worker v1, localhost HTTP API, marketer
 upload/validation service, model passport, runtime launcher/recovery and
 retention, research-pilot deployment tooling, source-only tests, canonical
-architecture documents and the merged
+architecture documents, the browser-safe JobProgressView v1 backend contract,
+and the merged
 Phase 2 React product-result frontend. The browser includes campaign result,
 Scenarios 1-6, reliability, warning, media-plan and report views. The
 standalone Model Passport route is connected to
@@ -42,7 +43,10 @@ or browser contracts.
 The backend has an asynchronous HTTP boundary for immutable jobs, progress
 polling, verified results and artifact downloads. Product API v1.1 additionally
 publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
-and paginated history. The Python process remains loopback-only in both local
+and paginated history. Phase B adds a fixed nine-stage `progress-view`, real
+Scenario 6 counters where available, a separate report status and a reviewed
+static MMM fact catalog. The frontend progress-page integration remains a
+separate milestone. The Python process remains loopback-only in both local
 and research profiles; a research server must place HTTPS/auth at a reverse
 proxy.
 

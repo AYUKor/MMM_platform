@@ -25,6 +25,16 @@ const contracts = [
     typeName: "ProductApiV1",
     output: "product-api-v1.ts",
   },
+  {
+    schema: "job_progress_view_v1.schema.json",
+    typeName: "JobProgressViewV1",
+    output: "job-progress-view-v1.ts",
+  },
+  {
+    schema: "mmm_fact_catalog_v1.schema.json",
+    typeName: "MmmFactCatalogV1",
+    output: "mmm-fact-catalog-v1.ts",
+  },
 ];
 
 for (const contract of contracts) {

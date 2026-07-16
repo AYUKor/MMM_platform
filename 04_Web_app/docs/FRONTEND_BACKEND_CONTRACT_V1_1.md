@@ -12,6 +12,8 @@ Stable result contracts:
 - `ResultOverview v1`: compact browser result projection;
 - `ModelPassport v1`: active model coverage and reliability policy;
 - application lifecycle v1: upload, validation, job, progress and errors;
+- `JobProgressView v1`: browser-safe nine-stage calculation snapshot;
+- `MmmFactCatalog v1`: reviewed static progress-screen facts;
 - `JobList v1`: paginated calculation history.
 
 ## Discovery Endpoints
@@ -22,11 +24,29 @@ Stable result contracts:
 | `GET /ready` | Are package, campaign service and local stores ready? |
 | `GET /api/v1/models/active` | Show model period, coverage and caveats. |
 | `GET /api/v1/meta/errors` | Map stable error codes to user actions. |
+| `GET /api/v1/meta/mmm-facts` | Load reviewed optional MMM facts without live generation. |
 | `GET /api/v1/openapi.json` | Machine-readable route specification. |
 | `GET /api/v1/contracts/product-api-v1.json` | Model passport, error catalog and job-list schema. |
 | `GET /api/v1/contracts/application-lifecycle-v1.json` | Upload/validation/job schema. |
 | `GET /api/v1/contracts/decision-result-v1.json` | Full result schema. |
 | `GET /api/v1/contracts/result-overview-v1.json` | Compact result schema. |
+| `GET /api/v1/contracts/job-progress-view-v1.json` | Nine-stage progress snapshot schema. |
+| `GET /api/v1/contracts/mmm-fact-catalog-v1.json` | Static MMM facts schema. |
+
+## Product Progress
+
+Use `GET /api/v1/jobs/{job_id}/progress-view` for the calculation progress
+page. Do not build the UI from raw `/progress` events.
+
+The response always contains P01-P09, one campaign summary, queue state,
+Scenario 6 counters, report state, safe errors, cancellation availability and
+result availability. `null` counters mean the current worker does not publish
+that value; they are not zero. The contract intentionally has no ETA, overall
+percentage, temporary Scenario 6 winner or unfinished business metrics.
+
+Poll by `job_id`. Repeated GET requests are read-only. Navigate to the result
+only after `job_status.code=succeeded` and `result_available=true`; backend does
+not require an automatic redirect.
 
 ## Job History
 
