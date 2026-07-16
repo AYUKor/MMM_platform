@@ -83,8 +83,14 @@ export function uploadCampaign(
   });
 }
 
-export function getUpload(uploadId: string): Promise<CampaignUpload> {
-  return requestJson<CampaignUpload>(`/api/v1/uploads/${encodeURIComponent(uploadId)}`);
+export function getUpload(
+  uploadId: string,
+  signal?: AbortSignal,
+): Promise<CampaignUpload> {
+  return requestJson<CampaignUpload>(
+    `/api/v1/uploads/${encodeURIComponent(uploadId)}`,
+    { signal },
+  );
 }
 
 export function requestValidation(
@@ -97,9 +103,13 @@ export function requestValidation(
   );
 }
 
-export function getValidation(validationId: string): Promise<ValidationResult> {
+export function getValidation(
+  validationId: string,
+  signal?: AbortSignal,
+): Promise<ValidationResult> {
   return requestJson<ValidationResult>(
     `/api/v1/validations/${encodeURIComponent(validationId)}`,
+    { signal },
   );
 }
 
@@ -151,17 +161,45 @@ export async function pollUntil<T>(
   load: () => Promise<T>,
   isComplete: (value: T) => boolean,
   onUpdate: (value: T) => void,
-  options: { intervalMs?: number; timeoutMs?: number } = {},
+  options: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<T> {
   const intervalMs = options.intervalMs ?? 500;
   const deadline = Date.now() + (options.timeoutMs ?? 120_000);
   while (true) {
+    throwIfAborted(options.signal);
     const value = await load();
+    throwIfAborted(options.signal);
     onUpdate(value);
     if (isComplete(value)) return value;
     if (Date.now() >= deadline) {
       throw new Error("Backend не завершил операцию в ожидаемое время.");
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await waitForNextPoll(intervalMs, options.signal);
   }
+}
+
+function waitForNextPoll(intervalMs: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    return new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throwIfAborted(signal);
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timeoutId);
+      reject(abortReason(signal));
+    };
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, intervalMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortReason(signal);
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("Операция отменена.", "AbortError");
 }

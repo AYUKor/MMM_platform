@@ -1,7 +1,34 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import type { CampaignUpload, ValidationResult } from "../entities/lifecycle/types";
 import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type RefObject,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import type {
+  CampaignPreview,
+  CampaignUpload,
+  ValidationIssue,
+  ValidationResult,
+} from "../entities/lifecycle/types";
+import {
+  NEW_CALCULATION_FILE_ACCEPT,
+  NEW_CALCULATION_SCENARIOS,
+  SCENARIO_RECOMMENDATION_RULES,
+  buildScenarioInvariantSnapshot,
+  checkCampaignFilePolicy,
+  getValidationTopStatus,
+  groupIssueAffectedEntities,
+  guardSingleCampaign,
+  resolveNewCalculationStep,
+  uploadCanProceedToValidation,
+  type NewCalculationStep,
+} from "../features/new-calculation/newCalculationFlow";
+import {
+  createIdempotencyKey,
   createJob,
   getUpload,
   getValidation,
@@ -12,229 +39,953 @@ import {
 import { formatDate, formatRub } from "../shared/formatters/metrics";
 import { Button } from "../shared/ui/Button";
 import { StatusBadge } from "../shared/ui/StatusBadge";
-import styles from "./lifecycle.module.css";
+import styles from "./new-calculation.module.css";
 
-type PreparationStage = "idle" | "upload" | "validation" | "review" | "job";
+type RemoteActivity =
+  | "idle"
+  | "uploading"
+  | "loading-upload"
+  | "starting-validation"
+  | "loading-validation"
+  | "creating-job";
+type ValidationTone = "ready" | "warning" | "blocked";
 
-const stageText: Record<PreparationStage, string> = {
-  idle: "Файл еще не выбран",
-  upload: "Файл загружается и разбирается",
-  validation: "План проверяется против текущей модели",
-  review: "Проверка завершена",
-  job: "Создается расчет",
-};
+interface RemoteActivityState {
+  code: RemoteActivity;
+  location: string | null;
+}
 
-function stepState(stage: PreparationStage, step: number): string {
-  const position = { idle: 0, upload: 1, validation: 2, review: 3, job: 3 }[stage];
-  if (position > step) return `${styles.step} ${styles.stepDone}`;
-  if (position === step) return `${styles.step} ${styles.stepActive}`;
-  return styles.step;
+interface FlowErrorState {
+  context: string;
+  kind: "load" | "action";
+  message: string;
+}
+
+const forbiddenUserText = /\b(api|backend|validation preview|support|candidate_id|attempt_id|posterior)\b/i;
+
+const stepLabels = ["Загрузка", "Проверка", "Сценарии", "Расчет"];
+
+function getCurrentStep(step: NewCalculationStep, activity: RemoteActivity): number {
+  if (activity === "creating-job") return 4;
+  if (step === "review") return 2;
+  if (step === "scenarios") return 3;
+  return 1;
+}
+
+function getFileError(file: File): string | null {
+  const policy = checkCampaignFilePolicy(file.name);
+  return policy.accepted ? null : policy.message;
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1).replace(".0", "")} КБ`;
+  return `${(size / (1024 * 1024)).toFixed(1).replace(".0", "")} МБ`;
+}
+
+function safeError(caught: unknown, fallback: string): string {
+  if (!(caught instanceof Error)) return fallback;
+  return safeMarketerText(caught.message, fallback);
+}
+
+function safeMarketerText(value: string, fallback: string): string {
+  const message = value.trim();
+  if (!message || forbiddenUserText.test(message)) return fallback;
+  return message;
+}
+
+function isAbortError(caught: unknown): boolean {
+  return typeof caught === "object" && caught !== null && "name" in caught
+    && caught.name === "AbortError";
+}
+
+function flowContext(
+  step: NewCalculationStep,
+  uploadId: string | null,
+  validationId: string | null,
+): string {
+  if (step === "upload-result") return `${step}:${uploadId ?? "missing"}`;
+  if (step === "review" || step === "scenarios") {
+    return `${step}:${validationId ?? "missing"}`;
+  }
+  return "upload:new";
+}
+
+function browserLocationKey(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function getValidationTone(validation: ValidationResult): ValidationTone {
+  const status = getValidationTopStatus(validation);
+  if (status.code === "ready") return "ready";
+  if (status.code === "warning") return "warning";
+  return "blocked";
+}
+
+function sourceFileName(upload: CampaignUpload | null): string {
+  return upload?.original_file.display_name ?? "Нет данных";
+}
+
+function Stepper({ current }: { current: number }) {
+  return (
+    <ol className={styles.stepper} aria-label="Этапы нового расчета">
+      {stepLabels.map((label, index) => {
+        const position = index + 1;
+        const state = position < current ? "done" : position === current ? "active" : "future";
+        return (
+          <li
+            key={label}
+            className={styles[`step_${state}`]}
+            aria-current={state === "active" ? "step" : undefined}
+          >
+            <span className={styles.stepNumber}>{position}</span>
+            <span className={styles.stepLabel}>{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function PageHero({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+  return (
+    <header className={styles.hero}>
+      <div className={styles.heroCopy}>
+        <span className={styles.eyebrow}>{eyebrow}</span>
+        <h1>{title}</h1>
+        <p>{description}</p>
+      </div>
+      <div className={styles.rulePill}>Один файл = одна кампания</div>
+    </header>
+  );
+}
+
+function UploadGlyph() {
+  return (
+    <svg className={styles.uploadGlyph} viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 31V8m0 0-8 8m8-8 8 8" />
+      <path d="M10 28v8a4 4 0 0 0 4 4h20a4 4 0 0 0 4-4v-8" />
+    </svg>
+  );
+}
+
+function LoadingPanel({ message }: { message: string }) {
+  return (
+    <section className={styles.loadingPanel} aria-live="polite" aria-busy="true">
+      <span className={styles.loadingMark} aria-hidden="true" />
+      <div>
+        <span className={styles.eyebrow}>Подождите</span>
+        <h2>{message}</h2>
+        <p>Страница обновится автоматически.</p>
+      </div>
+    </section>
+  );
+}
+
+function EmptyPreview({ title, message }: { title: string; message: string }) {
+  return (
+    <article className={styles.emptyPreview}>
+      <div className={styles.previewHeading}>
+        <h3>{title}</h3>
+        <StatusBadge tone="neutral">Нет данных</StatusBadge>
+      </div>
+      <div className={styles.previewPlaceholder} aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <p>{message}</p>
+    </article>
+  );
+}
+
+function AffectedContext({ issue, campaigns }: { issue: ValidationIssue; campaigns: CampaignPreview[] }) {
+  const groups = groupIssueAffectedEntities(issue, campaigns);
+  const values = [
+    ...groups.campaigns.map((value) => `Кампания: ${value}`),
+    ...groups.segments.map((value) => `Сегмент: ${value}`),
+    ...groups.geographies.map((value) => `Гео: ${value}`),
+    ...groups.channels.map((value) => `Канал: ${value}`),
+    ...groups.geoChannelPairs.map((value) => `Связка гео × канал: ${value}`),
+    ...groups.targets.map((value) => `Показатель: ${value}`),
+  ];
+
+  if (values.length === 0) {
+    return <span className={styles.contextChip}>Кампания целиком</span>;
+  }
+  return (
+    <>
+      {values.map((value) => (
+        <span className={styles.contextChip} key={value}>{value}</span>
+      ))}
+    </>
+  );
+}
+
+interface UploadStepProps {
+  file: File | null;
+  fileError: string | null;
+  dragging: boolean;
+  busy: boolean;
+  inputRef: RefObject<HTMLInputElement | null>;
+  onInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onDrop: (event: DragEvent<HTMLLabelElement>) => void;
+  onDragEnter: (event: DragEvent<HTMLLabelElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLLabelElement>) => void;
+  onChoose: () => void;
+  onRemove: () => void;
+  onUpload: () => void;
+}
+
+function UploadStep({
+  file,
+  fileError,
+  dragging,
+  busy,
+  inputRef,
+  onInputChange,
+  onDrop,
+  onDragEnter,
+  onDragLeave,
+  onChoose,
+  onRemove,
+  onUpload,
+}: UploadStepProps) {
+  return (
+    <div className={styles.uploadLayout}>
+      <section className={styles.uploadCard} aria-labelledby="upload-title">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.eyebrow}>Шаг 1 из 4</span>
+            <h2 id="upload-title">Загрузите медиаплан</h2>
+          </div>
+          <span className={styles.formatLabel}>XLSX или CSV</span>
+        </div>
+
+        <label
+          className={`${styles.dropzone} ${dragging ? styles.dropzoneActive : ""} ${file ? styles.dropzoneSelected : ""}`}
+          onDragEnter={onDragEnter}
+          onDragOver={onDragEnter}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          <input
+            ref={inputRef}
+            className={styles.dropzoneInput}
+            type="file"
+            accept={NEW_CALCULATION_FILE_ACCEPT}
+            onChange={onInputChange}
+            aria-label="Файл медиаплана"
+            disabled={busy}
+          />
+          <UploadGlyph />
+          {file ? (
+            <div className={styles.selectedFile}>
+              <span className={styles.selectedLabel}>Файл выбран</span>
+              <strong>{file.name}</strong>
+              <span>{formatFileSize(file.size)}</span>
+            </div>
+          ) : (
+            <div>
+              <strong>Перетащите файл сюда</strong>
+              <span>или нажмите, чтобы выбрать на компьютере</span>
+            </div>
+          )}
+        </label>
+
+        {fileError ? <p className={styles.inlineError} role="alert">{fileError}</p> : null}
+
+        <div className={styles.uploadActions}>
+          <div className={styles.secondaryActions}>
+            <Button type="button" onClick={onChoose} disabled={busy}>
+              {file ? "Заменить файл" : "Выбрать файл"}
+            </Button>
+            {file ? <Button type="button" onClick={onRemove} disabled={busy}>Удалить</Button> : null}
+          </div>
+          <Button variant="primary" type="button" onClick={onUpload} disabled={!file || Boolean(fileError) || busy}>
+            {busy ? "Загружаем файл…" : "Загрузить файл"}
+          </Button>
+        </div>
+      </section>
+
+      <aside className={styles.requirements} aria-labelledby="requirements-title">
+        <span className={styles.eyebrow}>Перед загрузкой</span>
+        <h2 id="requirements-title">Проверьте файл</h2>
+        <ul>
+          <li>Одна кампания</li>
+          <li>Указан сегмент</li>
+          <li>Указаны гео и канал</li>
+          <li>Бюджет в рублях</li>
+          <li>Даты указаны</li>
+          <li>Нет объединенных ячеек</li>
+        </ul>
+        <div className={styles.templateBlock}>
+          <button type="button" disabled>Скачать шаблон медиаплана</button>
+          <p>Шаблон будет доступен после подключения файла-шаблона</p>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function UploadResultStep({
+  upload,
+  onContinue,
+  onReset,
+  busy,
+}: {
+  upload: CampaignUpload;
+  onContinue: () => void;
+  onReset: () => void;
+  busy: boolean;
+}) {
+  const campaignGuard = guardSingleCampaign(upload.detected_campaigns_n);
+  const exactlyOne = campaignGuard.allowed;
+  return (
+    <section className={`${styles.resultCard} ${!exactlyOne ? styles.resultCardBlocked : ""}`}>
+      <div className={styles.resultLead}>
+        <span className={styles.resultIcon} aria-hidden="true">{exactlyOne ? "✓" : "!"}</span>
+        <div>
+          <span className={styles.eyebrow}>Файл обработан</span>
+          <h2>{exactlyOne ? "Файл успешно прочитан" : campaignGuard.title}</h2>
+          <p>
+            {exactlyOne
+              ? "Проверьте сводку и переходите к проверке кампании."
+              : campaignGuard.description}
+          </p>
+        </div>
+      </div>
+      <dl className={styles.fileSummary}>
+        <div><dt>Файл</dt><dd>{upload.original_file.display_name}</dd></div>
+        <div><dt>Размер</dt><dd>{formatFileSize(upload.original_file.size_bytes)}</dd></div>
+        <div><dt>Строк</dt><dd>{upload.source_rows_n ?? "Нет данных"}</dd></div>
+        <div><dt>Кампаний</dt><dd>{upload.detected_campaigns_n ?? "Нет данных"}</dd></div>
+      </dl>
+      <div className={styles.footerActions}>
+        <Button type="button" onClick={onReset} disabled={busy}>Загрузить другой файл</Button>
+        {exactlyOne ? (
+          <Button variant="primary" type="button" onClick={onContinue} disabled={busy}>
+            {busy ? "Начинаем проверку…" : "Продолжить к проверке"}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function CampaignSummary({ campaign, upload }: { campaign: CampaignPreview; upload: CampaignUpload | null }) {
+  return (
+    <section className={styles.campaignSummary} aria-labelledby="campaign-summary-title">
+      <div className={styles.summaryHeading}>
+        <div>
+          <span className={styles.eyebrow}>Кампания</span>
+          <h2 id="campaign-summary-title">{campaign.campaign_name}</h2>
+        </div>
+        <strong className={styles.summaryBudget}>{formatRub(campaign.uploaded_budget_rub)}</strong>
+      </div>
+      <dl className={styles.summaryGrid}>
+        <div><dt>Сегмент</dt><dd>{campaign.segments.join(", ") || "Нет данных"}</dd></div>
+        <div><dt>Период</dt><dd>{formatDate(campaign.start_date)} — {formatDate(campaign.end_date)}</dd></div>
+        <div><dt>Активных дней</dt><dd>{campaign.active_days}</dd></div>
+        <div><dt>Каналы</dt><dd>{campaign.channels.join(", ") || "Нет данных"}</dd></div>
+        <div><dt>Географии</dt><dd>{campaign.geographies.join(", ") || "Нет данных"}</dd></div>
+        <div><dt>Строк в файле</dt><dd>{campaign.source_rows_n}</dd></div>
+        <div className={styles.summaryWide}><dt>Исходный файл</dt><dd>{sourceFileName(upload)}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function ValidationChecks({ validation, upload }: { validation: ValidationResult; upload: CampaignUpload | null }) {
+  const campaign = validation.campaigns[0];
+  const budgetReconciliation = validation.totals
+    ? `Файл → план: ${formatRub(validation.totals.raw_to_normalized_abs_diff_rub)}; план → календарь: ${formatRub(validation.totals.normalized_to_daily_abs_diff_rub)}`
+    : null;
+  const facts = [
+    {
+      title: "Структура файла",
+      value: upload?.status.code === "parsed" ? "Файл прочитан" : "Нет отдельного результата",
+      tone: upload?.status.code === "parsed" ? "confirmed" : "unavailable",
+    },
+    {
+      title: "Сверка бюджета",
+      value: budgetReconciliation ?? "Нет отдельного результата",
+      tone: budgetReconciliation !== null ? "data" : "unavailable",
+    },
+    {
+      title: "Даты",
+      value: campaign ? `${formatDate(campaign.start_date)} — ${formatDate(campaign.end_date)}` : "Нет отдельного результата",
+      tone: campaign ? "data" : "unavailable",
+    },
+  ] satisfies { title: string; value: string; tone: "confirmed" | "data" | "unavailable" }[];
+  const unavailable = [
+    "Поддержка сегмента",
+    "Распознавание каналов",
+    "Распознавание географий",
+    "Сходство с историческими тратами",
+    "Ограничения использования модели",
+  ];
+
+  return (
+    <section className={styles.checksSection} aria-labelledby="checks-title">
+      <div className={styles.sectionHeading}>
+        <div>
+          <span className={styles.eyebrow}>Проверки</span>
+          <h2 id="checks-title">Что подтверждено данными</h2>
+        </div>
+        <p>Отдельные проверки не считаются пройденными без явного результата.</p>
+      </div>
+      <div className={styles.checkGrid}>
+        {facts.map((fact) => (
+          <article className={styles.checkItem} key={fact.title}>
+            <span
+              className={
+                fact.tone === "confirmed"
+                  ? styles.factMark
+                  : fact.tone === "data"
+                    ? styles.dataMark
+                    : styles.unavailableMark
+              }
+              aria-hidden="true"
+            />
+            <div><h3>{fact.title}</h3><p>{fact.value}</p></div>
+          </article>
+        ))}
+        {unavailable.map((title) => (
+          <article className={styles.checkItem} key={title}>
+            <span className={styles.unavailableMark} aria-hidden="true" />
+            <div><h3>{title}</h3><p>Детализация проверки не предоставлена</p></div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ValidationIssues({ validation }: { validation: ValidationResult }) {
+  const issues = [...validation.blocking_errors, ...validation.warnings];
+  if (issues.length === 0) {
+    return (
+      <section className={styles.noIssues} aria-label="Замечания">
+        <span aria-hidden="true">✓</span>
+        <div><h2>Замечаний не получено</h2><p>По текущему результату можно перейти к сценариям.</p></div>
+      </section>
+    );
+  }
+  return (
+    <section className={styles.issuesSection} aria-labelledby="issues-title">
+      <div className={styles.sectionHeading}>
+        <div><span className={styles.eyebrow}>Результат проверки</span><h2 id="issues-title">Замечания к кампании</h2></div>
+        <span className={styles.issueCount}>{issues.length}</span>
+      </div>
+      <div className={styles.issueGrid}>
+        {issues.map((issue, index) => (
+          <article className={styles.issueCard} key={`${issue.code}-${index}`}>
+            <div className={styles.issueTopline}>
+              <StatusBadge tone={issue.severity === "blocking" ? "danger" : "warning"}>
+                {issue.severity === "blocking" ? "Нужно исправить" : "Замечание"}
+              </StatusBadge>
+              <span>Расчет разрешен: {validation.job_creation_allowed ? "да" : "нет"}</span>
+            </div>
+            <h3>Что обнаружено</h3>
+            <p className={styles.issueText}>
+              {safeMarketerText(issue.display_text, "Получено замечание без безопасного пользовательского описания.")}
+            </p>
+            <div className={styles.contextList}><AffectedContext issue={issue} campaigns={validation.campaigns} /></div>
+            <dl className={styles.issueDetails}>
+              <div><dt>Почему это важно</dt><dd>Отдельное пояснение не предоставлено</dd></div>
+              <div><dt>Что можно сделать</dt><dd>Рекомендация по исправлению не предоставлена</dd></div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ValidationStep({
+  validation,
+  upload,
+  onReset,
+  onScenarios,
+}: {
+  validation: ValidationResult;
+  upload: CampaignUpload | null;
+  onReset: () => void;
+  onScenarios: () => void;
+}) {
+  const tone = getValidationTone(validation);
+  const topStatus = getValidationTopStatus(validation);
+  const campaign = validation.campaigns.length === 1 ? validation.campaigns[0] : null;
+  return (
+    <div className={styles.validationPage}>
+      <section className={`${styles.validationStatus} ${styles[`validationStatus_${tone}`]}`}>
+        <div>
+          <div className={styles.statusMeta}>
+            <span className={styles.eyebrow}>Шаг 2 из 4</span>
+            {validation.record_origin === "synthetic_fixture" ? (
+              <StatusBadge tone="warning">Демонстрационные данные</StatusBadge>
+            ) : null}
+          </div>
+          <h2>{topStatus.label}</h2>
+          <p>{topStatus.description}</p>
+        </div>
+        <span className={styles.statusSymbol} aria-hidden="true">{tone === "ready" ? "✓" : "!"}</span>
+      </section>
+
+      {campaign ? <CampaignSummary campaign={campaign} upload={upload} /> : (
+        <section className={styles.blockedNotice} role="alert">
+          <h2>Нельзя продолжить с этим файлом</h2>
+          <p>В результате проверки должно быть ровно одна кампания.</p>
+        </section>
+      )}
+
+      <ValidationChecks validation={validation} upload={upload} />
+      <ValidationIssues validation={validation} />
+
+      <section className={styles.s5Explanation}>
+        <span className={styles.shieldMark} aria-hidden="true">S5</span>
+        <div>
+          <h2>Как будет проверяться устойчивость</h2>
+          <p>Сценарий 5 попробует перераспределить бюджет между исходными каналами и гео так, чтобы план оставался в более надежной исторической зоне. Новые каналы и гео добавляться не будут.</p>
+        </div>
+      </section>
+
+      <section className={styles.previews} aria-labelledby="preview-title">
+        <div className={styles.sectionHeading}>
+          <div><span className={styles.eyebrow}>Предпросмотр медиаплана</span><h2 id="preview-title">Структура кампании</h2></div>
+          <p>Показываем только данные, доступные в текущем результате проверки.</p>
+        </div>
+        <div className={styles.previewGrid}>
+          <EmptyPreview title="Бюджет по каналам" message="График появится после подключения агрегатов по каналам" />
+          <EmptyPreview title="Бюджет по географии" message="График появится после подключения агрегатов по географиям" />
+          <EmptyPreview title="Активность каналов" message="Календарь появится после подключения дневного распределения бюджета" />
+          <EmptyPreview title="География кампании" message="Карта появится после подключения координат географий" />
+        </div>
+      </section>
+
+      <div className={styles.footerActions}>
+        <Button type="button" onClick={onReset}>{tone === "blocked" ? "Загрузить исправленный файл" : "Загрузить другой файл"}</Button>
+        {tone !== "blocked" ? (
+          <Button variant="primary" type="button" onClick={onScenarios}>
+            {tone === "warning" ? "Продолжить с замечаниями" : "Продолжить к сценариям"}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ScenariosStep({
+  validation,
+  onBack,
+  onStart,
+  busy,
+}: {
+  validation: ValidationResult;
+  onBack: () => void;
+  onStart: () => void;
+  busy: boolean;
+}) {
+  const campaign = validation.campaigns[0];
+  const invariant = buildScenarioInvariantSnapshot(campaign);
+  return (
+    <div className={styles.scenariosPage}>
+      <section className={styles.scenarioIntro}>
+        <div>
+          <div className={styles.statusMeta}>
+            <span className={styles.eyebrow}>Шаг 3 из 4</span>
+            {validation.record_origin === "synthetic_fixture" ? (
+              <StatusBadge tone="warning">Демонстрационные данные</StatusBadge>
+            ) : null}
+          </div>
+          <h2>Шесть сценариев будут рассчитаны автоматически</h2>
+        </div>
+        <p>Выбирать сценарии или настраивать поиск не нужно. До запуска здесь нет прогнозных значений.</p>
+      </section>
+
+      <section className={styles.scenarioGrid} aria-label="Сценарии расчета">
+        {NEW_CALCULATION_SCENARIOS.map((scenario, index) => (
+          <article className={`${styles.scenarioCard} ${styles[`scenario_${scenario.role}`]}`} key={scenario.id}>
+            <div className={styles.scenarioMeta}>
+              <strong>S{index + 1}</strong>
+              <span>{scenario.badge}</span>
+            </div>
+            <h3>{scenario.title}</h3>
+            <p>{scenario.description}</p>
+            {scenario.id === "S05" ? <div className={styles.scenarioPrinciple}>S5 — сначала устойчивость</div> : null}
+            {scenario.id === "S06" ? <div className={styles.scenarioPrinciple}>S6 — поиск эффективности с обязательной проверкой устойчивости</div> : null}
+          </article>
+        ))}
+      </section>
+
+      <section className={styles.invariants} aria-labelledby="invariants-title">
+        <div><span className={styles.eyebrow}>Неизменные границы</span><h2 id="invariants-title">Что останется прежним</h2></div>
+        <dl>
+          <div><dt>Общий бюджет</dt><dd>{formatRub(invariant.totalBudgetRub)}</dd></div>
+          <div><dt>Даты</dt><dd>{formatDate(invariant.startDate)} — {formatDate(invariant.endDate)}</dd></div>
+          <div><dt>Исходные каналы</dt><dd>{invariant.channels.join(", ")}</dd></div>
+          <div><dt>Исходные гео</dt><dd>{invariant.geographies.join(", ")}</dd></div>
+          <div><dt>Исходные связки гео × канал</dt><dd>{invariant.existingCellsRule} Количество не предоставлено.</dd></div>
+        </dl>
+      </section>
+
+      <section className={styles.recommendationLogic} aria-labelledby="logic-title">
+        <div><span className={styles.eyebrow}>После расчета</span><h2 id="logic-title">Как появится рекомендация</h2></div>
+        <ol>{SCENARIO_RECOMMENDATION_RULES.map((rule) => <li key={rule}>{rule}</li>)}</ol>
+        <p>Рекомендация относится к распределению бюджета, а не к решению запускать кампанию.</p>
+      </section>
+
+      <div className={styles.footerActions}>
+        <Button type="button" onClick={onBack} disabled={busy}>Назад к проверке</Button>
+        <Button variant="primary" type="button" onClick={onStart} disabled={busy}>
+          {busy ? "Создаем расчет…" : "Запустить расчет"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function NewCalculationPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(false);
+  const uploadActionRef = useRef<{ file: File; idempotencyKey: string } | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [stage, setStage] = useState<PreparationStage>("idle");
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [upload, setUpload] = useState<CampaignUpload | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [activityState, setActivityState] = useState<RemoteActivityState>({
+    code: "idle",
+    location: null,
+  });
+  const [errorState, setErrorState] = useState<FlowErrorState | null>(null);
+
+  const routeState = useMemo(() => resolveNewCalculationStep(searchParams), [searchParams]);
+  const flowStep = routeState.step;
+  const uploadId = routeState.uploadId;
+  const validationId = routeState.validationId;
+  const currentContext = flowContext(flowStep, uploadId, validationId);
+  const error = errorState?.context === currentContext ? errorState.message : null;
+  const hasLoadError = errorState?.context === currentContext && errorState.kind === "load";
+  const routeUpload = uploadId && upload?.upload_id === uploadId ? upload : null;
+  const routeValidation = validationId && validation?.validation_id === validationId
+    ? validation
+    : null;
+  const validationSourceUpload = routeValidation && upload?.upload_id === routeValidation.upload_id
+    ? upload
+    : null;
+  const activity = activityState.location && activityState.location !== browserLocationKey()
+    ? "idle"
+    : activityState.code;
+  const currentStep = getCurrentStep(flowStep, activity);
 
   useEffect(() => {
-    const validationId = searchParams.get("validationId");
-    if (!validationId) return;
-    let active = true;
-    pollUntil(
-      () => getValidation(validationId),
-      (record) => record.status.code !== "running",
-      (record) => {
-        if (!active) return;
-        setValidation(record);
-        setError(null);
-        if (record.status.code === "running") setStage("validation");
-      },
-    )
-      .then((record) => {
-        if (!active) return;
-        setValidation(record);
-        setStage("review");
-      })
-      .catch((caught: unknown) => {
-        if (!active) return;
-        setError(caught instanceof Error ? caught.message : "Не удалось загрузить validation.");
-        setStage("idle");
-      });
-    return () => { active = false; };
-  }, [searchParams]);
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
-    setFile(event.target.files?.[0] ?? null);
-    setStage("idle");
-    setUpload(null);
-    setValidation(null);
-    setError(null);
+  const actionMayUpdateCurrentRoute = (actionLocation: string): boolean => {
+    if (!mountedRef.current) return false;
+    if (browserLocationKey() === actionLocation) return true;
+    setActivityState((current) => current.location === actionLocation
+      ? { code: "idle", location: null }
+      : current);
+    return false;
   };
 
-  const prepare = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!file) return;
-    setError(null);
-    setValidation(null);
-    try {
-      setStage("upload");
-      const accepted = await uploadCampaign(file);
-      setUpload(accepted);
-      const parsed = await pollUntil(
-        () => getUpload(accepted.upload_id),
-        (record) => record.status.code !== "received",
-        setUpload,
-      );
-      if (parsed.status.code !== "parsed") {
-        throw new Error("Backend не смог разобрать загруженный файл.");
-      }
+  useEffect(() => {
+    if (flowStep !== "upload-result" || !uploadId) return;
+    const controller = new AbortController();
+    const requestContext = flowContext("upload-result", uploadId, null);
+    pollUntil(
+      () => getUpload(uploadId, controller.signal),
+      (record) => record.status.code !== "received",
+      (record) => setUpload(record),
+      { signal: controller.signal },
+    )
+      .then((record) => {
+        if (controller.signal.aborted) return;
+        if (record.status.code !== "parsed") {
+          throw new Error("Не удалось прочитать файл. Проверьте формат и структуру, затем загрузите его снова.");
+        }
+        setErrorState((current) => current?.context === requestContext ? null : current);
+        setUpload(record);
+        setActivityState({ code: "idle", location: null });
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught) || controller.signal.aborted) return;
+        setErrorState({
+          context: requestContext,
+          kind: "load",
+          message: safeError(caught, "Не удалось получить результат обработки файла. Попробуйте загрузить его снова."),
+        });
+        setActivityState({ code: "idle", location: null });
+      });
+    return () => controller.abort();
+  }, [flowStep, uploadId]);
 
-      setStage("validation");
-      const started = await requestValidation(parsed.upload_id);
-      setValidation(started);
-      const checked = await pollUntil(
-        () => getValidation(started.validation_id),
-        (record) => record.status.code !== "running",
-        setValidation,
-      );
-      setStage("review");
-      navigate(`/calculations/new?validationId=${encodeURIComponent(checked.validation_id)}`, { replace: true });
-      if (checked.status.code === "invalid" && checked.blocking_errors.length === 0) {
-        throw new Error("План не прошел validation, но backend не вернул причину.");
-      }
+  useEffect(() => {
+    if ((flowStep !== "review" && flowStep !== "scenarios") || !validationId) return;
+    const controller = new AbortController();
+    const requestContext = flowContext(flowStep, null, validationId);
+    pollUntil(
+      () => getValidation(validationId, controller.signal),
+      (record) => record.status.code !== "running",
+      (record) => setValidation(record),
+      { signal: controller.signal },
+    )
+      .then(async (record) => {
+        if (controller.signal.aborted) return;
+        setErrorState((current) => current?.context === requestContext ? null : current);
+        setValidation(record);
+        try {
+          const sourceUpload = await getUpload(record.upload_id, controller.signal);
+          if (!controller.signal.aborted) setUpload(sourceUpload);
+        } catch (caught) {
+          if (!isAbortError(caught) && !controller.signal.aborted) setUpload(null);
+        }
+        if (controller.signal.aborted) return;
+        if (flowStep === "scenarios" && getValidationTone(record) === "blocked") {
+          navigate(`/calculations/new?validationId=${encodeURIComponent(record.validation_id)}&step=review`, { replace: true });
+          return;
+        }
+        setActivityState({ code: "idle", location: null });
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught) || controller.signal.aborted) return;
+        setErrorState({
+          context: requestContext,
+          kind: "load",
+          message: safeError(caught, "Не удалось получить результат проверки. Попробуйте открыть страницу еще раз."),
+        });
+        setActivityState({ code: "idle", location: null });
+      });
+    return () => controller.abort();
+  }, [flowStep, navigate, validationId]);
+
+  const resetToUpload = (openPicker = false) => {
+    setFile(null);
+    uploadActionRef.current = null;
+    setFileError(null);
+    setUpload(null);
+    setValidation(null);
+    setErrorState(null);
+    setActivityState({ code: "idle", location: null });
+    if (inputRef.current) inputRef.current.value = "";
+    navigate("/calculations/new", { replace: true });
+    if (openPicker) window.setTimeout(() => inputRef.current?.click(), 0);
+  };
+
+  const acceptFile = (candidate: File | undefined) => {
+    if (!candidate) return;
+    const nextError = getFileError(candidate);
+    uploadActionRef.current = nextError ? null : {
+      file: candidate,
+      idempotencyKey: createIdempotencyKey("upload"),
+    };
+    setErrorState(null);
+    setUpload(null);
+    setValidation(null);
+    setFileError(nextError);
+    setFile(nextError ? null : candidate);
+    if (nextError && inputRef.current) inputRef.current.value = "";
+    if (flowStep !== "upload") navigate("/calculations/new");
+  };
+
+  const onInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    acceptFile(event.target.files?.[0]);
+  };
+
+  const onDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    if (activity === "uploading") return;
+    if (event.dataTransfer.files.length !== 1) {
+      setFile(null);
+      uploadActionRef.current = null;
+      setFileError("Загрузите один файл. Для каждой кампании нужен отдельный медиаплан.");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+    acceptFile(event.dataTransfer.files?.[0]);
+  };
+
+  const onDragEnter = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    if (activity === "uploading") return;
+    if (!event.dataTransfer.types.includes("Files")) return;
+    setDragging(true);
+  };
+
+  const onDragLeave = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setDragging(false);
+  };
+
+  const beginUpload = async () => {
+    if (!file || fileError) return;
+    const actionContext = currentContext;
+    const actionLocation = browserLocationKey();
+    const uploadAction = uploadActionRef.current?.file === file
+      ? uploadActionRef.current
+      : { file, idempotencyKey: createIdempotencyKey("upload") };
+    uploadActionRef.current = uploadAction;
+    setActivityState({ code: "uploading", location: actionLocation });
+    setErrorState(null);
+    try {
+      const accepted = await uploadCampaign(file, uploadAction.idempotencyKey);
+      if (!actionMayUpdateCurrentRoute(actionLocation)) return;
+      setUpload(accepted);
+      navigate(`/calculations/new?uploadId=${encodeURIComponent(accepted.upload_id)}&step=upload-result`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Не удалось проверить кампанию.");
-      setStage("idle");
+      if (!actionMayUpdateCurrentRoute(actionLocation)) return;
+      setErrorState({
+        context: actionContext,
+        kind: "action",
+        message: safeError(caught, "Не удалось загрузить файл. Проверьте соединение и попробуйте снова."),
+      });
+      setActivityState({ code: "idle", location: null });
+    }
+  };
+
+  const beginValidation = async () => {
+    if (!routeUpload || !uploadCanProceedToValidation(routeUpload)) return;
+    const actionContext = currentContext;
+    const actionLocation = browserLocationKey();
+    setActivityState({ code: "starting-validation", location: actionLocation });
+    setErrorState(null);
+    try {
+      const started = await requestValidation(
+        routeUpload.upload_id,
+        `validation:${routeUpload.upload_id}`,
+      );
+      if (!actionMayUpdateCurrentRoute(actionLocation)) return;
+      setValidation(started);
+      navigate(`/calculations/new?validationId=${encodeURIComponent(started.validation_id)}&step=review`);
+    } catch (caught) {
+      if (!actionMayUpdateCurrentRoute(actionLocation)) return;
+      setErrorState({
+        context: actionContext,
+        kind: "action",
+        message: safeError(caught, "Не удалось начать проверку кампании. Попробуйте еще раз."),
+      });
+      setActivityState({ code: "idle", location: null });
     }
   };
 
   const startJob = async () => {
-    if (!validation?.job_creation_allowed) return;
-    setError(null);
-    setStage("job");
+    if (!routeValidation || getValidationTone(routeValidation) === "blocked" || flowStep !== "scenarios") return;
+    const actionContext = currentContext;
+    const actionLocation = browserLocationKey();
+    setActivityState({ code: "creating-job", location: actionLocation });
+    setErrorState(null);
     try {
-      const job = await createJob(validation.validation_id);
+      const job = await createJob(
+        routeValidation.validation_id,
+        `job:${routeValidation.validation_id}`,
+      );
+      if (!actionMayUpdateCurrentRoute(actionLocation)) return;
       navigate(`/calculations/${job.job_id}/progress`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Не удалось создать расчет.");
-      setStage("review");
+      if (!actionMayUpdateCurrentRoute(actionLocation)) return;
+      setErrorState({
+        context: actionContext,
+        kind: "action",
+        message: safeError(caught, "Не удалось запустить расчет. Попробуйте еще раз."),
+      });
+      setActivityState({ code: "idle", location: null });
     }
   };
 
-  const busy = stage === "upload" || stage === "validation" || stage === "job";
-  const valid = validation?.status.code === "valid" && validation.job_creation_allowed;
+  const loadingUpload = flowStep === "upload-result" && !error && (
+    !routeUpload
+    || routeUpload.status.code === "received"
+    || activity === "uploading"
+    || activity === "loading-upload"
+  );
+  const loadingValidation =
+    (flowStep === "review" || flowStep === "scenarios") && !error && (
+      !routeValidation
+      || routeValidation.status.code === "running"
+      || activity === "starting-validation"
+      || activity === "loading-validation"
+    );
 
   return (
     <div className={styles.page}>
-      <header className={styles.pageHeader}>
-        <div>
-          <span className={styles.eyebrow}>Новый расчет</span>
-          <h1>Будущая рекламная кампания</h1>
-          <p className={styles.muted}>Forecast, Scenarios 1-6 и рекомендация по распределению бюджета</p>
+      <PageHero
+        eyebrow="Подготовка кампании"
+        title="Новый расчет"
+        description="Загрузите медиаплан одной будущей кампании. После проверки система рассчитает все шесть сценариев и предложит распределение бюджета."
+      />
+      <Stepper current={currentStep} />
+
+      {error ? (
+        <div className={styles.pageError} role="alert">
+          <span>{error}</span>
+          {flowStep !== "upload" ? (
+            <Button type="button" onClick={() => resetToUpload(false)}>Загрузить другой файл</Button>
+          ) : null}
         </div>
-      </header>
+      ) : null}
 
-      <div className={styles.stepRow} aria-label="Этапы подготовки">
-        <div className={stepState(stage, 1)}><strong>1</strong><span>Загрузка</span></div>
-        <div className={stepState(stage, 2)}><strong>2</strong><span>Проверка</span></div>
-        <div className={stepState(stage, 3)}><strong>3</strong><span>Запуск</span></div>
-      </div>
+      {flowStep === "upload" ? (
+        <UploadStep
+          file={file}
+          fileError={fileError}
+          dragging={dragging}
+          busy={activity === "uploading"}
+          inputRef={inputRef}
+          onInputChange={onInputChange}
+          onDrop={onDrop}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+          onChoose={() => {
+            if (!inputRef.current) return;
+            inputRef.current.value = "";
+            inputRef.current.click();
+          }}
+          onRemove={() => {
+            setFile(null);
+            uploadActionRef.current = null;
+            setFileError(null);
+            if (inputRef.current) inputRef.current.value = "";
+          }}
+          onUpload={beginUpload}
+        />
+      ) : null}
 
-      <form className={styles.uploadPanel} onSubmit={prepare}>
-        <label className={styles.filePicker}>
-          <input
-            type="file"
-            accept=".csv,.tsv,.xlsx,.xls"
-            onChange={selectFile}
-            disabled={busy}
-          />
-          <span>
-            <strong>{file ? file.name : "Выберите медиаплан"}</strong>
-            {file ? `${(file.size / 1024).toFixed(1)} КБ` : "CSV, TSV, XLSX или XLS"}
-          </span>
-        </label>
-        <section className={styles.actionPanel}>
-          <div>
-            <h2>Статус</h2>
-            <p className={styles.statusLine}>
-              <span className={styles.statusDot} aria-hidden="true" />
-              {stageText[stage]}
-            </p>
-            {upload?.source_rows_n != null ? (
-              <p className={styles.muted}>{upload.source_rows_n} строк · {upload.detected_campaigns_n ?? 0} кампаний</p>
-            ) : null}
-          </div>
-          <Button variant="primary" type="submit" disabled={!file || busy}>
-            {busy ? "Проверяем..." : "Загрузить и проверить"}
-          </Button>
-        </section>
-      </form>
+      {loadingUpload ? <LoadingPanel message="Читаем файл" /> : null}
+      {flowStep === "upload-result" && !hasLoadError && routeUpload?.status.code === "parsed" && activity !== "loading-upload" ? (
+        <UploadResultStep
+          upload={routeUpload}
+          onContinue={beginValidation}
+          onReset={() => resetToUpload(false)}
+          busy={activity === "starting-validation"}
+        />
+      ) : null}
 
-      {error ? <div className={styles.errorBox} role="alert">{error}</div> : null}
+      {loadingValidation ? <LoadingPanel message="Проверяем кампанию" /> : null}
+      {flowStep === "review" && !hasLoadError && routeValidation && routeValidation.status.code !== "running" && activity !== "loading-validation" ? (
+        <ValidationStep
+          validation={routeValidation}
+          upload={validationSourceUpload}
+          onReset={() => resetToUpload(false)}
+          onScenarios={() => navigate(`/calculations/new?validationId=${encodeURIComponent(routeValidation.validation_id)}&step=scenarios`)}
+        />
+      ) : null}
 
-      {validation ? (
-        <section className={styles.validation} aria-label="Результат проверки">
-          <div className={styles.validationHeader}>
-            <div>
-              <span className={styles.eyebrow}>Validation preview</span>
-              <h2>{validation.status.display_text}</h2>
-            </div>
-            <StatusBadge tone={valid ? "accent" : "danger"}>
-              {valid ? "Можно запускать" : "Нужны исправления"}
-            </StatusBadge>
-          </div>
-
-          {validation.totals ? (
-            <div className={styles.metricStrip}>
-              <div className={styles.metric}><span>Кампаний</span><strong>{validation.campaigns.length}</strong></div>
-              <div className={styles.metric}><span>Бюджет</span><strong>{formatRub(validation.totals.uploaded_budget_rub)}</strong></div>
-              <div className={styles.metric}><span>В модели</span><strong>{formatRub(validation.totals.model_input_budget_rub)}</strong></div>
-              <div className={styles.metric}><span>Вне модели</span><strong>{formatRub(validation.totals.unmodeled_budget_rub)}</strong></div>
-            </div>
-          ) : null}
-
-          {validation.campaigns.length > 0 ? (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead><tr><th>Кампания</th><th>Период</th><th>Каналы</th><th>Гео</th><th>Бюджет</th></tr></thead>
-                <tbody>
-                  {validation.campaigns.map((campaign) => (
-                    <tr key={campaign.campaign_id}>
-                      <td><strong>{campaign.campaign_name}</strong><br /><span className={styles.muted}>{campaign.segments.join(", ")}</span></td>
-                      <td>{formatDate(campaign.start_date)}<br />{formatDate(campaign.end_date)}</td>
-                      <td>{campaign.channels.join(", ")}</td>
-                      <td>{campaign.geographies.length}</td>
-                      <td>{formatRub(campaign.uploaded_budget_rub)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          {[...validation.blocking_errors, ...validation.warnings].length > 0 ? (
-            <ul className={styles.issueList}>
-              {[...validation.blocking_errors, ...validation.warnings].map((issue) => (
-                <li className={styles.issue} key={`${issue.code}-${issue.display_text}`}>
-                  <StatusBadge tone={issue.severity === "blocking" ? "danger" : "warning"}>
-                    {issue.severity === "blocking" ? "Ошибка" : "Важно"}
-                  </StatusBadge>
-                  <p>{issue.display_text}</p>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          <div className={styles.headerActions}>
-            <Button variant="primary" disabled={!valid || stage === "job"} onClick={startJob}>
-              {stage === "job" ? "Создаем расчет..." : "Запустить расчет"}
-            </Button>
-          </div>
-        </section>
+      {flowStep === "scenarios" && !hasLoadError && routeValidation && getValidationTone(routeValidation) !== "blocked" && activity !== "loading-validation" ? (
+        <ScenariosStep
+          validation={routeValidation}
+          onBack={() => navigate(`/calculations/new?validationId=${encodeURIComponent(routeValidation.validation_id)}&step=review`)}
+          onStart={startJob}
+          busy={activity === "creating-job"}
+        />
       ) : null}
     </div>
   );

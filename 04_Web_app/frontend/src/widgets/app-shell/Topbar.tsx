@@ -11,7 +11,7 @@ export function Topbar() {
         role="status"
       >
         <span aria-hidden="true" />
-        {apiConfigured ? "API настроен" : "API не подключён"}
+        {apiConfigured ? "Сервис настроен" : "Сервис не настроен"}
       </div>
       <ThemeSwitcher />
     </header>

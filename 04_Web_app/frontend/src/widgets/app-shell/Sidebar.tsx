@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { canAccessAdmin, currentAccess } from "../../app/access";
 import styles from "./app-shell.module.css";
 
@@ -21,6 +21,14 @@ function NavItem({ to, label, icon, disabled = false }: {
   icon: string;
   disabled?: boolean;
 }) {
+  const { pathname } = useLocation();
+  const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+  const nestedCalculationsActive =
+    to === "/calculations" &&
+    normalizedPath.startsWith("/calculations/") &&
+    normalizedPath !== "/calculations/new";
+  const isActive = normalizedPath === to || nestedCalculationsActive;
+
   if (disabled) {
     return (
       <span className={styles.disabledNav} aria-disabled="true" title="Требуются подключённые admin permissions">
@@ -30,14 +38,14 @@ function NavItem({ to, label, icon, disabled = false }: {
     );
   }
   return (
-    <NavLink
+    <Link
       to={to}
-      end={to === "/"}
-      className={({ isActive }) => isActive ? styles.activeNav : styles.navItem}
+      aria-current={isActive ? "page" : undefined}
+      className={isActive ? styles.activeNav : styles.navItem}
     >
       <span className={styles.navIcon} aria-hidden="true">{icon}</span>
       <span className={styles.navLabel}>{label}</span>
-    </NavLink>
+    </Link>
   );
 }
 
