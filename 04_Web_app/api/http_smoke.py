@@ -19,7 +19,7 @@ import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email.parser import BytesParser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,6 +71,15 @@ from services.campaign_template import (  # noqa: E402
     build_campaign_plan_template,
 )
 from services.product_api_service import paginate_jobs  # noqa: E402
+from services.product_navigation import (  # noqa: E402
+    ProductNavigationQueryError,
+    ProductNavigationStateError,
+    ProductNavigationUnavailableError,
+    build_calculation_history,
+    build_model_overview,
+    build_workspace_home,
+    load_help_catalog,
+)
 from services.job_progress_view import (  # noqa: E402
     ProgressProjectionError,
     build_job_progress_view,
@@ -93,7 +102,7 @@ from services.job_result_view import (  # noqa: E402
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.4.0"
+SERVER_VERSION = "0.5.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
     r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|result-view|media-plan|cancel))?$"
@@ -120,6 +129,10 @@ _CONTRACT_SCHEMA_FILES = {
     "job-result-view-v1": WEB_APP_DIR / "contracts" / "job_result_view_v1.schema.json",
     "scenario-media-plan-v1": WEB_APP_DIR / "contracts" / "scenario_media_plan_v1.schema.json",
     "mmm-fact-catalog-v1": WEB_APP_DIR / "contracts" / "mmm_fact_catalog_v1.schema.json",
+    "workspace-home-v1": WEB_APP_DIR / "contracts" / "workspace_home_v1.schema.json",
+    "calculation-history-v1": WEB_APP_DIR / "contracts" / "calculation_history_v1.schema.json",
+    "model-overview-v1": WEB_APP_DIR / "contracts" / "model_overview_v1.schema.json",
+    "help-catalog-v1": WEB_APP_DIR / "contracts" / "help_catalog_v1.schema.json",
 }
 
 
@@ -985,6 +998,65 @@ class HttpSmokeApplication:
             storage_prefix=storage_prefix,
         )
 
+    def model_overview(self) -> dict[str, Any]:
+        """Project verified model facts for the browser model page."""
+
+        registry_root = (
+            self.settings.registry_root
+            or self.settings.project_root
+            / "03_Outputs"
+            / "01_PyMC_outputs"
+            / "00_Model_registry"
+        ).expanduser().resolve()
+        return build_model_overview(
+            self.model_passport,
+            registry_root=registry_root,
+            registry_channel=self.settings.registry_channel,
+        )
+
+    def calculation_history(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        status: str | None,
+        search: str | None,
+        created_from: date | None,
+        created_to: date | None,
+        sort: str,
+    ) -> dict[str, Any]:
+        """Project persisted job state as a searchable product history."""
+
+        return build_calculation_history(
+            self.state.list_jobs(),
+            resource_reader=self.state.read_resource,
+            validation_reader=self.state.read_validation,
+            page=page,
+            page_size=page_size,
+            status=status,
+            search=search,
+            created_from=created_from,
+            created_to=created_to,
+            sort=sort,
+        )
+
+    def workspace_home(self) -> dict[str, Any]:
+        """Build the home snapshot without exposing lifecycle storage."""
+
+        return build_workspace_home(
+            self.state.list_jobs(),
+            model_overview=self.model_overview(),
+            resource_reader=self.state.read_resource,
+            validation_reader=self.state.read_validation,
+            progress_view_builder=self.progress_view,
+        )
+
+    @staticmethod
+    def help_catalog() -> dict[str, Any]:
+        """Return the reviewed structured help catalog."""
+
+        return load_help_catalog()
+
     def progress_view(self, job_id: str) -> dict[str, Any]:
         """Build one deterministic product snapshot for browser polling."""
 
@@ -1157,6 +1229,88 @@ def _job_list_parameters(query: str) -> tuple[int, int, str | None]:
     return limit, offset, status
 
 
+def _history_parameters(
+    query: str,
+) -> tuple[int, int, str | None, str | None, date | None, date | None, str]:
+    parameters = parse_qs(query, keep_blank_values=True)
+    allowed = {
+        "page",
+        "page_size",
+        "status",
+        "search",
+        "created_from",
+        "created_to",
+        "sort",
+    }
+    if set(parameters) - allowed:
+        raise ProductNavigationQueryError(
+            "Запрос содержит неподдерживаемые параметры."
+        )
+    if any(len(values) != 1 for values in parameters.values()):
+        raise ProductNavigationQueryError(
+            "Каждый параметр запроса можно указать только один раз."
+        )
+    try:
+        page = int(parameters.get("page", ["1"])[0])
+        page_size = int(parameters.get("page_size", ["25"])[0])
+    except ValueError as exc:
+        raise ProductNavigationQueryError(
+            "Номер страницы и количество строк на странице заполнены некорректно."
+        ) from exc
+    if page < 1 or not 1 <= page_size <= 100:
+        raise ProductNavigationQueryError(
+            "Номер страницы и количество строк на странице заполнены некорректно."
+        )
+
+    status = parameters.get("status", [None])[0]
+    if status is not None:
+        status = status.strip()
+        if status not in {
+            "active",
+            "queued",
+            "running",
+            "cancel_requested",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timed_out",
+        }:
+            raise ProductNavigationQueryError(
+                "Статус расчета заполнен некорректно."
+            )
+
+    search = parameters.get("search", [None])[0]
+    if search is not None:
+        search = search.strip()
+        if not search or len(search) > 120:
+            raise ProductNavigationQueryError(
+                "Строка поиска заполнена некорректно."
+            )
+
+    def optional_date(key: str) -> date | None:
+        raw = parameters.get(key, [None])[0]
+        if raw is None:
+            return None
+        try:
+            return date.fromisoformat(raw.strip())
+        except (AttributeError, ValueError) as exc:
+            raise ProductNavigationQueryError(
+                "Диапазон дат заполнен некорректно."
+            ) from exc
+
+    created_from = optional_date("created_from")
+    created_to = optional_date("created_to")
+    if created_from is not None and created_to is not None and created_to < created_from:
+        raise ProductNavigationQueryError("Диапазон дат заполнен некорректно.")
+
+    sort = parameters.get("sort", ["created_desc"])[0].strip()
+    if sort not in {"created_desc", "created_asc", "completed_desc", "campaign_asc"}:
+        raise ProductNavigationQueryError(
+            "Порядок сортировки заполнен некорректно."
+        )
+    return page, page_size, status, search, created_from, created_to, sort
+
+
 def _media_plan_parameters(
     query: str,
 ) -> tuple[str, int, int, str | None, str | None, str | None]:
@@ -1268,6 +1422,27 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         "user_action": str(catalog_entry["user_action"]),
                     }
                 },
+            )
+
+        def _product_navigation_error(self, error: Exception) -> None:
+            if isinstance(error, ProductNavigationQueryError):
+                self._error(
+                    HTTPStatus.UNPROCESSABLE_ENTITY,
+                    "PRODUCT_NAVIGATION_QUERY_INVALID",
+                    str(error),
+                )
+                return
+            if isinstance(error, ProductNavigationStateError):
+                self._error(
+                    HTTPStatus.CONFLICT,
+                    "PRODUCT_NAVIGATION_INCONSISTENT",
+                    "Опубликованные сведения не согласованы между собой.",
+                )
+                return
+            self._error(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "PRODUCT_NAVIGATION_UNAVAILABLE",
+                "Сведения для этой страницы временно недоступны.",
             )
 
         def do_OPTIONS(self) -> None:  # noqa: N802
@@ -1513,6 +1688,55 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         model_version_label=str(serving["display_name"]),
                     ),
                 )
+                return
+            if path in {
+                "/api/v1/workspace/home",
+                "/api/v1/calculations/history",
+                "/api/v1/model/overview",
+                "/api/v1/help/catalog",
+            }:
+                try:
+                    if path == "/api/v1/calculations/history":
+                        (
+                            page,
+                            page_size,
+                            status,
+                            search,
+                            created_from,
+                            created_to,
+                            sort,
+                        ) = _history_parameters(request_url.query)
+                        payload = application.calculation_history(
+                            page=page,
+                            page_size=page_size,
+                            status=status,
+                            search=search,
+                            created_from=created_from,
+                            created_to=created_to,
+                            sort=sort,
+                        )
+                    else:
+                        if request_url.query:
+                            raise ProductNavigationQueryError(
+                                "Запрос содержит неподдерживаемые параметры."
+                            )
+                        if path == "/api/v1/workspace/home":
+                            payload = application.workspace_home()
+                        elif path == "/api/v1/model/overview":
+                            payload = application.model_overview()
+                        else:
+                            payload = application.help_catalog()
+                except (
+                    ProductNavigationQueryError,
+                    ProductNavigationStateError,
+                    ProductNavigationUnavailableError,
+                ) as exc:
+                    self._product_navigation_error(exc)
+                    return
+                except Exception as exc:
+                    self._product_navigation_error(exc)
+                    return
+                self._json(HTTPStatus.OK, payload)
                 return
             if path == "/api/v1/jobs":
                 jobs = application.state.list_jobs()

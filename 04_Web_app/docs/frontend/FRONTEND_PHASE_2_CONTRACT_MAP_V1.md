@@ -202,3 +202,22 @@ Phase 2 не изменяет и не дублирует:
 Если реализация обнаружит новый обязательный field или endpoint, работа над
 затронутым экраном останавливается: gap сначала добавляется в этот contract map
 и выносится на отдельное согласование с backend owner.
+
+## 8. Backend Phase D: navigation pages
+
+Следующий frontend milestone должен использовать новые projections и не читать
+storage/registry/content files:
+
+| Экран | Endpoint | Contract | Source semantics |
+|---|---|---|---|
+| Главная | `GET /api/v1/workspace/home` | `workspace_home_v1` | Счетчики и карточки из persisted jobs, validation campaign summaries, published result/report flags, progress view и model overview. |
+| История | `GET /api/v1/calculations/history` | `calculation_history_v1` | Server-side pagination, status/search/date filters и stable sort. Missing campaign facts равны `null`. |
+| Модель | `GET /api/v1/model/overview` | `model_overview_v1` | Active ModelPassport плюс только реальные registry registrations; без fake quality score. |
+| Справка | `GET /api/v1/help/catalog` | `help_catalog_v1` | Reviewed structured JSON; frontend не читает Markdown и не рендерит raw HTML. |
+
+Frontend Phase D обязан валидировать `contract_name` и `schema_version`
+fail-closed, различать loading/ready/empty/unavailable/error/unsupported-contract
+и использовать только browser routes из response. Существующий
+`GET /api/v1/models/active` остается источником подробных target-specific
+channel policies; `model_overview_v1` предназначен для полной продуктовой
+проекции страницы и истории реальных версий.

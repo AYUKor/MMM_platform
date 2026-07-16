@@ -485,10 +485,14 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.4.0")
+        self.assertEqual(openapi["info"]["version"], "1.5.0")
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/media-plan", openapi["paths"])
+        self.assertIn("/api/v1/workspace/home", openapi["paths"])
+        self.assertIn("/api/v1/calculations/history", openapi["paths"])
+        self.assertIn("/api/v1/model/overview", openapi["paths"])
+        self.assertIn("/api/v1/help/catalog", openapi["paths"])
         for contract in (
             "application-lifecycle-v1",
             "decision-result-v1",
@@ -498,6 +502,10 @@ class HttpSmokeV1Test(unittest.TestCase):
             "job-result-view-v1",
             "scenario-media-plan-v1",
             "mmm-fact-catalog-v1",
+            "workspace-home-v1",
+            "calculation-history-v1",
+            "model-overview-v1",
+            "help-catalog-v1",
         ):
             status, schema, _ = self._request(
                 "GET", f"/api/v1/contracts/{contract}.json"

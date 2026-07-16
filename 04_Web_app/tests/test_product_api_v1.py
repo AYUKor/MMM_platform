@@ -80,6 +80,10 @@ class ProductApiContractTest(unittest.TestCase):
     def test_error_catalog_and_openapi_are_published_contracts(self) -> None:
         catalog = build_error_catalog_payload()
         validate_error_catalog(catalog)
+        for entry in catalog["errors"]:
+            display_text = entry["display_text"].casefold()
+            for forbidden in ("backend", "api", "worker", "stack trace", "local path"):
+                self.assertNotIn(forbidden, display_text)
         self.assertIn("MODEL_PASSPORT_UNAVAILABLE", {row["code"] for row in catalog["errors"]})
         document = load_openapi_document()
         self.assertEqual(document["openapi"], "3.1.0")
@@ -89,12 +93,19 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/jobs/{job_id}/result-view", document["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/media-plan", document["paths"])
         self.assertIn("/api/v1/meta/mmm-facts", document["paths"])
+        self.assertIn("/api/v1/workspace/home", document["paths"])
+        self.assertIn("/api/v1/calculations/history", document["paths"])
+        self.assertIn("/api/v1/model/overview", document["paths"])
+        self.assertIn("/api/v1/help/catalog", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.4.0")
+        self.assertEqual(document["info"]["version"], "1.5.0")
         error_codes = {row["code"] for row in catalog["errors"]}
         self.assertIn("RESULT_VIEW_INCONSISTENT", error_codes)
         self.assertIn("MEDIA_PLAN_QUERY_UNSUPPORTED", error_codes)
+        self.assertIn("PRODUCT_NAVIGATION_QUERY_INVALID", error_codes)
+        self.assertIn("PRODUCT_NAVIGATION_INCONSISTENT", error_codes)
+        self.assertIn("PRODUCT_NAVIGATION_UNAVAILABLE", error_codes)
 
     def test_job_pagination_and_filter_are_deterministic(self) -> None:
         records = [

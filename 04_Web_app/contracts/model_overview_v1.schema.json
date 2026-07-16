@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example/contracts/model_overview_v1.schema.json",
+  "title": "ModelOverviewV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "active_model",
+    "capabilities",
+    "data_requirements",
+    "methodology",
+    "limitations",
+    "versions",
+    "artifacts",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "contract_name": { "const": "model_overview_v1" },
+    "schema_version": { "const": "1.0.0" },
+    "record_origin": {
+      "enum": ["application_runtime", "synthetic_fixture"]
+    },
+    "active_model": { "$ref": "#/$defs/activeModel" },
+    "capabilities": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "data_requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dataRequirement" }
+    },
+    "methodology": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/methodology" }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "$ref": "#/$defs/limitation" }
+    },
+    "versions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/version" }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "updated_at_utc": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "nonEmptyText": { "type": "string", "minLength": 1 },
+    "nullableText": { "type": ["string", "null"], "minLength": 1 },
+    "modelId": {
+      "type": "string",
+      "pattern": "^pkg_[0-9a-f]{16}_[0-9a-f]{16}$"
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" }
+      }
+    },
+    "allowedUseCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "caution", "diagnostic", "unavailable"],
+      "properties": {
+        "primary": { "type": "integer", "minimum": 0 },
+        "caution": { "type": "integer", "minimum": 0 },
+        "diagnostic": { "type": "integer", "minimum": 0 },
+        "unavailable": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "supportedScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segments",
+        "channels",
+        "targets",
+        "geographies_n",
+        "capability_cells_n",
+        "allowed_use_counts"
+      ],
+      "properties": {
+        "segments": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyText" }
+        },
+        "channels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyText" }
+        },
+        "targets": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyText" }
+        },
+        "geographies_n": { "type": "integer", "minimum": 0 },
+        "capability_cells_n": { "type": "integer", "minimum": 0 },
+        "allowed_use_counts": { "$ref": "#/$defs/allowedUseCounts" }
+      }
+    },
+    "activeModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "model_id",
+        "display_name",
+        "version",
+        "published_at_utc",
+        "framework",
+        "purpose",
+        "training_period",
+        "supported_scope",
+        "description"
+      ],
+      "properties": {
+        "status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "display_text"],
+          "properties": {
+            "code": { "enum": ["available", "unavailable"] },
+            "display_text": { "$ref": "#/$defs/nonEmptyText" }
+          }
+        },
+        "model_id": {
+          "oneOf": [{ "$ref": "#/$defs/modelId" }, { "type": "null" }]
+        },
+        "display_name": { "$ref": "#/$defs/nullableText" },
+        "version": { "$ref": "#/$defs/nullableText" },
+        "published_at_utc": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "framework": { "$ref": "#/$defs/nullableText" },
+        "purpose": { "$ref": "#/$defs/nonEmptyText" },
+        "training_period": {
+          "oneOf": [{ "$ref": "#/$defs/period" }, { "type": "null" }]
+        },
+        "supported_scope": {
+          "oneOf": [
+            { "$ref": "#/$defs/supportedScope" },
+            { "type": "null" }
+          ]
+        },
+        "description": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability_id", "title", "status", "description"],
+      "properties": {
+        "capability_id": {
+          "enum": [
+            "incremental_effect_forecast",
+            "six_scenarios",
+            "budget_allocation",
+            "safe_recommendation",
+            "marketer_report"
+          ]
+        },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "status": { "enum": ["available", "conditional", "unavailable"] },
+        "description": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "dataRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_id",
+        "title",
+        "required",
+        "description",
+        "accepted_values"
+      ],
+      "properties": {
+        "requirement_id": { "$ref": "#/$defs/nonEmptyText" },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "required": { "type": "boolean" },
+        "description": { "$ref": "#/$defs/nonEmptyText" },
+        "accepted_values": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyText" }
+        }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method_id", "title", "summary"],
+      "properties": {
+        "method_id": {
+          "enum": [
+            "carryover",
+            "saturation",
+            "uncertainty",
+            "counterfactual_forecast",
+            "scenario_search",
+            "reliability_guardrails"
+          ]
+        },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "summary": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "status", "title", "display_text", "recommended_action"],
+      "properties": {
+        "code": { "$ref": "#/$defs/nonEmptyText" },
+        "status": { "enum": ["active", "unavailable"] },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "display_text": { "$ref": "#/$defs/nonEmptyText" },
+        "recommended_action": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "model_run_id",
+        "registered_at_utc",
+        "package_stage",
+        "activation_status",
+        "status",
+        "source"
+      ],
+      "properties": {
+        "model_id": { "$ref": "#/$defs/modelId" },
+        "model_run_id": { "$ref": "#/$defs/nonEmptyText" },
+        "registered_at_utc": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "package_stage": { "$ref": "#/$defs/nonEmptyText" },
+        "activation_status": { "$ref": "#/$defs/nonEmptyText" },
+        "status": { "enum": ["active", "registered"] },
+        "source": { "enum": ["registry_registration", "active_model_passport"] }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "title", "status", "path", "display_text"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/nonEmptyText" },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "status": { "enum": ["available", "unavailable"] },
+        "path": {
+          "oneOf": [
+            { "type": "string", "pattern": "^/(?!Users/|home/|private/|tmp/|var/)" },
+            { "type": "null" }
+          ]
+        },
+        "display_text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    }
+  }
+}

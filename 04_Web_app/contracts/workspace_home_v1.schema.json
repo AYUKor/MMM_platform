@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example/contracts/workspace_home_v1.schema.json",
+  "title": "WorkspaceHomeV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "summary",
+    "active_calculations",
+    "recent_calculations",
+    "model",
+    "quick_actions",
+    "warnings",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "contract_name": { "const": "workspace_home_v1" },
+    "schema_version": { "const": "1.0.0" },
+    "record_origin": {
+      "enum": ["application_runtime", "synthetic_fixture"]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["running", "queued", "completed_30d", "failed_30d"],
+      "properties": {
+        "running": { "type": "integer", "minimum": 0 },
+        "queued": { "type": "integer", "minimum": 0 },
+        "completed_30d": { "type": "integer", "minimum": 0 },
+        "failed_30d": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "active_calculations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/activeCalculation" }
+    },
+    "recent_calculations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recentCalculation" }
+    },
+    "model": { "$ref": "#/$defs/modelSummary" },
+    "quick_actions": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/quickAction" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/warning" }
+    },
+    "updated_at_utc": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"
+    },
+    "nonEmptyText": { "type": "string", "minLength": 1 },
+    "internalPath": { "type": "string", "pattern": "^/(?!Users/|home/|private/|tmp/|var/)" },
+    "jobStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {
+          "enum": [
+            "queued",
+            "running",
+            "cancel_requested",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timed_out"
+          ]
+        },
+        "display_text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date" }
+      }
+    },
+    "activeCalculation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "campaign_name",
+        "status",
+        "current_stage",
+        "created_at_utc",
+        "progress_path",
+        "can_cancel",
+        "display_text"
+      ],
+      "properties": {
+        "job_id": { "$ref": "#/$defs/opaqueId" },
+        "campaign_name": { "$ref": "#/$defs/nonEmptyText" },
+        "status": { "$ref": "#/$defs/jobStatus" },
+        "current_stage": {
+          "oneOf": [
+            { "$ref": "#/$defs/currentStage" },
+            { "type": "null" }
+          ]
+        },
+        "created_at_utc": { "type": "string", "format": "date-time" },
+        "progress_path": { "$ref": "#/$defs/internalPath" },
+        "can_cancel": { "type": "boolean" },
+        "display_text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "currentStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_id", "title", "status", "display_text"],
+      "properties": {
+        "stage_id": { "$ref": "#/$defs/nonEmptyText" },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "status": {
+          "enum": ["pending", "active", "completed", "warning", "failed", "skipped"]
+        },
+        "display_text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "recentCalculation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "campaign_name",
+        "campaign_period",
+        "total_budget_rub",
+        "created_at_utc",
+        "completed_at_utc",
+        "status",
+        "result_available",
+        "report_available",
+        "result_path",
+        "progress_path",
+        "warnings_count"
+      ],
+      "properties": {
+        "job_id": { "$ref": "#/$defs/opaqueId" },
+        "campaign_name": { "$ref": "#/$defs/nonEmptyText" },
+        "campaign_period": {
+          "oneOf": [{ "$ref": "#/$defs/period" }, { "type": "null" }]
+        },
+        "total_budget_rub": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "created_at_utc": { "type": "string", "format": "date-time" },
+        "completed_at_utc": { "type": ["string", "null"], "format": "date-time" },
+        "status": { "$ref": "#/$defs/jobStatus" },
+        "result_available": { "type": "boolean" },
+        "report_available": { "type": "boolean" },
+        "result_path": {
+          "oneOf": [{ "$ref": "#/$defs/internalPath" }, { "type": "null" }]
+        },
+        "progress_path": { "$ref": "#/$defs/internalPath" },
+        "warnings_count": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "modelSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "model_id",
+        "display_name",
+        "version",
+        "published_at_utc",
+        "training_period",
+        "supported_scope",
+        "description",
+        "details_path"
+      ],
+      "properties": {
+        "status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "display_text"],
+          "properties": {
+            "code": { "enum": ["available", "unavailable"] },
+            "display_text": { "$ref": "#/$defs/nonEmptyText" }
+          }
+        },
+        "model_id": { "type": ["string", "null"] },
+        "display_name": { "type": ["string", "null"] },
+        "version": { "type": ["string", "null"] },
+        "published_at_utc": { "type": ["string", "null"], "format": "date-time" },
+        "training_period": {
+          "oneOf": [{ "$ref": "#/$defs/period" }, { "type": "null" }]
+        },
+        "supported_scope": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["segments", "channels", "targets", "geographies_n"],
+              "properties": {
+                "segments": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                "channels": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                "targets": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                "geographies_n": { "type": "integer", "minimum": 0 }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "description": { "$ref": "#/$defs/nonEmptyText" },
+        "details_path": { "$ref": "#/$defs/internalPath" }
+      }
+    },
+    "quickAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "title", "description", "path"],
+      "properties": {
+        "action_id": {
+          "enum": ["new_calculation", "calculation_history", "model_overview", "help_catalog"]
+        },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "description": { "$ref": "#/$defs/nonEmptyText" },
+        "path": { "$ref": "#/$defs/internalPath" }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "title", "display_text", "recommended_action", "path"],
+      "properties": {
+        "code": { "$ref": "#/$defs/nonEmptyText" },
+        "severity": { "enum": ["info", "warning", "error"] },
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "display_text": { "$ref": "#/$defs/nonEmptyText" },
+        "recommended_action": { "$ref": "#/$defs/nonEmptyText" },
+        "path": {
+          "oneOf": [{ "$ref": "#/$defs/internalPath" }, { "type": "null" }]
+        }
+      }
+    }
+  }
+}

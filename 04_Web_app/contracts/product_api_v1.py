@@ -131,6 +131,26 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
             "ответственному за сервис."
         ),
     },
+    "PRODUCT_NAVIGATION_INCONSISTENT": {
+        "http_status": 409,
+        "retryable": False,
+        "display_text": "Опубликованные сведения не согласованы между собой.",
+        "user_action": (
+            "Не используйте спорные данные и сообщите ответственному за инструмент."
+        ),
+    },
+    "PRODUCT_NAVIGATION_QUERY_INVALID": {
+        "http_status": 422,
+        "retryable": True,
+        "display_text": "Параметры просмотра заполнены некорректно.",
+        "user_action": "Исправьте фильтры или параметры страницы и повторите запрос.",
+    },
+    "PRODUCT_NAVIGATION_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Сведения для этой страницы временно недоступны.",
+        "user_action": "Обновите страницу позже.",
+    },
     "PROGRESS_STATE_INCONSISTENT": {
         "http_status": 409,
         "retryable": True,
@@ -176,8 +196,8 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
     "ROUTE_NOT_FOUND": {
         "http_status": 404,
         "retryable": False,
-        "display_text": "API route не найден.",
-        "user_action": "Проверьте API version и адрес endpoint.",
+        "display_text": "Маршрут не найден.",
+        "user_action": "Проверьте адрес и версию запроса.",
     },
     "SCHEMA_NOT_FOUND": {
         "http_status": 404,
