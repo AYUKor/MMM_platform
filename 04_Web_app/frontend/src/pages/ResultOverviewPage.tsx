@@ -1,206 +1,286 @@
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { selectCampaign } from "../features/calculation-result/selectCampaign";
-import { getJob, getJobErrors } from "../shared/api/lifecycle-client";
-import { createResultProvider } from "../shared/api/provider-factory";
-import { Card } from "../shared/ui/Card";
-import { EmptyState } from "../shared/ui/EmptyState";
-import { ErrorState } from "../shared/ui/ErrorState";
-import { LoadingSkeleton } from "../shared/ui/LoadingSkeleton";
-import { ResultOverview } from "../widgets/result-overview/ResultOverview";
-import { PermissionDeniedPage } from "./PermissionDeniedPage";
+import {
+  JobResultInconsistentError,
+  JobResultNotReadyError,
+  JobResultNotFoundError,
+  JobResultUnavailableError,
+  MediaPlanQueryUnsupportedError,
+  UnsupportedJobResultContractError,
+  getJobResultView,
+  getScenarioMediaPlan,
+} from "../shared/api/job-result-client";
+import { Button } from "../shared/ui/Button";
+import { JobResultView } from "../features/job-result/JobResultView";
+import type { MediaPlanControls } from "../features/job-result/MediaPlanTab";
+import type { ResultMetricId } from "../features/job-result/jobResultFormatting";
+import {
+  mediaPlanScenarioFromSearch,
+  resultSearchParams,
+  resultTabFromSearch,
+  type ResultTabId,
+} from "../features/job-result/jobResultModel";
+import styles from "../features/job-result/job-result.module.css";
 
-const resultProvider = createResultProvider();
-const failedStatuses = new Set(["failed", "cancelled", "timed_out"]);
+const DEFAULT_MEDIA_CONTROLS: MediaPlanControls = {
+  channel: null,
+  geo: null,
+  page: 1,
+  pageSize: 25,
+};
 
-function FailedJobState({ status, retryable }: { status: string; retryable: boolean }) {
-  if (status === "cancelled") {
-    return (
-      <ErrorState
-        title="Расчет отменен"
-        description="Этот запуск был отменен. Создайте новый расчет, если результат все еще нужен."
-      />
-    );
+interface PageStateCopy {
+  eyebrow: string;
+  title: string;
+  description: string;
+  retryLabel: string | null;
+  showProgressLink: boolean;
+}
+
+function pageStateCopy(error: unknown): PageStateCopy {
+  if (error instanceof JobResultNotFoundError) {
+    return {
+      eyebrow: "Результат расчета",
+      title: "Результат не найден",
+      description: "Проверьте адрес или вернитесь к списку расчетов.",
+      retryLabel: null,
+      showProgressLink: false,
+    };
   }
-  if (status === "timed_out") {
-    return (
-      <ErrorState
-        title="Расчет не успел завершиться"
-        description={retryable
-          ? "Операция превысила допустимое время. Расчет можно запустить повторно."
-          : "Операция превысила допустимое время. Перед повтором обратитесь к администратору."}
-      />
-    );
+  if (error instanceof JobResultNotReadyError) {
+    return {
+      eyebrow: "Расчет продолжается",
+      title: "Результат еще не готов",
+      description: "Откройте ход расчета или повторите запрос через несколько секунд. Автоматического перехода не будет.",
+      retryLabel: "Проверить еще раз",
+      showProgressLink: true,
+    };
   }
+  if (error instanceof JobResultInconsistentError) {
+    return {
+      eyebrow: "Результат еще готовится",
+      title: "Данные временно не согласованы",
+      description: "Сервис завершает публикацию результата. Повторите запрос через несколько секунд.",
+      retryLabel: "Обновить сведения",
+      showProgressLink: false,
+    };
+  }
+  if (error instanceof JobResultUnavailableError) {
+    return {
+      eyebrow: "Результат расчета",
+      title: "Результат временно недоступен",
+      description: "Сервис не может безопасно собрать представление результата. Значения не восстанавливаются в браузере.",
+      retryLabel: "Повторить",
+      showProgressLink: false,
+    };
+  }
+  if (error instanceof UnsupportedJobResultContractError) {
+    return {
+      eyebrow: "Защитная проверка",
+      title: "Формат результата не поддерживается",
+      description: "Ответ не прошел проверку контракта и поэтому не показан.",
+      retryLabel: "Повторить",
+      showProgressLink: false,
+    };
+  }
+  return {
+    eyebrow: "Результат расчета",
+    title: "Не удалось загрузить результат",
+    description: "Проверьте соединение и повторите попытку.",
+    retryLabel: "Повторить",
+    showProgressLink: false,
+  };
+}
+
+function ResultPageState({
+  copy,
+  jobId,
+  onRetry,
+}: {
+  copy: PageStateCopy;
+  jobId: string;
+  onRetry: () => void;
+}) {
   return (
-    <ErrorState
-      title="Расчет завершился с ошибкой"
-      description={retryable
-        ? "Ошибка допускает повторный запуск. Проверьте входной файл и попробуйте снова."
-        : "Автоматический повтор недоступен. Перед новым запуском обратитесь к администратору."}
-    />
+    <section className={styles.pageState} role="alert">
+      <span className={styles.eyebrow}>{copy.eyebrow}</span>
+      <h1>{copy.title}</h1>
+      <p>{copy.description}</p>
+      <div className={styles.pageStateActions}>
+        {copy.retryLabel ? <Button onClick={onRetry}>{copy.retryLabel}</Button> : null}
+        {copy.showProgressLink ? (
+          <Link className={styles.secondaryLink} to={`/calculations/${encodeURIComponent(jobId)}/progress`}>
+            Открыть ход расчета
+          </Link>
+        ) : null}
+        <Link className={styles.secondaryLink} to="/calculations">Все расчеты</Link>
+      </div>
+    </section>
+  );
+}
+
+function ResultLoadingState() {
+  return (
+    <div className={styles.resultLoading} aria-live="polite" aria-busy="true">
+      <div className={styles.loadingBreadcrumb} aria-hidden="true" />
+      <header className={styles.loadingHeader}>
+        <div>
+          <span aria-hidden="true" />
+          <h1 aria-hidden="true" />
+          <p>Получаем результат расчета…</p>
+        </div>
+        <i aria-hidden="true" />
+        <dl aria-hidden="true">
+          {Array.from({ length: 6 }, (_, index) => <div key={index}><dt /><dd /></div>)}
+        </dl>
+      </header>
+      <div className={styles.loadingTabs} aria-hidden="true">
+        {Array.from({ length: 4 }, (_, index) => <span key={index} />)}
+      </div>
+      <div className={styles.loadingDecision} aria-hidden="true">
+        <section><span /><h2 /><p /><p /><div /></section>
+        <aside><div /><div /></aside>
+      </div>
+    </div>
   );
 }
 
 export function ResultOverviewPage() {
-  const { id } = useParams();
-  const [searchParams] = useSearchParams();
-  const forcedState = import.meta.env.DEV ? searchParams.get("state") : null;
-  const campaignId = searchParams.get("campaignId");
+  const { id = "" } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = resultTabFromSearch(searchParams.get("tab"));
+  const [metricId, setMetricId] = useState<ResultMetricId>("incremental_turnover_rub");
+  const [mediaControls, setMediaControls] = useState<MediaPlanControls>(DEFAULT_MEDIA_CONTROLS);
 
-  const lifecycleQuery = useQuery({
-    queryKey: ["result-job", id],
-    queryFn: () => getJob(id ?? ""),
-    enabled: Boolean(id) && forcedState === null && resultProvider.kind === "http",
+  const resultQuery = useQuery({
+    queryKey: ["job-result-view", id],
+    queryFn: ({ signal }) => getJobResultView(id, signal),
+    enabled: Boolean(id),
+    retry: false,
+    staleTime: 0,
   });
-  const jobStatus = lifecycleQuery.data?.status.code;
-  const errorsQuery = useQuery({
-    queryKey: ["result-job-errors", id],
-    queryFn: () => getJobErrors(id ?? ""),
-    enabled:
-      Boolean(id) &&
-      forcedState === null &&
-      resultProvider.kind === "http" &&
-      typeof jobStatus === "string" &&
-      failedStatuses.has(jobStatus),
-  });
-  const overviewCanLoad =
-    resultProvider.kind !== "http" || jobStatus === "succeeded";
-  const overviewQuery = useQuery({
-    queryKey: ["result-overview", id, resultProvider.kind],
-    queryFn: () => resultProvider.getOverview(id ?? ""),
-    enabled: Boolean(id) && forcedState === null && overviewCanLoad,
+  const mediaScenarioId = resultQuery.data
+    ? mediaPlanScenarioFromSearch(resultQuery.data, searchParams.get("scenario"))
+    : null;
+  const previousMediaScenario = useRef(mediaScenarioId);
+
+  useEffect(() => {
+    if (!resultQuery.data) return;
+    const canonical = resultSearchParams(activeTab, activeTab === "media-plan" ? mediaScenarioId : null);
+    if (canonical.toString() !== searchParams.toString()) {
+      setSearchParams(canonical, { replace: true });
+    }
+  }, [activeTab, mediaScenarioId, resultQuery.data, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (previousMediaScenario.current !== mediaScenarioId) {
+      previousMediaScenario.current = mediaScenarioId;
+      setMediaControls(DEFAULT_MEDIA_CONTROLS);
+    }
+  }, [mediaScenarioId]);
+
+  const mediaQuery = useQuery({
+    queryKey: [
+      "scenario-media-plan",
+      id,
+      mediaScenarioId,
+      mediaControls.channel,
+      mediaControls.geo,
+      mediaControls.page,
+      mediaControls.pageSize,
+    ],
+    queryFn: ({ signal }) => {
+      if (!resultQuery.data || mediaScenarioId === null) {
+        throw new Error("Медиаплан нельзя запросить без результата и сценария.");
+      }
+      return getScenarioMediaPlan(
+        id,
+        {
+          scenarioId: mediaScenarioId,
+          channel: mediaControls.channel,
+          geo: mediaControls.geo,
+          page: mediaControls.page,
+          pageSize: mediaControls.pageSize,
+        },
+        resultQuery.data,
+        signal,
+      );
+    },
+    enabled: Boolean(id) && Boolean(resultQuery.data) && activeTab === "media-plan" && mediaScenarioId !== null,
+    retry: false,
+    staleTime: 0,
   });
 
   if (!id) {
-    return <ErrorState title="Расчет не указан" description="Вернитесь к истории и выберите расчет." />;
+    return <ResultPageState copy={pageStateCopy(new JobResultNotFoundError())} jobId={id} onRetry={() => undefined} />;
   }
-  if (forcedState === "loading") return <LoadingSkeleton />;
-  if (forcedState === "permission") return <PermissionDeniedPage />;
-  if (forcedState === "empty") {
-    return <EmptyState title="Нет данных" description="Готовый обзор не содержит доступных кампаний." />;
+
+  if (resultQuery.isPending && !resultQuery.data) {
+    return <ResultLoadingState />;
   }
-  if (forcedState === "invalid") {
+
+  if (!resultQuery.data) {
     return (
-      <ErrorState
-        title="Результат имеет неизвестный формат"
-        description="Данные не прошли проверку контракта и поэтому не показаны."
-      />
-    );
-  }
-  if (forcedState === "failed") {
-    return <FailedJobState status="failed" retryable />;
-  }
-  if (forcedState === "unavailable") {
-    return (
-      <EmptyState
-        title="Результат недоступен"
-        description="Готовый обзор для этого расчета отсутствует. Значения не восстанавливаются в браузере."
-      />
-    );
-  }
-  if (forcedState === "error") {
-    return (
-      <ErrorState
-        title="Не удалось загрузить результат"
-        description="Соединение прервалось. Повторите попытку после его восстановления."
+      <ResultPageState
+        copy={pageStateCopy(resultQuery.error)}
+        jobId={id}
+        onRetry={() => { void resultQuery.refetch(); }}
       />
     );
   }
 
-  if (resultProvider.kind === "http" && lifecycleQuery.isLoading) return <LoadingSkeleton />;
-  if (lifecycleQuery.isError) {
-    return (
-      <ErrorState
-        title="Не удалось проверить состояние расчета"
-        description="История расчета временно недоступна. Повторите попытку позже."
-      />
-    );
-  }
-  if (jobStatus === "queued" || jobStatus === "running" || jobStatus === "cancel_requested") {
-    return (
-      <Card as="section" className="campaign-selection" role="status">
-        <h1>Расчет еще выполняется</h1>
-        <p>Готовый обзор появится после успешного завершения всех этапов.</p>
-        <div className="campaign-selection__actions">
-          <Link to={`/calculations/${encodeURIComponent(id)}/progress`}>Открыть прогресс</Link>
-        </div>
-      </Card>
-    );
-  }
-  if (typeof jobStatus === "string" && failedStatuses.has(jobStatus)) {
-    return (
-      <FailedJobState
-        status={jobStatus}
-        retryable={errorsQuery.data?.some((error) => error.retryable) ?? false}
-      />
-    );
-  }
-  if (resultProvider.kind === "http" && jobStatus !== "succeeded") {
-    return (
-      <ErrorState
-        title="Состояние расчета не поддерживается"
-        description="Обзор не будет показан до подтвержденного успешного завершения."
-      />
-    );
-  }
-  if (overviewQuery.isLoading) return <LoadingSkeleton />;
-  if (overviewQuery.isError) {
-    return (
-      <ErrorState
-        title="Не удалось загрузить результат"
-        description={
-          overviewQuery.error instanceof Error
-            ? overviewQuery.error.message
-            : "Повторите попытку после восстановления соединения."
-        }
-      />
-    );
-  }
-  if (!overviewQuery.data) {
-    return (
-      <EmptyState
-        title="Нет данных"
-        description="Готовый обзор отсутствует. Нулевые значения не подставляются."
-      />
-    );
-  }
+  const refreshNotice = resultQuery.error
+    ? resultQuery.error instanceof JobResultInconsistentError
+      ? "Данные временно не согласованы. Последний безопасный снимок результата сохранен."
+      : resultQuery.error instanceof UnsupportedJobResultContractError
+        ? "Получен неподдерживаемый формат. Последний безопасный снимок результата сохранен."
+        : "Не удалось обновить результат. Последний полученный снимок сохранен."
+    : null;
 
-  const selection = selectCampaign(overviewQuery.data, campaignId);
-  if (selection.status === "empty") {
-    return (
-      <EmptyState
-        title="Нет кампаний"
-        description="В результате нет ни одной доступной кампании."
-      />
-    );
-  }
-  if (selection.status === "not-found") {
-    return (
-      <ErrorState
-        title="Кампания не найдена"
-        description="Выбранная кампания отсутствует в этом результате. Вернитесь к выбору кампании."
-      />
-    );
-  }
-  if (selection.status === "selection-required") {
-    return (
-      <Card as="section" className="campaign-selection">
-        <h1>Выберите кампанию</h1>
-        <p>Результат содержит несколько кампаний. Первая не выбирается автоматически.</p>
-        <div className="campaign-selection__actions">
-          {selection.campaigns.map((campaign) => (
-            <Link
-              key={campaign.campaign_id}
-              to={`?campaignId=${encodeURIComponent(campaign.campaign_id)}`}
-            >
-              {campaign.passport.campaign_name}
-            </Link>
-          ))}
-        </div>
-      </Card>
-    );
-  }
+  const changeTab = (tab: ResultTabId) => {
+    const scenario = tab === "media-plan"
+      ? mediaPlanScenarioFromSearch(resultQuery.data, searchParams.get("scenario"))
+      : null;
+    setSearchParams(resultSearchParams(tab, scenario));
+  };
 
-  return <ResultOverview result={overviewQuery.data} campaign={selection.campaign} />;
+  const retryMediaPlan = () => {
+    if (mediaQuery.error instanceof MediaPlanQueryUnsupportedError) {
+      const controlsAreDefault =
+        mediaControls.channel === null &&
+        mediaControls.geo === null &&
+        mediaControls.page === DEFAULT_MEDIA_CONTROLS.page &&
+        mediaControls.pageSize === DEFAULT_MEDIA_CONTROLS.pageSize;
+      if (!controlsAreDefault) {
+        setMediaControls(DEFAULT_MEDIA_CONTROLS);
+        return;
+      }
+    }
+    void mediaQuery.refetch();
+  };
+
+  return (
+    <JobResultView
+      result={resultQuery.data}
+      activeTab={activeTab}
+      metricId={metricId}
+      mediaPlan={mediaQuery.data}
+      mediaScenarioId={mediaScenarioId}
+      mediaControls={mediaControls}
+      mediaLoading={mediaQuery.isPending || mediaQuery.isFetching}
+      mediaError={mediaQuery.error}
+      refreshNotice={refreshNotice}
+      onTabChange={changeTab}
+      onMetricChange={setMetricId}
+      onMediaScenarioChange={(scenarioId) => {
+        setMediaControls(DEFAULT_MEDIA_CONTROLS);
+        setSearchParams(resultSearchParams("media-plan", scenarioId));
+      }}
+      onMediaControlsChange={setMediaControls}
+      onMediaPageChange={(page) => setMediaControls((current) => ({ ...current, page }))}
+      onMediaRetry={retryMediaPlan}
+      onRefresh={() => { void resultQuery.refetch(); }}
+    />
+  );
 }
