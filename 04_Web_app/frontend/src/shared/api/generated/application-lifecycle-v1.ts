@@ -137,6 +137,9 @@ export interface ValidationIssue {
   code: StableCode;
   severity: "blocking" | "warning";
   display_text: string;
+  what?: string;
+  why?: string;
+  recommended_action?: string;
   scope: "upload" | "row" | "campaign" | "cell" | "model";
   recoverable: boolean;
   source_row_ids: number[];

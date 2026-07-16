@@ -130,6 +130,11 @@
     "validationIssue": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "what": ["why", "recommended_action"],
+        "why": ["what", "recommended_action"],
+        "recommended_action": ["what", "why"]
+      },
       "required": [
         "code",
         "severity",
@@ -143,6 +148,9 @@
         "code": {"$ref": "#/$defs/stableCode"},
         "severity": {"enum": ["blocking", "warning"]},
         "display_text": {"type": "string", "minLength": 1},
+        "what": {"type": "string", "minLength": 1},
+        "why": {"type": "string", "minLength": 1},
+        "recommended_action": {"type": "string", "minLength": 1},
         "scope": {"enum": ["upload", "row", "campaign", "cell", "model"]},
         "recoverable": {"type": "boolean"},
         "source_row_ids": {

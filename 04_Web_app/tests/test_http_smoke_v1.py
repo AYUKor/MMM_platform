@@ -420,7 +420,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.2.0")
+        self.assertEqual(openapi["info"]["version"], "1.2.1")
         for contract in (
             "application-lifecycle-v1",
             "decision-result-v1",

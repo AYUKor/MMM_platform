@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Versioned HTTP boundary for campaign upload, validation, asynchronous forecast and optimizer jobs, browser-safe results, model passport and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -260,7 +260,7 @@
     "responses": {
       "ApiError": {"description": "Browser-safe API error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}}},
       "CampaignUpload": {"description": "CampaignUpload v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CampaignUpload"}}}},
-      "ValidationResult": {"description": "ValidationResult v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationResult"}}}},
+      "ValidationResult": {"description": "ValidationResult v1 with optional actionable issue guidance and deterministic preview", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationResult"}}}},
       "DecisionJob": {"description": "DecisionJob v1", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionJob"}}}}
     },
     "schemas": {

@@ -347,12 +347,15 @@ class LocalCampaignService:
                         ValidationIssue(
                             code="UPLOAD_NOT_PARSED_AFTER_RESTART",
                             severity="blocking",
-                            display_text=(
-                                "Backend был перезапущен до завершения разбора файла. "
-                                "Повторите загрузку и validation."
-                            ),
+                            display_text="Разбор файла был прерван. Загрузите файл повторно.",
                             scope="upload",
                             recoverable=True,
+                            what="Разбор загруженного файла не завершен.",
+                            why=(
+                                "Сервис был перезапущен до того, как структура файла "
+                                "успела пройти проверку."
+                            ),
+                            recommended_action="Загрузите исходный файл повторно.",
                         ),
                     ),
                 )
@@ -644,16 +647,36 @@ class LocalCampaignService:
         detected_campaigns_n: int | None,
     ) -> ValidationResultV1:
         count = int(detected_campaigns_n or 0)
+        if count == 0:
+            why = (
+                "Без названия кампании система не может связать строки файла "
+                "с одним расчетом."
+            )
+            action = (
+                "Проверьте колонку campaign_name, укажите одно название кампании "
+                "во всех строках и загрузите файл повторно."
+            )
+        else:
+            why = (
+                "Один расчет предназначен для одной кампании; совместная обработка "
+                "смешала бы разные планы и результаты."
+            )
+            action = (
+                "Разделите файл: сохраните каждую кампанию в отдельный CSV или XLSX "
+                "и загрузите нужную кампанию повторно."
+            )
         issue = ValidationIssue(
             code="CAMPAIGN_COUNT_NOT_ONE",
             severity="blocking",
             display_text=(
-                f"В файле найдено кампаний: {count}. Для одного расчета загрузите "
-                "отдельный CSV или XLSX ровно с одной кампанией. Backend не разделяет "
-                "файл с несколькими кампаниями автоматически."
+                f"В файле найдено кампаний: {count}. Для расчета требуется ровно "
+                "одна кампания."
             ),
             scope="upload",
             recoverable=True,
+            what=f"В файле найдено кампаний: {count}.",
+            why=why,
+            recommended_action=action,
         )
         blocked = replace(
             validation,
@@ -705,22 +728,40 @@ class LocalCampaignService:
                     code="UNSUPPORTED_MODEL_CELLS",
                     severity="blocking",
                     display_text=(
-                        f"Модель не поддерживает {len(unsupported)} связок campaign x geo x channel x target. "
-                        "Исправьте медиаплан или используйте подходящий model package."
+                        "Строк медиаплана, недоступных для расчета: "
+                        f"{len(unsupported)}."
                     ),
                     scope="cell",
                     recoverable=True,
                     affected_cells=affected,
+                    what=(
+                        f"Обнаружено неподдерживаемых сочетаний сегмента, географии, "
+                        f"канала и показателя: {len(unsupported)}."
+                    ),
+                    why=(
+                        "Для указанных сочетаний нет разрешенной оценки эффективности, "
+                        "поэтому включать их в расчет нельзя."
+                    ),
+                    recommended_action=(
+                        "Исправьте отмеченные строки: выберите доступные географии или "
+                        "каналы либо исключите эти строки из медиаплана."
+                    ),
                 )
         return ValidationIssue(
             code="CAMPAIGN_VALIDATION_FAILED",
             severity="blocking",
-            display_text=(
-                "Кампания не прошла model-aware validation. Проверьте обязательные поля, "
-                "поддержку geo x channel и формат бюджета."
-            ),
+            display_text="План не прошел проверку входных данных.",
             scope="upload",
             recoverable=True,
+            what="Во входном плане обнаружена ошибка, которая блокирует расчет.",
+            why=(
+                "Один или несколько обязательных параметров не распознаны либо "
+                "недоступны для расчета."
+            ),
+            recommended_action=(
+                "Проверьте названия колонок, даты, бюджет, сегменты, географии и "
+                "каналы, затем загрузите исправленный файл."
+            ),
         )
 
     def _policy_selection(self, package: ModelPackage) -> PolicySelection:
@@ -952,7 +993,10 @@ class LocalCampaignService:
                 ValidationPreviewCheck(
                     code="BUDGET_RECONCILIATION",
                     status="passed",
-                    display_text="Бюджет исходного плана и daily flighting сходятся.",
+                    display_text=(
+                        "Сумма бюджета в исходном плане совпадает с суммой после "
+                        "распределения по дням."
+                    ),
                 ),
                 ValidationPreviewCheck(
                     code="DATES",
@@ -963,17 +1007,18 @@ class LocalCampaignService:
                     code="MODEL_SUPPORT",
                     status=model_status,
                     display_text=(
-                        "Есть поддерживаемые моделью связки с ограничениями использования."
+                        "Для части строк есть ограничения по качеству и допустимому "
+                        "использованию оценок."
                         if warnings
-                        else "Сегменты, каналы и географии поддерживаются выбранной моделью."
+                        else "Все сочетания сегментов, каналов и географий доступны для расчета."
                     ),
                 ),
                 ValidationPreviewCheck(
                     code="HISTORICAL_SPEND_SIMILARITY",
                     status="unavailable",
                     display_text=(
-                        "Сходство daily spend с историческим диапазоном проверяется "
-                        "на этапе сценарного расчета."
+                        "Сходство дневного бюджета с историческим диапазоном будет "
+                        "проверено во время расчета сценариев."
                     ),
                 ),
             ),
@@ -986,10 +1031,40 @@ class LocalCampaignService:
     ) -> tuple[ValidationIssue, ...]:
         campaign_ids = {campaign.campaign_name: campaign.campaign_id for campaign in campaigns}
         warnings: list[ValidationIssue] = []
-        for allowed_use, code, text in (
-            ("caution", "MODEL_CAUTION_CELLS", "Часть связок разрешена только с повышенной осторожностью."),
-            ("diagnostic", "MODEL_DIAGNOSTIC_CELLS", "Часть target-оценок доступна только как диагностика."),
-        ):
+        guidance = {
+            "caution": {
+                "code": "MODEL_CAUTION_CELLS",
+                "display": (
+                    "Строк, результаты которых требуют осторожной интерпретации: "
+                    "{count}."
+                ),
+                "what": (
+                    "Строк с ограничениями по использованию оценки: {count}."
+                ),
+                "why": (
+                    "Для указанных сочетаний оценка разрешена только с ограничениями "
+                    "качества."
+                ),
+                "action": (
+                    "Проверьте отмеченные строки и не используйте их как единственное "
+                    "основание для перераспределения бюджета."
+                ),
+            },
+            "diagnostic": {
+                "code": "MODEL_DIAGNOSTIC_CELLS",
+                "display": "Строк, для которых доступны только справочные оценки: {count}.",
+                "what": "Строк, доступных только в диагностическом режиме: {count}.",
+                "why": (
+                    "Эти оценки не допускаются как основа основной рекомендации по "
+                    "распределению бюджета."
+                ),
+                "action": (
+                    "Используйте их только как справочную информацию и не меняйте "
+                    "медиаплан только на их основании."
+                ),
+            },
+        }
+        for allowed_use, message in guidance.items():
             rows = [row for row in validation_rows if str(row.get("allowed_use") or "") == allowed_use]
             if not rows:
                 continue
@@ -1005,12 +1080,15 @@ class LocalCampaignService:
             )
             warnings.append(
                 ValidationIssue(
-                    code=code,
+                    code=message["code"],
                     severity="warning",
-                    display_text=f"{text} Затронуто строк проверки: {len(rows)}.",
+                    display_text=message["display"].format(count=len(rows)),
                     scope="model",
                     recoverable=True,
                     affected_cells=cells,
+                    what=message["what"].format(count=len(rows)),
+                    why=message["why"],
+                    recommended_action=message["action"],
                 )
             )
         return tuple(warnings)

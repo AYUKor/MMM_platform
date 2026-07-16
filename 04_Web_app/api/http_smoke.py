@@ -467,7 +467,7 @@ class LocalApiState:
                 path,
                 {
                     "code": "HTTP_SMOKE_BACKGROUND_FAILURE",
-                    "display_text": "Локальный backend не смог завершить фоновую обработку.",
+                    "display_text": "Не удалось завершить фоновую обработку.",
                 },
             )
 
@@ -548,8 +548,8 @@ class LocalApiState:
                     category="infrastructure",
                     retryable=True,
                     display_text=(
-                        "Локальный backend был перезапущен во время расчета. "
-                        "Запустите кампанию повторно из завершенной validation."
+                        "Сервис был перезапущен во время расчета. Запустите расчет "
+                        "повторно со страницы проверенного плана."
                     ),
                     actor_type="system",
                     terminal_display_text="Расчет прерван перезапуском",
@@ -580,7 +580,7 @@ class LocalApiState:
                 retryable=True,
                 display_text=display_text,
                 actor_type="system",
-                terminal_display_text="Техническая ошибка backend",
+                terminal_display_text="Техническая ошибка сервиса",
             )
             return True
 
@@ -627,7 +627,7 @@ class LocalApiState:
                 from_status_code="queued",
                 to_status=LifecycleStatus("running", "Выполняется"),
                 reason_code=None,
-                display_text="Backend принял фоновую задачу в обработку.",
+                display_text="Задача передана на выполнение.",
             )
             started_event.validate()
             events.append(started_event.to_dict())
@@ -894,7 +894,7 @@ class HttpSmokeApplication:
                 job.job_id,
                 code="HTTP_BACKGROUND_FAILURE",
                 display_text=(
-                    "Backend не смог завершить фоновую обработку. "
+                    "Не удалось завершить фоновую обработку. "
                     "Попробуйте повторить расчет после технической проверки."
                 ),
             )

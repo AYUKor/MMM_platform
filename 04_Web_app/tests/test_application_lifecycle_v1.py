@@ -151,6 +151,46 @@ class ApplicationLifecycleV1ContractTest(unittest.TestCase):
         self.assertEqual(terminal_error["category"], "artifact_integrity")
         self.assertFalse(terminal_error["retryable"])
 
+    def test_validation_issue_guidance_is_optional_but_complete_when_present(self) -> None:
+        payload = copy.deepcopy(self.failure["validations"][0])
+        issue = payload["blocking_errors"][0]
+        issue.update(
+            {
+                "what": "Обнаружена ошибка в строке медиаплана.",
+                "why": "Без исправления строку нельзя включить в расчет.",
+                "recommended_action": "Заполните обязательное поле и повторите загрузку.",
+            }
+        )
+        self.assertEqual(validate_lifecycle_payload(payload), payload)
+
+        issue.pop("recommended_action")
+        with self.assertRaisesRegex(
+            LifecycleContractValidationError,
+            "guidance requires what, why and recommended_action",
+        ):
+            validate_lifecycle_payload(payload)
+
+    @unittest.skipIf(jsonschema is None, "jsonschema is unavailable")
+    def test_validation_issue_guidance_matches_json_schema(self) -> None:
+        payload = copy.deepcopy(self.failure["validations"][0])
+        issue = payload["blocking_errors"][0]
+        issue.update(
+            {
+                "what": "Обнаружена ошибка в строке медиаплана.",
+                "why": "Без исправления строку нельзя включить в расчет.",
+                "recommended_action": "Заполните обязательное поле и повторите загрузку.",
+            }
+        )
+        validator = jsonschema.Draft202012Validator(
+            self.schema,
+            format_checker=jsonschema.Draft202012Validator.FORMAT_CHECKER,
+        )
+        self.assertEqual(list(validator.iter_errors(payload)), [])
+
+        issue.pop("why")
+        errors = list(validator.iter_errors(payload))
+        self.assertTrue(errors)
+
     def test_parsed_upload_requires_parser_payload_and_counts(self) -> None:
         for field_name in (
             "parser_name",

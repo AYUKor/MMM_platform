@@ -126,7 +126,10 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "http_status": 503,
         "retryable": True,
         "display_text": "Паспорт активной модели временно недоступен.",
-        "user_action": "Повторите запрос после проверки backend readiness.",
+        "user_action": (
+            "Повторите запрос позже. Если ошибка сохраняется, сообщите "
+            "ответственному за сервис."
+        ),
     },
     "RESOURCE_NOT_READY": {
         "http_status": 404,
@@ -162,7 +165,10 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "http_status": 503,
         "retryable": True,
         "display_text": "Campaign upload service не настроен.",
-        "user_action": "Проверьте model package и backend readiness.",
+        "user_action": (
+            "Обратитесь к ответственному за сервис: прием файлов временно "
+            "недоступен."
+        ),
     },
     "VALIDATION_NOT_FOUND": {
         "http_status": 404,

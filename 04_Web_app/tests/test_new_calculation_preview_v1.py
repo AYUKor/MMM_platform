@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -45,6 +47,27 @@ HAPPY_FIXTURE = (
     / "fixtures"
     / "application_lifecycle_v1_happy_path_synthetic.json"
 )
+FORBIDDEN_MARKETER_TERMS = (
+    "backend",
+    "model package",
+    "model-aware validation",
+    "campaign x geo x channel x target",
+    "daily flighting",
+)
+
+
+def _literal_text(node: ast.AST | None) -> str:
+    if node is None:
+        return ""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(_literal_text(value) for value in node.values)
+    if isinstance(node, ast.FormattedValue):
+        return ""
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _literal_text(node.left) + _literal_text(node.right)
+    return "".join(_literal_text(child) for child in ast.iter_child_nodes(node))
 
 
 class _DeferredExecutor:
@@ -114,6 +137,19 @@ class NewCalculationPreviewV1Test(unittest.TestCase):
         self.executor.run_next()
         return self.state.read_validation(validation["validation_id"])
 
+    def _assert_actionable_issue(
+        self,
+        issue: dict[str, Any],
+        expected_code: str,
+    ) -> None:
+        self.assertEqual(issue["code"], expected_code)
+        for field_name in ("what", "why", "recommended_action"):
+            self.assertIsInstance(issue[field_name], str)
+            self.assertTrue(issue[field_name].strip())
+        display_text = issue["display_text"].lower()
+        for forbidden in FORBIDDEN_MARKETER_TERMS:
+            self.assertNotIn(forbidden, display_text)
+
     def test_csv_and_xlsx_are_accepted_while_xls_and_tsv_are_rejected(self) -> None:
         csv_content = (
             "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
@@ -173,6 +209,9 @@ class NewCalculationPreviewV1Test(unittest.TestCase):
             validation["blocking_errors"][0]["code"],
             "CAMPAIGN_COUNT_NOT_ONE",
         )
+        issue = validation["blocking_errors"][0]
+        self._assert_actionable_issue(issue, "CAMPAIGN_COUNT_NOT_ONE")
+        self.assertIn("campaign_name", issue["recommended_action"])
         with self.assertRaises(ValueError):
             self.service.create_job(
                 validation["validation_id"],
@@ -190,7 +229,9 @@ class NewCalculationPreviewV1Test(unittest.TestCase):
         validation = self._validate_count(upload)
         self.assertEqual(validation["status"]["code"], "invalid")
         self.assertFalse(validation["job_creation_allowed"])
-        self.assertIn("не разделяет", validation["blocking_errors"][0]["display_text"])
+        issue = validation["blocking_errors"][0]
+        self._assert_actionable_issue(issue, "CAMPAIGN_COUNT_NOT_ONE")
+        self.assertIn("Разделите файл", issue["recommended_action"])
         self.assertEqual(self.executor.calls, [])
 
     def test_one_campaign_continues_to_normal_model_aware_validation(self) -> None:
@@ -244,6 +285,104 @@ class NewCalculationPreviewV1Test(unittest.TestCase):
         serialized = json.dumps(preview, default=lambda value: value.__dict__)
         for forbidden in ("roas", "posterior", "incremental", "optimizer", "forecast"):
             self.assertNotIn(forbidden, serialized.lower())
+        for check in preview.checks or ():
+            self.assertIsNone(re.search(r"[A-Za-z]", check.display_text))
+
+    def test_actionable_guidance_covers_unsupported_and_generic_failures(self) -> None:
+        validation_id = "validation_aaaaaaaaaaaa"
+        preparation = (
+            self.settings.validation_runtime_root / validation_id / "preparation"
+        )
+        preparation.mkdir(parents=True)
+        validation_file = preparation / "synthetic_campaign_model_validation.csv"
+        validation_file.write_text(
+            "supported_by_model,campaign_name,segment,geo,channel,target\n"
+            "false,Synthetic A,Segment A,Geo A,Channel A,turnover_per_user\n",
+            encoding="utf-8",
+        )
+        unsupported_issue = self.service._validation_failure_issue(validation_id)
+        unsupported_payload = {
+            **unsupported_issue.__dict__,
+            "affected_cells": [cell.__dict__ for cell in unsupported_issue.affected_cells],
+        }
+        self._assert_actionable_issue(
+            unsupported_payload,
+            "UNSUPPORTED_MODEL_CELLS",
+        )
+        self.assertEqual(len(unsupported_payload["affected_cells"]), 1)
+
+        generic_issue = self.service._validation_failure_issue(
+            "validation_bbbbbbbbbbbb"
+        )
+        self._assert_actionable_issue(
+            dict(generic_issue.__dict__),
+            "CAMPAIGN_VALIDATION_FAILED",
+        )
+
+    def test_actionable_guidance_covers_caution_and_diagnostic_rows(self) -> None:
+        fixture = json.loads(HAPPY_FIXTURE.read_text(encoding="utf-8"))
+        record = parse_lifecycle_contract(fixture["validations"][0])
+        self.assertIsInstance(record, ValidationResultV1)
+        campaign = record.campaigns[0]
+        validation_rows = [
+            {
+                "campaign_name": campaign.campaign_name,
+                "segment": "Segment A",
+                "geo": "Geo A",
+                "channel": "Channel A",
+                "target": "turnover_per_user",
+                "allowed_use": "caution",
+            },
+            {
+                "campaign_name": campaign.campaign_name,
+                "segment": "Segment A",
+                "geo": "Geo A",
+                "channel": "Channel B",
+                "target": "orders_per_user",
+                "allowed_use": "diagnostic",
+            },
+        ]
+        warnings = self.service._validation_warnings(
+            validation_rows,
+            record.campaigns,
+        )
+        by_code = {warning.code: dict(warning.__dict__) for warning in warnings}
+        self._assert_actionable_issue(
+            by_code["MODEL_CAUTION_CELLS"],
+            "MODEL_CAUTION_CELLS",
+        )
+        self._assert_actionable_issue(
+            by_code["MODEL_DIAGNOSTIC_CELLS"],
+            "MODEL_DIAGNOSTIC_CELLS",
+        )
+
+    def test_marketer_facing_display_text_literals_avoid_internal_terms(self) -> None:
+        paths = (
+            WEB_APP_DIR / "api" / "http_smoke.py",
+            WEB_APP_DIR / "services" / "local_campaign_service.py",
+            WEB_APP_DIR / "services" / "product_api_service.py",
+            WEB_APP_DIR / "worker" / "execution_worker.py",
+        )
+        display_literals: list[tuple[Path, int, str]] = []
+        for path in paths:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    for keyword in node.keywords:
+                        if keyword.arg == "display_text":
+                            display_literals.append(
+                                (path, node.lineno, _literal_text(keyword.value))
+                            )
+                if isinstance(node, ast.Dict):
+                    for key, value in zip(node.keys, node.values):
+                        if _literal_text(key) == "display_text":
+                            display_literals.append(
+                                (path, node.lineno, _literal_text(value))
+                            )
+        for path, line, display_text in display_literals:
+            for forbidden in FORBIDDEN_MARKETER_TERMS:
+                with self.subTest(path=path.name, line=line, term=forbidden):
+                    self.assertNotIn(forbidden, display_text.lower())
 
     def test_preview_is_optional_and_geo_points_are_omitted_without_reference(self) -> None:
         fixture = json.loads(HAPPY_FIXTURE.read_text(encoding="utf-8"))
@@ -251,6 +390,11 @@ class NewCalculationPreviewV1Test(unittest.TestCase):
         old_record = parse_lifecycle_contract(old_payload)
         self.assertIsInstance(old_record, ValidationResultV1)
         self.assertEqual(old_record.to_dict(), old_payload)
+        for collection in ("blocking_errors", "warnings"):
+            for issue in old_payload[collection]:
+                self.assertNotIn("what", issue)
+                self.assertNotIn("why", issue)
+                self.assertNotIn("recommended_action", issue)
 
         total = old_record.totals.model_input_budget_rub  # type: ignore[union-attr]
         daily_total = old_record.totals.daily_budget_rub  # type: ignore[union-attr]

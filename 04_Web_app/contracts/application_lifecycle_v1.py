@@ -306,6 +306,9 @@ class ValidationIssue:
     recoverable: bool
     source_row_ids: tuple[int, ...] = field(default_factory=tuple)
     affected_cells: tuple[AffectedCell, ...] = field(default_factory=tuple)
+    what: str | None = None
+    why: str | None = None
+    recommended_action: str | None = None
 
     def validate(self, field_name: str) -> None:
         _code(self.code, f"{field_name}.code")
@@ -319,6 +322,18 @@ class ValidationIssue:
             )
         _required_text(self.display_text, f"{field_name}.display_text")
         _boolean(self.recoverable, f"{field_name}.recoverable")
+        guidance = (self.what, self.why, self.recommended_action)
+        if any(value is not None for value in guidance):
+            if any(value is None for value in guidance):
+                raise LifecycleContractValidationError(
+                    f"{field_name} guidance requires what, why and recommended_action"
+                )
+            for name, value in (
+                ("what", self.what),
+                ("why", self.why),
+                ("recommended_action", self.recommended_action),
+            ):
+                _required_text(value, f"{field_name}.{name}")
         for row_id in self.source_row_ids:
             _positive_int(row_id, f"{field_name}.source_row_ids")
         _unique(self.source_row_ids, f"{field_name}.source_row_ids")
@@ -825,6 +840,11 @@ class ValidationResultV1(_ContractMixin):
 
     def to_dict(self) -> dict[str, Any]:
         payload = super().to_dict()
+        for collection_name in ("blocking_errors", "warnings"):
+            for issue in payload.get(collection_name, ()):
+                for name in ("what", "why", "recommended_action"):
+                    if issue.get(name) is None:
+                        issue.pop(name, None)
         preview = payload.get("preview")
         if preview is None:
             payload.pop("preview", None)
