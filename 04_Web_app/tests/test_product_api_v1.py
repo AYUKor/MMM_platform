@@ -15,6 +15,7 @@ if str(WEB_APP_DIR) not in sys.path:
     sys.path.insert(0, str(WEB_APP_DIR))
 
 from contracts.product_api_v1 import (  # noqa: E402
+    build_calculation_profile_payload,
     ProductApiContractError,
     build_error_catalog_payload,
     load_openapi_document,
@@ -41,6 +42,21 @@ def _write_json(path: Path, payload: object) -> None:
 
 
 class ProductApiContractTest(unittest.TestCase):
+    def test_calculation_profile_is_public_safe_and_schema_valid(self) -> None:
+        payload = build_calculation_profile_payload(
+            scenario6_attempt_budget=2048,
+            profile_label="Стандартный расчет",
+            model_version_label="Синтетическая исследовательская модель",
+        )
+        self.assertEqual(payload["contract_name"], "calculation_profile_v1")
+        self.assertNotIn("seed", json.dumps(payload).lower())
+        self.assertNotIn("/Users/", json.dumps(payload))
+        try:
+            import jsonschema
+        except ImportError:
+            self.skipTest("jsonschema is optional in the source-only runtime")
+        jsonschema.Draft202012Validator(load_product_api_schema()).validate(payload)
+
     def test_model_passport_is_path_safe_and_schema_valid(self) -> None:
         payload = json.loads(PASSPORT_FIXTURE.read_text(encoding="utf-8"))
         validate_model_passport(payload)
@@ -68,6 +84,8 @@ class ProductApiContractTest(unittest.TestCase):
         document = load_openapi_document()
         self.assertEqual(document["openapi"], "3.1.0")
         self.assertIn("/api/v1/models/active", document["paths"])
+        self.assertIn("/api/v1/calculation-profile", document["paths"])
+        self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
 
     def test_job_pagination_and_filter_are_deterministic(self) -> None:

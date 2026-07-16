@@ -11,12 +11,14 @@ import subprocess
 import sys
 import traceback
 import uuid
+import zipfile
 from collections import defaultdict
 from concurrent.futures import Executor
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
+from xml.etree import ElementTree as ET
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -34,8 +36,11 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     VALIDATION_RESULT_CONTRACT,
     AffectedCell,
     ArtifactIdentity,
+    BudgetByChannelPreview,
+    BudgetByGeoPreview,
     CampaignPreview,
     CampaignUploadV1,
+    ChannelFlightingPreview,
     DecisionJobV1,
     LifecycleContractValidationError,
     LifecycleStatus,
@@ -44,6 +49,8 @@ from contracts.application_lifecycle_v1 import (  # noqa: E402
     ResolvedModelReference,
     SamplingProfile,
     ValidationIssue,
+    ValidationPreview,
+    ValidationPreviewCheck,
     ValidationResultV1,
     ValidationTotals,
     parse_lifecycle_contract,
@@ -64,7 +71,23 @@ PARSER_NAME = "canonical_campaign_plan_parser"
 PARSER_VERSION = "1.0.0"
 VALIDATOR_NAME = "model_package_campaign_validator"
 VALIDATOR_VERSION = "1.0.0"
-SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".tsv", ".xlsx", ".xls"}
+SUPPORTED_UPLOAD_SUFFIXES = {".csv", ".xlsx"}
+MAX_XLSX_ARCHIVE_ENTRIES = 4096
+MAX_XLSX_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
+MAX_XLSX_WORKBOOK_XML_BYTES = 1024 * 1024
+PARSED_CAMPAIGN_COLUMNS = (
+    "source_row_id",
+    "campaign_name",
+    "creative_name",
+    "segment",
+    "geo",
+    "channel",
+    "date",
+    "start_date",
+    "end_date",
+    "budget_rub",
+    "source_format",
+)
 CALCULATION_SOURCE_PATHS = (
     "02_Code/01_PyMC",
     "02_Code/02_Budget_optimizer",
@@ -111,11 +134,16 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
+def _write_csv(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    fieldnames: tuple[str, ...] | None = None,
+) -> None:
+    if not rows and fieldnames is None:
         raise CampaignPlanError("Campaign parser produced no rows")
     path.parent.mkdir(parents=True, exist_ok=True)
-    fields = list(rows[0])
+    fields = list(fieldnames or tuple(rows[0]))
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -127,6 +155,59 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         return [dict(row) for row in csv.DictReader(handle)]
+
+
+def _xlsx_sheet_names(path: Path) -> tuple[str, ...]:
+    with zipfile.ZipFile(path) as archive:
+        entries = archive.infolist()
+        if len(entries) > MAX_XLSX_ARCHIVE_ENTRIES:
+            raise CampaignPlanError("XLSX contains too many archive entries")
+        if any(entry.flag_bits & 0x1 for entry in entries):
+            raise CampaignPlanError("Encrypted XLSX files are not supported")
+        if sum(entry.file_size for entry in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
+            raise CampaignPlanError("XLSX expands beyond the safe processing limit")
+        try:
+            workbook_entry = archive.getinfo("xl/workbook.xml")
+        except KeyError as exc:
+            raise CampaignPlanError("XLSX is missing xl/workbook.xml") from exc
+        if workbook_entry.file_size > MAX_XLSX_WORKBOOK_XML_BYTES:
+            raise CampaignPlanError("XLSX workbook metadata exceeds the safe limit")
+        workbook = ET.fromstring(archive.read(workbook_entry))
+    namespace = {
+        "x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    }
+    return tuple(
+        str(node.attrib["name"])
+        for node in workbook.findall("x:sheets/x:sheet", namespace)
+    )
+
+
+def _read_web_campaign_brief(path: Path) -> list[dict[str, Any]]:
+    if path.suffix.lower() != ".xlsx":
+        return read_campaign_brief(path)
+    sheet_names = set(_xlsx_sheet_names(path))
+    template_sheets = tuple(
+        name for name in ("01_Daily", "02_Interval") if name in sheet_names
+    )
+    if not template_sheets:
+        return read_campaign_brief(path)
+
+    active: list[tuple[str, list[dict[str, Any]]]] = []
+    for sheet_name in template_sheets:
+        rows = read_campaign_brief(path, sheet_name=sheet_name)
+        user_rows = [
+            row
+            for row in rows
+            if any(str(value or "").strip() for value in row.values())
+            and not str(row.get("campaign_name") or "").startswith("SYNTHETIC_")
+        ]
+        if user_rows:
+            active.append((sheet_name, user_rows))
+    if len(active) > 1:
+        raise CampaignPlanError(
+            "Заполните только один лист шаблона: 01_Daily или 02_Interval"
+        )
+    return active[0][1] if active else []
 
 
 def _artifact(
@@ -299,7 +380,7 @@ class LocalCampaignService:
             raise ValueError("Upload filename must not contain a path")
         suffix = Path(filename).suffix.lower()
         if suffix not in SUPPORTED_UPLOAD_SUFFIXES:
-            raise ValueError("Supported campaign files: CSV, TSV, XLSX and XLS")
+            raise ValueError("Поддерживаются только файлы CSV и XLSX")
         content_sha = hashlib.sha256(content).hexdigest()
         upload_id = _opaque_id("upload", f"{idempotency_key}:{filename}:{content_sha}")
         storage_key = f"uploads/{upload_id}/source/{filename}"
@@ -343,14 +424,27 @@ class LocalCampaignService:
     def _parse_upload(self, upload: CampaignUploadV1) -> None:
         try:
             source_path = _safe_child(self.settings.artifact_root, upload.original_file.storage_key)
-            raw_rows = read_campaign_brief(source_path)
-            normalized_rows, issues = normalize_campaign_rows(raw_rows)
+            raw_rows = _read_web_campaign_brief(source_path)
+            normalized_rows, issues = (
+                normalize_campaign_rows(raw_rows) if raw_rows else ([], [])
+            )
             if issues:
                 raise CampaignPlanError(f"Campaign contains {len(issues)} invalid row(s)")
+            if any(
+                str(row.get("campaign_name") or "") == "unknown_campaign"
+                for row in normalized_rows
+            ):
+                raise CampaignPlanError(
+                    "campaign_name is required for every campaign row"
+                )
             campaigns = sorted({str(row["campaign_name"]) for row in normalized_rows})
             parsed_key = f"uploads/{upload.upload_id}/parsed/campaign_upload_parsed.csv"
             parsed_path = _safe_child(self.settings.artifact_root, parsed_key)
-            _write_csv(parsed_path, normalized_rows)
+            _write_csv(
+                parsed_path,
+                normalized_rows,
+                fieldnames=PARSED_CAMPAIGN_COLUMNS,
+            )
             parsed_artifact = _artifact(
                 self.settings.artifact_root,
                 parsed_key,
@@ -473,6 +567,11 @@ class LocalCampaignService:
         validation: ValidationResultV1,
     ) -> None:
         try:
+            if upload.detected_campaigns_n != 1:
+                self.state.write_validation(
+                    self._campaign_count_block(validation, upload.detected_campaigns_n)
+                )
+                return
             config = self._workflow_config(validation)
             config_key = f"validations/{validation.validation_id}/config/source_workflow_config.json"
             config_path = _safe_child(self.settings.artifact_root, config_key)
@@ -538,6 +637,44 @@ class LocalCampaignService:
             )
             invalid.validate()
             self.state.write_validation(invalid)
+
+    @staticmethod
+    def _campaign_count_block(
+        validation: ValidationResultV1,
+        detected_campaigns_n: int | None,
+    ) -> ValidationResultV1:
+        count = int(detected_campaigns_n or 0)
+        issue = ValidationIssue(
+            code="CAMPAIGN_COUNT_NOT_ONE",
+            severity="blocking",
+            display_text=(
+                f"В файле найдено кампаний: {count}. Для одного расчета загрузите "
+                "отдельный CSV или XLSX ровно с одной кампанией. Backend не разделяет "
+                "файл с несколькими кампаниями автоматически."
+            ),
+            scope="upload",
+            recoverable=True,
+        )
+        blocked = replace(
+            validation,
+            status=LifecycleStatus("invalid", "План нельзя отправить в расчет"),
+            finished_at_utc=_utc_now(),
+            blocking_errors=(issue,),
+            preview=ValidationPreview(
+                checks=(
+                    ValidationPreviewCheck(
+                        code="CAMPAIGN_COUNT",
+                        status="failed",
+                        display_text=(
+                            f"Найдено кампаний: {count}. Требуется ровно одна кампания."
+                        ),
+                    ),
+                ),
+            ),
+            job_creation_allowed=False,
+        )
+        blocked.validate()
+        return blocked
 
     def _validation_failure_issue(self, validation_id: str) -> ValidationIssue:
         preparation_dir = (
@@ -643,6 +780,7 @@ class LocalCampaignService:
             production_blockers=tuple(str(value) for value in model_summary.get("production_blockers") or []),
         )
         warnings = self._validation_warnings(validation_rows, campaigns)
+        preview = self._validation_preview(normalized_rows, daily_rows, warnings)
         valid = replace(
             validation,
             status=LifecycleStatus("valid", "План можно рассчитать"),
@@ -654,6 +792,7 @@ class LocalCampaignService:
             campaigns=campaigns,
             totals=totals,
             warnings=warnings,
+            preview=preview,
             job_creation_allowed=True,
         )
         valid.validate()
@@ -723,6 +862,124 @@ class LocalCampaignService:
         return tuple(previews), totals
 
     @staticmethod
+    def _validation_preview(
+        normalized_rows: list[dict[str, str]],
+        daily_rows: list[dict[str, str]],
+        warnings: tuple[ValidationIssue, ...],
+    ) -> ValidationPreview:
+        normalized_channel: dict[str, float] = defaultdict(float)
+        normalized_geo: dict[str, float] = defaultdict(float)
+        daily_channel_date: dict[tuple[str, str], float] = defaultdict(float)
+        daily_geo_date: dict[tuple[str, str], float] = defaultdict(float)
+        for row in normalized_rows:
+            budget = float(row["budget_rub"])
+            normalized_channel[str(row["channel"])] += budget
+            normalized_geo[str(row["geo"])] += budget
+        for row in daily_rows:
+            budget = float(row["budget_rub"])
+            daily_channel_date[(str(row["channel"]), str(row["date"]))] += budget
+            daily_geo_date[(str(row["geo"]), str(row["date"]))] += budget
+
+        warning_channels = {
+            cell.channel
+            for issue in warnings
+            for cell in issue.affected_cells
+        }
+        warning_geos = {
+            cell.geo
+            for issue in warnings
+            for cell in issue.affected_cells
+        }
+
+        def status(has_warning: bool) -> LifecycleStatus:
+            return LifecycleStatus(
+                "warning" if has_warning else "passed",
+                "Есть ограничения модели" if has_warning else "Проверено",
+            )
+
+        budget_by_channel = tuple(
+            BudgetByChannelPreview(
+                channel=channel,
+                total_budget_rub=total,
+                max_daily_budget_rub=max(
+                    amount
+                    for (candidate, _), amount in daily_channel_date.items()
+                    if candidate == channel
+                ),
+                status=status(channel in warning_channels),
+            )
+            for channel, total in sorted(normalized_channel.items())
+        )
+        budget_by_geo = tuple(
+            BudgetByGeoPreview(
+                geo=geo,
+                total_budget_rub=total,
+                max_daily_budget_rub=max(
+                    amount
+                    for (candidate, _), amount in daily_geo_date.items()
+                    if candidate == geo
+                ),
+                status=status(geo in warning_geos),
+            )
+            for geo, total in sorted(normalized_geo.items())
+        )
+        channel_flighting = tuple(
+            ChannelFlightingPreview(
+                channel=channel,
+                date=flight_date,
+                daily_budget_rub=amount,
+                status=status(channel in warning_channels),
+            )
+            for (channel, flight_date), amount in sorted(daily_channel_date.items())
+        )
+        model_status = "warning" if warnings else "passed"
+        return ValidationPreview(
+            budget_by_channel=budget_by_channel,
+            budget_by_geo=budget_by_geo,
+            channel_flighting=channel_flighting,
+            geo_points=None,
+            checks=(
+                ValidationPreviewCheck(
+                    code="FILE_STRUCTURE",
+                    status="passed",
+                    display_text="Структура файла и обязательные поля распознаны.",
+                ),
+                ValidationPreviewCheck(
+                    code="CAMPAIGN_COUNT",
+                    status="passed",
+                    display_text="В файле найдена ровно одна кампания.",
+                ),
+                ValidationPreviewCheck(
+                    code="BUDGET_RECONCILIATION",
+                    status="passed",
+                    display_text="Бюджет исходного плана и daily flighting сходятся.",
+                ),
+                ValidationPreviewCheck(
+                    code="DATES",
+                    status="passed",
+                    display_text="Даты кампании распознаны и имеют корректный порядок.",
+                ),
+                ValidationPreviewCheck(
+                    code="MODEL_SUPPORT",
+                    status=model_status,
+                    display_text=(
+                        "Есть поддерживаемые моделью связки с ограничениями использования."
+                        if warnings
+                        else "Сегменты, каналы и географии поддерживаются выбранной моделью."
+                    ),
+                ),
+                ValidationPreviewCheck(
+                    code="HISTORICAL_SPEND_SIMILARITY",
+                    status="unavailable",
+                    display_text=(
+                        "Сходство daily spend с историческим диапазоном проверяется "
+                        "на этапе сценарного расчета."
+                    ),
+                ),
+            ),
+        )
+
+    @staticmethod
     def _validation_warnings(
         validation_rows: list[dict[str, str]],
         campaigns: tuple[CampaignPreview, ...],
@@ -768,7 +1025,12 @@ class LocalCampaignService:
         if existing is not None:
             return existing, False
         validation = parse_lifecycle_contract(self.state.read_validation(validation_id))
-        if not isinstance(validation, ValidationResultV1) or validation.status.code != "valid":
+        if (
+            not isinstance(validation, ValidationResultV1)
+            or validation.status.code != "valid"
+            or not validation.job_creation_allowed
+            or len(validation.campaigns) != 1
+        ):
             raise ValueError("Only a valid validation can create a job")
         upload = parse_lifecycle_contract(self.state.read_upload(validation.upload_id))
         assert isinstance(upload, CampaignUploadV1)

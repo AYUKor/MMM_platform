@@ -5,7 +5,8 @@
   "oneOf": [
     {"$ref": "#/$defs/modelPassport"},
     {"$ref": "#/$defs/httpErrorCatalog"},
-    {"$ref": "#/$defs/jobList"}
+    {"$ref": "#/$defs/jobList"},
+    {"$ref": "#/$defs/calculationProfile"}
   ],
   "$defs": {
     "nullableString": {"type": ["string", "null"]},
@@ -227,6 +228,24 @@
             }
           }
         }
+      }
+    },
+    "calculationProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_name",
+        "schema_version",
+        "scenario6_attempt_budget",
+        "profile_label",
+        "model_version_label"
+      ],
+      "properties": {
+        "contract_name": {"const": "calculation_profile_v1"},
+        "schema_version": {"const": "1.0.0"},
+        "scenario6_attempt_budget": {"type": "integer", "minimum": 1},
+        "profile_label": {"type": "string", "minLength": 1},
+        "model_version_label": {"type": "string", "minLength": 1}
       }
     },
     "jobList": {

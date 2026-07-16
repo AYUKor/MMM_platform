@@ -18,6 +18,7 @@ SCHEMA_VERSION = "1.0.0"
 MODEL_PASSPORT_CONTRACT = "model_passport_v1"
 JOB_LIST_CONTRACT = "job_list_v1"
 HTTP_ERROR_CATALOG_CONTRACT = "http_error_catalog_v1"
+CALCULATION_PROFILE_CONTRACT = "calculation_profile_v1"
 
 DEPLOYMENT_PROFILES = {"local_development", "research_pilot"}
 OOT_STATUS_CODES = {"passed", "unavailable", "failed"}
@@ -338,6 +339,36 @@ def build_error_catalog_payload() -> dict[str, Any]:
     }
     validate_error_catalog(payload)
     return payload
+
+
+def build_calculation_profile_payload(
+    *,
+    scenario6_attempt_budget: int,
+    profile_label: str,
+    model_version_label: str,
+) -> dict[str, Any]:
+    payload = {
+        "contract_name": CALCULATION_PROFILE_CONTRACT,
+        "schema_version": SCHEMA_VERSION,
+        "scenario6_attempt_budget": scenario6_attempt_budget,
+        "profile_label": profile_label,
+        "model_version_label": model_version_label,
+    }
+    validate_calculation_profile(payload)
+    return payload
+
+
+def validate_calculation_profile(payload: Mapping[str, Any]) -> None:
+    if payload.get("contract_name") != CALCULATION_PROFILE_CONTRACT:
+        raise ProductApiContractError("Unknown calculation profile contract")
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise ProductApiContractError("Unsupported calculation profile schema version")
+    attempt_budget = payload.get("scenario6_attempt_budget")
+    if isinstance(attempt_budget, bool) or not isinstance(attempt_budget, int) or attempt_budget <= 0:
+        raise ProductApiContractError("scenario6_attempt_budget must be a positive integer")
+    _required_text(payload, "profile_label")
+    _required_text(payload, "model_version_label")
+    _reject_paths(payload)
 
 
 def validate_error_catalog(payload: Mapping[str, Any]) -> None:
