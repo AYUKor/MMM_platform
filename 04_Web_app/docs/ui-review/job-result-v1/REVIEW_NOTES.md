@@ -120,7 +120,7 @@ Screenshot generator:
 | Generated contracts | passed | 8 files; second generation produced identical hashes |
 | TypeScript | passed | `tsc -b --pretty false` |
 | ESLint | passed | zero warnings |
-| Unit tests | passed | 284/284 across 24 files |
+| Unit tests | passed | 285/285 across 24 files |
 | Production build | passed | Vite 8.1.4, 126 modules |
 | Phase C Playwright | passed | 36/36 |
 | Full frontend Playwright | passed | 110/110 on a clean port |
@@ -133,7 +133,7 @@ Production output:
 ```text
 dist/index.html                   0.51 kB | gzip 0.31 kB
 dist/assets/index-vIuI1Dsh.css  109.71 kB | gzip 18.73 kB
-dist/assets/index-wx4i2tSn.js   530.58 kB | gzip 152.36 kB
+dist/assets/index-DZ7XqNod.js   530.71 kB | gzip 152.33 kB
 ```
 
 Vite reports the advisory warning for a minified JavaScript chunk above

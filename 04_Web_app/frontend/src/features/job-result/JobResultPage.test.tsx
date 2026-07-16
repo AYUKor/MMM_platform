@@ -113,7 +113,7 @@ describe("ResultOverviewPage Phase C orchestration", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPage(`/calculations/${JOB_ID}/result?tab=media-plan&scenario=S05`);
 
-    expect(await screen.findByRole("heading", { name: "Медиаплан было → открытый сценарий" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Исходный план → просматриваемый сценарий" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /S5.*Устойчивый ориентир/ })).toBeChecked();
     await waitFor(() => expect(screen.getByText("Только просмотр")).toBeInTheDocument());
     expect(screen.getByTestId("location")).toHaveTextContent(
@@ -145,7 +145,7 @@ describe("ResultOverviewPage Phase C orchestration", () => {
     renderPage();
     await screen.findByRole("heading", { name: "Рекомендуемое распределение бюджета" });
     fireEvent.click(screen.getByRole("tab", { name: "Медиаплан" }));
-    await screen.findByText("Каноническая рекомендация");
+    await screen.findByText("Рекомендованный вариант");
 
     const urls = fetchMock.mock.calls.map(([input]) => requestUrl(input));
     expect(urls[0].toString()).toBe(`${API_BASE_URL}/api/v1/jobs/${JOB_ID}/result-view`);
@@ -164,7 +164,7 @@ describe("ResultOverviewPage Phase C orchestration", () => {
     const fetchMock = createContractFetch(result);
     vi.stubGlobal("fetch", fetchMock);
     renderPage(`/calculations/${JOB_ID}/result?tab=media-plan`);
-    await screen.findByText("Каноническая рекомендация");
+    await screen.findByText("Рекомендованный вариант");
 
     fireEvent.click(screen.getByRole("radio", { name: /S1.*Как загружено/ }));
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("?tab=media-plan&scenario=S01"));

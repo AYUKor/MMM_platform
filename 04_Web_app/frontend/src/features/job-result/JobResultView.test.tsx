@@ -118,6 +118,40 @@ describe("JobResultView", () => {
     expect(screen.getByRole("heading", { name: "Отчет готов" })).toBeInTheDocument();
   });
 
+  it("uses the approved product copy and rejects deprecated user-facing phrases", () => {
+    const { container } = render(<ResultViewHarness result={createRecommendedJobResultFixture()} />);
+    const visitedCopy: string[] = [];
+    const captureCopy = () => visitedCopy.push(container.textContent ?? "");
+
+    expect(screen.getByRole("heading", { name: "Надежность результата" })).toBeInTheDocument();
+    expect(screen.getByText(/Числовая оценка пока недоступна, поэтому показаны отдельные признаки надежности\./)).toBeInTheDocument();
+    expect(screen.getByText("Сравнение исходного и выбранного плана", { exact: true })).toBeInTheDocument();
+    captureCopy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Сценарии и надежность" }));
+    expect(screen.getByText("Места сценариев учитывают ожидаемый эффект и ограничения надежности.")).toBeInTheDocument();
+    captureCopy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Медиаплан" }));
+    expect(screen.getByText("Рекомендованный вариант", { exact: true })).toBeInTheDocument();
+    captureCopy();
+
+    fireEvent.click(screen.getByRole("radio", { name: /S1.*Как загружено/ }));
+    expect(screen.getByRole("heading", { name: "Исходный план → просматриваемый сценарий" })).toBeInTheDocument();
+    captureCopy();
+
+    const allVisitedCopy = visitedCopy.join("\n").toLowerCase();
+    for (const phrase of [
+      "Каноническая рекомендация",
+      "Открытый сценарий",
+      "Без выдуманной оценки",
+      "Готовые сводки сервиса",
+      "Интерфейс не пересортировывает",
+    ]) {
+      expect(allVisitedCopy).not.toContain(phrase.toLowerCase());
+    }
+  });
+
   it("keeps S1 as source and S5 as the stable reference", () => {
     renderResultView();
     expect(screen.getAllByText("Исходный план").length).toBeGreaterThan(0);

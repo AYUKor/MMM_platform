@@ -118,7 +118,7 @@ export function MediaPlanTab({
   const isCanonicalRecommendation =
     result.recommendation.status === "recommended" &&
     result.recommendation.scenario_id === plan?.scenario.scenario_id;
-  const selectedBudgetLabel = isCanonicalRecommendation ? "Рекомендуется" : "Открытый сценарий";
+  const selectedBudgetLabel = isCanonicalRecommendation ? "Рекомендуется" : "Просматриваемый сценарий";
   const channels = plan?.aggregates.by_channel.map((row) => row.channel) ?? [];
   const geographies = plan?.aggregates.by_geo.map((row) => row.geo) ?? [];
 
@@ -130,7 +130,7 @@ export function MediaPlanTab({
           <h2 id="media-plan-title">
             {isCanonicalRecommendation
               ? "Медиаплан было → рекомендуется"
-              : "Медиаплан было → открытый сценарий"}
+              : "Исходный план → просматриваемый сценарий"}
           </h2>
           <p>
             Переключатель меняет только просмотр уже рассчитанного плана. Рекомендация системы,
@@ -213,7 +213,7 @@ export function MediaPlanTab({
                 {qualityLabel(plan.scenario.quality_status)}
               </StatusBadge>
               {isCanonicalRecommendation ? (
-                <StatusBadge tone="accent">Каноническая рекомендация</StatusBadge>
+                <StatusBadge tone="accent">Рекомендованный вариант</StatusBadge>
               ) : (
                 <StatusBadge tone="neutral">Только просмотр</StatusBadge>
               )}
@@ -226,7 +226,7 @@ export function MediaPlanTab({
                 <span className={styles.eyebrow}>Было → {selectedBudgetLabel.toLowerCase()}</span>
                 <h3 id="media-budget-changes-title">Изменение бюджета по каналам и географиям</h3>
               </div>
-              <span>Готовые сводки сервиса</span>
+              <span>Сравнение исходного и выбранного плана</span>
             </div>
             <div className={styles.budgetChartsGrid}>
               <BudgetComparisonChart

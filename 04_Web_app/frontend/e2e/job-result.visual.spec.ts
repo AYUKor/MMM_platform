@@ -34,6 +34,13 @@ const RAW_TERMS = [
   "scenario_id",
   "page_size",
 ] as const;
+const FORBIDDEN_USER_COPY = [
+  "Каноническая рекомендация",
+  "Открытый сценарий",
+  "Без выдуманной оценки",
+  "Готовые сводки сервиса",
+  "Интерфейс не пересортировывает",
+] as const;
 
 mkdirSync(REVIEW_DIRECTORY, { recursive: true });
 
@@ -324,6 +331,13 @@ async function expectNoRawTerms(page: Page) {
   for (const term of RAW_TERMS) expect(visibleText).not.toContain(term.toLowerCase());
 }
 
+async function expectNoForbiddenUserCopy(page: Page) {
+  const visibleText = (await page.locator("body").innerText()).toLowerCase();
+  for (const phrase of FORBIDDEN_USER_COPY) {
+    expect(visibleText).not.toContain(phrase.toLowerCase());
+  }
+}
+
 async function expectAllowedCallsOnly(page: Page) {
   expect(routeGuards.get(page)?.forbiddenCalls ?? []).toEqual([]);
 }
@@ -412,6 +426,7 @@ test.describe("job result review screenshots", () => {
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         await expectNoDocumentOverflow(page);
         await expectNoRawTerms(page);
+        await expectNoForbiddenUserCopy(page);
         await expectAllowedCallsOnly(page);
         await page.screenshot({
           path: `${REVIEW_DIRECTORY}${screenshotCase.name}-${theme}.png`,
@@ -449,6 +464,8 @@ test.describe("job result tabs and URL state", () => {
     await openResult(page, result, "?tab=media-plan&scenario=S05");
     await expect(page.getByRole("radio", { name: /S5.*Устойчивый ориентир/ })).toBeChecked();
     await expect(page.getByText("Только просмотр", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Исходный план → просматриваемый сценарий" })).toBeVisible();
+    await expectNoForbiddenUserCopy(page);
 
     const sourceRadio = page.getByRole("radio", { name: /S1.*Как загружено/ });
     await sourceRadio.focus();
@@ -680,6 +697,7 @@ test.describe("job result responsive and visual QA", () => {
     for (const tab of ["Обзор", "Сценарии и надежность", "Медиаплан", "Отчет"] as const) {
       await page.getByRole("tab", { name: tab, exact: true }).click();
       await expectNoRawTerms(page);
+      await expectNoForbiddenUserCopy(page);
       await expectNoDocumentOverflow(page);
     }
   });

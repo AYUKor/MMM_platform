@@ -208,8 +208,10 @@ export function OverviewTab({
       <section className={styles.reliabilityOverview} aria-labelledby="overview-reliability-title">
         <div className={styles.reliabilityIntro}>
           <span className={styles.eyebrow}>Надежность</span>
-          <h2 id="overview-reliability-title">Без выдуманной оценки 1–10</h2>
-          <p>{result.reliability.display_text}</p>
+          <h2 id="overview-reliability-title">Надежность результата</h2>
+          <p>
+            Числовая оценка пока недоступна, поэтому показаны отдельные признаки надежности. {result.reliability.display_text}
+          </p>
           <StatusBadge tone="neutral">Числовая шкала пока недоступна</StatusBadge>
         </div>
         <ul className={styles.reliabilityCompactList}>
@@ -225,7 +227,7 @@ export function OverviewTab({
 
       <section className={styles.budgetChartsSection} aria-labelledby="budget-changes-title">
         <div className={styles.sectionHeading}>
-          <div><span className={styles.eyebrow}>Готовые сводки сервиса</span><h2 id="budget-changes-title">Что изменилось в бюджете</h2></div>
+          <div><span className={styles.eyebrow}>Сравнение исходного и выбранного плана</span><h2 id="budget-changes-title">Что изменилось в бюджете</h2></div>
         </div>
         <div className={styles.budgetChartsGrid}>
           <BudgetComparisonChart title="По каналам" rows={[...result.overview.channel_summary]} dimension="channel" />

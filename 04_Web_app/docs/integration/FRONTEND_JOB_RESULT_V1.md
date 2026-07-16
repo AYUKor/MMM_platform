@@ -260,7 +260,7 @@ Local verification against baseline
   a second generation pass;
 - TypeScript: passed;
 - ESLint: passed with zero warnings;
-- unit tests: 284 passed in 24 files;
+- unit tests: 285 passed in 24 files;
 - production build: passed;
 - Phase C Playwright: 36 passed;
 - full frontend Playwright regression: 110 passed;
@@ -279,7 +279,7 @@ The live job was created earlier from the synthetic acceptance input
 download are real, but its calculation values are not model-quality or
 business-effect evidence.
 
-The production build emits Vite's advisory warning for a 530.58 kB minified
+The production build emits Vite's advisory warning for a 530.71 kB minified
 JavaScript chunk. The build succeeds; route-level code splitting remains a
 separate performance follow-up rather than a Phase C contract or correctness
 blocker.
