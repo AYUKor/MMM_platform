@@ -16,7 +16,7 @@ controlled unavailable state instead of calculating a replacement metric.
 | Orders per 100k | Missing denominator/projection | Render `Нет данных`; do not derive from raw orders. |
 | Average basket delta | Missing; `avg_basket_bridge` is not a delta | Render `Нет данных`. |
 | Reliability score | Missing | Render `Нет данных`; quality status remains a separate contract-backed label. |
-| S5 | Scenario `S05` | Label `Устойчивый benchmark`. |
+| S5 | Scenario `S05` | Label `Ориентир по устойчивости`. |
 | S6 unavailable | `available=false`, `quality.explanation`, `scenario6.explanation` | Render the backend explanation and no metrics. |
 | Allocation before/after | Uploaded allocation is missing | Render `Нет данных`; do not aggregate or reconstruct. |
 | Top geo deltas | Baseline allocation is missing | Render `Нет данных`. |

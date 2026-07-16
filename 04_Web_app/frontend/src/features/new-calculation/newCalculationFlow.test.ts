@@ -188,6 +188,7 @@ describe("scenario explanation", () => {
       id: "S05",
       title: "Самый устойчивый план",
       role: "benchmark",
+      badge: "Ориентир по устойчивости",
     });
     expect(NEW_CALCULATION_SCENARIOS[5]).toMatchObject({
       id: "S06",

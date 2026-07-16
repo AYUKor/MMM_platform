@@ -266,7 +266,7 @@ export const NEW_CALCULATION_SCENARIOS: readonly NewCalculationScenarioDefinitio
     title: "Самый устойчивый план",
     description: "Стремится уменьшить серьезность замечаний и удержать план в знакомой исторической зоне.",
     role: "benchmark",
-    badge: "Устойчивый benchmark",
+    badge: "Ориентир по устойчивости",
   },
   {
     id: "S06",

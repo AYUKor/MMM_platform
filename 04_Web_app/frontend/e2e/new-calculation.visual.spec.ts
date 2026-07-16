@@ -291,6 +291,14 @@ const validValidation: ValidationResult = {
         status: { code: "warning", display_text: "Ограниченная история" },
       },
     ],
+    geo_points: [
+      {
+        geo: "Синтетическая точка только для geo_points",
+        latitude: 55.7558,
+        longitude: 37.6173,
+        total_budget_rub: 12_000_000,
+      },
+    ],
     checks: [
       {
         code: "CHECK_SINGLE_CAMPAIGN",
@@ -708,6 +716,7 @@ async function expectScenarioScreen(page: Page) {
     ).toBeVisible();
   }
   await expect(page.getByText("S5 — сначала устойчивость", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ориентир по устойчивости", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
       "S6 — поиск эффективности с обязательной проверкой устойчивости",
@@ -750,6 +759,7 @@ test("1. empty upload screen is controlled", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Новый расчет", exact: true })).toBeVisible();
   await expect(page.getByText("Один файл = одна кампания", { exact: true })).toBeVisible();
   await expect(page.getByText("XLSX или CSV", { exact: true })).toBeVisible();
+  await expect(page.getByText(/с примером заполнения$/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Загрузить файл", exact: true })).toBeDisabled();
   await expectWorkingTemplateAction(page, calls);
   await expect(page.locator('nav a[aria-current="page"]')).toHaveCount(1);
@@ -915,6 +925,9 @@ test("4. valid campaign without warnings reaches ready review", async ({ page })
   await expect(page.getByRole("cell")).toHaveCount(6);
   await expect(page.getByText("География кампании", { exact: true })).toBeVisible();
   await expect(page.getByText("Данные для карты пока недоступны.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: /координаты географий/i })).toHaveCount(0);
+  await expect(page.getByText("Синтетическая точка только для geo_points", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Результаты проверки", exact: true })).toBeVisible();
   await expect(page.getByText("Файл содержит ровно одну кампанию.", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Бюджет файла и дневного плана совпадает.", { exact: true }),

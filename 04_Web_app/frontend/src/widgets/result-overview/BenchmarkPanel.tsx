@@ -13,7 +13,7 @@ export function BenchmarkPanel({ scenario }: BenchmarkPanelProps) {
   return (
     <Card className={styles.benchmark}>
       <div className={styles.panelLabel}>
-        {isS5 ? "Устойчивый benchmark" : "Исходный benchmark"}
+        {isS5 ? "Ориентир по устойчивости" : "Исходный benchmark"}
       </div>
       <h2>{scenario.title}</h2>
       <p>{scenario.description}</p>
@@ -27,7 +27,7 @@ export function BenchmarkPanel({ scenario }: BenchmarkPanelProps) {
         <div><dt>Сравнение</dt><dd>Абсолютные значения</dd></div>
       </dl>
       <StatusBadge tone={isS5 ? "accent" : "neutral"}>
-        {isS5 ? "Устойчивый benchmark" : "Как загрузили"}
+        {isS5 ? "Ориентир по устойчивости" : "Как загрузили"}
       </StatusBadge>
     </Card>
   );

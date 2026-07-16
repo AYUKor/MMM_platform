@@ -3,7 +3,6 @@ import type {
   BudgetByChannelPreview,
   BudgetByGeoPreview,
   ChannelFlightingPreview,
-  GeoPointPreview,
   PreviewStatus,
   ValidationPreview,
   ValidationPreviewCheck,
@@ -58,7 +57,7 @@ export function ValidationChecks({
       <div className={styles.sectionHeading}>
         <div>
           <span className={styles.eyebrow}>Проверки</span>
-          <h2 id="checks-title">Что проверил сервис</h2>
+          <h2 id="checks-title">Результаты проверки</h2>
         </div>
         <p>Статусы и формулировки приходят вместе с результатом проверки.</p>
       </div>
@@ -315,53 +314,6 @@ function ChannelFlightingChart({ rows }: { rows: ChannelFlightingPreview[] }) {
   );
 }
 
-function GeoPointPlot({ points }: { points: GeoPointPreview[] }) {
-  const latitudes = points.map((point) => point.latitude);
-  const longitudes = points.map((point) => point.longitude);
-  const minLatitude = Math.min(...latitudes);
-  const maxLatitude = Math.max(...latitudes);
-  const minLongitude = Math.min(...longitudes);
-  const maxLongitude = Math.max(...longitudes);
-  const latitudeSpan = maxLatitude - minLatitude || 1;
-  const longitudeSpan = maxLongitude - minLongitude || 1;
-
-  return (
-    <article className={styles.previewPanel}>
-      <div className={styles.panelHeading}>
-        <h3>География кампании</h3>
-        <span className={styles.rowCount}>{points.length}</span>
-      </div>
-      <div className={styles.geoPlot} role="img" aria-label="Координаты географий кампании">
-        {points.map((point) => {
-          const markerStyle = {
-            left: `${10 + ((point.longitude - minLongitude) / longitudeSpan) * 80}%`,
-            top: `${90 - ((point.latitude - minLatitude) / latitudeSpan) * 80}%`,
-          } as CSSProperties;
-          return (
-            <span
-              className={styles.geoMarker}
-              style={markerStyle}
-              key={point.geo}
-              title={`${point.geo}: ${formatRub(point.total_budget_rub)}`}
-            >
-              <i aria-hidden="true" />
-              <strong>{point.geo}</strong>
-            </span>
-          );
-        })}
-      </div>
-      <ul className={styles.geoList}>
-        {points.map((point) => (
-          <li key={point.geo}>
-            <span>{point.geo}</span>
-            <strong>{formatRub(point.total_budget_rub)}</strong>
-          </li>
-        ))}
-      </ul>
-    </article>
-  );
-}
-
 export function CampaignPreviewVisuals({ preview }: { preview: ValidationPreview | undefined }) {
   return (
     <section className={styles.previews} aria-labelledby="preview-title">
@@ -385,14 +337,10 @@ export function CampaignPreviewVisuals({ preview }: { preview: ValidationPreview
             message="Дневная активность каналов пока недоступна."
           />
         )}
-        {preview?.geo_points?.length ? (
-          <GeoPointPlot points={preview.geo_points} />
-        ) : (
-          <EmptyPreview
-            title="География кампании"
-            message="Данные для карты пока недоступны."
-          />
-        )}
+        <EmptyPreview
+          title="География кампании"
+          message="Данные для карты пока недоступны."
+        />
       </div>
     </section>
   );

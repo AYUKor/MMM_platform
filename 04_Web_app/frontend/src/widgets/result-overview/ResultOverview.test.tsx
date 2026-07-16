@@ -16,7 +16,7 @@ describe("ResultOverview", () => {
     const { container } = renderFixture();
 
     expect(screen.getByText("Демонстрационные данные")).toBeInTheDocument();
-    expect(screen.getByText("Устойчивый benchmark", { selector: "div" })).toBeInTheDocument();
+    expect(screen.getByText("Ориентир по устойчивости", { selector: "div" })).toBeInTheDocument();
     expect(screen.getByText(/не является решением запускать/)).toBeInTheDocument();
     expect(screen.getByText("Дополнительные заказы")).toBeInTheDocument();
     expect(container.textContent).not.toContain("candidate_");

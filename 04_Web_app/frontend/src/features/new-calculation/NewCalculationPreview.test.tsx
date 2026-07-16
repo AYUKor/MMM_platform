@@ -48,6 +48,14 @@ const preview: ValidationPreview = {
       display_text: "Синтетическая историческая проверка будет выполнена позже.",
     },
   ],
+  geo_points: [
+    {
+      geo: "Синтетическая точка только для geo_points",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      total_budget_rub: 1_000_000,
+    },
+  ],
 };
 
 describe("new calculation preview", () => {
@@ -55,6 +63,7 @@ describe("new calculation preview", () => {
     render(<ValidationChecks checks={preview.checks} />);
 
     expect(screen.getByText("Синтетическая структура распознана.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Результаты проверки" })).toBeInTheDocument();
     expect(screen.getByText("Синтетическая историческая проверка будет выполнена позже.")).toBeInTheDocument();
     expect(screen.getByText("Пройдено")).toBeInTheDocument();
     expect(screen.getByText("Недоступно")).toBeInTheDocument();
@@ -90,6 +99,8 @@ describe("new calculation preview", () => {
     expect(screen.getByText("Точные значения по дням")).toBeInTheDocument();
     expect(screen.getByText("Нулевой бюджет подтвержден")).toBeInTheDocument();
     expect(screen.getByText("Данные для карты пока недоступны.")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /координаты географий/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Синтетическая точка только для geo_points")).not.toBeInTheDocument();
   });
 
   it("uses controlled unavailable states for an old validation without preview", () => {

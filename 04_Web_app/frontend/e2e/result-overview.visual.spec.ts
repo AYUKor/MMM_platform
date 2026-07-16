@@ -82,6 +82,7 @@ for (const theme of ["dark", "light"] as const) {
     await page.goto("/calculations/demo-safe/result");
     await expect(page.getByText("Демонстрационные данные")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Demo campaign 1" })).toBeVisible();
+    await expect(page.getByText("Ориентир по устойчивости", { exact: true }).first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
 
     await page.screenshot({
