@@ -45,7 +45,6 @@ from services.local_campaign_service import (  # noqa: E402
 )
 from services.job_result_view import (  # noqa: E402
     ResultProjectionStateError,
-    UnsupportedMediaPlanQuery,
 )
 
 
@@ -572,24 +571,40 @@ class HttpSmokeV1Test(unittest.TestCase):
             date=None,
         )
 
-        status, error, _ = self._request(
-            "GET", f"/api/v1/jobs/{self.job.job_id}/media-plan"
+        browser_error_cases = (
+            ("", "Не удалось определить сценарий для просмотра медиаплана."),
+            ("?scenario_id=S99", "Не удалось определить сценарий для просмотра медиаплана."),
+            (
+                "?scenario_id=S01&page=zero",
+                "Номер страницы и количество строк на странице заполнены некорректно.",
+            ),
+            (
+                "?scenario_id=S01&page_size=501",
+                "Номер страницы и количество строк на странице заполнены некорректно.",
+            ),
+            ("?scenario_id=S01&channel=", "Название канала заполнено некорректно."),
+            ("?scenario_id=S01&geo=", "Название географии заполнено некорректно."),
+            ("?scenario_id=S01&date=2026-08-01", "Дата заполнена некорректно."),
+            (
+                "?scenario_id=S01&internal_name=1",
+                "Запрос содержит неподдерживаемые параметры.",
+            ),
+            (
+                "?scenario_id=S01&scenario_id=S02",
+                "Каждый параметр запроса можно указать только один раз.",
+            ),
         )
-        self.assertEqual(status, 422)
-        self.assertEqual(error["error"]["code"], "MEDIA_PLAN_QUERY_UNSUPPORTED")
-
-        with patch.object(
-            self.application,
-            "media_plan",
-            side_effect=UnsupportedMediaPlanQuery("Дневная разбивка недоступна."),
-        ):
-            status, error, _ = self._request(
-                "GET",
-                f"/api/v1/jobs/{self.job.job_id}/media-plan"
-                "?scenario_id=S01&date=2026-08-01",
-            )
-        self.assertEqual(status, 422)
-        self.assertEqual(error["error"]["code"], "MEDIA_PLAN_QUERY_UNSUPPORTED")
+        for query, expected_text in browser_error_cases:
+            with self.subTest(query=query):
+                status, error, _ = self._request(
+                    "GET", f"/api/v1/jobs/{self.job.job_id}/media-plan{query}"
+                )
+                self.assertEqual(status, 422)
+                self.assertEqual(
+                    error["error"]["code"],
+                    "MEDIA_PLAN_QUERY_UNSUPPORTED",
+                )
+                self.assertEqual(error["error"]["display_text"], expected_text)
 
         with patch.object(
             self.application,

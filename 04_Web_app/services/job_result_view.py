@@ -24,6 +24,17 @@ from contracts.scenario_media_plan_v1 import validate_scenario_media_plan_payloa
 
 ArtifactResolver = Callable[[str], tuple[Path, Mapping[str, Any]]]
 SCENARIO_IDS = ("S01", "S02", "S03", "S04", "S05", "S06")
+MEDIA_PLAN_SCENARIO_ERROR_TEXT = "Не удалось определить сценарий для просмотра медиаплана."
+MEDIA_PLAN_PAGINATION_ERROR_TEXT = (
+    "Номер страницы и количество строк на странице заполнены некорректно."
+)
+MEDIA_PLAN_CHANNEL_ERROR_TEXT = "Название канала заполнено некорректно."
+MEDIA_PLAN_GEO_ERROR_TEXT = "Название географии заполнено некорректно."
+MEDIA_PLAN_DATE_ERROR_TEXT = "Дата заполнена некорректно."
+MEDIA_PLAN_UNKNOWN_QUERY_ERROR_TEXT = "Запрос содержит неподдерживаемые параметры."
+MEDIA_PLAN_DUPLICATE_QUERY_ERROR_TEXT = (
+    "Каждый параметр запроса можно указать только один раз."
+)
 SCENARIO_COPY: dict[str, tuple[str, str, str]] = {
     "S01": (
         "Как загружено",
@@ -1227,13 +1238,13 @@ def build_scenario_media_plan(
     """Build one stable, paginated geo-by-channel media-plan page."""
 
     if scenario_id not in SCENARIO_IDS:
-        raise UnsupportedMediaPlanQuery("Поддерживаются только сценарии S01–S06.")
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_SCENARIO_ERROR_TEXT)
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-        raise UnsupportedMediaPlanQuery("page должен быть положительным целым числом.")
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_PAGINATION_ERROR_TEXT)
     if isinstance(page_size, bool) or not isinstance(page_size, int) or not 1 <= page_size <= 500:
-        raise UnsupportedMediaPlanQuery("page_size должен быть от 1 до 500.")
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_PAGINATION_ERROR_TEXT)
     if date is not None:
-        raise UnsupportedMediaPlanQuery("Фильтр по дате недоступен: текущий план не содержит дневной разбивки.")
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_DATE_ERROR_TEXT)
 
     campaign = _validate_sources(job_id, job, result, overview)
     evidence = _Evidence(overview, artifact_resolver)

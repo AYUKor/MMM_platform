@@ -464,10 +464,27 @@ class ProductResultContractsV1Test(unittest.TestCase):
         self.assertEqual(filtered["filtered_totals"]["selected_budget_rub"], 0)
 
     def test_media_plan_rejects_unavailable_scenario_date_and_tampered_artifact(self) -> None:
-        with self.assertRaisesRegex(UnsupportedMediaPlanQuery, "S01–S06"):
+        with self.assertRaises(UnsupportedMediaPlanQuery) as invalid_scenario:
             self.evidence.media_plan(scenario_id="S99")
-        with self.assertRaisesRegex(UnsupportedMediaPlanQuery, "дате"):
+        self.assertEqual(
+            str(invalid_scenario.exception),
+            "Не удалось определить сценарий для просмотра медиаплана.",
+        )
+        with self.assertRaises(UnsupportedMediaPlanQuery) as invalid_page:
+            self.evidence.media_plan(page=0)
+        self.assertEqual(
+            str(invalid_page.exception),
+            "Номер страницы и количество строк на странице заполнены некорректно.",
+        )
+        with self.assertRaises(UnsupportedMediaPlanQuery) as invalid_page_size:
+            self.evidence.media_plan(page_size=501)
+        self.assertEqual(
+            str(invalid_page_size.exception),
+            "Номер страницы и количество строк на странице заполнены некорректно.",
+        )
+        with self.assertRaises(UnsupportedMediaPlanQuery) as invalid_date:
             self.evidence.media_plan(date="2026-08-01")
+        self.assertEqual(str(invalid_date.exception), "Дата заполнена некорректно.")
         self.evidence.campaign["scenarios"][-1]["available"] = False
         with self.assertRaisesRegex(UnsupportedMediaPlanQuery, "недоступен"):
             self.evidence.media_plan(scenario_id="S06")

@@ -76,8 +76,16 @@ from services.job_progress_view import (  # noqa: E402
     build_job_progress_view,
 )
 from services.job_result_view import (  # noqa: E402
+    MEDIA_PLAN_CHANNEL_ERROR_TEXT,
+    MEDIA_PLAN_DATE_ERROR_TEXT,
+    MEDIA_PLAN_DUPLICATE_QUERY_ERROR_TEXT,
+    MEDIA_PLAN_GEO_ERROR_TEXT,
+    MEDIA_PLAN_PAGINATION_ERROR_TEXT,
+    MEDIA_PLAN_SCENARIO_ERROR_TEXT,
+    MEDIA_PLAN_UNKNOWN_QUERY_ERROR_TEXT,
     ResultProjectionStateError,
     ResultProjectionUnavailableError,
+    SCENARIO_IDS,
     UnsupportedMediaPlanQuery,
     build_job_result_view,
     build_scenario_media_plan,
@@ -1154,37 +1162,43 @@ def _media_plan_parameters(
 ) -> tuple[str, int, int, str | None, str | None, str | None]:
     parameters = parse_qs(query, keep_blank_values=True)
     allowed = {"scenario_id", "page", "page_size", "channel", "geo", "date"}
-    if unknown := set(parameters) - allowed:
-        raise UnsupportedMediaPlanQuery(
-            f"Неподдерживаемые параметры медиаплана: {', '.join(sorted(unknown))}."
-        )
+    if set(parameters) - allowed:
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_UNKNOWN_QUERY_ERROR_TEXT)
     if any(len(values) != 1 for values in parameters.values()):
-        raise UnsupportedMediaPlanQuery("Каждый параметр медиаплана можно указать только один раз.")
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_DUPLICATE_QUERY_ERROR_TEXT)
     scenario_id = parameters.get("scenario_id", [""])[0].strip()
-    if not scenario_id:
-        raise UnsupportedMediaPlanQuery("Укажите scenario_id от S01 до S06.")
+    if scenario_id not in SCENARIO_IDS:
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_SCENARIO_ERROR_TEXT)
     try:
         page = int(parameters.get("page", ["1"])[0])
         page_size = int(parameters.get("page_size", ["100"])[0])
     except ValueError as exc:
-        raise UnsupportedMediaPlanQuery("page и page_size должны быть целыми числами.") from exc
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_PAGINATION_ERROR_TEXT) from exc
+    if page < 1 or not 1 <= page_size <= 500:
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_PAGINATION_ERROR_TEXT)
 
-    def optional_text(key: str) -> str | None:
+    def optional_text(key: str, error_text: str) -> str | None:
         value = parameters.get(key, [None])[0]
         if value is None:
             return None
         value = value.strip()
         if not value or len(value) > 200:
-            raise UnsupportedMediaPlanQuery(f"Параметр {key} заполнен некорректно.")
+            raise UnsupportedMediaPlanQuery(error_text)
         return value
+
+    channel = optional_text("channel", MEDIA_PLAN_CHANNEL_ERROR_TEXT)
+    geo = optional_text("geo", MEDIA_PLAN_GEO_ERROR_TEXT)
+    date = optional_text("date", MEDIA_PLAN_DATE_ERROR_TEXT)
+    if date is not None:
+        raise UnsupportedMediaPlanQuery(MEDIA_PLAN_DATE_ERROR_TEXT)
 
     return (
         scenario_id,
         page,
         page_size,
-        optional_text("channel"),
-        optional_text("geo"),
-        optional_text("date"),
+        channel,
+        geo,
+        None,
     )
 
 
