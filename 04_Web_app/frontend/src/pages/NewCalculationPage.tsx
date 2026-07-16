@@ -28,6 +28,14 @@ import {
   type NewCalculationStep,
 } from "../features/new-calculation/newCalculationFlow";
 import {
+  CalculationProfileRequestError,
+  CalculationProfileUnavailableError,
+  UnsupportedCalculationProfileError,
+  campaignPlanTemplateUrl,
+  getCalculationProfile,
+  type CalculationProfile,
+} from "../shared/api/new-calculation-client";
+import {
   createIdempotencyKey,
   createJob,
   getUpload,
@@ -36,7 +44,8 @@ import {
   requestValidation,
   uploadCampaign,
 } from "../shared/api/lifecycle-client";
-import { formatDate, formatRub } from "../shared/formatters/metrics";
+import { CampaignPreviewVisuals, ValidationChecks } from "../features/new-calculation/NewCalculationPreview";
+import { formatDate, formatInteger, formatRub } from "../shared/formatters/metrics";
 import { Button } from "../shared/ui/Button";
 import { StatusBadge } from "../shared/ui/StatusBadge";
 import styles from "./new-calculation.module.css";
@@ -60,6 +69,13 @@ interface FlowErrorState {
   kind: "load" | "action";
   message: string;
 }
+
+type CalculationProfileState =
+  | { validationId: string; status: "ready"; profile: CalculationProfile }
+  | { validationId: string; status: "unavailable" | "unsupported" | "error" };
+
+type CalculationProfileViewState = CalculationProfileState
+  | { validationId: string; status: "loading" };
 
 const forbiddenUserText = /\b(api|backend|validation preview|support|candidate_id|attempt_id|posterior)\b/i;
 
@@ -91,6 +107,13 @@ function safeError(caught: unknown, fallback: string): string {
 function safeMarketerText(value: string, fallback: string): string {
   const message = value.trim();
   if (!message || forbiddenUserText.test(message)) return fallback;
+  return message;
+}
+
+function optionalSafeMarketerText(value: string | undefined): string | null {
+  if (!value) return null;
+  const message = value.trim();
+  if (!message || forbiddenUserText.test(message)) return null;
   return message;
 }
 
@@ -179,23 +202,6 @@ function LoadingPanel({ message }: { message: string }) {
         <p>Страница обновится автоматически.</p>
       </div>
     </section>
-  );
-}
-
-function EmptyPreview({ title, message }: { title: string; message: string }) {
-  return (
-    <article className={styles.emptyPreview}>
-      <div className={styles.previewHeading}>
-        <h3>{title}</h3>
-        <StatusBadge tone="neutral">Нет данных</StatusBadge>
-      </div>
-      <div className={styles.previewPlaceholder} aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-      <p>{message}</p>
-    </article>
   );
 }
 
@@ -320,8 +326,13 @@ function UploadStep({
           <li>Нет объединенных ячеек</li>
         </ul>
         <div className={styles.templateBlock}>
-          <button type="button" disabled>Скачать шаблон медиаплана</button>
-          <p>Шаблон будет доступен после подключения файла-шаблона</p>
+          <a
+            href={campaignPlanTemplateUrl()}
+            download="campaign-plan-template.xlsx"
+          >
+            Скачать шаблон медиаплана
+          </a>
+          <p>В шаблоне есть форматы по дням и по периоду с синтетическим примером</p>
         </div>
       </aside>
     </div>
@@ -396,72 +407,6 @@ function CampaignSummary({ campaign, upload }: { campaign: CampaignPreview; uplo
   );
 }
 
-function ValidationChecks({ validation, upload }: { validation: ValidationResult; upload: CampaignUpload | null }) {
-  const campaign = validation.campaigns[0];
-  const budgetReconciliation = validation.totals
-    ? `Файл → план: ${formatRub(validation.totals.raw_to_normalized_abs_diff_rub)}; план → календарь: ${formatRub(validation.totals.normalized_to_daily_abs_diff_rub)}`
-    : null;
-  const facts = [
-    {
-      title: "Структура файла",
-      value: upload?.status.code === "parsed" ? "Файл прочитан" : "Нет отдельного результата",
-      tone: upload?.status.code === "parsed" ? "confirmed" : "unavailable",
-    },
-    {
-      title: "Сверка бюджета",
-      value: budgetReconciliation ?? "Нет отдельного результата",
-      tone: budgetReconciliation !== null ? "data" : "unavailable",
-    },
-    {
-      title: "Даты",
-      value: campaign ? `${formatDate(campaign.start_date)} — ${formatDate(campaign.end_date)}` : "Нет отдельного результата",
-      tone: campaign ? "data" : "unavailable",
-    },
-  ] satisfies { title: string; value: string; tone: "confirmed" | "data" | "unavailable" }[];
-  const unavailable = [
-    "Поддержка сегмента",
-    "Распознавание каналов",
-    "Распознавание географий",
-    "Сходство с историческими тратами",
-    "Ограничения использования модели",
-  ];
-
-  return (
-    <section className={styles.checksSection} aria-labelledby="checks-title">
-      <div className={styles.sectionHeading}>
-        <div>
-          <span className={styles.eyebrow}>Проверки</span>
-          <h2 id="checks-title">Что подтверждено данными</h2>
-        </div>
-        <p>Отдельные проверки не считаются пройденными без явного результата.</p>
-      </div>
-      <div className={styles.checkGrid}>
-        {facts.map((fact) => (
-          <article className={styles.checkItem} key={fact.title}>
-            <span
-              className={
-                fact.tone === "confirmed"
-                  ? styles.factMark
-                  : fact.tone === "data"
-                    ? styles.dataMark
-                    : styles.unavailableMark
-              }
-              aria-hidden="true"
-            />
-            <div><h3>{fact.title}</h3><p>{fact.value}</p></div>
-          </article>
-        ))}
-        {unavailable.map((title) => (
-          <article className={styles.checkItem} key={title}>
-            <span className={styles.unavailableMark} aria-hidden="true" />
-            <div><h3>{title}</h3><p>Детализация проверки не предоставлена</p></div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function ValidationIssues({ validation }: { validation: ValidationResult }) {
   const issues = [...validation.blocking_errors, ...validation.warnings];
   if (issues.length === 0) {
@@ -479,25 +424,31 @@ function ValidationIssues({ validation }: { validation: ValidationResult }) {
         <span className={styles.issueCount}>{issues.length}</span>
       </div>
       <div className={styles.issueGrid}>
-        {issues.map((issue, index) => (
-          <article className={styles.issueCard} key={`${issue.code}-${index}`}>
+        {issues.map((issue, index) => {
+          const what = optionalSafeMarketerText(issue.what)
+            ?? safeMarketerText(issue.display_text, "Получено замечание к кампании.");
+          const why = optionalSafeMarketerText(issue.why);
+          const recommendedAction = optionalSafeMarketerText(issue.recommended_action);
+          return (
+            <article className={styles.issueCard} key={`${issue.code}-${index}`}>
             <div className={styles.issueTopline}>
               <StatusBadge tone={issue.severity === "blocking" ? "danger" : "warning"}>
                 {issue.severity === "blocking" ? "Нужно исправить" : "Замечание"}
               </StatusBadge>
-              <span>Расчет разрешен: {validation.job_creation_allowed ? "да" : "нет"}</span>
+              <span>{issue.severity === "blocking" ? "Блокирует расчет" : "Не блокирует расчет"}</span>
             </div>
             <h3>Что обнаружено</h3>
-            <p className={styles.issueText}>
-              {safeMarketerText(issue.display_text, "Получено замечание без безопасного пользовательского описания.")}
-            </p>
+            <p className={styles.issueText}>{what}</p>
             <div className={styles.contextList}><AffectedContext issue={issue} campaigns={validation.campaigns} /></div>
-            <dl className={styles.issueDetails}>
-              <div><dt>Почему это важно</dt><dd>Отдельное пояснение не предоставлено</dd></div>
-              <div><dt>Что можно сделать</dt><dd>Рекомендация по исправлению не предоставлена</dd></div>
-            </dl>
+            {why || recommendedAction ? (
+              <dl className={styles.issueDetails}>
+                {why ? <div><dt>Почему это важно</dt><dd>{why}</dd></div> : null}
+                {recommendedAction ? <div><dt>Что можно сделать</dt><dd>{recommendedAction}</dd></div> : null}
+              </dl>
+            ) : null}
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -536,11 +487,11 @@ function ValidationStep({
       {campaign ? <CampaignSummary campaign={campaign} upload={upload} /> : (
         <section className={styles.blockedNotice} role="alert">
           <h2>Нельзя продолжить с этим файлом</h2>
-          <p>В результате проверки должно быть ровно одна кампания.</p>
+          <p>В результате проверки должна быть ровно одна кампания.</p>
         </section>
       )}
 
-      <ValidationChecks validation={validation} upload={upload} />
+      <ValidationChecks checks={validation.preview?.checks} />
       <ValidationIssues validation={validation} />
 
       <section className={styles.s5Explanation}>
@@ -551,18 +502,7 @@ function ValidationStep({
         </div>
       </section>
 
-      <section className={styles.previews} aria-labelledby="preview-title">
-        <div className={styles.sectionHeading}>
-          <div><span className={styles.eyebrow}>Предпросмотр медиаплана</span><h2 id="preview-title">Структура кампании</h2></div>
-          <p>Показываем только данные, доступные в текущем результате проверки.</p>
-        </div>
-        <div className={styles.previewGrid}>
-          <EmptyPreview title="Бюджет по каналам" message="График появится после подключения агрегатов по каналам" />
-          <EmptyPreview title="Бюджет по географии" message="График появится после подключения агрегатов по географиям" />
-          <EmptyPreview title="Активность каналов" message="Календарь появится после подключения дневного распределения бюджета" />
-          <EmptyPreview title="География кампании" message="Карта появится после подключения координат географий" />
-        </div>
-      </section>
+      <CampaignPreviewVisuals preview={validation.preview} />
 
       <div className={styles.footerActions}>
         <Button type="button" onClick={onReset}>{tone === "blocked" ? "Загрузить исправленный файл" : "Загрузить другой файл"}</Button>
@@ -578,11 +518,13 @@ function ValidationStep({
 
 function ScenariosStep({
   validation,
+  calculationProfile,
   onBack,
   onStart,
   busy,
 }: {
   validation: ValidationResult;
+  calculationProfile: CalculationProfileViewState;
   onBack: () => void;
   onStart: () => void;
   busy: boolean;
@@ -614,7 +556,27 @@ function ScenariosStep({
             <h3>{scenario.title}</h3>
             <p>{scenario.description}</p>
             {scenario.id === "S05" ? <div className={styles.scenarioPrinciple}>S5 — сначала устойчивость</div> : null}
-            {scenario.id === "S06" ? <div className={styles.scenarioPrinciple}>S6 — поиск эффективности с обязательной проверкой устойчивости</div> : null}
+            {scenario.id === "S06" ? (
+              <div className={styles.scenarioProfile} aria-live="polite">
+                <span>S6 — поиск эффективности с обязательной проверкой устойчивости</span>
+                {calculationProfile.status === "ready" ? (
+                  <>
+                    <strong>
+                      {formatInteger(calculationProfile.profile.scenario6_attempt_budget)} вариантов
+                    </strong>
+                    <small>
+                      {calculationProfile.profile.profile_label} · {calculationProfile.profile.model_version_label}
+                    </small>
+                  </>
+                ) : (
+                  <strong>
+                    {calculationProfile.status === "loading"
+                      ? "Загружаем число вариантов…"
+                      : "Число вариантов пока недоступно"}
+                  </strong>
+                )}
+              </div>
+            ) : null}
           </article>
         ))}
       </section>
@@ -662,6 +624,7 @@ export function NewCalculationPage() {
     location: null,
   });
   const [errorState, setErrorState] = useState<FlowErrorState | null>(null);
+  const [calculationProfileState, setCalculationProfileState] = useState<CalculationProfileState | null>(null);
 
   const routeState = useMemo(() => resolveNewCalculationStep(searchParams), [searchParams]);
   const flowStep = routeState.step;
@@ -681,6 +644,10 @@ export function NewCalculationPage() {
     ? "idle"
     : activityState.code;
   const currentStep = getCurrentStep(flowStep, activity);
+  const activeCalculationProfile: CalculationProfileViewState =
+    validationId && calculationProfileState?.validationId === validationId
+      ? calculationProfileState
+      : { validationId: validationId ?? "validation_pending", status: "loading" };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -765,6 +732,28 @@ export function NewCalculationPage() {
       });
     return () => controller.abort();
   }, [flowStep, navigate, validationId]);
+
+  useEffect(() => {
+    if (flowStep !== "scenarios" || !validationId) return;
+    const controller = new AbortController();
+    getCalculationProfile(controller.signal)
+      .then((profile) => {
+        if (controller.signal.aborted) return;
+        setCalculationProfileState({ validationId, status: "ready", profile });
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught) || controller.signal.aborted) return;
+        const status = caught instanceof CalculationProfileUnavailableError
+          ? "unavailable"
+          : caught instanceof UnsupportedCalculationProfileError
+            ? "unsupported"
+            : caught instanceof CalculationProfileRequestError
+              ? "error"
+              : "error";
+        setCalculationProfileState({ validationId, status });
+      });
+    return () => controller.abort();
+  }, [flowStep, validationId]);
 
   const resetToUpload = (openPicker = false) => {
     setFile(null);
@@ -982,6 +971,7 @@ export function NewCalculationPage() {
       {flowStep === "scenarios" && !hasLoadError && routeValidation && getValidationTone(routeValidation) !== "blocked" && activity !== "loading-validation" ? (
         <ScenariosStep
           validation={routeValidation}
+          calculationProfile={activeCalculationProfile}
           onBack={() => navigate(`/calculations/new?validationId=${encodeURIComponent(routeValidation.validation_id)}&step=review`)}
           onStart={startJob}
           busy={activity === "creating-job"}

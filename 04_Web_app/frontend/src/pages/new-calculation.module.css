@@ -76,24 +76,18 @@
 .resultCard,
 .loadingPanel,
 .campaignSummary,
-.checksSection,
 .issuesSection,
-.previews,
 .invariants,
 .recommendationLogic { border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
 .uploadCard { min-width: 0; padding: var(--space-5); }
 .sectionHeading,
-.summaryHeading,
-.previewHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.summaryHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
 .summaryHeading > div,
-.validationStatus > div,
-.checkItem > div { min-width: 0; }
+.validationStatus > div { min-width: 0; }
 .sectionHeading h2,
-.summaryHeading h2,
-.previewHeading h3 { margin: 0.3rem 0 0; }
+.summaryHeading h2 { margin: 0.3rem 0 0; }
 .summaryHeading h2,
 .validationStatus h2,
-.checkItem p,
 .issueText { overflow-wrap: anywhere; }
 .sectionHeading > p { max-width: 480px; margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; text-align: right; }
 .formatLabel { padding: 0.35rem 0.65rem; border: 1px solid var(--border-default); border-radius: var(--radius-pill); color: var(--text-secondary); font: 700 0.7rem/1 var(--font-mono); }
@@ -135,8 +129,10 @@
 .requirements li { position: relative; padding-left: 1.8rem; color: var(--text-secondary); font-size: 0.88rem; }
 .requirements li::before { content: "✓"; position: absolute; left: 0; top: -0.12rem; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent-strong); font-weight: 900; }
 .templateBlock { margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--border-default); }
-.templateBlock button { min-height: 44px; width: 100%; padding: 0.65rem 0.8rem; border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.78rem; font-weight: 750; opacity: 0.6; cursor: not-allowed; }
-.templateBlock p { margin: 0.65rem 0 0; color: var(--text-tertiary); font-size: 0.72rem; line-height: 1.45; }
+.templateBlock a { min-height: 44px; width: 100%; display: inline-flex; align-items: center; justify-content: center; padding: 0.65rem 0.8rem; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: var(--surface-primary); color: var(--text-primary); font-size: 0.78rem; font-weight: 750; text-align: center; text-decoration: none; transition: background-color var(--motion-fast), transform var(--motion-fast); }
+.templateBlock a:hover { background: var(--surface-hover); }
+.templateBlock a:active { transform: translateY(1px); }
+.templateBlock p { margin: 0.65rem 0 0; color: var(--text-secondary); font-size: 0.72rem; line-height: 1.45; }
 
 .loadingPanel { min-height: 310px; display: flex; align-items: center; justify-content: center; gap: var(--space-5); padding: var(--space-8); text-align: left; }
 .loadingPanel h2 { margin: 0.3rem 0 0; font-size: 1.7rem; }
@@ -181,21 +177,9 @@
 .summaryGrid > div { min-width: 0; padding: var(--space-4); border-right: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default); }
 .summaryWide { grid-column: span 3; }
 
-.checksSection,
 .issuesSection,
-.previews,
 .invariants,
 .recommendationLogic { padding: var(--space-5); }
-.checkGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: var(--space-5); border-top: 1px solid var(--border-default); border-left: 1px solid var(--border-default); }
-.checkItem { min-width: 0; display: flex; align-items: flex-start; gap: 0.7rem; padding: 0.9rem; border-right: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default); }
-.checkItem h3 { margin: 0; font-size: 0.82rem; }
-.checkItem p { margin: 0.35rem 0 0; color: var(--text-secondary); font-size: 0.75rem; line-height: 1.4; }
-.factMark,
-.dataMark,
-.unavailableMark { width: 9px; height: 9px; flex: 0 0 9px; margin-top: 0.25rem; border-radius: 50%; }
-.factMark { background: var(--accent-strong); }
-.dataMark { background: var(--info); }
-.unavailableMark { border: 1px solid var(--text-tertiary); }
 
 .noIssues { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-5); border: 1px solid var(--accent-strong); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--accent) 7%, var(--surface-primary)); }
 .noIssues > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 900; }
@@ -206,7 +190,7 @@
 .issueCard { min-width: 0; padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-secondary); }
 .issueTopline { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .issueTopline > span:last-child { color: var(--text-secondary); font-size: 0.72rem; }
-.issueCard h3 { margin: var(--space-4) 0 0; font-size: 0.72rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+.issueCard h3 { margin: var(--space-4) 0 0; font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
 .issueText { margin: 0.45rem 0 0; line-height: 1.5; }
 .contextList { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: var(--space-3); }
 .contextChip { max-width: 100%; padding: 0.3rem 0.55rem; border: 1px solid var(--border-default); border-radius: var(--radius-pill); color: var(--text-secondary); font-size: 0.68rem; overflow-wrap: anywhere; }
@@ -218,14 +202,6 @@
 .s5Explanation h2 { margin: 0; font-size: 1.2rem; }
 .s5Explanation p { margin: 0.5rem 0 0; color: var(--text-secondary); line-height: 1.55; }
 .shieldMark { width: 58px; height: 64px; flex: 0 0 58px; display: grid; place-items: center; border-radius: 24px 24px 30px 30px; background: var(--accent); color: var(--accent-ink); font: 900 0.9rem/1 var(--font-mono); }
-.previewGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-5); }
-.emptyPreview { min-width: 0; padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-secondary); }
-.previewHeading h3 { font-size: 0.95rem; }
-.previewPlaceholder { display: grid; gap: 0.5rem; margin: var(--space-4) 0; }
-.previewPlaceholder span { height: 7px; border-radius: var(--radius-pill); background: var(--border-default); }
-.previewPlaceholder span:nth-child(2) { width: 78%; }
-.previewPlaceholder span:nth-child(3) { width: 54%; }
-.emptyPreview p { margin: 0; color: var(--text-secondary); font-size: 0.78rem; line-height: 1.45; }
 .blockedNotice { padding: var(--space-5); border: 1px solid var(--danger); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--danger) 7%, var(--surface-primary)); }
 .blockedNotice h2 { margin: 0; }
 .blockedNotice p { margin: 0.4rem 0 0; color: var(--text-secondary); }
@@ -239,13 +215,17 @@
 .scenarioCard > p { margin: 0.55rem 0 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.45; }
 .scenarioMeta { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
 .scenarioMeta strong { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 50%; font: 900 0.74rem/1 var(--font-mono); }
-.scenarioMeta span { color: var(--text-tertiary); font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; text-align: right; }
+.scenarioMeta span { color: var(--text-secondary); font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; text-align: right; }
 .scenario_benchmark,
 .scenario_adaptive { grid-column: span 2; min-height: 210px; }
 .scenario_benchmark { border-color: var(--accent-strong); background: color-mix(in srgb, var(--accent) 8%, var(--surface-primary)); }
 .scenario_adaptive { border-color: var(--border-strong); background: var(--surface-secondary); }
 .scenario_benchmark .scenarioMeta strong { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .scenarioPrinciple { margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--border-default); font-size: 0.78rem; font-weight: 800; }
+.scenarioProfile { display: grid; gap: 0.4rem; margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--border-default); }
+.scenarioProfile > span { color: var(--text-secondary); font-size: 0.72rem; line-height: 1.4; }
+.scenarioProfile strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.scenarioProfile small { color: var(--text-secondary); font-size: 0.66rem; line-height: 1.4; overflow-wrap: anywhere; }
 
 .invariants { display: grid; grid-template-columns: 240px 1fr; gap: var(--space-5); align-items: start; }
 .invariants h2,
@@ -267,7 +247,6 @@
   .requirements { min-height: auto; }
   .requirements ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .templateBlock { margin-top: 0; }
-  .checkGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scenarioGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scenario_benchmark,
   .scenario_adaptive { grid-column: span 1; }
@@ -307,8 +286,7 @@
   .fileSummary div { border-bottom: 1px solid var(--border-default); }
   .fileSummary div:nth-last-child(-n + 2) { border-bottom: 0; }
   .summaryWide { grid-column: span 2; }
-  .issueGrid,
-  .previewGrid { grid-template-columns: 1fr; }
+  .issueGrid { grid-template-columns: 1fr; }
   .issueDetails { grid-template-columns: 1fr; }
   .validationStatus { align-items: flex-start; }
   .statusSymbol { width: 48px; height: 48px; flex-basis: 48px; font-size: 1.2rem; }
@@ -327,15 +305,12 @@
   .requirements,
   .resultCard,
   .campaignSummary,
-  .checksSection,
   .issuesSection,
-  .previews,
   .invariants,
   .recommendationLogic { padding: var(--space-4); }
   .requirements ul,
   .fileSummary,
-  .summaryGrid,
-  .checkGrid { grid-template-columns: 1fr; }
+  .summaryGrid { grid-template-columns: 1fr; }
   .fileSummary div,
   .fileSummary div:nth-child(2) { border-right: 0; border-bottom: 1px solid var(--border-default); }
   .fileSummary div:last-child { border-bottom: 0; }

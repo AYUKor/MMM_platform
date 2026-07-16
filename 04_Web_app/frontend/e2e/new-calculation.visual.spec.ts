@@ -12,6 +12,7 @@ const UPLOAD_ID = "upload_000000000001";
 const VALIDATION_ID = "validation_000000000002";
 const JOB_ID = "job_000000000003";
 const CAMPAIGN_ID = "campaign_000000000004";
+const SYNTHETIC_SCENARIO6_ATTEMPTS = 3_217;
 const REVIEW_DIRECTORY = fileURLToPath(
   new URL("../../docs/ui-review/calculations-new-v2/", import.meta.url),
 );
@@ -125,10 +126,21 @@ const campaign: ValidationResult["campaigns"][number] = {
   daily_budget_rub: 12_000_000,
 };
 
+const calculationProfile = {
+  contract_name: "calculation_profile_v1",
+  schema_version: "1.0.0",
+  scenario6_attempt_budget: SYNTHETIC_SCENARIO6_ATTEMPTS,
+  profile_label: "Синтетический профиль поиска",
+  model_version_label: "Синтетическая версия модели",
+} as const;
+
 const syntheticWarning: ValidationIssue = {
   code: "SYNTHETIC_LIMITED_HISTORY",
   severity: "warning",
   display_text: "Для синтетического канала доступна ограниченная история расходов.",
+  what: "Для канала Б доступно меньше исторических наблюдений.",
+  why: "Короткая история повышает неопределенность оценки эффекта канала.",
+  recommended_action: "Проверьте период и бюджет канала Б перед запуском расчета.",
   scope: "cell",
   recoverable: true,
   source_row_ids: [4],
@@ -147,6 +159,9 @@ const syntheticBlockingIssue: ValidationIssue = {
   code: "SYNTHETIC_UNKNOWN_CHANNEL",
   severity: "blocking",
   display_text: "Синтетический канал не распознан и должен быть исправлен.",
+  what: "Канал из строки 7 не найден среди поддерживаемых каналов модели.",
+  why: "Модель не сможет оценить бюджет для неизвестного канала.",
+  recommended_action: "Исправьте название канала в строке 7 и загрузите файл снова.",
   scope: "cell",
   recoverable: true,
   source_row_ids: [7],
@@ -159,6 +174,16 @@ const syntheticBlockingIssue: ValidationIssue = {
       target: "synthetic_target",
     },
   ],
+};
+
+const syntheticLegacyWarning: ValidationIssue = {
+  code: syntheticWarning.code,
+  severity: syntheticWarning.severity,
+  display_text: syntheticWarning.display_text,
+  scope: syntheticWarning.scope,
+  recoverable: syntheticWarning.recoverable,
+  source_row_ids: syntheticWarning.source_row_ids,
+  affected_cells: syntheticWarning.affected_cells,
 };
 
 const validValidation: ValidationResult = {
@@ -199,6 +224,91 @@ const validValidation: ValidationResult = {
   },
   blocking_errors: [],
   warnings: [],
+  preview: {
+    budget_by_channel: [
+      {
+        channel: "Синтетический канал А",
+        total_budget_rub: 7_200_000,
+        max_daily_budget_rub: 300_000,
+        status: { code: "passed", display_text: "Данные готовы" },
+      },
+      {
+        channel: "Синтетический канал Б",
+        total_budget_rub: 4_800_000,
+        max_daily_budget_rub: 200_000,
+        status: { code: "warning", display_text: "Проверьте историю" },
+      },
+    ],
+    budget_by_geo: [
+      {
+        geo: "Синтетический город А",
+        total_budget_rub: 8_000_000,
+        max_daily_budget_rub: 340_000,
+        status: { code: "passed", display_text: "Данные готовы" },
+      },
+      {
+        geo: "Синтетический город Б",
+        total_budget_rub: 4_000_000,
+        max_daily_budget_rub: 160_000,
+        status: { code: "passed", display_text: "Данные готовы" },
+      },
+    ],
+    channel_flighting: [
+      {
+        channel: "Синтетический канал А",
+        date: "2026-02-01",
+        daily_budget_rub: 300_000,
+        status: { code: "passed", display_text: "Активен" },
+      },
+      {
+        channel: "Синтетический канал А",
+        date: "2026-02-02",
+        daily_budget_rub: 250_000,
+        status: { code: "passed", display_text: "Активен" },
+      },
+      {
+        channel: "Синтетический канал А",
+        date: "2026-02-03",
+        daily_budget_rub: 180_000,
+        status: { code: "passed", display_text: "Активен" },
+      },
+      {
+        channel: "Синтетический канал Б",
+        date: "2026-02-01",
+        daily_budget_rub: 120_000,
+        status: { code: "warning", display_text: "Ограниченная история" },
+      },
+      {
+        channel: "Синтетический канал Б",
+        date: "2026-02-02",
+        daily_budget_rub: 200_000,
+        status: { code: "warning", display_text: "Ограниченная история" },
+      },
+      {
+        channel: "Синтетический канал Б",
+        date: "2026-02-03",
+        daily_budget_rub: 140_000,
+        status: { code: "warning", display_text: "Ограниченная история" },
+      },
+    ],
+    checks: [
+      {
+        code: "CHECK_SINGLE_CAMPAIGN",
+        status: "passed",
+        display_text: "Файл содержит ровно одну кампанию.",
+      },
+      {
+        code: "CHECK_BUDGET_RECONCILIATION",
+        status: "passed",
+        display_text: "Бюджет файла и дневного плана совпадает.",
+      },
+      {
+        code: "CHECK_HISTORY_COVERAGE",
+        status: "warning",
+        display_text: "Для одного канала доступна ограниченная история.",
+      },
+    ],
+  },
   job_creation_allowed: true,
 };
 
@@ -279,6 +389,8 @@ const queuedJob: DecisionJob = {
 interface MockApiOptions {
   parsed?: CampaignUpload;
   validation?: ValidationResult;
+  calculationProfile?: unknown;
+  calculationProfileStatus?: number;
   uploadFailuresBeforeSuccess?: number;
   uploadPollsBeforeParsed?: number;
   uploadGetError?: boolean;
@@ -288,6 +400,8 @@ interface MockApiOptions {
 }
 
 interface MockApiCalls {
+  templateGets: number;
+  profileGets: number;
   uploadPosts: number;
   uploadGets: number;
   uploadIdempotencyKeys: string[];
@@ -312,6 +426,8 @@ async function mockNewCalculationApi(
   options: MockApiOptions = {},
 ): Promise<MockApiCalls> {
   const calls: MockApiCalls = {
+    templateGets: 0,
+    profileGets: 0,
     uploadPosts: 0,
     uploadGets: 0,
     uploadIdempotencyKeys: [],
@@ -329,6 +445,38 @@ async function mockNewCalculationApi(
     const request = route.request();
     const method = request.method();
     const pathname = new URL(request.url()).pathname;
+
+    if (method === "GET" && pathname === "/api/v1/templates/campaign-plan.xlsx") {
+      calls.templateGets += 1;
+      await route.fulfill({
+        status: 200,
+        body: Buffer.from("PK\u0003\u0004synthetic-xlsx-template", "utf8"),
+        headers: {
+          "cache-control": "no-store",
+          "content-disposition": 'attachment; filename="campaign-plan-template.xlsx"',
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      });
+      return;
+    }
+
+    if (method === "GET" && pathname === "/api/v1/calculation-profile") {
+      calls.profileGets += 1;
+      const status = options.calculationProfileStatus ?? 200;
+      await fulfillJson(
+        route,
+        status,
+        status === 200
+          ? (options.calculationProfile ?? calculationProfile)
+          : {
+              error: {
+                code: "SYNTHETIC_CALCULATION_PROFILE_UNAVAILABLE",
+                display_text: "Параметры расчета временно недоступны.",
+              },
+            },
+      );
+      return;
+    }
 
     if (method === "POST" && pathname === "/api/v1/uploads") {
       calls.uploadPosts += 1;
@@ -477,6 +625,10 @@ async function expectNoInternalNames(page: Page) {
     "storage_key",
     "SYNTHETIC_LIMITED_HISTORY",
     "SYNTHETIC_UNKNOWN_CHANNEL",
+    "CHECK_SINGLE_CAMPAIGN",
+    "CHECK_BUDGET_RECONCILIATION",
+    "CHECK_HISTORY_COVERAGE",
+    "calculation_profile_v1",
     "synthetic_target",
     "/Users/",
   ]) {
@@ -492,17 +644,34 @@ async function expectNoDocumentOverflow(page: Page) {
   ).toBe(false);
 }
 
-async function expectDisabledTemplateAction(page: Page) {
-  const label = page.getByText("Скачать шаблон медиаплана", { exact: true }).first();
-  await expect(label).toBeVisible();
-  expect(
-    await label.evaluate((element) => {
-      const action = element.closest("button, a, [aria-disabled]");
-      if (!action) return false;
-      if (action instanceof HTMLButtonElement) return action.disabled;
-      return action.getAttribute("aria-disabled") === "true" && !action.hasAttribute("href");
-    }),
-  ).toBe(true);
+async function expectWorkingTemplateAction(page: Page, calls: MockApiCalls) {
+  const action = page.getByRole("link", {
+    name: "Скачать шаблон медиаплана",
+    exact: true,
+  });
+  await expect(action).toHaveAttribute("href", "/api/v1/templates/campaign-plan.xlsx");
+  await expect(action).toHaveAttribute("download", "campaign-plan-template.xlsx");
+
+  const templateResponse = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/templates/campaign-plan.xlsx");
+    const bytes = [...new Uint8Array(await response.arrayBuffer()).slice(0, 2)];
+    return {
+      contentType: response.headers.get("content-type"),
+      ok: response.ok,
+      bytes,
+    };
+  });
+  expect(templateResponse).toEqual({
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ok: true,
+    bytes: [80, 75],
+  });
+  expect(calls.templateGets).toBe(1);
+
+  const downloadPromise = page.waitForEvent("download");
+  await action.click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("campaign-plan-template.xlsx");
 }
 
 async function reachParsedUpload(page: Page) {
@@ -550,6 +719,9 @@ async function expectScenarioScreen(page: Page) {
   await expect(page.getByText("Исходные каналы", { exact: true })).toBeVisible();
   await expect(page.getByText("Исходные гео", { exact: true })).toBeVisible();
   await expect(page.getByText("Исходные связки гео × канал", { exact: true })).toBeVisible();
+  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toBeVisible();
+  await expect(page.getByText("Синтетический профиль поиска", { exact: false })).toBeVisible();
+  await expect(page.getByText("Синтетическая версия модели", { exact: false })).toBeVisible();
 
   const text = await page.locator("body").innerText();
   expect(text).not.toContain("150");
@@ -579,7 +751,7 @@ test("1. empty upload screen is controlled", async ({ page }) => {
   await expect(page.getByText("Один файл = одна кампания", { exact: true })).toBeVisible();
   await expect(page.getByText("XLSX или CSV", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Загрузить файл", exact: true })).toBeDisabled();
-  await expectDisabledTemplateAction(page);
+  await expectWorkingTemplateAction(page, calls);
   await expect(page.locator('nav a[aria-current="page"]')).toHaveCount(1);
   await expect(page.getByRole("link", { name: "Новый расчёт", exact: true })).toHaveAttribute(
     "aria-current",
@@ -731,10 +903,37 @@ test("4. valid campaign without warnings reaches ready review", async ({ page })
   await expect(page.getByText("Синтетический сегмент", { exact: true })).toBeVisible();
   await expect(page.getByText(/12,3[\s\u00a0]*млн[\s\u00a0]*₽/)).toBeVisible();
   await expect(page.getByText("Бюджет по каналам", { exact: true })).toBeVisible();
-  await expect(page.getByText("Бюджет по географии", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Синтетический канал А:/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Синтетический канал Б:/ })).toBeVisible();
+  await expect(page.getByText("Бюджет по географиям", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Синтетический город А:/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Синтетический город Б:/ })).toBeVisible();
   await expect(page.getByText("Активность каналов", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Временная диаграмма активности каналов", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("cell")).toHaveCount(6);
   await expect(page.getByText("География кампании", { exact: true })).toBeVisible();
-  await expect(page.getByText(/после подключения/i).first()).toBeVisible();
+  await expect(page.getByText("Данные для карты пока недоступны.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Файл содержит ровно одну кампанию.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Бюджет файла и дневного плана совпадает.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Для одного канала доступна ограниченная история.", { exact: true }),
+  ).toBeVisible();
+  for (const manualLabel of [
+    "Структура файла",
+    "Сверка бюджета",
+    "Поддержка сегмента",
+    "Распознавание каналов",
+    "Распознавание географий",
+    "Сходство с историческими тратами",
+    "Ограничения использования модели",
+    "Детализация проверки не предоставлена",
+  ]) {
+    await expect(page.getByText(manualLabel, { exact: true })).toHaveCount(0);
+  }
   await expect(
     page.getByRole("button", { name: "Продолжить к сценариям", exact: true }),
   ).toBeVisible();
@@ -770,13 +969,18 @@ test("5. valid campaign with warnings stays calculable", async ({ page }) => {
   await reachReview(page, "Кампанию можно рассчитать, но есть замечания");
 
   await expect(page.getByText("Что обнаружено", { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticWarning.display_text, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticWarning.what!, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticWarning.why!, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticWarning.recommended_action!, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticWarning.display_text, { exact: true })).toHaveCount(0);
   await expect(page.getByText(/Гео: Синтетический город А/)).toBeVisible();
   await expect(page.getByText(/Канал: Синтетический канал Б/)).toBeVisible();
   await expect(
     page.getByText(/Связка гео × канал: Синтетический город А × Синтетический канал Б/),
   ).toBeVisible();
-  await expect(page.getByText(/Расчет разрешен:\s*да/i)).toBeVisible();
+  await expect(page.getByText("Не блокирует расчет", { exact: true })).toBeVisible();
+  await expect(page.getByText(/пояснение не предоставлено/i)).toHaveCount(0);
+  await expect(page.getByText(/рекомендация по исправлению не предоставлена/i)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Продолжить с замечаниями", exact: true }),
   ).toBeVisible();
@@ -788,8 +992,11 @@ test("6. invalid campaign is blocked", async ({ page }) => {
   const calls = await mockNewCalculationApi(page, { validation: invalidValidation });
   await reachReview(page, "Кампанию нужно исправить");
 
-  await expect(page.getByText(syntheticBlockingIssue.display_text, { exact: true })).toBeVisible();
-  await expect(page.getByText(/Расчет разрешен:\s*нет/i)).toBeVisible();
+  await expect(page.getByText(syntheticBlockingIssue.what!, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticBlockingIssue.why!, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticBlockingIssue.recommended_action!, { exact: true })).toBeVisible();
+  await expect(page.getByText(syntheticBlockingIssue.display_text, { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Блокирует расчет", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Загрузить исправленный файл", exact: true }),
   ).toBeVisible();
@@ -797,6 +1004,49 @@ test("6. invalid campaign is blocked", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toHaveCount(0);
   expect(calls.jobPosts).toBe(0);
   await expectNoInternalNames(page);
+});
+
+test("6a. a validation without preview arrays stays controlled", async ({ page }) => {
+  await mockNewCalculationApi(page, {
+    validation: { ...validValidation, preview: undefined },
+  });
+  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=review`);
+
+  await expect(page.getByText("Детализация проверок пока недоступна.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Данные по каналам пока недоступны.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Данные по географиям пока недоступны.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Дневная активность каналов пока недоступна.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Данные для карты пока недоступны.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Продолжить к сценариям", exact: true })).toBeVisible();
+});
+
+test("6b. legacy issue guidance is omitted without invented placeholders", async ({ page }) => {
+  await mockNewCalculationApi(page, {
+    validation: { ...warningValidation, warnings: [syntheticLegacyWarning] },
+  });
+  await reachReview(page, "Кампанию можно рассчитать, но есть замечания");
+
+  await expect(page.getByText(syntheticLegacyWarning.display_text, { exact: true })).toBeVisible();
+  await expect(page.getByText("Почему это важно", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Что можно сделать", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/пояснение не предоставлено/i)).toHaveCount(0);
+  await expect(page.getByText(/рекомендация по исправлению не предоставлена/i)).toHaveCount(0);
+});
+
+test("6c. missing campaign uses grammatically correct blocked copy", async ({ page }) => {
+  await mockNewCalculationApi(page, {
+    validation: { ...invalidValidation, campaigns: [] },
+  });
+  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=review`);
+
+  await expect(
+    page.getByText("В результате проверки должна быть ровно одна кампания.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("В результате проверки должно быть ровно одна кампания.", {
+    exact: true,
+  })).toHaveCount(0);
 });
 
 test("7. scenario screen contains all six approved scenarios", async ({ page }) => {
@@ -811,8 +1061,41 @@ test("7. scenario screen contains all six approved scenarios", async ({ page }) 
     page.getByRole("button", { name: "Назад к проверке", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
+  expect(calls.profileGets).toBeGreaterThanOrEqual(1);
   expect(calls.jobPosts).toBe(0);
   await expectNoInternalNames(page);
+});
+
+test("7a. unavailable calculation profile keeps scenario launch controlled", async ({ page }) => {
+  const calls = await mockNewCalculationApi(page, {
+    validation: validValidation,
+    calculationProfileStatus: 503,
+  });
+  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
+
+  await expect(page.getByText("Число вариантов пока недоступно", { exact: true })).toBeVisible();
+  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
+  expect(calls.profileGets).toBeGreaterThanOrEqual(1);
+});
+
+test("7b. unsupported calculation profile fails closed without hardcoded count", async ({ page }) => {
+  const calls = await mockNewCalculationApi(page, {
+    validation: validValidation,
+    calculationProfile: {
+      ...calculationProfile,
+      unsupported_field: "synthetic-contract-drift",
+    },
+  });
+  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
+
+  await expect(page.getByText("Число вариантов пока недоступно", { exact: true })).toBeVisible();
+  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toHaveCount(0);
+  const text = await page.locator("body").innerText();
+  expect(text).not.toContain("2048");
+  expect(text).not.toContain("2 048");
+  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
+  expect(calls.profileGets).toBeGreaterThanOrEqual(1);
 });
 
 test("8. a job can only be created from the scenario screen", async ({ page }) => {
@@ -956,6 +1239,10 @@ test("9a. URL navigation never exposes or submits a stale validation", async ({ 
       await fulfillJson(route, 200, parsedUpload);
       return;
     }
+    if (method === "GET" && pathname === "/api/v1/calculation-profile") {
+      await fulfillJson(route, 200, calculationProfile);
+      return;
+    }
     if (method === "POST" && pathname === `/api/v1/validations/${alternateValidationId}/jobs`) {
       submittedValidationPaths.push(pathname);
       await fulfillJson(route, 202, alternateJob);
@@ -1090,6 +1377,15 @@ for (const theme of ["dark", "light"] as const) {
     await expectNoDocumentOverflow(page);
     await expectNoInternalNames(page);
     await captureExactViewport(page, `03-validation-warning-${theme}.png`);
+
+    await page.locator("#preview-title").evaluate((element) => {
+      element.closest("section")?.scrollIntoView({ block: "start" });
+    });
+    await expect(
+      page.getByLabel("Временная диаграмма активности каналов", { exact: true }),
+    ).toBeVisible();
+    await expectNoDocumentOverflow(page);
+    await captureExactViewport(page, `05-validation-preview-${theme}.png`);
 
     await page.goto(
       `/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`,
