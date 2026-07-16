@@ -450,6 +450,35 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(error["error"]["code"], "INVALID_QUERY")
         self.assertIn("user_action", error["error"])
 
+    def test_calculation_profile_unavailable_messages_are_user_facing(self) -> None:
+        campaign_service = self.application.campaign_service
+        model_passport = self.application.model_passport
+        try:
+            self.application.campaign_service = None
+            status, error, _ = self._request("GET", "/api/v1/calculation-profile")
+            self.assertEqual(status, 503)
+            self.assertEqual(error["error"]["code"], "UPLOAD_SERVICE_DISABLED")
+            self.assertEqual(
+                error["error"]["display_text"],
+                "Параметры расчета временно недоступны.",
+            )
+
+            self.application.campaign_service = campaign_service
+            self.application.model_passport = None
+            status, error, _ = self._request("GET", "/api/v1/calculation-profile")
+            self.assertEqual(status, 503)
+            self.assertEqual(
+                error["error"]["code"],
+                "MODEL_PASSPORT_UNAVAILABLE",
+            )
+            self.assertEqual(
+                error["error"]["display_text"],
+                "Сведения об активной модели временно недоступны.",
+            )
+        finally:
+            self.application.campaign_service = campaign_service
+            self.application.model_passport = model_passport
+
     def test_multipart_upload_parse_and_invalid_validation_are_fail_closed(self) -> None:
         boundary = "----x5-http-upload-boundary"
         campaign = (

@@ -1308,14 +1308,14 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     self._error(
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         "UPLOAD_SERVICE_DISABLED",
-                        "Calculation profile недоступен без campaign service.",
+                        "Параметры расчета временно недоступны.",
                     )
                     return
                 if application.model_passport is None:
                     self._error(
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         "MODEL_PASSPORT_UNAVAILABLE",
-                        "Calculation profile недоступен без паспорта активной модели.",
+                        "Сведения об активной модели временно недоступны.",
                     )
                     return
                 serving = application.model_passport["serving"]

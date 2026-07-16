@@ -53,6 +53,8 @@ FORBIDDEN_MARKETER_TERMS = (
     "model-aware validation",
     "campaign x geo x channel x target",
     "daily flighting",
+    "calculation profile недоступен без campaign service",
+    "calculation profile недоступен без паспорта активной модели",
 )
 
 
