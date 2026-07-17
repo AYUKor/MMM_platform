@@ -9,10 +9,12 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from dataclasses import replace
 from datetime import timedelta
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Mapping
+from unittest.mock import patch
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -31,6 +33,7 @@ from services.auth_admin import (  # noqa: E402
     AuthAdminError,
     Argon2idPasswordHasher,
     LocalAuthSettings,
+    SessionResolution,
     authenticated_session_payload,
     build_local_auth_stack,
     opaque_id,
@@ -262,6 +265,80 @@ class AuthAdminServiceTest(unittest.TestCase):
             )
         self.assertEqual(disable.exception.code, "ADMIN_LAST_ADMIN_PROTECTED")
 
+    def test_admin_service_enforces_write_permissions_by_action(self) -> None:
+        target = self.stack.admin.create_user(
+            {
+                "email": "permission-target@example.org",
+                "display_name": "Проверка разрешений",
+                "password": "Permission-target-2026",
+                "role_id": "viewer",
+            },
+            actor=self.admin_context,
+        )
+        target_id = target["user"]["user_id"]
+        users_writer = replace(
+            self.admin_context,
+            permissions=("admin.users.write",),
+        )
+        roles_writer = replace(
+            self.admin_context,
+            permissions=("admin.roles.write",),
+        )
+        sessions_writer = replace(
+            self.admin_context,
+            permissions=("admin.sessions.write",),
+        )
+
+        renamed = self.stack.admin.update_user(
+            target_id,
+            {"display_name": "Новое имя"},
+            actor=users_writer,
+        )
+        self.assertEqual(renamed["user"]["display_name"], "Новое имя")
+        disabled = self.stack.admin.set_user_enabled(
+            target_id,
+            enabled=False,
+            actor=users_writer,
+        )
+        self.assertEqual(disabled["user"]["status"], "disabled")
+
+        with self.assertRaises(AuthAdminError) as create_denied:
+            self.stack.admin.create_user(
+                {
+                    "email": "permission-denied@example.org",
+                    "display_name": "Нет назначения роли",
+                    "password": "Permission-denied-2026",
+                    "role_id": "viewer",
+                },
+                actor=users_writer,
+            )
+        self.assertEqual(create_denied.exception.code, "PERMISSION_DENIED")
+        with self.assertRaises(AuthAdminError) as role_denied:
+            self.stack.admin.update_user(
+                target_id,
+                {"role_id": "analyst"},
+                actor=users_writer,
+            )
+        self.assertEqual(role_denied.exception.code, "PERMISSION_DENIED")
+        with self.assertRaises(AuthAdminError) as session_denied:
+            self.stack.admin.revoke_user_sessions(
+                target_id,
+                actor=users_writer,
+            )
+        self.assertEqual(session_denied.exception.code, "PERMISSION_DENIED")
+
+        role_updated = self.stack.admin.update_user(
+            target_id,
+            {"role_id": "analyst"},
+            actor=roles_writer,
+        )
+        self.assertEqual(role_updated["user"]["role"]["role_id"], "analyst")
+        revoked = self.stack.admin.revoke_user_sessions(
+            target_id,
+            actor=sessions_writer,
+        )
+        self.assertEqual(revoked["user_id"], target_id)
+
     def test_contracts_audit_pagination_and_append_only_storage(self) -> None:
         session_payload = authenticated_session_payload(self.admin_context)
         self.assertEqual(validate_auth_session(session_payload), session_payload)
@@ -376,6 +453,7 @@ class AuthAdminHttpTest(unittest.TestCase):
             request_id=opaque_id("req"),
             client_key="127.0.0.1",
         )
+        self.admin_context = admin_context
         self.admin_id = admin_context.user_id
         viewer = self.application.auth.admin.create_user(
             {
@@ -460,18 +538,60 @@ class AuthAdminHttpTest(unittest.TestCase):
             parsed = json.loads(raw) if content_type.startswith("application/json") else raw
             return response.status, parsed, dict(response.headers)
 
+    def assert_security_headers(self, headers: Mapping[str, str]) -> None:
+        self.assertEqual(headers.get("Cache-Control"), "no-store")
+        self.assertEqual(headers.get("Pragma"), "no-cache")
+        self.assertEqual(headers.get("X-Content-Type-Options"), "nosniff")
+
+    def request_with_permissions(
+        self,
+        method: str,
+        path: str,
+        *,
+        permissions: tuple[str, ...],
+        payload: Any = _NO_BODY,
+    ) -> tuple[int, Any, Mapping[str, str]]:
+        controlled_token = "controlled-permission-context"
+        controlled_context = replace(
+            self.admin_context,
+            permissions=permissions,
+        )
+        original_resolver = self.application.auth.identity_provider.resolve_session
+
+        def resolve_session(token: str | None, *, request_id: str) -> SessionResolution:
+            if token == controlled_token:
+                return SessionResolution(
+                    "authenticated",
+                    replace(controlled_context, request_id=request_id),
+                )
+            return original_resolver(token, request_id=request_id)
+
+        with patch.object(
+            self.application.auth.identity_provider,
+            "resolve_session",
+            side_effect=resolve_session,
+        ):
+            return self.request(
+                method,
+                path,
+                payload=payload,
+                cookie=f"mmm_session={controlled_token}",
+            )
+
     def test_login_session_logout_cookie_and_generic_failure(self) -> None:
-        status, anonymous, _ = self.request("GET", "/api/v1/auth/session")
+        status, anonymous, headers = self.request("GET", "/api/v1/auth/session")
         self.assertEqual(status, 200)
         self.assertFalse(anonymous["authenticated"])
+        self.assert_security_headers(headers)
 
         failures = []
         for email in ("admin@example.org", "missing@example.org"):
-            status, error, _ = self.request(
+            status, error, headers = self.request(
                 "POST",
                 "/api/v1/auth/login",
                 payload={"email": email, "password": "Wrong-password-2026"},
             )
+            self.assert_security_headers(headers)
             failures.append((status, error["error"]["code"], error["error"]["display_text"]))
         self.assertEqual(failures[0], failures[1])
 
@@ -482,16 +602,18 @@ class AuthAdminHttpTest(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertTrue(session["authenticated"])
+        self.assert_security_headers(headers)
         self.assertNotIn("token", json.dumps(session).casefold())
         set_cookie = headers["Set-Cookie"]
         for flag in ("HttpOnly", "SameSite=Lax", "Path=/api/v1"):
             self.assertIn(flag, set_cookie)
         browser_cookie = set_cookie.split(";", 1)[0]
-        status, current, _ = self.request(
+        status, current, headers = self.request(
             "GET", "/api/v1/auth/session", cookie=browser_cookie
         )
         self.assertEqual(status, 200)
         self.assertTrue(current["authenticated"])
+        self.assert_security_headers(headers)
         status, logged_out, headers = self.request(
             "POST", "/api/v1/auth/logout", cookie=browser_cookie
         )
@@ -500,8 +622,9 @@ class AuthAdminHttpTest(unittest.TestCase):
         self.assertIn("Max-Age=0", headers["Set-Cookie"])
 
     def test_central_permissions_distinguish_401_and_403(self) -> None:
-        status, error, _ = self.request("GET", "/api/v1/workspace/home")
+        status, error, headers = self.request("GET", "/api/v1/admin/users")
         self.assertEqual((status, error["error"]["code"]), (401, "AUTH_REQUIRED"))
+        self.assert_security_headers(headers)
 
         status, home, _ = self.request(
             "GET", "/api/v1/workspace/home", cookie=self.cookies["viewer"]
@@ -522,18 +645,88 @@ class AuthAdminHttpTest(unittest.TestCase):
             cookie=self.cookies["analyst"],
         )
         self.assertEqual((status, error["error"]["code"]), (422, "INVALID_JOB"))
-        status, error, _ = self.request(
+        status, error, headers = self.request(
             "GET", "/api/v1/admin/users", cookie=self.cookies["analyst"]
         )
         self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
+        self.assert_security_headers(headers)
+
+    def test_http_permissions_separate_user_role_and_session_writes(self) -> None:
+        users_write = ("admin.users.write",)
+        users_and_roles_write = ("admin.users.write", "admin.roles.write")
+
+        status, renamed, _ = self.request_with_permissions(
+            "PATCH",
+            f"/api/v1/admin/users/{self.viewer_id}",
+            permissions=users_write,
+            payload={"display_name": "Наблюдатель с новым именем"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(renamed["user"]["display_name"], "Наблюдатель с новым именем")
+
+        status, error, _ = self.request_with_permissions(
+            "POST",
+            "/api/v1/admin/users",
+            permissions=users_write,
+            payload={
+                "email": "http-role-denied@example.org",
+                "display_name": "Нет права роли",
+                "password": "Http-role-denied-2026",
+                "role_id": "viewer",
+            },
+        )
+        self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
+        status, error, _ = self.request_with_permissions(
+            "PATCH",
+            f"/api/v1/admin/users/{self.viewer_id}",
+            permissions=users_write,
+            payload={"role_id": "analyst"},
+        )
+        self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
+
+        status, created, _ = self.request_with_permissions(
+            "POST",
+            "/api/v1/admin/users",
+            permissions=users_and_roles_write,
+            payload={
+                "email": "http-role-allowed@example.org",
+                "display_name": "Разрешено назначить роль",
+                "password": "Http-role-allowed-2026",
+                "role_id": "viewer",
+            },
+        )
+        self.assertEqual(status, 201)
+        status, updated, _ = self.request_with_permissions(
+            "PATCH",
+            f"/api/v1/admin/users/{created['user']['user_id']}",
+            permissions=users_and_roles_write,
+            payload={"role_id": "analyst"},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["user"]["role"]["role_id"], "analyst")
+
+        status, error, _ = self.request_with_permissions(
+            "POST",
+            f"/api/v1/admin/users/{self.analyst_id}/sessions/revoke",
+            permissions=users_write,
+        )
+        self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
+        status, revoked, _ = self.request_with_permissions(
+            "POST",
+            f"/api/v1/admin/users/{self.analyst_id}/sessions/revoke",
+            permissions=("admin.sessions.write",),
+        )
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(revoked["revoked_sessions_n"], 1)
 
     def test_admin_users_roles_revoke_system_audit_and_schema_discovery(self) -> None:
-        status, users, _ = self.request(
+        status, users, headers = self.request(
             "GET",
             "/api/v1/admin/users?role=analyst&status=active&page=1&page_size=10",
             cookie=self.cookies["admin"],
         )
         self.assertEqual(status, 200)
+        self.assert_security_headers(headers)
         self.assertEqual(users["items"][0]["user_id"], self.analyst_id)
         status, created, _ = self.request(
             "POST",
@@ -588,8 +781,9 @@ class AuthAdminHttpTest(unittest.TestCase):
             ("/api/v1/admin/system/status", "admin_system_status_v1"),
             ("/api/v1/admin/audit?page_size=100", "admin_audit_log_v1"),
         ):
-            status, payload, _ = self.request("GET", path, cookie=self.cookies["admin"])
+            status, payload, headers = self.request("GET", path, cookie=self.cookies["admin"])
             self.assertEqual(status, 200)
+            self.assert_security_headers(headers)
             self.assertEqual(payload["contract_name"], contract)
             if contract == "admin_system_status_v1":
                 system_payload = payload

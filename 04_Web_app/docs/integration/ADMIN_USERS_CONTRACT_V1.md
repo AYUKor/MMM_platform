@@ -10,9 +10,9 @@ company identities and do not emulate SSO.
 | Method | Route | Permission |
 |---|---|---|
 | `GET` | `/api/v1/admin/users` | `admin.users.read` |
-| `POST` | `/api/v1/admin/users` | `admin.users.write` |
+| `POST` | `/api/v1/admin/users` | `admin.users.write` + `admin.roles.write` |
 | `GET` | `/api/v1/admin/users/{user_id}` | `admin.users.read` |
-| `PATCH` | `/api/v1/admin/users/{user_id}` | `admin.users.write` |
+| `PATCH` | `/api/v1/admin/users/{user_id}` | field-specific; see below |
 | `POST` | `/api/v1/admin/users/{user_id}/disable` | `admin.users.write` |
 | `POST` | `/api/v1/admin/users/{user_id}/enable` | `admin.users.write` |
 | `POST` | `/api/v1/admin/users/{user_id}/sessions/revoke` | `admin.sessions.write` |
@@ -25,6 +25,20 @@ Sorting values are `created_desc`, `created_asc`, `name_asc`, `email_asc` and
 
 Create requires `email`, `display_name`, `password` and `role_id`. PATCH accepts
 only `display_name` and/or `role_id`; password reset is deliberately absent.
+
+Mutation permissions are enforced by the backend service, not inferred by the
+frontend:
+
+- `display_name`, enable and disable require `admin.users.write`;
+- assigning `role_id` during create requires both `admin.users.write` and
+  `admin.roles.write`;
+- changing `role_id` through PATCH additionally requires
+  `admin.roles.write`;
+- session revoke requires `admin.sessions.write`.
+
+Therefore a custom permission bundle with `admin.users.write` but without
+`admin.roles.write` may maintain profile/status fields but receives `403` for
+role assignment. No additional production role is introduced.
 
 ## Invariants
 

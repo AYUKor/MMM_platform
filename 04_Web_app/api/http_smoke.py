@@ -1801,6 +1801,9 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
         def _common_headers(self) -> None:
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Cache-Control", "no-store")
+            response_path = urlsplit(self.path).path
+            if response_path.startswith(("/api/v1/auth/", "/api/v1/admin/")):
+                self.send_header("Pragma", "no-cache")
             origin = self._origin()
             if origin:
                 self.send_header("Access-Control-Allow-Origin", origin)

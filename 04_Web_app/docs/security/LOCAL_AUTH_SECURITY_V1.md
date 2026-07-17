@@ -23,6 +23,12 @@ SSO, MFA, centralized secrets, SIEM or company IAM governance.
 - per-identity/client login window and cooldown;
 - generic unknown-email/wrong-password response;
 - centralized permission guard with separate `401` and `403`;
+- field/action-level admin enforcement: profile/status changes require
+  `admin.users.write`, role assignment requires `admin.roles.write`, and
+  session revocation requires `admin.sessions.write`;
+- every auth/admin response, including errors, carries
+  `Cache-Control: no-store`, `Pragma: no-cache` and
+  `X-Content-Type-Options: nosniff`;
 - last-admin, self-disable and disable-revokes-session invariants;
 - append-only browser-safe audit log;
 - auth directory mode `0700` and SQLite file mode `0600` where supported.

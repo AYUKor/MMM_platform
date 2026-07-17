@@ -461,9 +461,12 @@ Each item is a separate reviewable milestone:
     storage, bootstrap CLI, centralized permission guards and security
     documentation. The next frontend milestone may consume these endpoints;
     it must use returned permissions and must not hardcode access from roles.
-    Local verification passed web/backend `133` tests with 19 explicit skips,
+    Local verification passed web/backend `135` tests with 19 explicit skips,
     unchanged MMM core `78` tests with two skips, generated-contract drift,
     TypeScript, ESLint, frontend `319/319` unit tests and production build.
+    Security review additionally verifies field/action-level users/roles/session
+    permissions and no-store/no-cache/nosniff headers on auth/admin success and
+    error responses.
     The browser login/admin screens, corporate SSO, MFA, password recovery and
     multi-node session storage remain outside this backend milestone.
 17. When company-contour or multi-node scale is approved, replace file-backed

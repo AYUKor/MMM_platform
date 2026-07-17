@@ -58,6 +58,11 @@ returned in JSON.
 - use the same generic text for an unknown email and a wrong password;
 - do not persist the response as a replacement for checking `/auth/session`.
 
+All `/api/v1/auth/*` and `/api/v1/admin/*` responses, including errors, are
+explicitly non-cacheable with `Cache-Control: no-store` and
+`Pragma: no-cache`. API responses also carry
+`X-Content-Type-Options: nosniff`.
+
 The schema is available as
 `GET /api/v1/contracts/auth-session-v1.json` to an authenticated user with
 `help.read`.

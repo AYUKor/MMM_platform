@@ -1302,6 +1302,15 @@ class AuthorizationGuard:
         permission: str,
     ) -> RequestContext:
         context = self.require_authenticated(resolution)
+        return self.require_context_permission(context, permission)
+
+    @staticmethod
+    def require_context_permission(
+        context: RequestContext,
+        permission: str,
+    ) -> RequestContext:
+        """Enforce one permission for an already authenticated service actor."""
+
         if permission not in context.permissions:
             raise auth_error("PERMISSION_DENIED")
         return context
@@ -1351,12 +1360,14 @@ class AdminService:
         sessions: SQLiteSessionRepository,
         audit: SQLiteAuditRepository,
         hasher: PasswordHasher,
+        authorization: AuthorizationGuard,
     ) -> None:
         self.database = database
         self.users = users
         self.sessions = sessions
         self.audit = audit
         self.hasher = hasher
+        self.authorization = authorization
 
     @staticmethod
     def _role(role_id: str) -> dict[str, str]:
@@ -1452,6 +1463,8 @@ class AdminService:
         *,
         actor: RequestContext,
     ) -> dict[str, Any]:
+        self.authorization.require_context_permission(actor, "admin.users.write")
+        self.authorization.require_context_permission(actor, "admin.roles.write")
         expected = {"email", "display_name", "password", "role_id"}
         if set(payload) != expected:
             raise auth_error("ADMIN_STATE_INCONSISTENT")
@@ -1508,6 +1521,10 @@ class AdminService:
     ) -> dict[str, Any]:
         if not payload or set(payload) - {"display_name", "role_id"}:
             raise auth_error("ADMIN_STATE_INCONSISTENT")
+        if "display_name" in payload:
+            self.authorization.require_context_permission(actor, "admin.users.write")
+        if "role_id" in payload:
+            self.authorization.require_context_permission(actor, "admin.roles.write")
         changes: dict[str, Any] = {}
         try:
             if "display_name" in payload:
@@ -1560,6 +1577,7 @@ class AdminService:
         enabled: bool,
         actor: RequestContext,
     ) -> dict[str, Any]:
+        self.authorization.require_context_permission(actor, "admin.users.write")
         now = utc_now()
         with self.database.transaction() as connection:
             current = self.users.get(user_id, connection=connection)
@@ -1606,6 +1624,7 @@ class AdminService:
         *,
         actor: RequestContext,
     ) -> dict[str, Any]:
+        self.authorization.require_context_permission(actor, "admin.sessions.write")
         now = utc_now()
         with self.database.transaction() as connection:
             user = self.users.get(user_id, connection=connection)
@@ -1758,6 +1777,7 @@ def build_local_auth_stack(settings: LocalAuthSettings) -> LocalAuthStack:
         audit,
         hasher,
     )
+    authorization = AuthorizationGuard()
     return LocalAuthStack(
         database=database,
         users=users,
@@ -1766,8 +1786,8 @@ def build_local_auth_stack(settings: LocalAuthSettings) -> LocalAuthStack:
         audit=audit,
         hasher=hasher,
         identity_provider=identity,
-        authorization=AuthorizationGuard(),
-        admin=AdminService(database, users, sessions, audit, hasher),
+        authorization=authorization,
+        admin=AdminService(database, users, sessions, audit, hasher, authorization),
     )
 
 

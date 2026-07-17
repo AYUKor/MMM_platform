@@ -51,6 +51,12 @@ Routes are mapped centrally to versioned permissions. Handlers do not compare
 role names. `viewer`, `analyst` and `admin` are only maintained role bundles;
 the session response contains the authoritative permissions for the frontend.
 
+The administrative service performs a second action-level check after route
+authentication: `admin.users.write` covers profile/status changes,
+`admin.roles.write` covers every role assignment, and
+`admin.sessions.write` covers session revoke. A route-level users permission
+therefore cannot be used to smuggle `role_id` through a mutation payload.
+
 Anonymous access is limited to login, session check, liveness and readiness.
 Authentication failure is `401`; an authenticated user without a required
 permission receives `403`.
@@ -68,6 +74,10 @@ This pilot uses strict Origin/Host validation rather than a JavaScript-readable
 CSRF token. `Secure` cookies are mandatory for the research-pilot profile.
 GET requests do not change product state. Session last-seen bookkeeping and
 required audit entries are security side effects, not product mutations.
+
+Auth/admin responses and errors are explicitly non-cacheable through
+`Cache-Control: no-store` and `Pragma: no-cache`; API responses also send
+`X-Content-Type-Options: nosniff`.
 
 ## Consequences
 
