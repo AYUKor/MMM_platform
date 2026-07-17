@@ -26,12 +26,13 @@ PACKAGE_ID = "pkg_807d3ddbae57a52a_9aacd3beb350725b"
 PASSPORT_FIXTURE = (
     WEB_APP_DIR / "tests" / "fixtures" / "model_passport_v1_synthetic.json"
 )
+TEST_AUTH_SECRET = "backend-runtime-test-session-secret"
 
 
 class BackendRuntimeTest(unittest.TestCase):
     def _config(self, root: Path) -> dict:
         return {
-            "schema_version": "1.1.0",
+            "schema_version": "1.2.0",
             "server": {
                 "deployment_profile": "local_development",
                 "host": "127.0.0.1",
@@ -59,12 +60,34 @@ class BackendRuntimeTest(unittest.TestCase):
                 "max_upload_mb": 5,
             },
             "retention": {"days": 30},
+            "auth": {
+                "mode": "local",
+                "database_path": str(root / "auth.sqlite3"),
+                "cookie_name": "mmm_session",
+                "cookie_secure": False,
+                "session_ttl_seconds": 28_800,
+                "idle_timeout_seconds": 3_600,
+                "login_window_seconds": 900,
+                "login_max_attempts": 5,
+                "login_cooldown_seconds": 900,
+                "argon2_time_cost": 2,
+                "argon2_memory_cost_kib": 19_456,
+                "argon2_parallelism": 1,
+            },
         }
+
+    @staticmethod
+    def _build(config: dict):
+        return build_settings(
+            config,
+            project_root=PROJECT_ROOT,
+            environ={"MMM_AUTH_SESSION_SECRET": TEST_AUTH_SECRET},
+        )
 
     def test_build_and_preflight_pin_registry_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(Path(temporary))
-            settings, host, port = build_settings(config, project_root=PROJECT_ROOT)
+            settings, host, port = self._build(config)
             self.assertEqual(host, "127.0.0.1")
             self.assertEqual(port, 8765)
             resolved = {
@@ -87,7 +110,7 @@ class BackendRuntimeTest(unittest.TestCase):
     def test_preflight_rejects_channel_package_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(Path(temporary))
-            settings, _, _ = build_settings(config, project_root=PROJECT_ROOT)
+            settings, _, _ = self._build(config)
             resolved = {
                 "package_id": "pkg_ffffffffffffffff_ffffffffffffffff",
                 "registration": {"package_input_fingerprint": "f" * 64},
@@ -112,15 +135,16 @@ class BackendRuntimeTest(unittest.TestCase):
                     "allowed_origins": ["https://mmm.example.test"],
                 }
             )
-            settings, host, _ = build_settings(config, project_root=PROJECT_ROOT)
+            config["auth"]["cookie_secure"] = True
+            settings, host, _ = self._build(config)
             self.assertEqual(settings.deployment_profile, "research_pilot")
             self.assertEqual(host, "127.0.0.1")
             config["model"]["verification_mode"] = "serving_bundle"
-            settings, _, _ = build_settings(config, project_root=PROJECT_ROOT)
+            settings, _, _ = self._build(config)
             self.assertEqual(settings.model_verification_mode, "serving_bundle")
             config["server"]["public_base_url"] = "http://mmm.example.test"
             with self.assertRaisesRegex(ValueError, "HTTPS"):
-                build_settings(config, project_root=PROJECT_ROOT)
+                self._build(config)
 
     def test_environment_overrides_are_part_of_effective_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -133,11 +157,30 @@ class BackendRuntimeTest(unittest.TestCase):
                     "MMM_BACKEND_ALLOWED_ORIGINS": "http://localhost:4173,http://127.0.0.1:4173",
                 },
             )
-            settings, _, port = build_settings(effective, project_root=PROJECT_ROOT)
+            settings, _, port = self._build(effective)
             self.assertEqual(port, 9876)
             self.assertEqual(settings.retention_days, 14)
             self.assertEqual(len(settings.allowed_origins), 2)
             self.assertNotEqual(_config_sha256(config), _config_sha256(effective))
+
+    def test_auth_secret_is_required_but_never_part_of_effective_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(Path(temporary))
+            with self.assertRaisesRegex(ValueError, "MMM_AUTH_SESSION_SECRET"):
+                build_settings(config, project_root=PROJECT_ROOT, environ={})
+            settings, _, _ = self._build(config)
+            self.assertNotIn(TEST_AUTH_SECRET, repr(settings))
+            self.assertNotIn(TEST_AUTH_SECRET, json.dumps(config, ensure_ascii=False))
+            effective = apply_environment_overrides(
+                config,
+                {
+                    "MMM_AUTH_MODE": "local",
+                    "MMM_AUTH_COOKIE_SECURE": "true",
+                    "MMM_AUTH_SESSION_SECRET": TEST_AUTH_SECRET,
+                },
+            )
+            self.assertTrue(effective["auth"]["cookie_secure"])
+            self.assertNotIn(TEST_AUTH_SECRET, json.dumps(effective, ensure_ascii=False))
 
     def test_single_instance_lock_blocks_second_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

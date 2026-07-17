@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5-mmm.local/contracts/admin_role_catalog_v1.schema.json",
+  "title": "Admin Role Catalog V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "catalog_version", "permissions", "roles"],
+  "properties": {
+    "contract_name": {"const": "admin_role_catalog_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "catalog_version": {"const": "1.0.0"},
+    "permissions": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/permission"}
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/role"}
+    }
+  },
+  "$defs": {
+    "permission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permission_id", "title", "description"],
+      "properties": {
+        "permission_id": {"type": "string", "pattern": "^[a-z]+(?:[.][a-z]+)+$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 120},
+        "description": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_id", "title", "description", "permissions"],
+      "properties": {
+        "role_id": {"enum": ["viewer", "analyst", "admin"]},
+        "title": {"type": "string", "minLength": 1, "maxLength": 120},
+        "description": {"type": "string", "minLength": 1, "maxLength": 500},
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z]+(?:[.][a-z]+)+$"}
+        }
+      }
+    }
+  }
+}

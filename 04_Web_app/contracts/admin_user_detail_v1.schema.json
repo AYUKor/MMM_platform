@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5-mmm.local/contracts/admin_user_detail_v1.schema.json",
+  "title": "Admin User Detail V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "user"],
+  "properties": {
+    "contract_name": {"const": "admin_user_detail_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "user": {"$ref": "#/$defs/user"}
+  },
+  "$defs": {
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_id", "title"],
+      "properties": {
+        "role_id": {"enum": ["viewer", "analyst", "admin"]},
+        "title": {"type": "string", "minLength": 1, "maxLength": 120}
+      }
+    },
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_id", "display_name", "email", "role", "status", "created_at_utc", "updated_at_utc", "last_login_at_utc", "created_by_user_id", "active_sessions_n"],
+      "properties": {
+        "user_id": {"type": "string", "pattern": "^usr_[0-9a-f]{24}$"},
+        "display_name": {"type": "string", "minLength": 2, "maxLength": 120},
+        "email": {"type": "string", "format": "email", "maxLength": 254},
+        "role": {"$ref": "#/$defs/role"},
+        "status": {"enum": ["active", "disabled"]},
+        "created_at_utc": {"type": "string", "format": "date-time"},
+        "updated_at_utc": {"type": "string", "format": "date-time"},
+        "last_login_at_utc": {"type": ["string", "null"], "format": "date-time"},
+        "created_by_user_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^usr_[0-9a-f]{24}$"}
+          ]
+        },
+        "active_sessions_n": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

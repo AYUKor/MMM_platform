@@ -44,6 +44,7 @@ jobs:
           "jsonschema>=4.21,<5"
           "pandas==3.0.1"
           "openpyxl==3.1.5"
+          "argon2-cffi==25.1.0"
 
       - name: Run source-only web contract tests
         run: python -B -m unittest discover -s 04_Web_app/tests -p "test_*.py" -v

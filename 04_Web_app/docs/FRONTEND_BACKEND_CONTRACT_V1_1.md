@@ -1,4 +1,4 @@
-# Frontend Handoff: Backend Product API v1.1
+# Frontend Handoff: Backend Product API v1.6
 
 ## What Is Stable
 
@@ -15,6 +15,26 @@ Stable result contracts:
 - `JobProgressView v1`: browser-safe nine-stage calculation snapshot;
 - `MmmFactCatalog v1`: reviewed static progress-screen facts;
 - `JobList v1`: paginated calculation history.
+- `AuthSession v1`: current user, server-side session metadata and authoritative permissions;
+- `AdminUserList/Detail v1`, `AdminRoleCatalog v1`,
+  `AdminSystemStatus v1`, `AdminAuditLog v1`: Phase E administration.
+
+## Authentication Boundary
+
+Only liveness, readiness, login and session check are anonymous. Every other
+product route is protected by a centralized backend permission map.
+
+1. Call `GET /api/v1/auth/session` when the application starts.
+2. If anonymous, submit credentials to `POST /api/v1/auth/login`.
+3. Send later requests with browser credentials enabled; JavaScript never
+   receives or persists the opaque HttpOnly token.
+4. Render capabilities from `session.user.permissions`, not from `role_id`.
+5. Treat `401` as missing/expired authentication and `403` as a valid session
+   without the requested permission.
+6. Use `POST /api/v1/auth/logout` to revoke the server-side session.
+
+All POST/PATCH requests must originate from an allowed browser origin. The
+backend validates both Origin and Host.
 
 ## Discovery Endpoints
 
@@ -32,6 +52,23 @@ Stable result contracts:
 | `GET /api/v1/contracts/result-overview-v1.json` | Compact result schema. |
 | `GET /api/v1/contracts/job-progress-view-v1.json` | Nine-stage progress snapshot schema. |
 | `GET /api/v1/contracts/mmm-fact-catalog-v1.json` | Static MMM facts schema. |
+| `GET /api/v1/contracts/auth-session-v1.json` | Current session schema. |
+| `GET /api/v1/contracts/admin-user-list-v1.json` | Admin user list schema. |
+| `GET /api/v1/contracts/admin-user-detail-v1.json` | Admin user detail schema. |
+| `GET /api/v1/contracts/admin-role-catalog-v1.json` | Role and permission catalog schema. |
+| `GET /api/v1/contracts/admin-system-status-v1.json` | Safe subsystem checks schema. |
+| `GET /api/v1/contracts/admin-audit-log-v1.json` | Append-only audit page schema. |
+
+## Administration
+
+The admin navigation is backed by `/api/v1/admin/users`, `/roles`,
+`/system/status` and `/audit`. User list and audit filtering, sorting and
+pagination happen on the server. Frontend must not read SQLite, lifecycle
+files, runtime cards, environment values or logs directly.
+
+The local account provider is pilot-only. A future corporate provider must
+preserve `AuthSession v1` and permissions; the frontend must not contain a
+parallel SSO assumption or local role-to-permission table.
 
 ## Product Progress
 
@@ -87,4 +124,5 @@ catalog is returned by `/api/v1/meta/errors`.
 Local development uses `http://127.0.0.1:8765`. A research server will expose
 the same routes under one HTTPS origin through a reverse proxy. Frontend code
 must use its configured API base URL and must not contain workstation paths,
-model folders, registry paths or artifact filesystem paths.
+model folders, registry paths or artifact filesystem paths. Credentialed CORS
+is allowed only for configured origins; wildcard origins are invalid.

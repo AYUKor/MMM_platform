@@ -44,6 +44,36 @@ class ProductApiContractError(ValueError):
 
 
 HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
+    "ADMIN_LAST_ADMIN_PROTECTED": {
+        "http_status": 409,
+        "retryable": False,
+        "display_text": "Нельзя отключить или понизить роль последнего активного администратора.",
+        "user_action": "Сначала назначьте другого активного администратора.",
+    },
+    "ADMIN_QUERY_INVALID": {
+        "http_status": 422,
+        "retryable": True,
+        "display_text": "Параметры просмотра заполнены некорректно.",
+        "user_action": "Исправьте фильтры или параметры страницы и повторите запрос.",
+    },
+    "ADMIN_SERVICE_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Управление пользователями временно недоступно.",
+        "user_action": "Повторите действие позже.",
+    },
+    "ADMIN_STATE_INCONSISTENT": {
+        "http_status": 409,
+        "retryable": True,
+        "display_text": "Не удалось применить изменение из-за текущего состояния учетных записей.",
+        "user_action": "Обновите страницу, проверьте данные и повторите действие.",
+    },
+    "ADMIN_USER_NOT_FOUND": {
+        "http_status": 404,
+        "retryable": False,
+        "display_text": "Пользователь не найден.",
+        "user_action": "Обновите список пользователей.",
+    },
     "ARTIFACT_INTEGRITY_FAILED": {
         "http_status": 409,
         "retryable": False,
@@ -55,6 +85,36 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "retryable": False,
         "display_text": "Файл результата не найден или удален по retention policy.",
         "user_action": "Повторите расчет, если файл результата еще нужен.",
+    },
+    "AUTH_ACCOUNT_DISABLED": {
+        "http_status": 401,
+        "retryable": False,
+        "display_text": "Учетная запись отключена.",
+        "user_action": "Обратитесь к администратору.",
+    },
+    "AUTH_INVALID_CREDENTIALS": {
+        "http_status": 401,
+        "retryable": True,
+        "display_text": "Не удалось войти. Проверьте данные и повторите попытку.",
+        "user_action": "Проверьте адрес и пароль.",
+    },
+    "AUTH_RATE_LIMITED": {
+        "http_status": 429,
+        "retryable": True,
+        "display_text": "Слишком много попыток входа.",
+        "user_action": "Повторите попытку немного позже.",
+    },
+    "AUTH_REQUIRED": {
+        "http_status": 401,
+        "retryable": True,
+        "display_text": "Войдите в систему, чтобы продолжить.",
+        "user_action": "Откройте страницу входа.",
+    },
+    "AUTH_SESSION_EXPIRED": {
+        "http_status": 401,
+        "retryable": True,
+        "display_text": "Сессия завершена.",
+        "user_action": "Войдите в систему повторно.",
     },
     "CANCELLATION_NOT_ACCEPTED": {
         "http_status": 409,
@@ -150,6 +210,12 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "retryable": True,
         "display_text": "Сведения для этой страницы временно недоступны.",
         "user_action": "Обновите страницу позже.",
+    },
+    "PERMISSION_DENIED": {
+        "http_status": 403,
+        "retryable": False,
+        "display_text": "Недостаточно прав для выполнения этого действия.",
+        "user_action": "Обратитесь к администратору, если доступ необходим для работы.",
     },
     "PROGRESS_STATE_INCONSISTENT": {
         "http_status": 409,

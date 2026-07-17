@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5-mmm.local/contracts/auth_session_v1.schema.json",
+  "title": "Auth Session V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "authenticated", "user", "session"],
+  "properties": {
+    "contract_name": {"const": "auth_session_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "authenticated": {"type": "boolean"},
+    "user": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/user"}
+      ]
+    },
+    "session": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/session"}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"authenticated": {"const": false}}},
+      "then": {"properties": {"user": {"type": "null"}, "session": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"authenticated": {"const": true}}},
+      "then": {"properties": {"user": {"$ref": "#/$defs/user"}, "session": {"$ref": "#/$defs/session"}}}
+    }
+  ],
+  "$defs": {
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role_id", "title"],
+      "properties": {
+        "role_id": {"enum": ["viewer", "analyst", "admin"]},
+        "title": {"type": "string", "minLength": 1, "maxLength": 120}
+      }
+    },
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_id", "display_name", "email", "role", "permissions", "status"],
+      "properties": {
+        "user_id": {"type": "string", "pattern": "^usr_[0-9a-f]{24}$"},
+        "display_name": {"type": "string", "minLength": 2, "maxLength": 120},
+        "email": {"type": "string", "format": "email", "maxLength": 254},
+        "role": {"$ref": "#/$defs/role"},
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z]+(?:[.][a-z]+)+$"}
+        },
+        "status": {"const": "active"}
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "created_at_utc", "expires_at_utc", "last_seen_at_utc", "idle_timeout_seconds"],
+      "properties": {
+        "session_id": {"type": "string", "pattern": "^ses_[0-9a-f]{24}$"},
+        "created_at_utc": {"type": "string", "format": "date-time"},
+        "expires_at_utc": {"type": "string", "format": "date-time"},
+        "last_seen_at_utc": {"type": "string", "format": "date-time"},
+        "idle_timeout_seconds": {"type": "integer", "minimum": 60}
+      }
+    }
+  }
+}

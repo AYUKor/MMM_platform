@@ -99,7 +99,23 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/help/catalog", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.5.0")
+        self.assertEqual(document["info"]["version"], "1.6.0")
+        for path in (
+            "/api/v1/auth/login",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/session",
+            "/api/v1/admin/users",
+            "/api/v1/admin/roles",
+            "/api/v1/admin/system/status",
+            "/api/v1/admin/audit",
+        ):
+            self.assertIn(path, document["paths"])
+        self.assertEqual(document["security"], [{"sessionCookie": []}])
+        self.assertEqual(document["paths"]["/api/v1/auth/login"]["post"]["security"], [])
+        self.assertEqual(
+            document["components"]["securitySchemes"]["sessionCookie"]["in"],
+            "cookie",
+        )
         error_codes = {row["code"] for row in catalog["errors"]}
         self.assertIn("RESULT_VIEW_INCONSISTENT", error_codes)
         self.assertIn("MEDIA_PLAN_QUERY_UNSUPPORTED", error_codes)

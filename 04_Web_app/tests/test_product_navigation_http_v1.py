@@ -30,6 +30,7 @@ from services.product_navigation import (  # noqa: E402
 PASSPORT_FIXTURE = (
     WEB_APP_DIR / "tests" / "fixtures" / "model_passport_v1_synthetic.json"
 )
+TEST_AUTH_SECRET = "product-navigation-test-session-secret"
 
 
 class ProductNavigationHttpTest(unittest.TestCase):
@@ -44,9 +45,27 @@ class ProductNavigationHttpTest(unittest.TestCase):
                 artifact_root=root / "artifacts",
                 project_root=root,
                 registry_root=root / "registry",
+                auth_database_path=root / "auth.sqlite3",
+                auth_session_secret=TEST_AUTH_SECRET,
+                auth_argon2_time_cost=2,
+                auth_argon2_memory_cost_kib=19_456,
+                auth_argon2_parallelism=1,
             ),
             model_passport=passport,
         )
+        self.application.auth.identity_provider.bootstrap_admin(
+            email="admin@example.org",
+            password="Product-navigation-admin-2026",
+            display_name="Тестовый администратор",
+            update_existing=False,
+        )
+        _, token = self.application.auth.identity_provider.authenticate(
+            "admin@example.org",
+            "Product-navigation-admin-2026",
+            request_id="req_bbbbbbbbbbbbbbbbbbbbbbbb",
+            client_key="127.0.0.1",
+        )
+        self.session_cookie = f"mmm_session={token}"
         self.server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
             make_handler(self.application),
@@ -63,7 +82,11 @@ class ProductNavigationHttpTest(unittest.TestCase):
         self.temporary.cleanup()
 
     def request(self, path: str) -> tuple[int, dict]:
-        request = urllib.request.Request(self.base_url + path, method="GET")
+        request = urllib.request.Request(
+            self.base_url + path,
+            headers={"Cookie": self.session_cookie},
+            method="GET",
+        )
         try:
             response = urllib.request.urlopen(request, timeout=3)
         except urllib.error.HTTPError as exc:

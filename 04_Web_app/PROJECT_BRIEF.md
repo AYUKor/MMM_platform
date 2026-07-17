@@ -9,9 +9,9 @@ adapter, local Execution Worker v1, localhost HTTP API, marketer
 upload/validation service, model passport, runtime launcher/recovery and
 retention, research-pilot deployment tooling, source-only tests, canonical
 architecture documents, the browser-safe JobProgressView v1,
-JobResultView v1 and ScenarioMediaPlan v1 backend contracts,
-and the merged
-Phase 2 React product-result frontend. The browser includes campaign result,
+JobResultView v1 and ScenarioMediaPlan v1 backend contracts, Phase D
+navigation contracts, local pilot authentication/administration, and the
+merged Phase D React frontend. The browser includes campaign result,
 Scenarios 1-6, reliability, warning, media-plan and report views. The
 standalone Model Passport route is connected to
 `GET /api/v1/models/active` through a typed, fail-closed client and exposes
@@ -19,7 +19,9 @@ training period, coverage, replay/OOT status, channel policy and caveats.
 Panel-free model transfer, reverse-proxy/systemd rendering, health, retention
 and backup/restore are implemented. There is still no provisioned hosted
 VM/domain/TLS secret, durable company queue, PostgreSQL runtime, approved
-object storage or corporate authentication. The
+object storage or corporate authentication. The application now has local
+research-pilot login, server-side sessions, viewer/analyst/admin permissions
+and administrative audit; this is not corporate SSO/MFA. The
 previous mock/stub prototype was
 removed because it duplicated `mmm_core` and returned synthetic calculation
 results.
@@ -50,14 +52,14 @@ deployment can replace runtime adapters without changing MMM calculation logic
 or browser contracts.
 
 The backend has an asynchronous HTTP boundary for immutable jobs, progress
-polling, verified results and artifact downloads. Product API v1.1 additionally
+polling, verified results and artifact downloads. Product API OpenAPI v1.6 additionally
 publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
 and paginated history. Phase B adds a fixed nine-stage `progress-view`, real
 Scenario 6 counters where available, a separate report status and a reviewed
 static MMM fact catalog. The frontend progress-page integration remains a
-separate milestone. The Python process remains loopback-only in both local
-and research profiles; a research server must place HTTPS/auth at a reverse
-proxy.
+separate milestone. The Python process remains loopback-only in both local and
+research profiles; a research server must place HTTPS at a reverse proxy and
+supply the application session secret through untracked secret handling.
 
 The trained model remains outside Git. A verified serving bundle transfers the
 registered model inventory and registry evidence while retaining the training
