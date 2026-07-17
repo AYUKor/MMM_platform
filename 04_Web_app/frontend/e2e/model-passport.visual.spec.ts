@@ -1,109 +1,28 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import type { ModelPassportV1 } from "../src/entities/model-passport/types";
+import type { ModelOverviewV1 } from "../src/shared/api/generated/model-overview-v1";
+import { createModelOverviewFixture } from "../src/test/productNavigationFixtures";
 
-const syntheticPassport: ModelPassportV1 = {
-  contract_name: "model_passport_v1",
-  schema_version: "1.0.0",
-  record_origin: "synthetic_fixture",
-  serving: {
-    deployment_profile: "research_pilot",
-    display_name: "Синтетическая исследовательская MMM-модель",
-    calculation_allowed: true,
-    decision_scope: "forecast_and_allocation_only",
-    production_claim_allowed: false,
-  },
-  package: {
-    registry_channel: "RAW_CHANNEL",
-    registry_event_id: "RAW_EVENT",
-    package_id: "pkg_aaaaaaaaaaaaaaaa_bbbbbbbbbbbbbbbb",
-    package_fingerprint: "c".repeat(64),
-    model_run_id: "RAW_RUN",
-    package_stage: "posterior_ready",
-    activation_status: "preprod_restricted",
-    package_schema_version: "1.0.0",
-    gate_policy_version: "gate-policy-v1",
-  },
-  data: {
-    grain: "daily",
-    training_period: { start_date: "2024-01-01", end_date: "2025-03-31" },
-    development_shadow_period: {
-      start_date: "2025-04-01",
-      end_date: "2025-06-30",
-      purpose: "development_shadow_not_sealed_oot",
-    },
-  },
-  coverage: {
-    segments: ["Программа лояльности", "Онлайн"],
-    channels: ["Видео", "Поиск"],
-    targets: [
-      { target: "turnover_per_user", allowed_use_counts: { primary: 1, caution: 1 }, objective_roles: ["RAW_OBJECTIVE"] },
-      { target: "orders_per_user", allowed_use_counts: { diagnostic: 1 }, objective_roles: ["RAW_SIDE_METRIC"] },
-      { target: "avg_basket", allowed_use_counts: { unavailable: 1 }, objective_roles: ["RAW_FORBIDDEN"] },
-    ],
-    geographies_n: 18,
-    capability_cells_n: 4,
-    allowed_use_counts: { primary: 1, caution: 1, diagnostic: 1, unavailable: 1 },
-    channel_policies: [
-      {
-        segment: "Программа лояльности",
-        channel: "Видео",
-        target: "turnover_per_user",
-        allowed_use: "primary",
-        forecast_action: "RAW_FORECAST",
-        optimizer_action: "RAW_OPTIMIZE",
-        display_text: "Канал можно использовать для прогноза и разрешенной оптимизации.",
-      },
-      {
-        segment: "Онлайн",
-        channel: "Поиск",
-        target: "turnover_per_user",
-        allowed_use: "caution",
-        forecast_action: "RAW_FORECAST",
-        optimizer_action: "RAW_LIMITED",
-        display_text: "Прогноз доступен, но увеличение бюджета требует осторожности.",
-      },
-      {
-        segment: "Программа лояльности",
-        channel: "Видео",
-        target: "orders_per_user",
-        allowed_use: "diagnostic",
-        forecast_action: "RAW_DIAGNOSTIC",
-        optimizer_action: "RAW_FIXED",
-        display_text: "Заказы показываются только как диагностический показатель.",
-      },
-      {
-        segment: "Онлайн",
-        channel: "Поиск",
-        target: "avg_basket",
-        allowed_use: "unavailable",
-        forecast_action: "RAW_BLOCKED",
-        optimizer_action: "RAW_BLOCKED",
-        display_text: "Средний чек недоступен для автоматического использования.",
-      },
-    ],
-  },
-  validation: {
-    historical_replay: {
-      status: "passed",
-      generated_at_utc: "2026-07-15T10:00:00Z",
-      reason_code: null,
-      display_text: "Независимый historical replay пройден.",
-    },
-    sealed_oot: {
-      status: "unavailable",
-      generated_at_utc: null,
-      reason_code: "RAW_OOT_REASON",
-      display_text: "Новые полные данные для sealed OOT пока недоступны.",
-    },
-    production_blockers: [
-      { code: "RAW_PRODUCTION_BLOCKER", display_text: "Sealed OOT пока недоступен из-за отсутствия полного нового периода." },
-    ],
-  },
-  caveats: [
-    { code: "RAW_RESEARCH", display_text: "Результаты предназначены для исследовательского прогнозирования." },
-    { code: "RAW_ALLOCATION", display_text: "Рекомендация относится к распределению бюджета, а не к запуску кампании." },
-  ],
-};
+function unavailableModel(): ModelOverviewV1 {
+  const overview = createModelOverviewFixture();
+  overview.active_model = {
+    ...overview.active_model,
+    status: { code: "unavailable", display_text: "Модель недоступна" },
+    model_id: null,
+    display_name: null,
+    version: null,
+    published_at_utc: null,
+    framework: null,
+    training_period: null,
+    supported_scope: null,
+    description: "Сведения об активной модели пока недоступны.",
+  };
+  overview.capabilities = overview.capabilities.map((capability) => ({
+    ...capability,
+    status: "unavailable",
+  }));
+  overview.versions = [];
+  return overview;
+}
 
 async function setTheme(page: Page, theme: "dark" | "light") {
   await page.addInitScript((value) => {
@@ -117,116 +36,134 @@ async function expectNoDocumentOverflow(page: Page) {
   )).toBe(false);
 }
 
-async function expectNoRawPassportNames(page: Page) {
+async function expectNoRawModelNames(page: Page) {
   const text = await page.locator("body").innerText();
   for (const rawName of [
-    "RAW_",
-    "model_passport_v1",
-    "forecast_and_allocation_only",
-    "development_shadow_not_sealed_oot",
-    "posterior_ready",
-    "preprod_restricted",
-    "turnover_per_user",
-    "orders_per_user",
-    "avg_basket",
+    "model_overview_v1",
+    "model_id",
+    "model_run_id",
+    "capability_cells_n",
+    "allowed_use_counts",
+    "record_origin",
   ]) {
     expect(text).not.toContain(rawName);
   }
 }
 
-async function mockReady(page: Page) {
-  await page.route("**/api/v1/models/active", (route) => route.fulfill({ status: 200, json: syntheticPassport }));
+async function mockOverview(
+  page: Page,
+  response: { status?: number; payload: unknown; delayMs?: number },
+) {
+  const legacyCalls: string[] = [];
+  await page.route("**/api/v1/models/active", async (route) => {
+    legacyCalls.push(route.request().url());
+    await route.fulfill({ status: 599, body: "legacy model endpoint is forbidden" });
+  });
+  await page.route("**/api/v1/model/overview", async (route: Route) => {
+    if (response.delayMs) {
+      await new Promise((resolve) => setTimeout(resolve, response.delayMs));
+    }
+    await route.fulfill({
+      status: response.status ?? 200,
+      contentType: "application/json",
+      body: JSON.stringify(response.payload),
+    });
+  });
+  return legacyCalls;
 }
 
 for (const theme of ["dark", "light"] as const) {
-  test(`Model Passport ready ${theme} desktop`, async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 960 });
+  test(`Model overview ready ${theme} desktop`, async ({ page }) => {
+    await page.setViewportSize({ width: 1_440, height: 960 });
     await setTheme(page, theme);
-    await mockReady(page);
+    const legacyCalls = await mockOverview(page, {
+      payload: createModelOverviewFixture(),
+    });
     const consoleErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
 
     await page.goto("/model");
-    await expect(page.getByRole("heading", { name: "Исследовательская / preprod модель" })).toBeVisible();
-    await expect(page.getByText("Демонстрационные данные", { exact: true }).first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Replay и независимая OOT-проверка" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Правила использования каналов" })).toBeVisible();
-    await expect(page.getByText(/не является решением\s+запускать/)).toBeVisible();
-    await expectNoRawPassportNames(page);
+    await expect(page.getByRole("heading", { name: "Модель", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Демонстрационная MMM" })).toBeVisible();
+    await expect(page.getByText("Демонстрационные данные", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Что умеет текущая версия" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ограничения" })).toBeVisible();
+    await expectNoRawModelNames(page);
     await expectNoDocumentOverflow(page);
-    await page.screenshot({
-      path: `artifacts/visual-qa/model-passport-${theme}-1440x960.png`,
-      fullPage: true,
-    });
+    expect(legacyCalls).toEqual([]);
     expect(consoleErrors).toEqual([]);
   });
 }
 
-test("Model Passport mobile uses policy cards without page overflow", async ({ page }) => {
+test("Model overview mobile has no page overflow", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await mockReady(page);
-  await page.goto("/model");
-
-  await expect(page.locator("table")).toBeHidden();
-  await expect(page.locator("article").filter({ hasText: "Основное применение" }).first()).toBeVisible();
-  await expectNoDocumentOverflow(page);
-  await page.screenshot({
-    path: "artifacts/visual-qa/model-passport-mobile-375x812.png",
-    fullPage: true,
+  const legacyCalls = await mockOverview(page, {
+    payload: createModelOverviewFixture(),
   });
+  await page.goto("/model");
+  await expect(page.getByRole("heading", { name: "Что можно получить в расчете" })).toBeVisible();
+  await expectNoDocumentOverflow(page);
 
   await page.setViewportSize({ width: 812, height: 375 });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Исследовательская / preprod модель" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Модель", exact: true })).toBeVisible();
   await expectNoDocumentOverflow(page);
+  expect(legacyCalls).toEqual([]);
 });
 
-test("Model Passport unavailable state is explicit and retryable", async ({ page }) => {
-  await page.route("**/api/v1/models/active", (route) => route.fulfill({
+test("Model overview unavailable state is explicit", async ({ page }) => {
+  const legacyCalls = await mockOverview(page, { payload: unavailableModel() });
+  await page.goto("/model");
+  await expect(page.getByRole("heading", {
+    name: "Сведения об активной модели пока недоступны",
+  })).toBeVisible();
+  await expect(page.getByText("История версий пока недоступна", { exact: true })).toBeVisible();
+  await expectNoRawModelNames(page);
+  expect(legacyCalls).toEqual([]);
+});
+
+test("Model overview 503 is controlled and retryable", async ({ page }) => {
+  const legacyCalls = await mockOverview(page, {
     status: 503,
-    json: {
+    payload: {
       error: {
-        code: "MODEL_PASSPORT_UNAVAILABLE",
-        display_text: "RAW_BACKEND_UNAVAILABLE_TEXT",
+        code: "PRODUCT_NAVIGATION_UNAVAILABLE",
+        display_text: "Сведения временно недоступны.",
         retryable: true,
-        user_action: "RAW_BACKEND_ACTION",
+        user_action: "Повторите запрос позже.",
       },
     },
-  }));
-  await page.goto("/model");
-  await expect(page.getByRole("heading", { name: "Паспорт модели временно недоступен" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Повторить запрос" })).toBeVisible();
-  await expectNoRawPassportNames(page);
-});
-
-test("Model Passport rejects an unsupported contract", async ({ page }) => {
-  await page.route("**/api/v1/models/active", (route) => route.fulfill({
-    status: 200,
-    json: { ...syntheticPassport, schema_version: "2.0.0", raw_value: "RAW_CONTRACT_VALUE" },
-  }));
-  await page.goto("/model");
-  await expect(page.getByRole("heading", { name: "Контракт паспорта не поддерживается" })).toBeVisible();
-  await expect(page.getByText(/строгую проверку/)).toBeVisible();
-  await expectNoRawPassportNames(page);
-});
-
-test("Model Passport error state hides backend details", async ({ page }) => {
-  await page.route("**/api/v1/models/active", (route) => route.fulfill({
-    status: 500,
-    json: { error: { code: "RAW_INTERNAL_ERROR", display_text: "RAW_BACKEND_STACK" } },
-  }));
-  await page.goto("/model");
-  await expect(page.getByRole("heading", { name: "Не удалось загрузить паспорт модели" })).toBeVisible();
-  await expectNoRawPassportNames(page);
-});
-
-test("Model Passport loading state is announced", async ({ page }) => {
-  await page.route("**/api/v1/models/active", async (route: Route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    await route.fulfill({ status: 200, json: syntheticPassport });
   });
   await page.goto("/model");
-  await expect(page.getByRole("status").filter({ hasText: "Загрузка паспорта модели" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Сведения временно недоступны" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Повторить" })).toBeVisible();
+  await expectNoRawModelNames(page);
+  expect(legacyCalls).toEqual([]);
+});
+
+test("Model overview rejects an unsupported contract", async ({ page }) => {
+  const unsupported = {
+    ...createModelOverviewFixture(),
+    schema_version: "2.0.0",
+  };
+  const legacyCalls = await mockOverview(page, { payload: unsupported });
+  await page.goto("/model");
+  await expect(page.getByRole("heading", { name: "Формат сведений не поддерживается" }))
+    .toBeVisible();
+  await expect(page.getByText(/не прошел защитную проверку/)).toBeVisible();
+  await expectNoRawModelNames(page);
+  expect(legacyCalls).toEqual([]);
+});
+
+test("Model overview loading state is announced", async ({ page }) => {
+  const legacyCalls = await mockOverview(page, {
+    payload: createModelOverviewFixture(),
+    delayMs: 1_500,
+  });
+  await page.goto("/model");
+  await expect(page.getByRole("status").filter({ hasText: "Загрузка сведений о модели" }))
+    .toBeVisible();
+  expect(legacyCalls).toEqual([]);
 });

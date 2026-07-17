@@ -5,7 +5,7 @@ import styles from "./app-shell.module.css";
 const primaryItems = [
   { to: "/", label: "Главная", icon: "M" },
   { to: "/calculations/new", label: "Новый расчёт", icon: "+" },
-  { to: "/calculations", label: "Мои расчёты", icon: "R" },
+  { to: "/calculations", label: "История расчетов", icon: "R" },
   { to: "/model", label: "Модель", icon: "O" },
   { to: "/help", label: "Справка", icon: "?" },
 ];
@@ -61,7 +61,7 @@ export function Sidebar() {
         </span>
       </div>
 
-      <nav className={styles.nav}>
+      <nav className={styles.nav} aria-label="Разделы продукта">
         {primaryItems.map((item) => <NavItem key={`${item.to}-${item.label}`} {...item} />)}
       </nav>
 
