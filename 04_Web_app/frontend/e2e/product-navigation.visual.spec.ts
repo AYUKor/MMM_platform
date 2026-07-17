@@ -35,7 +35,29 @@ const RAW_COPY = [
   /page_size/i,
   /created_from/i,
   /created_to/i,
+  /Кампания, сегмент или номер расчета/i,
 ] as const;
+
+const SMALL_CONTENT_TARGETS = [
+  { name: "home compact facts", selector: '[class*="compactFacts"] dt' },
+  { name: "home warnings", selector: '[class*="warningList"] span' },
+  { name: "model scope", selector: '[class*="scopeStrip"] small' },
+  { name: "model list indexes", selector: '[class*="listIndex"]' },
+  { name: "model limitations", selector: '[class*="limitationsList"] small' },
+  { name: "model versions", selector: '[class*="versionList"] span' },
+  { name: "model artifacts", selector: '[class*="artifactList"] span' },
+  { name: "model requirements", selector: '[class*="requirementsList"] small' },
+  { name: "model update timestamp", selector: '[class*="updatedLine"]' },
+  { name: "help search results", selector: '[class*="helpResultList"] span' },
+  { name: "mobile history facts", selector: '[class*="historyCardFacts"] dt' },
+  { name: "sidebar brand", selector: '[class*="brandCopy"] small' },
+  { name: "sidebar administration", selector: '[class*="adminLabel"]' },
+  { name: "sidebar identity", selector: '[class*="identityCopy"] small' },
+] as const;
+
+const SMALL_CONTENT_SELECTOR = SMALL_CONTENT_TARGETS
+  .map((target) => target.selector)
+  .join(", ");
 
 type JsonResponse = {
   status?: number;
@@ -385,12 +407,111 @@ async function expectNoDocumentOverflow(page: Page) {
 
 async function expectNoRawCopy(page: Page) {
   const accessibilityCopy = await page.locator("body").evaluate((body) => {
-    const attributes = [...body.querySelectorAll<HTMLElement>("[aria-label], [title]")]
-      .flatMap((element) => [element.getAttribute("aria-label"), element.getAttribute("title")])
+    const attributes = [...body.querySelectorAll<HTMLElement>(
+      "[aria-label], [title], [placeholder]",
+    )]
+      .flatMap((element) => [
+        element.getAttribute("aria-label"),
+        element.getAttribute("title"),
+        element.getAttribute("placeholder"),
+      ])
       .filter((value): value is string => value !== null);
     return [body.innerText, ...attributes].join("\n");
   });
   for (const pattern of RAW_COPY) expect(accessibilityCopy).not.toMatch(pattern);
+}
+
+type ContrastSample = {
+  background: string;
+  color: string;
+  ratio: number;
+  target: string;
+  text: string;
+};
+
+async function measureSmallContentContrast(page: Page): Promise<ContrastSample[]> {
+  return page.locator(SMALL_CONTENT_SELECTOR).evaluateAll((elements, targets) => {
+    type Rgba = { r: number; g: number; b: number; a: number };
+
+    const parseColor = (value: string): Rgba => {
+      if (value === "transparent") return { r: 0, g: 0, b: 0, a: 0 };
+      if (value.startsWith("color(srgb")) {
+        const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
+        return {
+          r: (channels[0] ?? 0) * 255,
+          g: (channels[1] ?? 0) * 255,
+          b: (channels[2] ?? 0) * 255,
+          a: channels[3] ?? 1,
+        };
+      }
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? [];
+      return {
+        r: channels[0] ?? 0,
+        g: channels[1] ?? 0,
+        b: channels[2] ?? 0,
+        a: channels[3] ?? 1,
+      };
+    };
+
+    const over = (foreground: Rgba, background: Rgba): Rgba => {
+      const alpha = foreground.a + background.a * (1 - foreground.a);
+      if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 };
+      return {
+        r: (foreground.r * foreground.a + background.r * background.a *
+          (1 - foreground.a)) / alpha,
+        g: (foreground.g * foreground.a + background.g * background.a *
+          (1 - foreground.a)) / alpha,
+        b: (foreground.b * foreground.a + background.b * background.a *
+          (1 - foreground.a)) / alpha,
+        a: alpha,
+      };
+    };
+
+    const luminance = ({ r, g, b }: Rgba) => {
+      const linear = [r, g, b].map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+    };
+
+    const contrast = (left: Rgba, right: Rgba) => {
+      const lighter = Math.max(luminance(left), luminance(right));
+      const darker = Math.min(luminance(left), luminance(right));
+      return (lighter + 0.05) / (darker + 0.05);
+    };
+
+    return elements.flatMap((element) => {
+      const htmlElement = element as HTMLElement;
+      const rect = htmlElement.getBoundingClientRect();
+      const text = htmlElement.innerText.trim();
+      if (rect.width === 0 || rect.height === 0 || text.length === 0) return [];
+
+      let background: Rgba = { r: 0, g: 0, b: 0, a: 0 };
+      let ancestor: Element | null = htmlElement;
+      while (ancestor) {
+        const layer = parseColor(getComputedStyle(ancestor).backgroundColor);
+        background = over(background, layer);
+        ancestor = ancestor.parentElement;
+      }
+      background = over(background, { r: 255, g: 255, b: 255, a: 1 });
+      const colorValue = getComputedStyle(htmlElement).color;
+      const foreground = over(parseColor(colorValue), background);
+      const ratio = contrast(foreground, background);
+
+      return targets
+        .filter((target) => htmlElement.matches(target.selector))
+        .map((target) => ({
+          background: `rgb(${Math.round(background.r)}, ${Math.round(background.g)}, ${Math.round(background.b)})`,
+          color: colorValue,
+          ratio,
+          target: target.name,
+          text: text.slice(0, 80),
+        }));
+    });
+  }, SMALL_CONTENT_TARGETS);
 }
 
 async function expectSyntheticBadge(page: Page) {
@@ -638,6 +759,8 @@ test.describe("Phase D history server state", () => {
     const search = page.getByLabel("Поиск", { exact: true });
     const createdFrom = page.getByLabel("Создан с", { exact: true });
     const createdTo = page.getByLabel("Создан по", { exact: true });
+    await expect(search).toHaveAttribute("placeholder", "Поиск по названию кампании");
+    await expect(page.getByPlaceholder("Кампания, сегмент или номер расчета")).toHaveCount(0);
     await search.fill("кампания");
     await createdFrom.fill("2026-07-01");
     await createdTo.fill("2026-07-17");
@@ -860,6 +983,67 @@ test.describe("Phase D responsive, motion and copy QA", () => {
     ).toBeVisible();
     await expectNoDocumentOverflow(page);
   });
+
+  for (const theme of ["dark", "light"] as const) {
+    test(`small product copy meets WCAG contrast in ${theme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width: 1_440, height: 900 });
+      await setTheme(page, theme);
+      const model = createModelOverviewFixture();
+      model.artifacts = [{
+        artifact_id: "methodology_note",
+        title: "Описание методологии",
+        status: "unavailable",
+        path: null,
+        display_text: "Материал пока недоступен",
+      }];
+      await installNavigationRoutes(page, { model: { payload: model } });
+      const samples: ContrastSample[] = [];
+
+      await page.goto("/");
+      await expect(page.getByText("Демонстрационная активная кампания", { exact: true }))
+        .toBeVisible();
+      samples.push(...await measureSmallContentContrast(page));
+
+      await page.goto("/model");
+      await expect(page.getByRole("heading", { name: "Демонстрационная MMM" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Опубликованные материалы" })).toBeVisible();
+      samples.push(...await measureSmallContentContrast(page));
+
+      await page.goto("/help");
+      await page.getByRole("searchbox", { name: "Поиск по справке" }).fill("сценарии");
+      await expect(page.getByRole("heading", { name: "Найденные статьи" })).toBeVisible();
+      samples.push(...await measureSmallContentContrast(page));
+      await page.locator('[class*="helpResultList"] button').first().hover();
+      samples.push(...await measureSmallContentContrast(page));
+
+      await page.setViewportSize({ width: 375, height: 812 });
+      await page.goto("/calculations");
+      await expect(
+        page.getByText("Демонстрационная активная кампания", { exact: true })
+          .filter({ visible: true })
+          .first(),
+      ).toBeVisible();
+      await expect(page.getByRole("table")).toBeHidden();
+      samples.push(...await measureSmallContentContrast(page));
+
+      const coveredTargets = [...new Set(samples.map((sample) => sample.target))];
+      for (const target of SMALL_CONTENT_TARGETS) {
+        expect(coveredTargets, `${target.name} was not measured`).toContain(target.name);
+      }
+      const minimum = samples.reduce((current, sample) =>
+        sample.ratio < current.ratio ? sample : current
+      );
+      test.info().annotations.push({
+        type: "contrast",
+        description: `${minimum.ratio.toFixed(3)}:1 — ${minimum.text}`,
+      });
+      console.info(
+        `[contrast:${theme}] minimum ${minimum.ratio.toFixed(3)}:1`,
+        JSON.stringify(minimum),
+      );
+      expect(minimum.ratio, JSON.stringify(minimum, null, 2)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
 
   test("reduced motion leaves no active looping animations", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });

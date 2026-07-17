@@ -50,12 +50,13 @@ disabled animations и проверку document overflow.
 | Home | ready, empty, known zero, missing facts, warnings | passed |
 | History URL | back/forward/refresh восстанавливают query state | passed |
 | History server behavior | status/search/date/sort/page/page_size уходят в endpoint | passed |
+| History search copy | Placeholder ограничен поиском по названию кампании | passed |
 | History draft | смена sort не стирает введенные search/date до Apply | passed |
 | History states | general/filter/search empty, 422 last-visible snapshot recovery | passed |
 | Null vs zero | missing → `Нет данных`; известный `0` остается нулем | passed |
 | Model | available, unavailable, 503, unsupported contract | passed |
 | Help | sections, article, local search, relations, deep link | passed |
-| Accessibility | landmarks, labels, keyboard, focus, semantic table/cards | passed |
+| Accessibility | landmarks, labels, keyboard, focus, semantic table/cards, small-text contrast | passed |
 | Responsive | 375×812 и 812×375 без document overflow | passed |
 | Stress content | long copy, 100 history rows, internal table scroll | passed |
 | Reduced motion | active infinite animations отсутствуют | passed |
@@ -73,8 +74,9 @@ disabled animations и проверку document overflow.
 | ESLint | passed, 0 warnings |
 | Unit tests | 27 files, 319 tests passed |
 | Production build | passed; 129 modules transformed |
-| Phase D Playwright | 41 tests passed |
-| Full frontend Playwright regression | 151 tests passed |
+| Phase D Playwright | 43 tests passed |
+| Full frontend Playwright regression | 153 tests passed |
+| Browser WCAG contrast | minimum 5.783:1 light; 7.273:1 dark |
 | Backend Phase D contract/HTTP tests | 12 run, 11 passed, 1 optional schema test skipped |
 
 Production build сохраняет неблокирующий Vite advisory: основной JS chunk
@@ -118,7 +120,8 @@ client abort. Завершенные запросы оставались 200, UI
 
 - [x] Home и History имеют разные задачи и page identity.
 - [x] Active navigation однозначна на всех четырех routes.
-- [x] Light/dark contrast и status semantics читаемы.
+- [x] Light/dark contrast и status semantics читаемы; мелкий содержательный
+      текст измерен в браузере, включая hover, и превышает 4.5:1.
 - [x] Long localized copy переносится без overlap/clipping.
 - [x] Desktop history table остается в своей scroll region.
 - [x] Mobile использует cards и нижнюю product navigation.
@@ -144,6 +147,3 @@ client abort. Завершенные запросы оставались 200, UI
    Phase D.
 7. Playwright пока не входит в GitHub Actions workflow и остается локальным
    review evidence.
-8. Мелкий tertiary-текст в light theme остается пограничным по contrast;
-   системное усиление этого token лучше вынести в отдельную cross-page
-   accessibility-полировку, чтобы синхронно проверить Phase A-D.

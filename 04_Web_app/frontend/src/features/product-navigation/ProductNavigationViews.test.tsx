@@ -59,7 +59,11 @@ describe("Phase D product-navigation views", () => {
 
     expect(screen.getByRole("heading", { name: "История расчетов" })).toBeInTheDocument();
     expect(screen.getAllByText(history.items[0].campaign_name).length).toBeGreaterThan(0);
-    fireEvent.change(screen.getByLabelText("Поиск"), { target: { value: "  кампания  " } });
+    const search = screen.getByRole("searchbox", { name: "Поиск" });
+    expect(search).toHaveAttribute("placeholder", "Поиск по названию кампании");
+    expect(screen.queryByPlaceholderText("Кампания, сегмент или номер расчета"))
+      .not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "  кампания  " } });
     fireEvent.submit(screen.getByLabelText("Поиск").closest("form") as HTMLFormElement);
     expect(onQueryChange).toHaveBeenCalledWith(expect.objectContaining({
       search: "кампания",

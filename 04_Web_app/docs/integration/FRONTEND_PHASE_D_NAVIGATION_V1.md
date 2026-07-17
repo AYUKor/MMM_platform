@@ -87,6 +87,9 @@ Back, forward и refresh восстанавливают query. Frontend запр
 
 Desktop отображает semantic table, mobile — cards. `null` в budget, period,
 segments, counts, warnings и completion time не превращается в ноль.
+Placeholder поиска явно отражает backend scope: `Поиск по названию кампании`.
+Старая формулировка про сегмент и номер расчета запрещена unit и browser
+regression checks.
 
 При 422 последний успешно показанный snapshot остается видимым, а backend
 `display_text` показывается рядом с фильтрами. Draft search/dates сохраняются,
@@ -157,8 +160,9 @@ Synthetic states содержат badge `Демонстрационные дан
 | ESLint | passed, 0 warnings |
 | Unit | 319/319 passed |
 | Production build | passed |
-| Phase D Playwright | 41/41 passed |
-| Full frontend Playwright | 151/151 passed |
+| Phase D Playwright | 43/43 passed |
+| Full frontend Playwright | 153/153 passed |
+| Small-text WCAG contrast | passed; light 5.783:1, dark 7.273:1 |
 | Backend Phase D contract/HTTP | 11 passed, 1 optional schema check skipped |
 
 Build advisory: основной minified JS chunk `568.44 kB` превышает стандартный
@@ -192,8 +196,6 @@ multi-page History дополнительно проверены contract-valid 
    gate этой версии.
 7. Playwright пока не запускается GitHub Actions и остается локальным evidence.
 8. Production JS chunk имеет неблокирующий size advisory, указанный выше.
-9. Мелкий tertiary-текст в light theme имеет пограничный contrast; изменение
-   общего token требует отдельной cross-page проверки всех экранов Phase A-D.
 
 ## Out of scope confirmation
 

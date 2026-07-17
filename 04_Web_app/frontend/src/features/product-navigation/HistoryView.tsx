@@ -188,7 +188,7 @@ export function HistoryView({
               type="search"
               value={draft.search}
               maxLength={120}
-              placeholder="Кампания, сегмент или номер расчета"
+              placeholder="Поиск по названию кампании"
               onChange={(event) => setDraft((current) => ({ ...current, search: event.target.value }))}
             />
           </label>

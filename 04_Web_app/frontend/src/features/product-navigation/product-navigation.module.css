@@ -384,7 +384,7 @@
   margin: 0;
 }
 .compactFacts div { min-width: 0; }
-.compactFacts dt { color: var(--text-tertiary); font-size: 0.67rem; }
+.compactFacts dt { color: var(--text-secondary); font-size: 0.67rem; }
 .compactFacts dd { margin: 0.25rem 0 0; font-size: 0.78rem; overflow-wrap: anywhere; }
 
 .inlineEmpty,
@@ -439,7 +439,7 @@
 .warningList .warning-error { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface-primary)); }
 .warningList strong { display: block; }
 .warningList p { margin: 0.35rem 0; color: var(--text-secondary); line-height: 1.45; }
-.warningList span { color: var(--text-tertiary); font-size: 0.76rem; }
+.warningList span { color: var(--text-secondary); font-size: 0.76rem; }
 
 .actionGrid { min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border-default); background: var(--border-default); }
 .actionItem,
@@ -579,7 +579,7 @@
 .unavailableHero { grid-template-columns: 1fr; border-color: var(--border-strong); box-shadow: none; }
 
 .scopeStrip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.scopeStrip small { display: block; margin-top: 0.65rem; color: var(--text-tertiary); font-size: 0.68rem; line-height: 1.4; overflow-wrap: anywhere; }
+.scopeStrip small { display: block; margin-top: 0.65rem; color: var(--text-secondary); font-size: 0.68rem; line-height: 1.4; overflow-wrap: anywhere; }
 .usageStrip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .usageStrip dd { font-size: 1.35rem; }
 
@@ -599,7 +599,7 @@
 .limitationsList li:last-child,
 .versionList li:last-child,
 .artifactList li:last-child { border-bottom: 0; }
-.listIndex { color: var(--text-tertiary); font: 760 0.72rem/1.5 var(--font-mono); }
+.listIndex { color: var(--text-secondary); font: 760 0.72rem/1.5 var(--font-mono); }
 .capabilityList strong,
 .limitationsList strong,
 .versionList strong,
@@ -608,7 +608,7 @@
 .limitationsList p { margin: 0.35rem 0 0; color: var(--text-secondary); line-height: 1.5; }
 .limitationsList small,
 .versionList span,
-.artifactList span { display: block; margin-top: 0.35rem; color: var(--text-tertiary); font-size: 0.75rem; line-height: 1.45; }
+.artifactList span { display: block; margin-top: 0.35rem; color: var(--text-secondary); font-size: 0.75rem; line-height: 1.45; }
 .limitationsList { grid-template-columns: 1fr; }
 .limitationsList li { grid-template-columns: auto minmax(0, 1fr); }
 
@@ -618,7 +618,7 @@
 .requirementsList li > div { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.7rem; }
 .requirementsList li > div span { color: var(--text-secondary); font-size: 0.7rem; }
 .requirementsList p { margin: 0.45rem 0; color: var(--text-secondary); line-height: 1.5; }
-.requirementsList small { color: var(--text-tertiary); line-height: 1.45; }
+.requirementsList small { color: var(--text-secondary); line-height: 1.45; }
 
 .methodologyList { display: grid; margin: 0; padding: 0; list-style: none; counter-reset: method; }
 .methodologyList li { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: var(--space-3); padding: 1rem 0; border-bottom: 1px solid var(--border-default); }
@@ -628,7 +628,7 @@
 .methodologyList p { margin: 0.35rem 0 0; color: var(--text-secondary); line-height: 1.5; }
 .versionList li { grid-template-columns: 56px minmax(0, 1fr) auto; }
 .artifactList li { grid-template-columns: minmax(0, 1fr) auto; }
-.updatedLine { margin: 0; color: var(--text-tertiary); font-size: 0.72rem; text-align: right; }
+.updatedLine { margin: 0; color: var(--text-secondary); font-size: 0.72rem; text-align: right; }
 
 /* Help */
 .helpHeader { align-items: end; }
@@ -700,7 +700,7 @@
 .helpResultList { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--border-default); background: var(--border-default); }
 .helpResultList button { min-height: 165px; width: 100%; display: grid; align-content: start; gap: 0.55rem; padding: var(--space-4); border: 0; background: var(--surface-primary); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
 .helpResultList button:hover { background: var(--surface-hover); }
-.helpResultList span { color: var(--text-tertiary); font-size: 0.68rem; }
+.helpResultList span { color: var(--text-secondary); font-size: 0.68rem; }
 .helpResultList strong { font-size: 1rem; }
 .helpResultList small { color: var(--text-secondary); line-height: 1.45; }
 
@@ -759,7 +759,7 @@
   .historyCardHeader span:not(.statusTag) { color: var(--text-secondary); font-size: 0.75rem; }
   .historyCardFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--border-default); }
   .historyCardFacts div { min-width: 0; padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--border-default); }
-  .historyCardFacts dt { color: var(--text-tertiary); font-size: 0.67rem; }
+  .historyCardFacts dt { color: var(--text-secondary); font-size: 0.67rem; }
   .historyCardFacts dd { margin: 0.25rem 0 0; font-size: 0.78rem; overflow-wrap: anywhere; }
   .historyFilters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .searchField { grid-column: 1 / -1; }
