@@ -22,6 +22,7 @@ import {
   type ResultTabId,
 } from "../features/job-result/jobResultModel";
 import styles from "../features/job-result/job-result.module.css";
+import { useAuth } from "../features/auth/AuthProvider";
 
 const DEFAULT_MEDIA_CONTROLS: MediaPlanControls = {
   channel: null,
@@ -147,6 +148,7 @@ function ResultLoadingState() {
 }
 
 export function ResultOverviewPage() {
+  const auth = useAuth();
   const { id = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = resultTabFromSearch(searchParams.get("tab"));
@@ -271,6 +273,7 @@ export function ResultOverviewPage() {
       mediaLoading={mediaQuery.isPending || mediaQuery.isFetching}
       mediaError={mediaQuery.error}
       refreshNotice={refreshNotice}
+      canDownload={auth.can("report.download")}
       onTabChange={changeTab}
       onMetricChange={setMetricId}
       onMediaScenarioChange={(scenarioId) => {

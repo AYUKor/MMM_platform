@@ -30,6 +30,7 @@ describe("lifecycle client", () => {
     await expect(uploadCampaign(file, "upload:test-key-0001")).resolves.toEqual(response);
     const [, request] = fetchMock.mock.calls[0];
     expect(request.method).toBe("POST");
+    expect(request.credentials).toBe("include");
     expect(request.headers["Idempotency-Key"]).toBe("upload:test-key-0001");
     expect(request.body).toBeInstanceOf(FormData);
   });

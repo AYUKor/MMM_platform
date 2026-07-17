@@ -1,6 +1,11 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import type { ModelOverviewV1 } from "../src/shared/api/generated/model-overview-v1";
 import { createModelOverviewFixture } from "../src/test/productNavigationFixtures";
+import { installAuthenticatedAdminSession } from "./support/auth";
+
+test.beforeEach(async ({ page }) => {
+  await installAuthenticatedAdminSession(page);
+});
 
 function unavailableModel(): ModelOverviewV1 {
   const overview = createModelOverviewFixture();

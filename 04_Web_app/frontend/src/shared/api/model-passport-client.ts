@@ -1,5 +1,6 @@
 import type { ModelPassportV1 } from "../../entities/model-passport/types";
 import { appEnv } from "../config/env";
+import { credentialedFetch } from "./credentialed-fetch";
 
 const MODEL_PASSPORT_PATH = "/api/v1/models/active";
 const CONTRACT_KEYS = [
@@ -370,7 +371,7 @@ export async function getActiveModelPassport(
 ): Promise<ModelPassportV1> {
   let response: Response;
   try {
-    response = await fetch(apiUrl(baseUrl), {
+    response = await credentialedFetch(apiUrl(baseUrl), {
       headers: { Accept: "application/json" },
     });
   } catch {

@@ -1,4 +1,5 @@
 import type { ResultOverviewV1 } from "../../entities/result-overview/types";
+import { credentialedFetch } from "./credentialed-fetch";
 import type { ResultProvider } from "./result-provider";
 
 interface ApiErrorPayload {
@@ -133,7 +134,7 @@ export function createHttpResultProvider(apiBaseUrl: string): ResultProvider {
     kind: "http",
     async getOverview(jobId) {
       if (!jobId) throw new Error("Не указан расчёт.");
-      const response = await fetch(
+      const response = await credentialedFetch(
         `${baseUrl}/api/v1/jobs/${encodeURIComponent(jobId)}/overview`,
         { headers: { Accept: "application/json" } },
       );

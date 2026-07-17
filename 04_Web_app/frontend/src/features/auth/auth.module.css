@@ -1,0 +1,150 @@
+.loginPage,
+.bootstrapPage {
+  min-height: 100vh;
+  padding: var(--space-5) var(--page-gutter);
+}
+
+.loginTopbar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+.reviewBadge { margin-left: auto; padding: 0.25rem 0.6rem; border: 1px solid var(--warning); border-radius: var(--radius-pill); color: var(--warning); font-size: 0.65rem; letter-spacing: 0.05em; text-transform: uppercase; }
+
+.loginFrame {
+  width: min(1040px, 100%);
+  min-height: 610px;
+  margin: clamp(2rem, 7vh, 5rem) auto 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-shifted);
+}
+
+.loginIntro {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+  padding: clamp(2rem, 6vw, 5rem);
+  background:
+    radial-gradient(circle at 75% 15%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 34%),
+    var(--surface-secondary);
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: auto;
+  border: 1px solid var(--accent-ink);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 950;
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.loginIntro h1 {
+  max-width: 620px;
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.8rem);
+  line-height: 0.92;
+  letter-spacing: -0.065em;
+}
+
+.loginIntro > p:last-child {
+  max-width: 52ch;
+  margin: var(--space-5) 0 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.loginForm {
+  align-self: center;
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: clamp(2rem, 5vw, 4rem);
+}
+
+.loginForm label { display: grid; gap: 0.5rem; }
+.loginForm label > span { color: var(--text-secondary); font-size: 0.78rem; font-weight: 800; }
+.loginForm input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  color: var(--text-primary);
+  font: inherit;
+}
+.loginForm input:focus { border-color: var(--accent-strong); }
+.loginForm > button { width: 100%; margin-top: var(--space-2); }
+.loginForm > small { color: var(--text-secondary); font-size: 0.72rem; line-height: 1.45; }
+
+.notice,
+.loginError {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface-primary));
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.loginError { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--surface-primary)); }
+.loginError span { color: var(--text-secondary); }
+
+.bootstrapPage { display: grid; place-items: center; }
+.bootstrapCard,
+.bootstrapError {
+  width: min(620px, 100%);
+  padding: clamp(2rem, 6vw, 4rem);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+}
+.bootstrapCard { display: flex; align-items: center; gap: 1rem; }
+.bootstrapCard p { margin: 0; color: var(--text-secondary); }
+.pulse { width: 13px; height: 13px; border-radius: 50%; background: var(--accent-strong); animation: auth-pulse 1.2s ease-in-out infinite alternate; }
+.bootstrapError > span { color: var(--text-secondary); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.bootstrapError h1 { margin: 0.8rem 0; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.05em; }
+.bootstrapError p { margin: 0 0 var(--space-5); color: var(--text-secondary); line-height: 1.55; }
+
+@keyframes auth-pulse { to { transform: scale(1.35); opacity: 0.45; } }
+
+@media (max-width: 760px) {
+  .loginFrame { grid-template-columns: 1fr; margin-top: 1.5rem; box-shadow: none; }
+  .loginIntro { min-height: 320px; padding: var(--space-6); }
+  .brandMark { margin-bottom: var(--space-10); }
+  .loginForm { padding: var(--space-6); }
+}
+
+@media (max-width: 420px) {
+  .loginPage { padding-inline: 0.75rem; }
+  .loginTopbar > span { max-width: 150px; }
+  .loginIntro,
+  .loginForm { padding: var(--space-5); }
+  .loginIntro h1 { font-size: 2.35rem; }
+}

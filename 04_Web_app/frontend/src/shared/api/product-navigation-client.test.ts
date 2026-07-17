@@ -271,7 +271,11 @@ describe("Phase D HTTP clients", () => {
       "http://127.0.0.1:8765/api/v1/help/catalog",
     ]);
     for (const [, options] of fetchMock.mock.calls) {
-      expect(options).toMatchObject({ method: "GET", headers: { Accept: "application/json" } });
+      expect(options).toMatchObject({
+        credentials: "include",
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
     }
   });
 

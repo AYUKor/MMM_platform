@@ -7,6 +7,7 @@ import type {
   ValidationIssue,
   ValidationResult,
 } from "../src/entities/lifecycle/types";
+import { installAuthenticatedAdminSession } from "./support/auth";
 
 const UPLOAD_ID = "upload_000000000001";
 const VALIDATION_ID = "validation_000000000002";
@@ -16,6 +17,10 @@ const SYNTHETIC_SCENARIO6_ATTEMPTS = 3_217;
 const REVIEW_DIRECTORY = fileURLToPath(
   new URL("../../docs/ui-review/calculations-new-v2/", import.meta.url),
 );
+
+test.beforeEach(async ({ page }) => {
+  await installAuthenticatedAdminSession(page);
+});
 
 const sourceArtifact: CampaignUpload["original_file"] = {
   artifact_id: "artifact_synthetic_source_0001",
@@ -451,8 +456,14 @@ async function mockNewCalculationApi(
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
+    const url = new URL(request.url());
     const method = request.method();
-    const pathname = new URL(request.url()).pathname;
+    const pathname = url.pathname;
+
+    if (method === "GET" && pathname === "/api/v1/auth/session" && url.search === "") {
+      await route.fallback();
+      return;
+    }
 
     if (method === "GET" && pathname === "/api/v1/templates/campaign-plan.xlsx") {
       calls.templateGets += 1;
@@ -1236,8 +1247,14 @@ test("9a. URL navigation never exposes or submits a stale validation", async ({ 
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
+    const url = new URL(request.url());
     const method = request.method();
-    const pathname = new URL(request.url()).pathname;
+    const pathname = url.pathname;
+
+    if (method === "GET" && pathname === "/api/v1/auth/session" && url.search === "") {
+      await route.fallback();
+      return;
+    }
 
     if (method === "GET" && pathname === `/api/v1/validations/${VALIDATION_ID}`) {
       await fulfillJson(route, 200, validValidation);

@@ -220,6 +220,16 @@ describe("JobResultView", () => {
     expect(screen.getByRole("heading", { name: "Листы отчета" })).toBeInTheDocument();
   });
 
+  it("does not expose report artifacts without report.download permission", () => {
+    renderResultView({
+      result: createReportReadyJobResultFixture(),
+      activeTab: "report",
+      overrides: { canDownload: false },
+    });
+    expect(screen.queryByRole("link", { name: "Скачать отчет" })).not.toBeInTheDocument();
+    expect(screen.getByText("Нет доступа к скачиванию")).toBeInTheDocument();
+  });
+
   it("renders a contract-backed working media-plan artifact when it is ready", () => {
     const result = createReportReadyJobResultFixture();
     const workingPlan = {

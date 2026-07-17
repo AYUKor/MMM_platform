@@ -58,6 +58,21 @@
 .systemState { display: flex; align-items: center; gap: 0.45rem; margin-right: auto; color: var(--text-secondary); font-size: 0.75rem; }
 .systemState span { width: 7px; height: 7px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 14%, transparent); }
 .systemStateConfigured span { background: var(--accent-strong); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-strong) 14%, transparent); }
+.reviewBadge { padding: 0.24rem 0.58rem; border: 1px solid var(--warning); border-radius: var(--radius-pill); color: var(--warning); font-size: 0.64rem; font-weight: 850; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.profile { position: relative; }
+.profileButton { min-height: 40px; display: flex; align-items: center; gap: 0.55rem; max-width: 240px; padding: 0.3rem 0.65rem 0.3rem 0.3rem; border: 1px solid var(--border-default); border-radius: var(--radius-pill); background: var(--surface-primary); color: var(--text-primary); font: inherit; cursor: pointer; }
+.profileButton > span { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: var(--surface-secondary); font-size: 0.72rem; font-weight: 850; }
+.profileButton strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.72rem; }
+.profileMenu { position: absolute; z-index: 60; top: calc(100% + 0.55rem); right: 0; width: min(300px, calc(100vw - 1.5rem)); display: grid; padding: 0.55rem; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-primary); box-shadow: 5px 5px 0 color-mix(in srgb, var(--border-strong) 70%, transparent); }
+.profileSummary { display: grid; gap: 0.25rem; min-width: 0; padding: 0.7rem 0.75rem 0.85rem; border-bottom: 1px solid var(--border-default); }
+.profileSummary strong,
+.profileSummary small { overflow-wrap: anywhere; }
+.profileSummary span,
+.profileSummary small { color: var(--text-secondary); font-size: 0.7rem; }
+.profileMenu > a,
+.profileMenu > button { min-height: 42px; display: flex; align-items: center; padding: 0.55rem 0.75rem; border: 0; border-radius: 8px; background: transparent; color: var(--text-primary); font: 750 0.76rem/1.2 var(--font-sans); text-align: left; text-decoration: none; cursor: pointer; }
+.profileMenu > a:hover,
+.profileMenu > button:hover { background: var(--surface-hover); }
 .main { position: relative; width: 100%; max-width: 1600px; margin: 0 auto; padding: var(--space-6) var(--page-gutter) var(--space-10); }
 
 @media (max-width: 1100px) {
@@ -127,6 +142,9 @@
   }
   .workspace { min-width: 0; }
   .topbar { padding-inline: 0.75rem; }
-  .systemState { max-width: 90px; line-height: 1.2; }
+  .systemState { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .reviewBadge { margin-right: auto; padding: 0.22rem 0.45rem; font-size: 0.55rem; line-height: 1.15; letter-spacing: 0.02em; white-space: normal; }
+  .profileButton { max-width: 42px; padding-right: 0.3rem; }
+  .profileButton strong { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .main { padding-bottom: var(--space-8); }
 }

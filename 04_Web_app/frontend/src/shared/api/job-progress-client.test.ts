@@ -207,7 +207,10 @@ describe("job progress HTTP client", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock).toHaveBeenCalledWith(
       `http://127.0.0.1:8765/api/v1/jobs/${JOB_ID}/progress-view`,
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
     );
   });
 
@@ -269,7 +272,10 @@ describe("MMM fact catalog", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8765/api/v1/meta/mmm-facts",
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
     );
   });
 

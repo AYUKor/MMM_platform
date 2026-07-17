@@ -15,6 +15,7 @@ import {
 } from "../shared/api/job-progress-client";
 import { cancelJob } from "../shared/api/lifecycle-client";
 import { Button } from "../shared/ui/Button";
+import { useAuth } from "../features/auth/AuthProvider";
 
 interface InitialStateCopy {
   title: string;
@@ -72,6 +73,7 @@ function ProgressPageState({
 }
 
 export function JobProgressPage() {
+  const auth = useAuth();
   const { id = "" } = useParams();
   const progressQuery = useQuery({
     queryKey: ["job-progress-view", id],
@@ -152,6 +154,7 @@ export function JobProgressPage() {
       onCancel={async () => {
         await cancelMutation.mutateAsync();
       }}
+      canCancel={auth.can("calculation.cancel")}
       cancelPending={cancelMutation.isPending}
       cancelError={cancelMutation.isError
         ? "Не удалось отправить запрос на отмену. Повторите попытку."

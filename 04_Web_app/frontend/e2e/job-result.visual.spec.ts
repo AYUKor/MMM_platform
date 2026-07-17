@@ -18,6 +18,7 @@ import {
   createScenarioMediaPlanFixture,
   createUnavailableJobResultFixture,
 } from "../src/test/jobResultFixtures";
+import { installAuthenticatedAdminSession } from "./support/auth";
 
 const REVIEW_DIRECTORY = fileURLToPath(
   new URL("../../docs/ui-review/job-result-v1/", import.meta.url),
@@ -64,6 +65,10 @@ interface ProductRouteGuard {
 }
 
 const routeGuards = new WeakMap<Page, ProductRouteGuard>();
+
+test.beforeEach(async ({ page }) => {
+  await installAuthenticatedAdminSession(page);
+});
 
 test.afterEach(async ({ page }) => {
   const guard = routeGuards.get(page);
@@ -210,7 +215,12 @@ async function installProductRoutes(
   // overview, errors and progress endpoints.
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
-    guard.forbiddenCalls.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/v1/auth/session" && url.search === "") {
+      await route.fallback();
+      return;
+    }
+    guard.forbiddenCalls.push(`${request.method()} ${url.pathname}`);
     await route.fulfill({ status: 599, body: "blocked unapproved endpoint" });
   });
 
