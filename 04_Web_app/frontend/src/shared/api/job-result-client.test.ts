@@ -301,7 +301,10 @@ describe("result and media-plan HTTP clients", () => {
     await expect(getJobResultView(JOB_ID, undefined, API_BASE_URL)).resolves.toMatchObject({ job_id: JOB_ID });
     expect(fetchMock).toHaveBeenCalledWith(
       `http://127.0.0.1:8765/api/v1/jobs/${JOB_ID}/result-view`,
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
     );
   });
 
@@ -319,7 +322,10 @@ describe("result and media-plan HTTP clients", () => {
     }, result, undefined, API_BASE_URL)).resolves.toMatchObject({ scenario: { scenario_id: "S05" } });
     expect(fetchMock).toHaveBeenCalledWith(
       `http://127.0.0.1:8765/api/v1/jobs/${JOB_ID}/media-plan?scenario_id=S05&page=2&page_size=1&channel=${encodeURIComponent("Онлайн-видео")}&geo=${encodeURIComponent("Москва")}`,
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
     );
   });
 

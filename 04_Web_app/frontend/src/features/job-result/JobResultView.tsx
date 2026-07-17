@@ -31,6 +31,7 @@ export interface JobResultViewProps {
   onMediaPageChange: (page: number) => void;
   onMediaRetry: () => void;
   onRefresh: () => void;
+  canDownload?: boolean;
 }
 
 export function JobResultView({
@@ -50,6 +51,7 @@ export function JobResultView({
   onMediaPageChange,
   onMediaRetry,
   onRefresh,
+  canDownload = true,
 }: JobResultViewProps) {
   const recommendationStatus = result.recommendation.status === "recommended"
     ? { label: "Рекомендация готова", tone: "accent" as const }
@@ -89,7 +91,7 @@ export function JobResultView({
           </div>
           <div className={styles.headerActions}>
             <Link className={styles.secondaryLink} to="/calculations">Все расчеты</Link>
-            {reportDownloadUrl ? (
+            {reportDownloadUrl && canDownload ? (
               <a className={styles.headerDownload} href={reportDownloadUrl} download>
                 Скачать отчет
               </a>
@@ -158,7 +160,7 @@ export function JobResultView({
             onRetry={onMediaRetry}
           />
         ) : null}
-        {activeTab === "report" ? <ReportTab result={result} /> : null}
+        {activeTab === "report" ? <ReportTab result={result} canDownload={canDownload} /> : null}
       </section>
     </div>
   );

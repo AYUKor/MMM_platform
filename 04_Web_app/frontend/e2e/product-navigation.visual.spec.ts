@@ -13,6 +13,7 @@ import {
   createWorkspaceHomeFixture,
   SYNTHETIC_NAVIGATION_BADGE,
 } from "../src/test/productNavigationFixtures";
+import { installAuthenticatedAdminSession } from "./support/auth";
 
 const REVIEW_DIRECTORY = fileURLToPath(
   new URL("../../docs/ui-review/phase-d-navigation-v1/", import.meta.url),
@@ -83,6 +84,10 @@ interface NavigationRouteGuard {
 }
 
 const routeGuards = new WeakMap<Page, NavigationRouteGuard>();
+
+test.beforeEach(async ({ page }) => {
+  await installAuthenticatedAdminSession(page);
+});
 
 test.afterEach(async ({ page }) => {
   const guard = routeGuards.get(page);
@@ -311,7 +316,12 @@ async function installNavigationRoutes(
   // registered exact handlers below before this guard.
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
-    guard.forbiddenCalls.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/v1/auth/session" && url.search === "") {
+      await route.fallback();
+      return;
+    }
+    guard.forbiddenCalls.push(`${request.method()} ${url.pathname}`);
     await route.fulfill({ status: 599, body: "blocked unapproved product endpoint" });
   });
 
@@ -907,10 +917,13 @@ test.describe("Phase D help URL and keyboard state", () => {
   test("help search uses title summary and keywords without requesting another endpoint", async ({ page }) => {
     const guard = await installNavigationRoutes(page);
     await page.goto("/help");
+    const searchbox = page.getByRole("searchbox", { name: /поиск/i });
+    await expect(searchbox).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Справка", exact: true })).toBeVisible();
     const callsBeforeSearch = guard.allowedCalls.filter((call) =>
       call.includes("/api/v1/help/catalog")
     ).length;
-    await page.getByRole("searchbox", { name: /поиск/i }).fill("сценарии");
+    await searchbox.fill("сценарии");
     await expect(page.getByText("Зачем нужны шесть сценариев", { exact: true })).toBeVisible();
     const callsAfterSearch = guard.allowedCalls.filter((call) =>
       call.includes("/api/v1/help/catalog")

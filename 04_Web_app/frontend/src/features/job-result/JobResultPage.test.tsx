@@ -16,6 +16,10 @@ import {
   JOB_RESULT_FIXTURE_IDS,
 } from "../../test/jobResultFixtures";
 
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({ can: () => true }),
+}));
+
 const API_BASE_URL = "http://127.0.0.1:8765";
 const { jobId: JOB_ID } = JOB_RESULT_FIXTURE_IDS;
 

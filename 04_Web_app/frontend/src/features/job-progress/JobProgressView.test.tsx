@@ -83,6 +83,7 @@ function LocationProbe() {
 
 interface RenderViewOptions {
   onCancel?: () => Promise<void>;
+  canCancel?: boolean;
   cancelPending?: boolean;
   cancelError?: string | null;
   fact?: { fact_id: string; category: "forecast"; text: string; source_label: string } | null;
@@ -99,6 +100,7 @@ function progressViewTree(
         fact={options.fact ?? null}
         onRefresh={() => undefined}
         onCancel={options.onCancel ?? vi.fn().mockResolvedValue(undefined)}
+        canCancel={options.canCancel ?? true}
         cancelPending={options.cancelPending ?? false}
         cancelError={options.cancelError ?? null}
       />
@@ -229,6 +231,11 @@ describe("JobProgressView", () => {
     await waitFor(() => expect(onCancel).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("hides cancellation when the session has no calculation.cancel permission", () => {
+    renderView(view("running"), { canCancel: false });
+    expect(screen.queryByRole("button", { name: "Отменить расчет" })).not.toBeInTheDocument();
   });
 
   it("closes the cancel dialog with Escape and keeps calculation running", () => {

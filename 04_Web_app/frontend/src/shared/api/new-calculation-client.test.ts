@@ -38,7 +38,10 @@ describe("new calculation Product API client", () => {
     await expect(getCalculationProfile()).resolves.toEqual(profile());
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8765/api/v1/calculation-profile",
-      expect.objectContaining({ headers: { Accept: "application/json" } }),
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
     );
   });
 

@@ -26,7 +26,7 @@ function artifactGlyph(displayName: string): string {
   return /^[A-Z0-9]{2,5}$/.test(extension) ? extension : "ФАЙЛ";
 }
 
-export function ReportTab({ result }: { result: JobResultViewV1 }) {
+export function ReportTab({ result, canDownload = true }: { result: JobResultViewV1; canDownload?: boolean }) {
   const { report } = result;
   const downloadUrl = report.status === "ready" ? artifactDownloadUrl(report.artifact) : null;
   const workingPlan = report.working_media_plan;
@@ -57,10 +57,12 @@ export function ReportTab({ result }: { result: JobResultViewV1 }) {
               <p>{formatBytes(report.artifact.size_bytes)} · Excel-отчет</p>
             </div>
           </div>
-          {downloadUrl ? (
+          {downloadUrl && canDownload ? (
             <a className={styles.downloadButton} href={downloadUrl} download>
               Скачать отчет
             </a>
+          ) : downloadUrl ? (
+            <StatusBadge tone="warning">Нет доступа к скачиванию</StatusBadge>
           ) : (
             <StatusBadge tone="danger">Ссылка не прошла проверку</StatusBadge>
           )}
@@ -95,10 +97,12 @@ export function ReportTab({ result }: { result: JobResultViewV1 }) {
               <p>{formatBytes(workingPlan.artifact.size_bytes)} · Рабочий медиаплан</p>
             </div>
           </div>
-          {workingPlanDownloadUrl ? (
+          {workingPlanDownloadUrl && canDownload ? (
             <a className={styles.downloadButton} href={workingPlanDownloadUrl} download>
               Скачать медиаплан
             </a>
+          ) : workingPlanDownloadUrl ? (
+            <StatusBadge tone="warning">Нет доступа к скачиванию</StatusBadge>
           ) : (
             <StatusBadge tone="danger">Ссылка не прошла проверку</StatusBadge>
           )}

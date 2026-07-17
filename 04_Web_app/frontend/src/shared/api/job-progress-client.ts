@@ -4,6 +4,7 @@ import type {
 } from "./generated/job-progress-view-v1";
 import type { MMMFactCatalogV1 } from "./generated/mmm-fact-catalog-v1";
 import { appEnv } from "../config/env";
+import { credentialedFetch } from "./credentialed-fetch";
 
 const PROGRESS_VIEW_PATH = (jobId: string) =>
   `/api/v1/jobs/${encodeURIComponent(jobId)}/progress-view`;
@@ -520,7 +521,7 @@ export async function getJobProgressView(
 ): Promise<JobProgressViewV1> {
   let response: Response;
   try {
-    response = await fetch(endpoint(PROGRESS_VIEW_PATH(jobId), baseUrl), {
+    response = await credentialedFetch(endpoint(PROGRESS_VIEW_PATH(jobId), baseUrl), {
       headers: { Accept: "application/json" },
       signal,
     });
@@ -543,7 +544,7 @@ export async function getMmmFacts(
 ): Promise<MMMFactCatalogV1> {
   let response: Response;
   try {
-    response = await fetch(endpoint(MMM_FACTS_PATH, baseUrl), {
+    response = await credentialedFetch(endpoint(MMM_FACTS_PATH, baseUrl), {
       headers: { Accept: "application/json" },
       signal,
     });

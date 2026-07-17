@@ -7,6 +7,7 @@ import type {
   ValidationResult,
 } from "../../entities/lifecycle/types";
 import { appEnv } from "../config/env";
+import { credentialedFetch } from "./credentialed-fetch";
 
 interface ApiErrorPayload {
   error?: { code?: string; display_text?: string };
@@ -53,7 +54,7 @@ async function apiError(response: Response): Promise<LifecycleApiError> {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), {
+  const response = await credentialedFetch(apiUrl(path), {
     ...init,
     headers: {
       Accept: "application/json",

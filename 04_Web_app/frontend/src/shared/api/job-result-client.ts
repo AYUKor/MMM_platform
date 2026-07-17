@@ -12,6 +12,7 @@ import type {
   ScenarioMediaPlanV1,
 } from "./generated/scenario-media-plan-v1";
 import { appEnv } from "../config/env";
+import { credentialedFetch } from "./credentialed-fetch";
 
 const SCENARIO_IDS = ["S01", "S02", "S03", "S04", "S05", "S06"] as const;
 const SCENARIO_ROLES = ["source", "control", "control", "control", "benchmark", "adaptive"] as const;
@@ -854,7 +855,7 @@ export async function getJobResultView(
 ): Promise<JobResultViewV1> {
   let response: Response;
   try {
-    response = await fetch(apiEndpoint(resultViewPath(jobId), baseUrl), { headers: { Accept: "application/json" }, signal });
+    response = await credentialedFetch(apiEndpoint(resultViewPath(jobId), baseUrl), { headers: { Accept: "application/json" }, signal });
   } catch (error) {
     if (signal?.aborted) throw error;
     throw new JobResultRequestError();
@@ -890,7 +891,7 @@ export async function getScenarioMediaPlan(
   const normalized = normalizeScenarioMediaPlanQuery(query);
   let response: Response;
   try {
-    response = await fetch(apiEndpoint(mediaPlanPath(jobId, normalized), baseUrl), { headers: { Accept: "application/json" }, signal });
+    response = await credentialedFetch(apiEndpoint(mediaPlanPath(jobId, normalized), baseUrl), { headers: { Accept: "application/json" }, signal });
   } catch (error) {
     if (signal?.aborted) throw error;
     throw new MediaPlanRequestError();

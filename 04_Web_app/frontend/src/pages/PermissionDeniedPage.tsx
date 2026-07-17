@@ -5,7 +5,7 @@ export function PermissionDeniedPage() {
     <ErrorState
       tone="permission"
       title="Недостаточно прав"
-      description="Authentication и admin RBAC ещё не подключены. Доступ не симулируется на клиенте."
+      description="Ваша сессия активна, но для этого раздела нет необходимого разрешения. Обратитесь к администратору."
     />
   );
 }

@@ -1,5 +1,6 @@
 import type { CalculationProfile } from "./generated/product-api-v1";
 import { appEnv } from "../config/env";
+import { credentialedFetch } from "./credentialed-fetch";
 
 const CALCULATION_PROFILE_PATH = "/api/v1/calculation-profile";
 const CAMPAIGN_TEMPLATE_PATH = "/api/v1/templates/campaign-plan.xlsx";
@@ -80,7 +81,7 @@ export async function getCalculationProfile(
 ): Promise<CalculationProfile> {
   let response: Response;
   try {
-    response = await fetch(endpoint(CALCULATION_PROFILE_PATH), {
+    response = await credentialedFetch(endpoint(CALCULATION_PROFILE_PATH), {
       headers: { Accept: "application/json" },
       signal,
     });

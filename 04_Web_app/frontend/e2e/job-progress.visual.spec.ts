@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { JobProgressViewV1 } from "../src/shared/api/generated/job-progress-view-v1";
+import { installAuthenticatedAdminSession } from "./support/auth";
 
 const JOB_ID = "job_000000000001";
 const REVIEW_DIRECTORY = fileURLToPath(
@@ -9,6 +10,10 @@ const REVIEW_DIRECTORY = fileURLToPath(
 );
 
 mkdirSync(REVIEW_DIRECTORY, { recursive: true });
+
+test.beforeEach(async ({ page }) => {
+  await installAuthenticatedAdminSession(page);
+});
 
 const titles = [
   "Расчет ожидает запуска",

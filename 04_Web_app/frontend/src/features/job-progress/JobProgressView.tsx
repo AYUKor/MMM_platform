@@ -31,6 +31,7 @@ interface JobProgressViewProps {
   refreshNotice?: RefreshNotice | null;
   onRefresh: () => void;
   onCancel: () => Promise<void>;
+  canCancel?: boolean;
   cancelPending: boolean;
   cancelError?: string | null;
 }
@@ -218,6 +219,7 @@ export function JobProgressView({
   refreshNotice = null,
   onRefresh,
   onCancel,
+  canCancel = true,
   cancelPending,
   cancelError = null,
 }: JobProgressViewProps) {
@@ -247,13 +249,13 @@ export function JobProgressView({
   }, []);
 
   useEffect(() => {
-    if (!cancelDialogOpen || view.can_cancel) return;
+    if (!cancelDialogOpen || (view.can_cancel && canCancel)) return;
     const frame = window.requestAnimationFrame(() => {
       setCancelDialogOpen(false);
       fallbackFocusRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [cancelDialogOpen, view.can_cancel]);
+  }, [cancelDialogOpen, canCancel, view.can_cancel]);
 
   const confirmCancel = async () => {
     try {
@@ -334,7 +336,7 @@ export function JobProgressView({
               </div>
             ) : null}
             <div className={styles.statusActions}>
-              {view.can_cancel ? (
+              {view.can_cancel && canCancel ? (
                 <Button
                   disabled={cancelPending}
                   onClick={(event) => {
@@ -431,7 +433,7 @@ export function JobProgressView({
       ) : null}
 
       <CancelDialog
-        open={cancelDialogOpen && view.can_cancel}
+        open={cancelDialogOpen && view.can_cancel && canCancel}
         pending={cancelPending}
         error={cancelError}
         onClose={closeDialog}

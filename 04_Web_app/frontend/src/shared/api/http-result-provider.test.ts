@@ -25,7 +25,10 @@ describe("HTTP result overview provider", () => {
     await expect(provider.getOverview("job_123456789abc")).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8765/api/v1/jobs/job_123456789abc/overview",
-      { headers: { Accept: "application/json" } },
+      {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      },
     );
   });
 

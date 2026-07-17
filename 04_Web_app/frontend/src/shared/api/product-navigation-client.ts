@@ -3,6 +3,7 @@ import type { HelpCatalogV1 } from "./generated/help-catalog-v1";
 import type { ModelOverviewV1 } from "./generated/model-overview-v1";
 import type { WorkspaceHomeV1 } from "./generated/workspace-home-v1";
 import { appEnv } from "../config/env";
+import { credentialedFetch } from "./credentialed-fetch";
 
 const WORKSPACE_HOME_PATH = "/api/v1/workspace/home";
 const CALCULATION_HISTORY_PATH = "/api/v1/calculations/history";
@@ -959,7 +960,7 @@ async function getProductNavigationContract<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(apiEndpoint(path, baseUrl), {
+    response = await credentialedFetch(apiEndpoint(path, baseUrl), {
       method: "GET",
       headers: { Accept: "application/json" },
       signal,

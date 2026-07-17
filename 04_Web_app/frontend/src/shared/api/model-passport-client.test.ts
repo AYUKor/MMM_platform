@@ -137,7 +137,10 @@ describe("Model Passport client", () => {
     await expect(getActiveModelPassport(API_BASE_URL)).resolves.toEqual(passport);
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8765/api/v1/models/active",
-      { headers: { Accept: "application/json" } },
+      {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      },
     );
   });
 

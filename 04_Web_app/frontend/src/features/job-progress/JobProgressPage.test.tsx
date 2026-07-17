@@ -35,6 +35,10 @@ vi.mock("../../shared/api/lifecycle-client", async () => {
   return { ...actual, cancelJob: apiMocks.cancel };
 });
 
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({ can: () => true }),
+}));
+
 const JOB_ID = "job_000000000001";
 
 function snapshot(status: "running" | "succeeded" = "running"): JobProgressViewV1 {
