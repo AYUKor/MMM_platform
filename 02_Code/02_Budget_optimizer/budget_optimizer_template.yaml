@@ -3,7 +3,7 @@
 
 run_id: budget_optimization_q1_daily_example
 layer: budget_optimizer
-decision_policy_file: optimizer_decision_policy_v2.yaml
+decision_policy_file: optimizer_decision_policy_v3.yaml
 
 model_ref:
   source: registry
@@ -57,8 +57,6 @@ constraints:
 optimizer:
   targets:
     - turnover_per_user
-    - orders_per_user
-    - avg_basket
   scenario_6:
     enabled: true
     default_method: adaptive_marginal_posterior

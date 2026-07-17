@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -24,11 +25,15 @@ from mmm_core.forecast_engine import (  # noqa: E402
     _assert_no_cross_campaign_overlap,
     _assert_modeled_spend_reconciles,
     _candidate_score,
+    _candidate_from_allocation,
+    _candidate_risk_budget_summary,
     _channel_balanced_candidate,
     _compile_decision_policy,
     _compile_optimizer_objective,
     _enforce_candidate_constraints,
     _geo_balanced_candidate,
+    _generate_adaptive_scenario6_candidates,
+    _generate_scenario5_candidates,
     _incremental_saturated_response,
     _incremental_saturated_response_draw_matrix,
     _greedy_marginal_allocation,
@@ -42,6 +47,7 @@ from mmm_core.forecast_engine import (  # noqa: E402
     _reliable_candidate_sort_key,
     _risk_policy_violation_count,
     _support_weighted_candidate,
+    CandidateFeasibilityError,
     summarize_forecast_detail,
 )
 from mmm_core.model_package import (  # noqa: E402
@@ -53,6 +59,11 @@ from mmm_core.model_package import (  # noqa: E402
 )
 from mmm_core.model import run_model_refresh, validate_existing_model_run  # noqa: E402
 from mmm_core.model_package_reader import StaleModelPackageError  # noqa: E402
+from mmm_core.serving_semantics import (  # noqa: E402
+    ServingSemanticsError,
+    serving_model_inventory,
+    validate_serving_model_inventory,
+)
 
 DATA_PIPELINE_PATH = Path(__file__).resolve().parents[3] / "00_Data" / "data_pipeline.py"
 DATA_PIPELINE_SPEC = importlib.util.spec_from_file_location("x5_data_pipeline_contract", DATA_PIPELINE_PATH)
@@ -652,7 +663,7 @@ class OptimizerConstraintTests(unittest.TestCase):
         self.assertEqual(_risk_policy_violation_count(1, 0, balanced), 0)
         self.assertEqual(_risk_policy_violation_count(1, 0, strict), 1)
 
-    def test_fixed_diagnostic_cell_can_use_hard_support_fallback(self) -> None:
+    def test_fixed_diagnostic_cell_requires_supported_full_budget(self) -> None:
         engine = _engine_for_support()
         engine.capability.loc[:, "allowed_use"] = "diagnostic"
         engine.capability.loc[:, "optimizer_use"] = "fixed_at_plan"
@@ -671,8 +682,60 @@ class OptimizerConstraintTests(unittest.TestCase):
                 }
             ]
         )
-        projected = _enforce_candidate_constraints(cells, source, engine, 150.0, prefer_safe_support=True)
+        with self.assertRaisesRegex(CandidateFeasibilityError, "fixed-at-plan"):
+            _enforce_candidate_constraints(
+                cells,
+                source,
+                engine,
+                150.0,
+                support_limit="p95",
+            )
+        projected = _enforce_candidate_constraints(
+            cells,
+            source,
+            engine,
+            150.0,
+            support_limit="p99",
+        )
         self.assertAlmostEqual(float(projected["budget_rub"].iloc[0]), 150.0)
+
+    def test_fixed_diagnostic_cell_above_robust_cap_becomes_safe_partial(self) -> None:
+        engine = _engine_for_support()
+        engine.capability.loc[:, "allowed_use"] = "diagnostic"
+        engine.capability.loc[:, "optimizer_use"] = "fixed_at_plan"
+        source = pd.DataFrame(
+            [
+                {
+                    "campaign_name": "A",
+                    "segment": "S",
+                    "geo": "G",
+                    "channel": "C",
+                    "date": "2026-01-01",
+                    "budget_rub": 250.0,
+                }
+            ]
+        )
+        cells = source.drop(columns=["date"]).copy()
+
+        candidates = _generate_scenario5_candidates(
+            cells,
+            source,
+            engine,
+            250.0,
+            {
+                "support_expansion_levels": ["p95", "p99", "robust_upper"],
+                "approved_maximum_risk_boundary": "robust_upper",
+                "projection_modes": ["proportional"],
+            },
+            {},
+        )
+
+        self.assertEqual(len(candidates), 1)
+        _, candidate = candidates[0]
+        self.assertEqual(candidate["scenario_variant"].iloc[0], "safe_partial")
+        self.assertAlmostEqual(float(candidate["allocated_budget_rub"].iloc[0]), 220.0)
+        risk = _candidate_risk_budget_summary(candidate, source, engine)
+        self.assertAlmostEqual(float(risk["high_risk_budget_rub"]), 0.0)
 
     def test_scenario_five_returns_partial_plan_instead_of_unsafe_fallback(self) -> None:
         engine = _engine_for_support()
@@ -696,6 +759,216 @@ class OptimizerConstraintTests(unittest.TestCase):
         self.assertAlmostEqual(float(projected["allocated_budget_rub"].iloc[0]), 100.0)
         self.assertAlmostEqual(float(projected["unallocated_budget_rub"].iloc[0]), 150.0)
         self.assertEqual(str(projected["support_limit_policy"].iloc[0]), "p95")
+
+    def test_scenario_five_uses_controlled_expansion_before_partial_fallback(self) -> None:
+        engine = _engine_for_support()
+        source = pd.DataFrame(
+            [
+                {
+                    "campaign_name": "A",
+                    "segment": "S",
+                    "geo": "G",
+                    "channel": "C",
+                    "date": "2026-01-01",
+                    "budget_rub": 180.0,
+                }
+            ]
+        )
+        cells = source.drop(columns=["date"]).copy()
+        policy = {
+            "support_expansion_levels": ["p95", "p99", "robust_upper"],
+            "approved_maximum_risk_boundary": "robust_upper",
+            "projection_modes": ["proportional", "additive"],
+        }
+
+        candidates = _generate_scenario5_candidates(
+            cells, source, engine, 180.0, policy, {}
+        )
+
+        self.assertTrue(candidates)
+        for suffix, candidate in candidates:
+            self.assertIn("full_conservative_robust_upper", suffix)
+            self.assertAlmostEqual(float(candidate["budget_rub"].sum()), 180.0)
+            self.assertEqual(candidate["scenario_variant"].iloc[0], "full_conservative")
+            self.assertAlmostEqual(float(candidate["unallocated_budget_rub"].iloc[0]), 0.0)
+            risk = _candidate_risk_budget_summary(candidate, source, engine)
+            self.assertAlmostEqual(float(risk["within_support_budget_rub"]), 100.0)
+            self.assertAlmostEqual(float(risk["controlled_extrapolation_budget_rub"]), 80.0)
+            self.assertAlmostEqual(float(risk["high_risk_budget_rub"]), 0.0)
+
+    def test_scenario_five_partial_is_explicit_after_robust_capacity_is_exhausted(self) -> None:
+        engine = _engine_for_support()
+        source = pd.DataFrame(
+            [
+                {
+                    "campaign_name": "A",
+                    "segment": "S",
+                    "geo": "G",
+                    "channel": "C",
+                    "date": "2026-01-01",
+                    "budget_rub": 250.0,
+                }
+            ]
+        )
+        cells = source.drop(columns=["date"]).copy()
+        candidates = _generate_scenario5_candidates(
+            cells,
+            source,
+            engine,
+            250.0,
+            {
+                "support_expansion_levels": ["p95", "p99", "robust_upper"],
+                "approved_maximum_risk_boundary": "robust_upper",
+                "projection_modes": ["proportional"],
+            },
+            {},
+        )
+        self.assertEqual(len(candidates), 1)
+        _, candidate = candidates[0]
+        self.assertEqual(candidate["scenario_variant"].iloc[0], "safe_partial")
+        self.assertAlmostEqual(float(candidate["allocated_budget_rub"].iloc[0]), 220.0)
+        self.assertAlmostEqual(float(candidate["unallocated_budget_rub"].iloc[0]), 30.0)
+        self.assertTrue(str(candidate["full_allocation_impossible_reason"].iloc[0]).strip())
+        self.assertTrue(str(candidate["limiting_constraints"].iloc[0]).strip())
+
+    def test_scenario_six_rejects_silent_partial_allocation(self) -> None:
+        cells = pd.DataFrame(
+            [
+                {"campaign_name": "A", "segment": "S", "geo": "G1", "channel": "C", "budget_rub": 50.0},
+                {"campaign_name": "A", "segment": "S", "geo": "G2", "channel": "C", "budget_rub": 50.0},
+            ]
+        )
+        with self.assertRaisesRegex(CandidateFeasibilityError, "full requested budget"):
+            _candidate_from_allocation(
+                cells,
+                np.array([40.0, 40.0]),
+                100.0,
+                support_limit="robust_upper",
+                diagnostics={},
+            )
+
+    def test_turnover_serving_inventory_is_measured_and_fails_closed(self) -> None:
+        metadata = {
+            "fits": {
+                **{
+                    f"segment_{index}::turnover_per_user": {
+                        "segment": f"segment_{index}",
+                        "target": "turnover_per_user",
+                    }
+                    for index in range(4)
+                },
+                **{
+                    f"diagnostic_{index}": {
+                        "segment": f"segment_{index % 4}",
+                        "target": "orders_per_user" if index < 4 else "avg_basket",
+                    }
+                    for index in range(8)
+                },
+            }
+        }
+        inventory = validate_serving_model_inventory(metadata)
+        self.assertEqual(inventory["research_models_in_package_n"], 12)
+        self.assertEqual(inventory["active_serving_models_n"], 4)
+
+        missing_fit = {"fits": dict(metadata["fits"])}
+        missing_fit["fits"].pop("segment_3::turnover_per_user")
+        self.assertEqual(serving_model_inventory(missing_fit)["active_serving_models_n"], 3)
+        with self.assertRaises(ServingSemanticsError):
+            validate_serving_model_inventory(missing_fit)
+
+    def test_scenario_six_infeasible_capacity_skips_posterior_kernel_build(self) -> None:
+        engine = _engine_for_support()
+        support_row = engine.support_bounds.iloc[0].to_dict()
+        engine.support_bounds = pd.DataFrame(
+            [
+                {**support_row, "geo_label": "G1"},
+                {**support_row, "geo_label": "G2"},
+            ]
+        )
+        source = pd.DataFrame(
+            [
+                {
+                    "campaign_name": "A",
+                    "segment": "S",
+                    "geo": geo,
+                    "channel": "C",
+                    "date": "2026-01-01",
+                    "budget_rub": 250.0,
+                }
+                for geo in ("G1", "G2")
+            ]
+        )
+        cells = source.drop(columns=["date"]).copy()
+        scenario_config = {
+            "require_full_budget": True,
+            "support_limits": ["p99", "robust_upper"],
+            "approved_maximum_risk_boundary": "robust_upper",
+            "infeasible_when_full_budget_cannot_be_allocated": True,
+        }
+
+        with patch(
+            "mmm_core.forecast_engine._build_turnover_response_kernels"
+        ) as kernel_builder:
+            with self.assertRaisesRegex(CandidateFeasibilityError, "infeasible"):
+                _generate_adaptive_scenario6_candidates(
+                    cells,
+                    source,
+                    engine,
+                    "A",
+                    500.0,
+                    search_samples=8,
+                    seed=42,
+                    max_evaluations=16,
+                    finalists=2,
+                    scenario_config=scenario_config,
+                    business_constraints={},
+                    analog_year=None,
+                    analog_missing_geo_policy="nearest_available_year_same_geo",
+                )
+        kernel_builder.assert_not_called()
+
+    def test_scenario_six_fixed_cell_above_robust_cap_is_infeasible(self) -> None:
+        engine = _engine_for_support()
+        engine.capability.loc[:, "allowed_use"] = "diagnostic"
+        engine.capability.loc[:, "optimizer_use"] = "fixed_at_plan"
+        source = pd.DataFrame(
+            [
+                {
+                    "campaign_name": "A",
+                    "segment": "S",
+                    "geo": "G",
+                    "channel": "C",
+                    "date": "2026-01-01",
+                    "budget_rub": 250.0,
+                }
+            ]
+        )
+        cells = source.drop(columns=["date"]).copy()
+
+        with patch(
+            "mmm_core.forecast_engine._build_turnover_response_kernels"
+        ) as kernel_builder:
+            with self.assertRaisesRegex(CandidateFeasibilityError, "infeasible"):
+                _generate_adaptive_scenario6_candidates(
+                    cells,
+                    source,
+                    engine,
+                    "A",
+                    250.0,
+                    search_samples=8,
+                    seed=42,
+                    max_evaluations=16,
+                    finalists=2,
+                    scenario_config={
+                        "require_full_budget": True,
+                        "support_limits": ["p99", "robust_upper"],
+                        "approved_maximum_risk_boundary": "robust_upper",
+                    },
+                    business_constraints={},
+                    analog_year=None,
+                    analog_missing_geo_policy="nearest_available_year_same_geo",
+                )
+        kernel_builder.assert_not_called()
 
     def test_scenario_five_proportional_projection_preserves_source_mix(self) -> None:
         projected = _project_proportional_box_simplex(
@@ -1232,6 +1505,9 @@ class MarketerReportContractTests(unittest.TestCase):
         self.assertEqual(result["scenario_no"], "S01")
         self.assertEqual(result["recommendation_type"], "Оставить исходный план")
         self.assertIn("не проходит materiality", result["allocation_decision"])
+        self.assertEqual(result["decision_status"], "keep_uploaded_plan")
+        self.assertEqual(result["review_status"], "manual_review_required")
+        self.assertEqual(result["plan_status"], "Исходный план для ручной проверки")
 
     def test_reliability_improvement_can_override_tiny_gain(self) -> None:
         scenario_results, scenario6, campaign_summary, allocation = self._decision_inputs(

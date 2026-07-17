@@ -292,6 +292,12 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
             "недоступен."
         ),
     },
+    "VALIDATION_VIEW_INCONSISTENT": {
+        "http_status": 409,
+        "retryable": False,
+        "display_text": "Опубликованные сведения о проверке не согласованы между собой.",
+        "user_action": "Не запускайте расчет и повторите проверку файла.",
+    },
     "VALIDATION_NOT_FOUND": {
         "http_status": 404,
         "retryable": False,

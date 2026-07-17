@@ -46,13 +46,18 @@ PYTHONDONTWRITEBYTECODE=1 python -B \
 
 ## Objective policy
 
-Default policy is `balanced`:
+New application jobs use turnover-only serving with the versioned v3 decision
+policy:
 
 - `objective_allowed` rows can enter the optimizer objective;
 - `objective_allowed_with_penalty` rows can enter the objective but must be reported as caution;
-- `side_metric_only` / diagnostic rows are kept in outputs but excluded from objective scoring.
+- `side_metric_only` / diagnostic rows remain research evidence and are not
+  calculated as application result KPIs.
 
-The objective score is currently `turnover_per_user` p50 total incremental turnover. Other targets remain side metrics and must not be summed into a single business effect.
+The application objective and only served target are `turnover_per_user` p50
+total incremental turnover. The immutable research package may still contain
+orders and average-basket fits, but runtime does not request them and the
+primary result does not publish their derived metrics.
 
 ## Scenario 6 search
 
@@ -64,8 +69,11 @@ Current implementation uses `adaptive_marginal_posterior` search plus five trans
 - Scenario 2: equal split across source `geo x channel` cells;
 - Scenario 3: keep channel totals and equalize geos;
 - Scenario 4: keep geo totals and equalize channels;
-- Scenario 5: closest-to-source proportional allocation inside p95 support;
-- Scenario 6: adaptive support-aware candidates inside gate and robust-support constraints.
+- Scenario 5: one public conservative plan, using a full allocation across
+  p95, p99 or robust-upper expansion when feasible and an explicit
+  `safe_partial` fallback only when every full option is infeasible;
+- Scenario 6: adaptive effect-first search inside approved gate/support limits,
+  with full requested budget required.
 
 This is not a static ROAS multiplier. The engine compiles the exact serving
 equation for every campaign `geo x channel` cell (denominator, scaling,
@@ -92,6 +100,11 @@ support bounds, the correct result is no proven improvement, not an invented
 one. When the attempt budget is exhausted before the 50k step is certified, the
 report explicitly avoids claiming global or local optimality.
 
+Before search, Scenario 6 checks whether the existing `geo x channel` cells
+have enough approved capacity to place the full requested budget. If not, S6
+returns explicit `infeasible`, exact capacity constraints and null effect/ROAS;
+it never exports a silent partial optimizer plan.
+
 Every Scenario 6 run records:
 
 - attempts generated and rejected;
@@ -103,7 +116,9 @@ Every Scenario 6 run records:
 
 ## Recommendation materiality
 
-Recommendation policy is versioned separately in `optimizer_decision_policy_v2.yaml`.
+Recommendation and allocation policy is versioned in
+`optimizer_decision_policy_v3.yaml`. Historical jobs retain their immutable v2
+snapshots.
 
 Current defaults:
 
@@ -116,6 +131,17 @@ Current defaults:
 - full model coverage at least `99%`, usable partial coverage at least `95%`.
 
 The report separates the reliability champion, best-safe Scenario 6 and final recommendation. A reliability improvement may override economic materiality when the source plan is materially less trustworthy, but the report must explain the expected-effect trade-off.
+
+S1 is always the uploaded-plan benchmark with `keep_uploaded_plan` and manual
+review. It cannot become a green automatic recommendation merely because no
+safe reallocation was found. `safe_partial` S5 is also never an automatic
+recommendation. A recommended S5 or S6 must allocate the full requested budget
+and satisfy the approved risk policy.
+
+Every scenario records requested, allocated and unallocated budget, allocation
+share, ROAS against allocated and requested budget, the selected denominator,
+and RUB/share decomposition across within-support, controlled-extrapolation
+and high-risk tranches.
 
 ## Marketer report
 
@@ -136,6 +162,8 @@ Raw candidate identifiers, sampler diagnostics and long validation-code dumps ar
 - Current local runtimes on the four agency files are about 38-247 seconds;
   geo-rich runs still belong in asynchronous server jobs and need progress
   events plus a configurable search-time service level.
+- The browser should migrate to the additive v2 result/validation/model
+  contracts before legacy diagnostic sections are retired.
 - The backend-only technical XLSX can truncate a very long cell-level violation-code string at Excel's 32,767-character limit; the CSV remains canonical and complete. Normalize these codes into a separate table before API rollout.
 - Real operating constraints are still needed per campaign: inventory, min/max shares, mandatory channels, geo exclusions and contractual spend commitments.
 - Saturation curves remain model-based interventional assumptions, not experimentally proven causal response functions.

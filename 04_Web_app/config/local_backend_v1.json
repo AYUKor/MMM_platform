@@ -18,7 +18,7 @@
     "runtime_root": "04_Web_app/var/local/runtime",
     "artifact_root": "04_Web_app/var/local/artifacts",
     "registry_root": "03_Outputs/01_PyMC_outputs/00_Model_registry",
-    "optimizer_policy_path": "02_Code/02_Budget_optimizer/optimizer_decision_policy_v2.yaml",
+    "optimizer_policy_path": "02_Code/02_Budget_optimizer/optimizer_decision_policy_v3.yaml",
     "business_policy_path": "02_Code/02_Budget_optimizer/business_threshold_policy_v1.yaml"
   },
   "model": {

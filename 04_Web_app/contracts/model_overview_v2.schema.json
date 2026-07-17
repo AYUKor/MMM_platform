@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmm-platform.local/contracts/model_overview_v2.schema.json",
+  "title": "ModelOverviewV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "serving", "summary", "channel_policies", "limitations"],
+  "properties": {
+    "contract_name": {"const": "model_overview_v2"},
+    "schema_version": {"const": "2.0.0"},
+    "serving": {"$ref": "#/$defs/serving"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "channel_policies": {"type": "array", "items": {"$ref": "#/$defs/channelPolicy"}},
+    "limitations": {"type": "array", "items": {"$ref": "#/$defs/limitation"}}
+  },
+  "$defs": {
+    "nonEmptyText": {"type": "string", "minLength": 1},
+    "nullableText": {"type": ["string", "null"]},
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"}
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"$ref": "#/$defs/nonEmptyText"},
+        "display_text": {"$ref": "#/$defs/nonEmptyText"}
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"$ref": "#/$defs/nonEmptyText"},
+        "display_text": {"$ref": "#/$defs/nonEmptyText"},
+        "status": {"type": "string"},
+        "title": {"type": "string"},
+        "recommended_action": {"type": "string"}
+      }
+    },
+    "evidenceStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "generated_at_utc", "reason_code", "display_text"],
+      "properties": {
+        "status": {"enum": ["passed", "unavailable", "failed"]},
+        "generated_at_utc": {"$ref": "#/$defs/nullableText"},
+        "reason_code": {"$ref": "#/$defs/nullableText"},
+        "display_text": {"$ref": "#/$defs/nonEmptyText"}
+      }
+    },
+    "serving": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["serving_policy_version", "target_id", "core_target", "serving_targets_n", "active_serving_models_n", "research_models_in_package_n", "calculation_allowed", "production_claim_allowed"],
+      "properties": {
+        "serving_policy_version": {"const": "turnover_serving_v1"},
+        "target_id": {"const": "turnover"},
+        "core_target": {"const": "turnover_per_user"},
+        "serving_targets_n": {"const": 1},
+        "active_serving_models_n": {"const": 4},
+        "research_models_in_package_n": {"const": 12},
+        "calculation_allowed": {"type": "boolean"},
+        "production_claim_allowed": {"const": false}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["training_period", "package_status", "activation_status", "calculation_allowed", "historical_replay", "sealed_oot"],
+      "properties": {
+        "training_period": {"$ref": "#/$defs/period"},
+        "package_status": {"$ref": "#/$defs/nullableText"},
+        "activation_status": {"$ref": "#/$defs/nullableText"},
+        "calculation_allowed": {"type": "boolean"},
+        "historical_replay": {"$ref": "#/$defs/evidenceStatus"},
+        "sealed_oot": {"$ref": "#/$defs/evidenceStatus"}
+      }
+    },
+    "channelPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segment", "channel_id", "channel_display_name", "target", "allowed_use", "forecast_action", "optimizer_action", "display_text"],
+      "properties": {
+        "segment": {"$ref": "#/$defs/nonEmptyText"},
+        "channel_id": {"$ref": "#/$defs/nonEmptyText"},
+        "channel_display_name": {"$ref": "#/$defs/nonEmptyText"},
+        "target": {"const": "turnover"},
+        "allowed_use": {"$ref": "#/$defs/nonEmptyText"},
+        "forecast_action": {"$ref": "#/$defs/nonEmptyText"},
+        "optimizer_action": {"$ref": "#/$defs/nonEmptyText"},
+        "display_text": {"$ref": "#/$defs/nonEmptyText"}
+      }
+    }
+  }
+}

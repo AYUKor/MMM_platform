@@ -16,6 +16,14 @@ Scenarios 1-6, reliability, warning, media-plan and report views. The
 standalone Model Passport route is connected to
 `GET /api/v1/models/active` through a typed, fail-closed client and exposes
 training period, coverage, replay/OOT status, channel policy and caveats.
+Backend Phase E.1A adds an additive turnover-only serving boundary: new jobs
+request one target, the application validates four active turnover fits out of
+the 12-fit research package, and v2 result/model/validation/media-plan
+contracts remove orders and average-basket metrics from primary product
+decisions. S5 now publishes a full conservative plan when feasible or an
+explicit partial plan; S6 publishes a full plan or explicit infeasibility.
+React remains on the compatible v1 contracts until a separate frontend
+migration.
 Panel-free model transfer, reverse-proxy/systemd rendering, health, retention
 and backup/restore are implemented. There is still no provisioned hosted
 VM/domain/TLS secret, durable company queue, PostgreSQL runtime, approved
@@ -39,7 +47,7 @@ versioned evidence exists.
 The product is an internal browser-based tool for marketers and media planners. A user uploads a future campaign specification and receives:
 
 1. validation of campaign dates, budget, segment, channels and geographies;
-2. an incremental media-effect forecast with p10/p50/p90 uncertainty;
+2. an incremental turnover media-effect forecast with p10/p50/p90 uncertainty;
 3. five transparent benchmark scenarios;
 4. Scenario 6 with support-aware budget optimization across `geo x channel`;
 5. a recommended media plan when a reliable automatic recommendation is available;
@@ -52,7 +60,7 @@ deployment can replace runtime adapters without changing MMM calculation logic
 or browser contracts.
 
 The backend has an asynchronous HTTP boundary for immutable jobs, progress
-polling, verified results and artifact downloads. Product API OpenAPI v1.6 additionally
+polling, verified results and artifact downloads. Product API OpenAPI v1.7 additionally
 publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
 and paginated history. Phase B adds a fixed nine-stage `progress-view`, real
 Scenario 6 counters where available, a separate report status and a reviewed
@@ -125,13 +133,23 @@ A support warning must not be translated into a blanket statement that advertisi
 - Every job is reproducible and linked to input hash, model package ID, package fingerprint, gate policy, configuration, random seed and output hashes.
 - The model registry decides which package can serve a job.
 - Diagnostic-only targets never drive optimization or campaign go/no-go.
+- New application jobs calculate and serve turnover only; diagnostic research
+  targets remain outside the primary product result.
+- S5 partial budget and S6 infeasibility are always explicit; no scenario may
+  silently drop requested budget.
+- ROAS always names its denominator, and risk-budget money reconciles to the
+  allocated budget.
+- Machine-readable geo arrays remain complete and map coordinates are never
+  guessed.
 - Scenario 6 distinguishes `best_raw`, `best_safe` and `no_safe_candidate`.
 - The UI never hides warnings, but translates them into business language.
 - Production activation remains fail-closed when mandatory model gates are not passed.
 
-The browser consumes the versioned `ResultOverview v1` projection. The
-canonical `DecisionResult v1` remains the completed-job source of truth; React
-must not join optimizer CSV files or derive alternative metric semantics.
+The merged browser still consumes versioned v1 projections. New result work
+must migrate to `job_result_view_v2` for turnover-only scenario semantics.
+The canonical completed-job artifacts remain source evidence; React must not
+join optimizer CSV files or derive alternative metric, risk, denominator or
+recommendation semantics.
 
 ## Initial Enterprise MVP
 

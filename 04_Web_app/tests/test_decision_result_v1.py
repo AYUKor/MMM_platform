@@ -127,6 +127,12 @@ class DecisionResultV1ContractTest(unittest.TestCase):
         self.assertIsNone(campaign["scenarios"][-1]["metrics"]["incremental_turnover"])
         self.assertNotIn("/Users/", json.dumps(self.gate_blocked_fixture, ensure_ascii=False))
 
+    def test_turnover_only_infeasible_optimizer_status_is_versioned(self) -> None:
+        status = _status("optimizer_status", "Автоматический план не найден")
+        self.assertEqual(status.code, "no_safe_candidate")
+        support = _status("cell_support_status", "Между p99 и robust upper")
+        self.assertEqual(support.code, "above_p99_within_robust_upper")
+
     @unittest.skipUnless(RUN_17.is_dir(), "canonical optimizer run 17 is unavailable")
     def test_run_17_maps_gate_block_and_partial_coverage(self) -> None:
         payload = build_decision_result(RUN_17).to_dict()
@@ -279,12 +285,12 @@ class DecisionResultV1ContractTest(unittest.TestCase):
         with self.assertRaisesRegex(OptimizerResultAdapterError, "Unmapped quality_status"):
             _status("quality_status", "Неизвестный новый статус")
 
-    def test_optimizer_default_policy_is_v2(self) -> None:
+    def test_optimizer_default_policy_is_v3(self) -> None:
         source = (
             PROJECT_ROOT / "02_Code" / "02_Budget_optimizer" / "budget_optimizer.py"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            'config.get("decision_policy_file") or "optimizer_decision_policy_v2.yaml"',
+            'config.get("decision_policy_file") or "optimizer_decision_policy_v3.yaml"',
             source,
         )
 

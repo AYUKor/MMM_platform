@@ -12,6 +12,46 @@ Standalone Model Passport закрыт на backend-стороне. Текущи
 milestone подключает route `/model` через typed client и fail-closed runtime
 validation, не читая registry, `CURRENT_TRUTH.md` или локальные model files.
 
+Post-merge E.1A update, 2026-07-17: backend now publishes additive turnover-only
+contracts. The existing v1 sections below remain historical documentation for
+the merged frontend; they are not the target semantics for the next result
+milestone.
+
+New frontend work must prefer:
+
+| Product view | Endpoint | Contract |
+|---|---|---|
+| Result and scenarios | `GET /api/v1/jobs/{job_id}/result-view-v2` | `job_result_view_v2` |
+| Scenario media plan | `GET /api/v1/jobs/{job_id}/media-plan-v2` | `scenario_media_plan_v2` |
+| Validation review | `GET /api/v1/validations/{validation_id}/view-v2` | `validation_result_v2` |
+| Model Passport | `GET /api/v1/models/active-v2` | `model_passport_v2` |
+| Model summary | `GET /api/v1/model/overview-v2` | `model_overview_v2` |
+| Geo identity/coordinate availability | `GET /api/v1/meta/geo-catalog` | `geo_catalog_v1` |
+| Workspace geo budget | `GET /api/v1/workspace/geo-budget` | `workspace_geo_budget_v1` |
+
+E.1A rules for the future frontend migration:
+
+- primary result target is turnover only; do not render orders or average
+  basket from legacy v1 fields;
+- render both allocated-budget and requested-budget ROAS with the denominator
+  label supplied by backend;
+- render requested, allocated and unallocated budget explicitly;
+- show within-support, controlled-extrapolation and high-risk budget shares as
+  separate backend values; do not derive them from coverage;
+- S1 is the uploaded reference and manual review, not a recommendation badge;
+- S5 uses backend `scenario_variant`: `full_conservative` or `safe_partial`;
+- S6 is either a complete full-budget plan or `infeasible`; do not invent a
+  partial display plan;
+- use `channel_display_name` for labels and `channel_id` for query/machine
+  identity;
+- keep all structured geographies; never parse `... еще N` presentation text;
+- map state remains unavailable while canonical coordinates are null.
+
+The v1 `/media-plan` endpoint remains compatible for the merged historical
+frontend. New work uses `/media-plan-v2`, which already supplies versioned
+channel and geography identities; frontend constants and loose CSV joins
+remain prohibited.
+
 ## 1. Источники истины и граница frontend
 
 Для экранов результата основным browser contract является

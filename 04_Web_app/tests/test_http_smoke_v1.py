@@ -479,6 +479,36 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(passport["contract_name"], "model_passport_v1")
 
+        status, turnover_passport, _ = self._request(
+            "GET", "/api/v1/models/active-v2"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(turnover_passport["contract_name"], "model_passport_v2")
+        self.assertEqual(turnover_passport["serving"]["target_id"], "turnover")
+        self.assertEqual(turnover_passport["serving"]["serving_targets_n"], 1)
+        self.assertEqual(turnover_passport["serving"]["active_serving_models_n"], 4)
+
+        status, turnover_overview, _ = self._request(
+            "GET", "/api/v1/model/overview-v2"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(turnover_overview["contract_name"], "model_overview_v2")
+        self.assertNotIn(
+            "orders_per_user", json.dumps(turnover_overview, ensure_ascii=False)
+        )
+
+        status, geo_catalog, _ = self._request(
+            "GET", "/api/v1/meta/geo-catalog"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(geo_catalog["contract_name"], "geo_catalog_v1")
+
+        status, geo_budget, _ = self._request(
+            "GET", "/api/v1/workspace/geo-budget"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(geo_budget["contract_name"], "workspace_geo_budget_v1")
+
         status, profile, _ = self._request("GET", "/api/v1/calculation-profile")
         self.assertEqual(status, 200)
         self.assertEqual(profile["contract_name"], "calculation_profile_v1")
@@ -507,13 +537,19 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.6.0")
+        self.assertEqual(openapi["info"]["version"], "1.7.0")
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/result-view-v2", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/media-plan", openapi["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/media-plan-v2", openapi["paths"])
         self.assertIn("/api/v1/workspace/home", openapi["paths"])
         self.assertIn("/api/v1/calculations/history", openapi["paths"])
         self.assertIn("/api/v1/model/overview", openapi["paths"])
+        self.assertIn("/api/v1/model/overview-v2", openapi["paths"])
+        self.assertIn("/api/v1/models/active-v2", openapi["paths"])
+        self.assertIn("/api/v1/meta/geo-catalog", openapi["paths"])
+        self.assertIn("/api/v1/workspace/geo-budget", openapi["paths"])
         self.assertIn("/api/v1/help/catalog", openapi["paths"])
         for contract in (
             "application-lifecycle-v1",
@@ -522,7 +558,14 @@ class HttpSmokeV1Test(unittest.TestCase):
             "product-api-v1",
             "job-progress-view-v1",
             "job-result-view-v1",
+            "job-result-view-v2",
+            "validation-result-v2",
+            "model-passport-v2",
+            "model-overview-v2",
+            "geo-catalog-v1",
+            "workspace-geo-budget-v1",
             "scenario-media-plan-v1",
+            "scenario-media-plan-v2",
             "mmm-fact-catalog-v1",
             "workspace-home-v1",
             "calculation-history-v1",
@@ -534,6 +577,19 @@ class HttpSmokeV1Test(unittest.TestCase):
             )
             self.assertEqual(status, 200)
             self.assertIn("$schema", schema)
+        for schema_name in (
+            "JobResultViewV2",
+            "ValidationResultV2",
+            "ModelPassportV2",
+            "ModelOverviewV2",
+            "GeoCatalogV1",
+            "WorkspaceGeoBudgetV1",
+            "ScenarioMediaPlanV2",
+        ):
+            reference = openapi["components"]["schemas"][schema_name]["$ref"]
+            self.assertTrue(reference.startswith("/api/v1/contracts/"))
+            status, _, _ = self._request("GET", reference)
+            self.assertEqual(status, 200)
         status, error, _ = self._request(
             "GET", "/api/v1/contracts/unknown-contract.json"
         )
@@ -598,6 +654,32 @@ class HttpSmokeV1Test(unittest.TestCase):
             page_size=25,
             channel="RegionalTV",
             geo="Moscow",
+            date=None,
+        )
+
+        media_plan_v2_payload = {
+            "contract_name": "scenario_media_plan_v2",
+            "schema_version": "2.0.0",
+        }
+        with patch.object(
+            self.application,
+            "media_plan_v2",
+            return_value=media_plan_v2_payload,
+        ) as projection_v2:
+            status, payload, _ = self._request(
+                "GET",
+                f"/api/v1/jobs/{self.job.job_id}/media-plan-v2"
+                "?scenario_id=S05&page=1&page_size=100",
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, media_plan_v2_payload)
+        projection_v2.assert_called_once_with(
+            self.job.job_id,
+            scenario_id="S05",
+            page=1,
+            page_size=100,
+            channel=None,
+            geo=None,
             date=None,
         )
 

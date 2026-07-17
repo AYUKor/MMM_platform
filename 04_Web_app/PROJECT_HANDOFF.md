@@ -42,10 +42,33 @@ As of 2026-07-17:
   viewer/analyst/admin permissions, centralized guards, SQLite administration,
   safe system status and append-only audit. Corporate SSO/MFA remain future
   adapters rather than simulated integrations;
-- the Phase D regression boundary passed the complete 122-test web/backend
-  suite with 11 expected skips, the unchanged 78-test MMM core suite with two
-  expected skips, TypeScript, ESLint, all 285 frontend unit tests and the
-  production build. No refit, MCMC or optimizer rerun was performed;
+- backend Phase E.1A narrows new application jobs to the turnover target. The
+  research package keeps 12 fits, while application serving uses the four
+  turnover fits. New jobs do not request orders or average-basket posteriors,
+  and additive v2 result/model/validation contracts do not publish their
+  derived metrics as primary KPIs;
+- S5 is now one public scenario with `full_conservative` preferred across p95,
+  p99 and robust-bound expansion. `safe_partial` is legal only after full
+  allocation is proven infeasible and must expose the exact remainder. S6 must
+  allocate the full requested budget or return explicit `infeasible`;
+- every v2 scenario publishes requested, allocated and unallocated budget,
+  allocation share, ROAS against both allocated and requested budget, and
+  reconciled within-support / controlled-extrapolation / high-risk money;
+- S1 is a source reference with `keep_uploaded_plan` and manual review, never a
+  green automatic recommendation. A recommendation still concerns budget
+  allocation only, not campaign launch;
+- structured channel identities and `geo_catalog_v1` are available. Machine
+  geo arrays cannot contain shortened presentation strings; coordinates remain
+  null until a reviewed canonical catalog exists;
+- `campaign-plan-example-regions-2026.xlsx` passed the E.1A real acceptance at
+  45 rows, 15 geographies, three channels and 267,818,706 RUB. Full approved
+  capacity was insufficient: S5 published 173,912,511 RUB as `safe_partial`,
+  and S6 returned explicit infeasible instead of dropping budget silently;
+- the E.1A regression boundary passed the complete 143-test web/backend suite
+  with 11 external-evidence skips, the 85-test MMM core suite with two fixture
+  skips, TypeScript, ESLint, all 392 frontend unit tests and the production
+  build. No refit or MCMC was performed; the real turnover-only optimizer
+  acceptance was repeated after review fixes;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -61,10 +84,11 @@ As of 2026-07-17:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current Backend Phase E branch starts from
-  `origin/main@bdb14a415c62b9e682a8559d7daf3e2efed89a9a`, which includes merged
-  PRs through #20. Phase E changes only application security/admin services,
-  additive contracts, generated contract types, tests and documentation;
+- current Backend Phase E.1A branch starts from
+  `origin/main@7d731843d6e79fb73b20ac855fba3643b8def7a7`, which includes merged
+  PRs through #22. E.1A changes the serving target list, S5/S6 allocation
+  constraints, marketer reporting and additive browser contracts; it does not
+  change posterior response mathematics, React or deployment;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -72,6 +96,37 @@ As of 2026-07-17:
   company-contour deployment remain future work.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
+
+## Phase E.1A Integration Boundary
+
+New frontend work must prefer these additive endpoints:
+
+- `GET /api/v1/jobs/{job_id}/result-view-v2`;
+- `GET /api/v1/jobs/{job_id}/media-plan-v2`;
+- `GET /api/v1/validations/{validation_id}/view-v2`;
+- `GET /api/v1/models/active-v2`;
+- `GET /api/v1/model/overview-v2`;
+- `GET /api/v1/meta/geo-catalog`;
+- `GET /api/v1/workspace/geo-budget`.
+
+The existing v1 result/model endpoints remain compatible for the merged
+frontend and historical jobs. They must not be used to reconstruct E.1A
+business semantics. In particular, frontend code must not derive ROAS,
+risk-budget shares, S5 feasibility, S6 feasibility, recommendation status or
+channel display names from legacy fields.
+
+The v2 media-plan route is the source for paginated allocation rows and
+aggregates. It publishes `channel_id`, `channel_display_name`, `geo_id` and
+`geo_display_name`; frontend code must not maintain its own channel dictionary
+or join loose optimizer CSV files.
+
+The v2 semantic validator is a backend decision boundary, not only a JSON
+shape check. It fails closed when money does not reconcile, S6 is partial, a
+safe-partial S5 is marked recommended, a high-risk plan is promoted, a geo list
+is shortened, or a diagnostic target leaks into the primary result.
+
+Detailed migration, benchmark and real-campaign evidence are in
+`04_Web_app/docs/integration/BACKEND_PHASE_E1A_BUSINESS_SEMANTICS_V1.md`.
 
 ## Existing Calculation Boundary To Reuse
 

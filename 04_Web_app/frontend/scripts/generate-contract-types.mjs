@@ -36,9 +36,44 @@ const contracts = [
     output: "job-result-view-v1.ts",
   },
   {
+    schema: "job_result_view_v2.schema.json",
+    typeName: "JobResultViewV2",
+    output: "job-result-view-v2.ts",
+  },
+  {
+    schema: "validation_result_v2.schema.json",
+    typeName: "ValidationResultV2",
+    output: "validation-result-v2.ts",
+  },
+  {
+    schema: "model_passport_v2.schema.json",
+    typeName: "ModelPassportV2",
+    output: "model-passport-v2.ts",
+  },
+  {
+    schema: "model_overview_v2.schema.json",
+    typeName: "ModelOverviewV2",
+    output: "model-overview-v2.ts",
+  },
+  {
+    schema: "geo_catalog_v1.schema.json",
+    typeName: "GeoCatalogV1",
+    output: "geo-catalog-v1.ts",
+  },
+  {
+    schema: "workspace_geo_budget_v1.schema.json",
+    typeName: "WorkspaceGeoBudgetV1",
+    output: "workspace-geo-budget-v1.ts",
+  },
+  {
     schema: "scenario_media_plan_v1.schema.json",
     typeName: "ScenarioMediaPlanV1",
     output: "scenario-media-plan-v1.ts",
+  },
+  {
+    schema: "scenario_media_plan_v2.schema.json",
+    typeName: "ScenarioMediaPlanV2",
+    output: "scenario-media-plan-v2.ts",
   },
   {
     schema: "mmm_fact_catalog_v1.schema.json",

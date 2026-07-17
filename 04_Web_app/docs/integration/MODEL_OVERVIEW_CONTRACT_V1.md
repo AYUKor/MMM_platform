@@ -1,5 +1,12 @@
 # Model Overview Contract V1
 
+E.1A note: this remains the backward-compatible Phase D contract. New model
+screens should use `GET /api/v1/model/overview-v2` and
+`GET /api/v1/models/active-v2`. Those projections expose only turnover, one
+serving target and four active serving fits; they omit diagnostic orders and
+average-basket capabilities. No frontend may merge v1 and v2 into a synthetic
+hybrid model status.
+
 ## Назначение
 
 `GET /api/v1/model/overview` объясняет активную модель для продуктовой страницы

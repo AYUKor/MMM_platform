@@ -61,9 +61,9 @@ SCENARIOS = [
     },
     {
         "scenario_code": "S05_SUPPORT_SAFE",
-        "candidate_marker": "__scenario5_support_weighted",
-        "scenario_name": "Сценарий 5. Осторожный support-safe",
-        "plain_description": "Распределяем максимум бюджета внутри p95 support-zone. Если весь бюджет не помещается, остаток явно остается нераспределенным для ручного решения.",
+        "candidate_marker": "__scenario5_",
+        "scenario_name": "Сценарий 5. Осторожный сценарий",
+        "plain_description": "Сначала ищем полный план с минимальным риском, затем расширяем допустимый диапазон. Частичный вариант показывается только когда весь бюджет надежно распределить невозможно.",
     },
 ]
 
@@ -137,11 +137,14 @@ def _million(value: Any) -> float:
     return value / 1_000_000.0
 
 
-def _short_list(values: pd.Series, max_items: int = 12) -> str:
-    vals = [str(v) for v in sorted(set(values.dropna().astype(str))) if v]
-    if len(vals) <= max_items:
-        return ", ".join(vals)
-    return ", ".join(vals[:max_items]) + f" ... еще {len(vals) - max_items}"
+def _full_list(values: pd.Series) -> str:
+    """Serialize a complete machine-readable set without presentation truncation."""
+
+    return ", ".join(
+        str(value)
+        for value in sorted(set(values.dropna().astype(str)))
+        if str(value)
+    )
 
 
 def _campaign_cells(flighting: pd.DataFrame) -> pd.DataFrame:
@@ -154,7 +157,7 @@ def _campaign_cells(flighting: pd.DataFrame) -> pd.DataFrame:
             start_date=("date", "min"),
             end_date=("date", "max"),
             active_days=("date", "nunique"),
-            creative_name=("creative_name", _short_list),
+            creative_name=("creative_name", _full_list),
         )
         .reset_index()
     )
@@ -213,6 +216,7 @@ def _result_rows_from_optimizer(
         row["allocated_budget_mln_rub"] = _million(allocated_budget)
         row["unallocated_budget_mln_rub"] = _million(unallocated_budget)
         row["allocated_budget_share"] = allocated_budget / requested_budget if requested_budget > 0 else 0.0
+        row["allocation_share"] = row["allocated_budget_share"]
         row["support_limit_policy"] = (
             str(score_rows["support_limit_policy"].iloc[0])
             if not score_rows.empty and "support_limit_policy" in score_rows
@@ -244,17 +248,36 @@ def _result_rows_from_optimizer(
         )
         row["policy_violations_n"] = policy_violations + risk_policy_violations
         row["policy_violation_codes"] = str(score_rows["policy_violation_codes"].iloc[0]) if not score_rows.empty else "OK"
-        if scenario_code == "S05_SUPPORT_SAFE" and unallocated_budget > 1.0:
-            row["scenario_name"] = "Сценарий 5. Частичный support-safe"
-            row["scenario_description"] = (
-                "Часть бюджета размещена внутри p95 support-zone. Нераспределенный остаток "
-                "нужно вернуть маркетологу для ручного решения, а не прятать в рискованных ячейках."
-            )
-        for target, prefix in [
-            ("turnover_per_user", "rto"),
-            ("orders_per_user", "orders"),
-            ("avg_basket", "basket"),
+        for column in [
+            "scenario_kind",
+            "scenario_variant",
+            "scenario_feasibility_status",
+            "full_allocation_impossible_reason",
+            "limiting_constraints",
+            "within_support_budget_rub",
+            "within_support_share",
+            "controlled_extrapolation_budget_rub",
+            "controlled_extrapolation_share",
+            "high_risk_budget_rub",
+            "high_risk_share",
+            "within_support_cells_n",
+            "controlled_extrapolation_cells_n",
+            "high_risk_cells_n",
         ]:
+            row[column] = (
+                score_rows[column].iloc[0]
+                if not score_rows.empty and column in score_rows
+                else np.nan
+            )
+        if scenario_code == "S05_SUPPORT_SAFE" and row.get("scenario_variant") == "safe_partial":
+            row["scenario_name"] = "Сценарий 5. Безопасно распределяемая часть"
+            row["scenario_description"] = (
+                "Весь бюджет нельзя разместить в пределах утвержденной границы риска. "
+                "Показана рассчитанная часть и явный остаток для ручного решения."
+            )
+        elif scenario_code == "S05_SUPPORT_SAFE":
+            row["scenario_name"] = "Сценарий 5. Осторожный полный план"
+        for target, prefix in [("turnover_per_user", "rto")]:
             t = sub[sub["target"].eq(target)]
             if t.empty:
                 continue
@@ -285,6 +308,46 @@ def _result_rows_from_optimizer(
                     }:
                         value = _million(value) if pd.notna(value) else np.nan
                     row[column] = value
+                row["roas_allocated_budget_p10"] = (
+                    float(rec["total_effect_p10"]) / allocated_budget
+                    if allocated_budget > 0
+                    else np.nan
+                )
+                row["roas_allocated_budget_p50"] = (
+                    float(rec["total_effect_p50"]) / allocated_budget
+                    if allocated_budget > 0
+                    else np.nan
+                )
+                row["roas_allocated_budget_p90"] = (
+                    float(rec["total_effect_p90"]) / allocated_budget
+                    if allocated_budget > 0
+                    else np.nan
+                )
+                row["roas_requested_budget_p10"] = (
+                    float(rec["total_effect_p10"]) / requested_budget
+                    if requested_budget > 0
+                    else np.nan
+                )
+                row["roas_requested_budget_p50"] = (
+                    float(rec["total_effect_p50"]) / requested_budget
+                    if requested_budget > 0
+                    else np.nan
+                )
+                row["roas_requested_budget_p90"] = (
+                    float(rec["total_effect_p90"]) / requested_budget
+                    if requested_budget > 0
+                    else np.nan
+                )
+                row["roas_denominator_kind"] = (
+                    "allocated_budget"
+                    if abs(requested_budget - allocated_budget) > 1.0
+                    else "requested_budget"
+                )
+                row["roas_denominator_budget_rub"] = (
+                    allocated_budget
+                    if row["roas_denominator_kind"] == "allocated_budget"
+                    else requested_budget
+                )
         row["calculation_status"] = "Рассчитано частично" if unallocated_budget > 1.0 else "Рассчитано"
         row["cell_support_status"] = _cell_support_status(row)
         row["optimizer_status"] = _optimizer_status(row)
@@ -298,7 +361,7 @@ def _cell_support_status(row: dict[str, Any]) -> str:
     if int(row.get("hard_support_warnings_n") or 0) > 0:
         return "Вне надежной наблюдаемой зоны"
     if int(row.get("strong_support_warnings_n") or 0) > 0:
-        return "Выше p99, требуется ручная проверка"
+        return "Между p99 и robust upper"
     if int(row.get("elevated_support_warnings_n") or 0) > 0:
         return "Между p95 и p99"
     return "Внутри p95 support-zone"
@@ -307,12 +370,14 @@ def _cell_support_status(row: dict[str, Any]) -> str:
 def _optimizer_status(row: dict[str, Any]) -> str:
     if int(row.get("hard_support_warnings_n") or 0) > 0 or int(row.get("policy_violations_n") or 0) > 0:
         return "Только ручное распределение"
-    if int(row.get("strong_support_warnings_n") or 0) > 0:
-        return "Только ручное распределение"
     if float(row.get("unallocated_budget_mln_rub") or 0.0) > 0.000001:
         return "Частичный безопасный план"
     objective_rows_n = int(row.get("objective_rows_n") or _objective_rows_count(row.get("rto_optimizer_use", "")))
-    return "Автоматический план доступен" if objective_rows_n > 0 else "Перераспределение недоступно по gate policy"
+    if objective_rows_n <= 0:
+        return "Перераспределение недоступно по gate policy"
+    if int(row.get("strong_support_warnings_n") or 0) > 0:
+        return "Автоматический план доступен с оговоркой"
+    return "Автоматический план доступен"
 
 
 def _human_quality(row: dict[str, Any]) -> str:
@@ -321,7 +386,7 @@ def _human_quality(row: dict[str, Any]) -> str:
     if int(row.get("hard_support_warnings_n") or 0) > 0 or int(row.get("policy_violations_n") or 0) > 0:
         return "Не использовать для автоматического перераспределения"
     if int(row.get("strong_support_warnings_n") or 0) > 0:
-        return "Требуется ручная проверка"
+        return "Повышенная неопределенность"
     allowed = str(row.get("rto_allowed") or "")
     risk = str(row.get("rto_risk") or "")
     objective_rows_n = int(row.get("objective_rows_n") or _objective_rows_count(row.get("rto_optimizer_use", "")))
@@ -349,7 +414,11 @@ def _quality_explanation(row: dict[str, Any]) -> str:
             "Расчет остается сравнительным benchmark, но не рекомендацией."
         )
     if int(row.get("strong_support_warnings_n") or 0) > 0:
-        return "Есть траты выше p99, но не выше robust upper. Нужна ручная проверка, автоматическое увеличение запрещено."
+        return (
+            "Часть бюджета находится выше p99, но не выше утвержденной robust upper. "
+            "Это контролируемое расширение исторического диапазона: автоматическое распределение "
+            "допустимо по policy, но требует явной оговорки."
+        )
     if float(row.get("unallocated_budget_mln_rub") or 0.0) > 0.000001:
         return (
             "Система безопасно разместила только часть бюджета. Остаток не спрятан в экстраполяции и требует ручного решения."
@@ -481,8 +550,6 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
     )
     for (source_campaign, candidate_name), sub in total_groups:
         rto = sub[sub["target"].eq("turnover_per_user")]
-        orders = sub[sub["target"].eq("orders_per_user")]
-        basket = sub[sub["target"].eq("avg_basket")]
         if rto.empty:
             continue
         rec = rto.iloc[0]
@@ -595,11 +662,12 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
                 if "policy_violations_n" in tries
                 else 0,
                 "attempts_rejected_precheck_n": int(statuses.eq("rejected_infeasible").sum()),
-                "search_method": _short_list(tries["method"]) if not tries.empty else "none",
+                "search_method": _full_list(tries["method"]) if not tries.empty else "none",
                 "requested_budget_mln_rub": _million(requested_budget),
                 "allocated_budget_mln_rub": _million(allocated_budget),
                 "unallocated_budget_mln_rub": _million(unallocated_budget),
                 "allocated_budget_share": allocated_budget / requested_budget if requested_budget > 0 else 0.0,
+                "allocation_share": allocated_budget / requested_budget if requested_budget > 0 else np.nan,
                 "support_limit_policy": str(score_rows["support_limit_policy"].iloc[0])
                 if not score_rows.empty and "support_limit_policy" in score_rows
                 else "unknown",
@@ -608,8 +676,47 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
                 "rto_p50_mln": _million(rec["total_effect_p50"]),
                 "rto_p90_mln": _million(rec["total_effect_p90"]),
                 "roas_p50": rec.get("roas_p50", ""),
-                "orders_p50": float(orders.iloc[0]["total_effect_p50"]) if not orders.empty else np.nan,
-                "basket_bridge_p50_mln": _million(basket.iloc[0]["total_effect_p50"]) if not basket.empty else np.nan,
+                "roas_allocated_budget_p10": float(rec["total_effect_p10"]) / allocated_budget
+                if allocated_budget > 0
+                else np.nan,
+                "roas_allocated_budget_p50": float(rec["total_effect_p50"]) / allocated_budget
+                if allocated_budget > 0
+                else np.nan,
+                "roas_allocated_budget_p90": float(rec["total_effect_p90"]) / allocated_budget
+                if allocated_budget > 0
+                else np.nan,
+                "roas_requested_budget_p10": float(rec["total_effect_p10"]) / requested_budget
+                if requested_budget > 0
+                else np.nan,
+                "roas_requested_budget_p50": float(rec["total_effect_p50"]) / requested_budget
+                if requested_budget > 0
+                else np.nan,
+                "roas_requested_budget_p90": float(rec["total_effect_p90"]) / requested_budget
+                if requested_budget > 0
+                else np.nan,
+                "roas_denominator_kind": "requested_budget",
+                "roas_denominator_budget_rub": requested_budget,
+                "scenario_kind": "optimized_plan",
+                "scenario_variant": "full_effect_maximizing",
+                "scenario_feasibility_status": "feasible_full",
+                "within_support_budget_rub": score_rows["within_support_budget_rub"].iloc[0]
+                if not score_rows.empty and "within_support_budget_rub" in score_rows
+                else np.nan,
+                "within_support_share": score_rows["within_support_share"].iloc[0]
+                if not score_rows.empty and "within_support_share" in score_rows
+                else np.nan,
+                "controlled_extrapolation_budget_rub": score_rows["controlled_extrapolation_budget_rub"].iloc[0]
+                if not score_rows.empty and "controlled_extrapolation_budget_rub" in score_rows
+                else np.nan,
+                "controlled_extrapolation_share": score_rows["controlled_extrapolation_share"].iloc[0]
+                if not score_rows.empty and "controlled_extrapolation_share" in score_rows
+                else np.nan,
+                "high_risk_budget_rub": score_rows["high_risk_budget_rub"].iloc[0]
+                if not score_rows.empty and "high_risk_budget_rub" in score_rows
+                else np.nan,
+                "high_risk_share": score_rows["high_risk_share"].iloc[0]
+                if not score_rows.empty and "high_risk_share" in score_rows
+                else np.nan,
                 "support_warnings_n": support_warnings,
                 "elevated_support_warnings_n": elevated_support_warnings,
                 "strong_support_warnings_n": strong_support_warnings,
@@ -699,7 +806,7 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
                 "attempts_rejected_by_support_n": rejected_infeasible_n,
                 "attempts_rejected_by_policy_n": 0,
                 "attempts_rejected_precheck_n": rejected_infeasible_n,
-                "search_method": _short_list(tries["method"]) if all_infeasible else "Не запускался",
+                "search_method": _full_list(tries["method"]) if all_infeasible else "Не запускался",
                 "requested_budget_mln_rub": _million(status.get("total_budget_rub", 0.0)),
                 "allocated_budget_mln_rub": np.nan,
                 "unallocated_budget_mln_rub": np.nan,
@@ -709,8 +816,14 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
                 "rto_p10_mln": np.nan,
                 "rto_p50_mln": np.nan,
                 "roas_p50": np.nan,
-                "orders_p50": np.nan,
-                "basket_bridge_p50_mln": np.nan,
+                "roas_allocated_budget_p50": np.nan,
+                "roas_requested_budget_p50": np.nan,
+                "roas_denominator_kind": None,
+                "roas_denominator_budget_rub": np.nan,
+                "scenario_kind": "optimized_plan",
+                "scenario_variant": "infeasible",
+                "scenario_feasibility_status": "infeasible",
+                "full_allocation_impossible_reason": str(status.get("precheck_reason") or ""),
                 "support_warnings_n": rejected_infeasible_n,
                 "elevated_support_warnings_n": 0,
                 "strong_support_warnings_n": rejected_infeasible_n,
@@ -757,15 +870,19 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
         df["scenario6_ran"].fillna(False)
         &
         df["hard_support_warnings_n"].eq(0)
-        & df["strong_support_warnings_n"].eq(0)
         & df["policy_violations_n"].eq(0)
+        & pd.to_numeric(
+            df.get("high_risk_budget_rub", pd.Series(0.0, index=df.index)),
+            errors="coerce",
+        ).fillna(np.inf).le(0.000001)
         & df["objective_rows_n"].gt(0)
+        & pd.to_numeric(df["unallocated_budget_mln_rub"], errors="coerce").fillna(np.inf).le(0.000001)
     ].copy()
     if not safe.empty:
         safe["safe_rank"] = (
             safe.sort_values(
-                ["campaign_name", "quality_rank", "unallocated_budget_mln_rub", "rto_p50_mln", "rto_p10_mln"],
-                ascending=[True, True, True, False, False],
+                ["campaign_name", "rto_p50_mln", "rto_p10_mln", "controlled_extrapolation_budget_rub"],
+                ascending=[True, False, False, True],
             )
             .groupby("campaign_name")
             .cumcount()
@@ -782,7 +899,7 @@ def _scenario6_summary(candidate_scores: pd.DataFrame, finalist_summary: pd.Data
         if int(row.get("policy_violations_n") or 0) > 0:
             return "Нарушает gate policy: не использовать для автоматического перераспределения"
         if int(row.get("strong_support_warnings_n") or 0) > 0:
-            return "Выше p99: показать как best raw, но не выбирать автоматически"
+            return "Контролируемое расширение между p99 и robust upper; допустимо с явной оговоркой"
         if float(row.get("unallocated_budget_mln_rub") or 0.0) > 0.000001:
             return "Безопасный частичный план; остаток бюджета требует ручного решения"
         if int(row.get("elevated_support_warnings_n") or 0) > 0:
@@ -874,11 +991,11 @@ def _campaign_summary(
             model_flighting_start=("date", "min"),
             model_flighting_end=("date", "max"),
             budget_mln_rub=("budget_rub", lambda s: float(s.sum()) / 1_000_000.0),
-            directions=("segment", _short_list),
-            channels=("channel", _short_list),
+            directions=("segment", _full_list),
+            channels=("channel", _full_list),
             geos_n=("geo", "nunique"),
-            geos=("geo", _short_list),
-            creatives=("creative_name", _short_list),
+            geos=("geo", _full_list),
+            creatives=("creative_name", _full_list),
             rows_n=("campaign_name", "size"),
         )
         .reset_index()
@@ -1081,9 +1198,29 @@ def _build_decision_pool(
                 "rto_p10_mln": r.get("rto_p10_mln", np.nan),
                 "rto_p50_mln": r.get("rto_p50_mln", np.nan),
                 "rto_p90_mln": r.get("rto_p90_mln", np.nan),
-                "roas_p50": r.get("rto_roas_p50", np.nan),
-                "orders_p50": r.get("orders_p50_mln", np.nan),
-                "basket_bridge_p50_mln": r.get("basket_p50_mln", np.nan),
+                "roas_p50": r.get(
+                    "roas_requested_budget_p50",
+                    r.get("rto_roas_p50", np.nan),
+                ),
+                "roas_allocated_budget_p10": r.get("roas_allocated_budget_p10", np.nan),
+                "roas_allocated_budget_p50": r.get("roas_allocated_budget_p50", np.nan),
+                "roas_allocated_budget_p90": r.get("roas_allocated_budget_p90", np.nan),
+                "roas_requested_budget_p10": r.get("roas_requested_budget_p10", np.nan),
+                "roas_requested_budget_p50": r.get("roas_requested_budget_p50", np.nan),
+                "roas_requested_budget_p90": r.get("roas_requested_budget_p90", np.nan),
+                "roas_denominator_kind": r.get("roas_denominator_kind"),
+                "roas_denominator_budget_rub": r.get("roas_denominator_budget_rub", np.nan),
+                "scenario_kind": r.get("scenario_kind", "benchmark_plan"),
+                "scenario_variant": r.get("scenario_variant"),
+                "scenario_feasibility_status": r.get("scenario_feasibility_status", "feasible_full"),
+                "full_allocation_impossible_reason": r.get("full_allocation_impossible_reason", ""),
+                "limiting_constraints": r.get("limiting_constraints", ""),
+                "within_support_budget_rub": r.get("within_support_budget_rub", np.nan),
+                "within_support_share": r.get("within_support_share", np.nan),
+                "controlled_extrapolation_budget_rub": r.get("controlled_extrapolation_budget_rub", np.nan),
+                "controlled_extrapolation_share": r.get("controlled_extrapolation_share", np.nan),
+                "high_risk_budget_rub": r.get("high_risk_budget_rub", np.nan),
+                "high_risk_share": r.get("high_risk_share", np.nan),
                 "elevated_support_warnings_n": r.get("elevated_support_warnings_n", 0),
                 "strong_support_warnings_n": r.get("strong_support_warnings_n", 0),
                 "hard_support_warnings_n": r.get("hard_support_warnings_n", 0),
@@ -1108,8 +1245,8 @@ def _build_decision_pool(
                     "campaign_name": r["campaign_name"],
                     "scenario_source": "Сценарий 6",
                     "scenario_no": "S06",
-                    "scenario_name": "Сценарий 6. Адаптивный поиск",
-                    "scenario_description": "Лучший безопасный вариант адаптивного поиска после support и gate constraints.",
+                    "scenario_name": "Сценарий 6. План максимального эффекта",
+                    "scenario_description": "Лучший полный вариант по дополнительному обороту в пределах утвержденных ограничений риска.",
                     "candidate_name": r["candidate_name"],
                     "requested_budget_mln_rub": r.get("requested_budget_mln_rub", r.get("budget_mln_rub", np.nan)),
                     "allocated_budget_mln_rub": r.get("allocated_budget_mln_rub", r.get("budget_mln_rub", np.nan)),
@@ -1119,8 +1256,23 @@ def _build_decision_pool(
                     "rto_p50_mln": r.get("rto_p50_mln", np.nan),
                     "rto_p90_mln": r.get("rto_p90_mln", np.nan),
                     "roas_p50": r.get("roas_p50", np.nan),
-                    "orders_p50": r.get("orders_p50", np.nan),
-                    "basket_bridge_p50_mln": r.get("basket_bridge_p50_mln", np.nan),
+                    "roas_allocated_budget_p10": r.get("roas_allocated_budget_p10", np.nan),
+                    "roas_allocated_budget_p50": r.get("roas_allocated_budget_p50", np.nan),
+                    "roas_allocated_budget_p90": r.get("roas_allocated_budget_p90", np.nan),
+                    "roas_requested_budget_p10": r.get("roas_requested_budget_p10", np.nan),
+                    "roas_requested_budget_p50": r.get("roas_requested_budget_p50", np.nan),
+                    "roas_requested_budget_p90": r.get("roas_requested_budget_p90", np.nan),
+                    "roas_denominator_kind": r.get("roas_denominator_kind"),
+                    "roas_denominator_budget_rub": r.get("roas_denominator_budget_rub", np.nan),
+                    "scenario_kind": "optimized_plan",
+                    "scenario_variant": r.get("scenario_variant", "full_effect_maximizing"),
+                    "scenario_feasibility_status": r.get("scenario_feasibility_status", "feasible_full"),
+                    "within_support_budget_rub": r.get("within_support_budget_rub", np.nan),
+                    "within_support_share": r.get("within_support_share", np.nan),
+                    "controlled_extrapolation_budget_rub": r.get("controlled_extrapolation_budget_rub", np.nan),
+                    "controlled_extrapolation_share": r.get("controlled_extrapolation_share", np.nan),
+                    "high_risk_budget_rub": r.get("high_risk_budget_rub", np.nan),
+                    "high_risk_share": r.get("high_risk_share", np.nan),
                     "elevated_support_warnings_n": r.get("elevated_support_warnings_n", 0),
                     "strong_support_warnings_n": r.get("strong_support_warnings_n", 0),
                     "hard_support_warnings_n": r.get("hard_support_warnings_n", 0),
@@ -1196,8 +1348,7 @@ def _build_decision_pool(
         if int(row.get("policy_violations_n") or 0) > 0:
             return 5, "Нарушает ограничения модели"
         if (
-            int(row.get("strong_support_warnings_n") or 0) > 0
-            or int(row.get("objective_rows_n") or 0) <= 0
+            int(row.get("objective_rows_n") or 0) <= 0
             or quality == "Требуется ручная проверка"
         ):
             return 4, "Только ручная проверка"
@@ -1207,6 +1358,7 @@ def _build_decision_pool(
             return 1, "Надежный частичный план"
         if (
             int(row.get("elevated_support_warnings_n") or 0) > 0
+            or int(row.get("strong_support_warnings_n") or 0) > 0
             or quality == "Повышенная неопределенность"
         ):
             return 2, "Допустимый план с оговорками"
@@ -1356,7 +1508,10 @@ def _recommendations(
         safe_s6 = safe_s6_rows.iloc[0].copy() if not safe_s6_rows.empty else None
         chosen = current.copy()
         recommendation_type = "Оставить исходный план"
-        allocation_decision = "Исходный медиаплан остается рабочей рекомендацией."
+        allocation_decision = (
+            "Автоматическое перераспределение не подтвердило надежного улучшения. "
+            "Исходный план сохранен как точка отсчета и требует ручной проверки."
+        )
 
         def _rank(value: Any) -> int:
             numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
@@ -1459,11 +1614,37 @@ def _recommendations(
 
         chosen["recommendation_type"] = recommendation_type
         chosen["allocation_decision"] = allocation_decision
-        if float(chosen.get("unallocated_budget_mln_rub") or 0.0) > 0.000001:
-            chosen["plan_status"] = "Частичный рекомендованный медиаплан"
+        chosen_scenario = str(chosen.get("scenario_no") or "")
+        chosen_variant = str(chosen.get("scenario_variant") or "")
+        if chosen_scenario == "S01":
+            chosen["decision_status"] = "keep_uploaded_plan"
+            chosen["review_status"] = "manual_review_required"
+            if float(chosen.get("effective_coverage_share") or 0.0) < full_min:
+                chosen["plan_status"] = "Полный медиаплан; частичное покрытие модели"
+            else:
+                chosen["plan_status"] = "Исходный план для ручной проверки"
+        elif chosen_variant == "safe_partial" or float(
+            chosen.get("unallocated_budget_mln_rub") or 0.0
+        ) > 0.000001:
+            chosen["decision_status"] = "no_safe_recommendation"
+            chosen["review_status"] = "manual_review_required"
+            chosen["plan_status"] = "Безопасно распределяемая часть; не рекомендация"
+            chosen["allocation_decision"] = (
+                "Весь бюджет нельзя распределить с приемлемой надежностью. "
+                f"Безопасно распределить удалось только {float(chosen.get('allocated_budget_mln_rub') or 0.0):.2f} "
+                f"из {float(chosen.get('requested_budget_mln_rub') or 0.0):.2f} млн рублей."
+            )
+        elif _rank(chosen.get("reliability_rank")) >= 4:
+            chosen["decision_status"] = "manual_review_required"
+            chosen["review_status"] = "manual_review_required"
+            chosen["plan_status"] = "Требуется ручная проверка"
         elif float(chosen.get("effective_coverage_share") or 0.0) < full_min:
+            chosen["decision_status"] = "manual_review_required"
+            chosen["review_status"] = "manual_review_required"
             chosen["plan_status"] = "Полный медиаплан; частичное покрытие модели"
         else:
+            chosen["decision_status"] = "recommended_reallocation"
+            chosen["review_status"] = "not_required"
             chosen["plan_status"] = "Рекомендованный медиаплан"
         chosen["optimizer_available"] = safe_s6 is not None
         chosen["optimizer_status"] = (
@@ -1488,8 +1669,21 @@ def _recommendations(
             for column in context.index:
                 if column not in chosen or pd.isna(chosen.get(column)):
                     chosen[column] = context.get(column)
-        roas = pd.to_numeric(pd.Series([chosen.get("roas_p50")]), errors="coerce").iloc[0]
-        source_partial = float(chosen.get("unmodeled_budget_mln_rub") or 0.0) > 0.000001
+        roas = pd.to_numeric(
+            pd.Series(
+                [
+                    chosen.get(
+                        "roas_requested_budget_p50",
+                        chosen.get("roas_p50"),
+                    )
+                ]
+            ),
+            errors="coerce",
+        ).iloc[0]
+        source_partial = (
+            float(chosen.get("unmodeled_budget_mln_rub") or 0.0) > 0.000001
+            or float(chosen.get("unallocated_budget_mln_rub") or 0.0) > 0.000001
+        )
         optimizer_blocked = _rank(chosen.get("reliability_rank")) >= 4
         if min_roas_p50 is None:
             chosen["business_decision_status"] = "Не настроено: нужен бизнес-порог"
