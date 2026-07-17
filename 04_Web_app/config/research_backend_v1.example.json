@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "server": {
     "deployment_profile": "research_pilot",
     "host": "127.0.0.1",
@@ -33,5 +33,19 @@
   },
   "retention": {
     "days": 30
+  },
+  "auth": {
+    "mode": "local",
+    "database_path": "04_Web_app/var/research/auth/auth.sqlite3",
+    "cookie_name": "mmm_session",
+    "cookie_secure": true,
+    "session_ttl_seconds": 28800,
+    "idle_timeout_seconds": 3600,
+    "login_window_seconds": 900,
+    "login_max_attempts": 5,
+    "login_cooldown_seconds": 900,
+    "argon2_time_cost": 3,
+    "argon2_memory_cost_kib": 65536,
+    "argon2_parallelism": 4
   }
 }

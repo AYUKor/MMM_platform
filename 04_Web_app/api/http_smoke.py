@@ -18,10 +18,11 @@ import sys
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
-from datetime import date, datetime, timezone
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, timedelta, timezone
 from email.parser import BytesParser
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
@@ -99,10 +100,34 @@ from services.job_result_view import (  # noqa: E402
     build_job_result_view,
     build_scenario_media_plan,
 )
+from services.auth_admin import (  # noqa: E402
+    AUDIT_EVENT_TYPES,
+    ROLE_IDS,
+    USER_STATUSES,
+    AuthAdminError,
+    LocalAuthSettings,
+    RequestContext,
+    SessionResolution,
+    anonymous_session_payload,
+    authenticated_session_payload,
+    auth_error,
+    build_local_auth_stack,
+    opaque_id as auth_opaque_id,
+)
+from contracts.auth_session_v1 import validate_auth_session  # noqa: E402
+from contracts.admin_user_detail_v1 import validate_admin_user_detail  # noqa: E402
+from contracts.admin_user_list_v1 import validate_admin_user_list  # noqa: E402
+from contracts.admin_role_catalog_v1 import validate_admin_role_catalog  # noqa: E402
+from contracts.admin_system_status_v1 import validate_admin_system_status  # noqa: E402
+from contracts.admin_audit_log_v1 import validate_admin_audit_log  # noqa: E402
+from contracts.admin_user_mutation_v1 import (  # noqa: E402
+    validate_admin_user_create,
+    validate_admin_user_update,
+)
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.5.0"
+SERVER_VERSION = "0.6.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
     r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|result-view|media-plan|cancel))?$"
@@ -120,6 +145,9 @@ _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9._:-]{16,128}$")
 _SCHEMA_PATH_RE = re.compile(
     r"^/api/v1/contracts/(?P<contract_name>[a-z0-9][a-z0-9-]{0,63})\.json$"
 )
+_ADMIN_USER_PATH_RE = re.compile(
+    r"^/api/v1/admin/users/(?P<user_id>usr_[0-9a-f]{24})(?:/(?P<action>disable|enable|sessions/revoke))?$"
+)
 _CONTRACT_SCHEMA_FILES = {
     "application-lifecycle-v1": WEB_APP_DIR / "contracts" / "application_lifecycle_v1.schema.json",
     "decision-result-v1": WEB_APP_DIR / "contracts" / "decision_result_v1.schema.json",
@@ -133,6 +161,13 @@ _CONTRACT_SCHEMA_FILES = {
     "calculation-history-v1": WEB_APP_DIR / "contracts" / "calculation_history_v1.schema.json",
     "model-overview-v1": WEB_APP_DIR / "contracts" / "model_overview_v1.schema.json",
     "help-catalog-v1": WEB_APP_DIR / "contracts" / "help_catalog_v1.schema.json",
+    "auth-session-v1": WEB_APP_DIR / "contracts" / "auth_session_v1.schema.json",
+    "admin-user-list-v1": WEB_APP_DIR / "contracts" / "admin_user_list_v1.schema.json",
+    "admin-user-detail-v1": WEB_APP_DIR / "contracts" / "admin_user_detail_v1.schema.json",
+    "admin-user-mutation-v1": WEB_APP_DIR / "contracts" / "admin_user_mutation_v1.schema.json",
+    "admin-role-catalog-v1": WEB_APP_DIR / "contracts" / "admin_role_catalog_v1.schema.json",
+    "admin-system-status-v1": WEB_APP_DIR / "contracts" / "admin_system_status_v1.schema.json",
+    "admin-audit-log-v1": WEB_APP_DIR / "contracts" / "admin_audit_log_v1.schema.json",
 }
 
 
@@ -211,6 +246,20 @@ class HttpSmokeSettings:
     access_control_mode: str = "local_only"
     retention_days: int = 30
     calculation_profile_label: str = "Стандартный расчет"
+    auth_mode: str = "local"
+    auth_database_path: Path | None = None
+    auth_session_secret: str = field(default="", repr=False)
+    auth_cookie_name: str = "mmm_session"
+    auth_cookie_secure: bool = False
+    auth_session_ttl_seconds: int = 28_800
+    auth_idle_timeout_seconds: int = 3_600
+    auth_login_window_seconds: int = 900
+    auth_login_max_attempts: int = 5
+    auth_login_cooldown_seconds: int = 900
+    auth_argon2_time_cost: int = 3
+    auth_argon2_memory_cost_kib: int = 65_536
+    auth_argon2_parallelism: int = 4
+    build_revision: str | None = None
     allowed_origins: tuple[str, ...] = (
         "http://localhost:4173",
         "http://127.0.0.1:4173",
@@ -233,6 +282,28 @@ class HttpSmokeSettings:
             raise ValueError("Unknown model_verification_mode")
         if self.deployment_profile not in {"local_development", "research_pilot"}:
             raise ValueError("Unknown deployment_profile")
+        if self.auth_mode != "local":
+            raise ValueError("Only the local pilot identity provider is implemented")
+        if self.auth_database_path is None:
+            raise ValueError("auth_database_path is required")
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{2,63}", self.auth_cookie_name):
+            raise ValueError("auth_cookie_name is invalid")
+        LocalAuthSettings(
+            database_path=self.auth_database_path,
+            session_secret=self.auth_session_secret,
+            session_ttl_seconds=self.auth_session_ttl_seconds,
+            idle_timeout_seconds=self.auth_idle_timeout_seconds,
+            login_window_seconds=self.auth_login_window_seconds,
+            login_max_attempts=self.auth_login_max_attempts,
+            login_cooldown_seconds=self.auth_login_cooldown_seconds,
+            argon2_time_cost=self.auth_argon2_time_cost,
+            argon2_memory_cost_kib=self.auth_argon2_memory_cost_kib,
+            argon2_parallelism=self.auth_argon2_parallelism,
+        ).validate()
+        if self.build_revision is not None and not re.fullmatch(
+            r"[0-9a-f]{40}", self.build_revision
+        ):
+            raise ValueError("build_revision must be a full Git SHA")
         if not self.allowed_origins:
             raise ValueError("At least one explicit CORS origin is required")
         for origin in self.allowed_origins:
@@ -284,6 +355,8 @@ class HttpSmokeSettings:
             public_origin = f"{parsed_public.scheme}://{parsed_public.netloc}"
             if public_origin not in self.allowed_origins:
                 raise ValueError("Research public_base_url must be present in allowed_origins")
+            if not self.auth_cookie_secure:
+                raise ValueError("Research pilot requires Secure authentication cookies")
 
 
 class LocalApiState:
@@ -789,6 +862,20 @@ class HttpSmokeApplication:
         settings.runtime_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         settings.artifact_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         self.state = LocalApiState(settings.state_root)
+        self.auth = build_local_auth_stack(
+            LocalAuthSettings(
+                database_path=settings.auth_database_path,
+                session_secret=settings.auth_session_secret,
+                session_ttl_seconds=settings.auth_session_ttl_seconds,
+                idle_timeout_seconds=settings.auth_idle_timeout_seconds,
+                login_window_seconds=settings.auth_login_window_seconds,
+                login_max_attempts=settings.auth_login_max_attempts,
+                login_cooldown_seconds=settings.auth_login_cooldown_seconds,
+                argon2_time_cost=settings.auth_argon2_time_cost,
+                argon2_memory_cost_kib=settings.auth_argon2_memory_cost_kib,
+                argon2_parallelism=settings.auth_argon2_parallelism,
+            )
+        )
         self.model_passport = dict(model_passport) if model_passport is not None else None
         if self.model_passport is not None:
             validate_model_passport(self.model_passport)
@@ -850,6 +937,7 @@ class HttpSmokeApplication:
             "state_store": self.state.root.is_dir(),
             "runtime_store": self.settings.runtime_root.expanduser().resolve().is_dir(),
             "artifact_store": self.settings.artifact_root.expanduser().resolve().is_dir(),
+            "auth_store": self.auth.database.health()[0],
             "campaign_service": self.campaign_service is not None,
             "model_passport": self.model_passport is not None,
         }
@@ -1057,6 +1145,140 @@ class HttpSmokeApplication:
 
         return load_help_catalog()
 
+    def system_status(self) -> dict[str, Any]:
+        """Return real, browser-safe checks without local infrastructure details."""
+
+        checked_at = datetime.now(timezone.utc)
+        jobs = self.state.list_jobs()
+        job_payloads = [dict(record.get("job") or {}) for record in jobs]
+        status_codes = [str((job.get("status") or {}).get("code") or "") for job in job_payloads]
+        failed_cutoff = checked_at - timedelta(hours=24)
+        failed_jobs_24h = 0
+        for job in job_payloads:
+            if str((job.get("status") or {}).get("code") or "") not in {
+                "failed",
+                "timed_out",
+            }:
+                continue
+            raw_time = job.get("finished_at_utc") or job.get("created_at_utc")
+            try:
+                occurred = datetime.fromisoformat(str(raw_time))
+            except (TypeError, ValueError):
+                continue
+            if occurred.tzinfo is not None and occurred >= failed_cutoff:
+                failed_jobs_24h += 1
+
+        storage_healthy = all(
+            path.expanduser().resolve().is_dir()
+            and os.access(path.expanduser().resolve(), os.R_OK | os.W_OK)
+            for path in (
+                self.state.root,
+                self.settings.runtime_root,
+                self.settings.artifact_root,
+            )
+        )
+        auth_healthy, auth_check = self.auth.database.health()
+        model_available = self.model_passport is not None
+        model_allowed = bool(
+            model_available
+            and ((self.model_passport or {}).get("serving") or {}).get(
+                "calculation_allowed"
+            )
+        )
+        report_available = (
+            self.settings.project_root
+            / "02_Code"
+            / "02_Budget_optimizer"
+            / "marketer_report.py"
+        ).is_file()
+        subsystems: dict[str, dict[str, Any]] = {
+            "application": {
+                "status": "healthy",
+                "display_text": "Приложение отвечает на запросы.",
+                "facts": {"service_version": SERVER_VERSION},
+            },
+            "storage": {
+                "status": "healthy" if storage_healthy else "unavailable",
+                "display_text": (
+                    "Хранилище расчетов доступно."
+                    if storage_healthy
+                    else "Хранилище расчетов недоступно."
+                ),
+                "facts": {"available": storage_healthy},
+            },
+            "queue": {
+                "status": "healthy",
+                "display_text": "Локальная очередь расчетов работает.",
+                "facts": {
+                    "mode": "single_process_thread_pool",
+                    "workers": self.settings.max_workers,
+                    "active_jobs": sum(
+                        code in {"running", "cancel_requested"} for code in status_codes
+                    ),
+                    "queued_jobs": status_codes.count("queued"),
+                    "failed_jobs_24h": failed_jobs_24h,
+                },
+            },
+            "model": {
+                "status": (
+                    "healthy"
+                    if model_allowed
+                    else "degraded"
+                    if model_available
+                    else "unavailable"
+                ),
+                "display_text": (
+                    "Активная модель разрешает расчеты."
+                    if model_allowed
+                    else "Активная модель доступна с ограничениями."
+                    if model_available
+                    else "Сведения об активной модели недоступны."
+                ),
+                "facts": {
+                    "available": model_available,
+                    "calculation_allowed": model_allowed,
+                },
+            },
+            "reports": {
+                "status": "healthy" if report_available else "unavailable",
+                "display_text": (
+                    "Формирование отчетов доступно."
+                    if report_available
+                    else "Формирование отчетов недоступно."
+                ),
+                "facts": {"available": report_available},
+            },
+            "auth_storage": {
+                "status": "healthy" if auth_healthy else "unavailable",
+                "display_text": (
+                    "Хранилище пользователей и сессий доступно."
+                    if auth_healthy
+                    else "Хранилище пользователей и сессий недоступно."
+                ),
+                "facts": {"available": auth_healthy, "integrity_check": auth_check},
+            },
+        }
+        if subsystems["application"]["status"] == "unavailable" or not auth_healthy:
+            overall = "unavailable"
+        elif any(item["status"] != "healthy" for item in subsystems.values()):
+            overall = "degraded"
+        else:
+            overall = "healthy"
+        payload = {
+            "contract_name": "admin_system_status_v1",
+            "schema_version": "1.0.0",
+            "overall_status": overall,
+            "checked_at_utc": checked_at.isoformat(),
+            "subsystems": subsystems,
+            "build": {
+                "application_version": SERVER_VERSION,
+                "api_version": API_VERSION,
+                "config_schema_version": self.settings.config_schema_version,
+                "source_revision": self.settings.build_revision,
+            },
+        }
+        return validate_admin_system_status(payload)
+
     def progress_view(self, job_id: str) -> dict[str, Any]:
         """Build one deterministic product snapshot for browser polling."""
 
@@ -1207,8 +1429,72 @@ def _multipart_file(content_type: str, body: bytes) -> tuple[str, bytes]:
     return filename, content
 
 
-def _local_actor_id() -> str:
-    return "actor_" + hashlib.sha256(b"local-development-actor").hexdigest()[:20]
+def _required_permission(method: str, path: str) -> str | None:
+    """Central route policy; ``None`` marks the deliberately public surface."""
+
+    if path in {"/health", "/ready"}:
+        return None
+    if path in {"/api/v1/auth/login", "/api/v1/auth/logout"} and method == "POST":
+        return None
+    if path == "/api/v1/auth/session" and method == "GET":
+        return None
+    if path == "/api/v1/admin/users":
+        return "admin.users.read" if method == "GET" else "admin.users.write"
+    admin_user = _ADMIN_USER_PATH_RE.fullmatch(path)
+    if admin_user:
+        if method == "GET":
+            return "admin.users.read"
+        if admin_user.group("action") == "sessions/revoke":
+            return "admin.sessions.write"
+        return "admin.users.write"
+    if path == "/api/v1/admin/roles":
+        return "admin.users.read"
+    if path == "/api/v1/admin/system/status":
+        return "admin.system.read"
+    if path == "/api/v1/admin/audit":
+        return "admin.audit.read"
+    if method == "POST":
+        if path == "/api/v1/uploads" or path == "/api/v1/jobs":
+            return "calculation.create"
+        upload = _UPLOAD_PATH_RE.fullmatch(path)
+        validation = _VALIDATION_PATH_RE.fullmatch(path)
+        if upload and upload.group("resource") == "validations":
+            return "calculation.create"
+        if validation and validation.group("resource") == "jobs":
+            return "calculation.create"
+        job = _JOB_PATH_RE.fullmatch(path)
+        if job and job.group("resource") == "cancel":
+            return "calculation.cancel"
+    if method == "GET":
+        if path == "/api/v1/workspace/home":
+            return "workspace.read"
+        if path in {
+            "/api/v1/models/active",
+            "/api/v1/model/overview",
+            "/api/v1/calculation-profile",
+        }:
+            return "model.read"
+        if path in {
+            "/api/v1/openapi.json",
+            "/api/v1/meta/errors",
+            "/api/v1/meta/mmm-facts",
+            "/api/v1/help/catalog",
+        } or _SCHEMA_PATH_RE.fullmatch(path):
+            return "help.read"
+        if path == "/api/v1/templates/campaign-plan.xlsx":
+            return "calculation.create"
+        if path in {"/api/v1/jobs", "/api/v1/calculations/history"}:
+            return "calculation.read"
+        if _UPLOAD_PATH_RE.fullmatch(path) or _VALIDATION_PATH_RE.fullmatch(path):
+            return "calculation.read"
+        if _ARTIFACT_PATH_RE.fullmatch(path):
+            return "report.download"
+        job = _JOB_PATH_RE.fullmatch(path)
+        if job:
+            if job.group("resource") in {"result", "overview", "result-view", "media-plan"}:
+                return "result.read"
+            return "calculation.read"
+    return "workspace.read"
 
 
 def _job_list_parameters(query: str) -> tuple[int, int, str | None]:
@@ -1311,6 +1597,148 @@ def _history_parameters(
     return page, page_size, status, search, created_from, created_to, sort
 
 
+def _admin_user_parameters(
+    query: str,
+) -> tuple[int, int, str | None, str | None, str | None, str]:
+    parameters = parse_qs(query, keep_blank_values=True)
+    allowed = {"page", "page_size", "search", "role", "status", "sort"}
+    if set(parameters) - allowed:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Запрос содержит неподдерживаемые параметры.",
+        )
+    if any(len(values) != 1 for values in parameters.values()):
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Каждый параметр запроса можно указать только один раз.",
+        )
+    try:
+        page = int(parameters.get("page", ["1"])[0])
+        page_size = int(parameters.get("page_size", ["25"])[0])
+    except ValueError as exc:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Номер страницы и количество строк на странице заполнены некорректно.",
+        ) from exc
+    if page < 1 or not 1 <= page_size <= 100:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Номер страницы и количество строк на странице заполнены некорректно.",
+        )
+    search = parameters.get("search", [None])[0]
+    if search is not None:
+        search = search.strip()
+        if not search or len(search) > 120:
+            raise AuthAdminError(
+                "ADMIN_QUERY_INVALID", 422, "Строка поиска заполнена некорректно."
+            )
+    role_id = parameters.get("role", [None])[0]
+    if role_id is not None and role_id not in ROLE_IDS:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Фильтр по роли заполнен некорректно."
+        )
+    status = parameters.get("status", [None])[0]
+    if status is not None and status not in USER_STATUSES:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Фильтр по статусу заполнен некорректно."
+        )
+    sort = parameters.get("sort", ["created_desc"])[0]
+    if sort not in {
+        "created_desc",
+        "created_asc",
+        "name_asc",
+        "email_asc",
+        "last_login_desc",
+    }:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Порядок сортировки заполнен некорректно."
+        )
+    return page, page_size, search, role_id, status, sort
+
+
+def _admin_audit_parameters(
+    query: str,
+) -> tuple[int, int, str | None, str | None, datetime | None, datetime | None, str]:
+    parameters = parse_qs(query, keep_blank_values=True)
+    allowed = {
+        "page",
+        "page_size",
+        "actor_user_id",
+        "event_type",
+        "occurred_from_utc",
+        "occurred_to_utc",
+        "sort",
+    }
+    if set(parameters) - allowed:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Запрос содержит неподдерживаемые параметры."
+        )
+    if any(len(values) != 1 for values in parameters.values()):
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Каждый параметр запроса можно указать только один раз.",
+        )
+    try:
+        page = int(parameters.get("page", ["1"])[0])
+        page_size = int(parameters.get("page_size", ["50"])[0])
+    except ValueError as exc:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Номер страницы и количество строк на странице заполнены некорректно.",
+        ) from exc
+    if page < 1 or not 1 <= page_size <= 100:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID",
+            422,
+            "Номер страницы и количество строк на странице заполнены некорректно.",
+        )
+    actor_user_id = parameters.get("actor_user_id", [None])[0]
+    if actor_user_id is not None and not re.fullmatch(r"usr_[0-9a-f]{24}", actor_user_id):
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Фильтр по пользователю заполнен некорректно."
+        )
+    event_type = parameters.get("event_type", [None])[0]
+    if event_type is not None and event_type not in AUDIT_EVENT_TYPES:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Фильтр по типу события заполнен некорректно."
+        )
+
+    def optional_timestamp(key: str) -> datetime | None:
+        raw = parameters.get(key, [None])[0]
+        if raw is None:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError as exc:
+            raise AuthAdminError(
+                "ADMIN_QUERY_INVALID", 422, "Диапазон дат заполнен некорректно."
+            ) from exc
+        if parsed.tzinfo is None:
+            raise AuthAdminError(
+                "ADMIN_QUERY_INVALID", 422, "Диапазон дат заполнен некорректно."
+            )
+        return parsed.astimezone(timezone.utc)
+
+    occurred_from = optional_timestamp("occurred_from_utc")
+    occurred_to = optional_timestamp("occurred_to_utc")
+    if occurred_from is not None and occurred_to is not None and occurred_to < occurred_from:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Диапазон дат заполнен некорректно."
+        )
+    sort = parameters.get("sort", ["occurred_desc"])[0]
+    if sort not in {"occurred_desc", "occurred_asc"}:
+        raise AuthAdminError(
+            "ADMIN_QUERY_INVALID", 422, "Порядок сортировки заполнен некорректно."
+        )
+    return page, page_size, actor_user_id, event_type, occurred_from, occurred_to, sort
+
+
 def _media_plan_parameters(
     query: str,
 ) -> tuple[str, int, int, str | None, str | None, str | None]:
@@ -1359,6 +1787,9 @@ def _media_plan_parameters(
 def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = f"X5MMMHTTP/{SERVER_VERSION}"
+        _request_context: RequestContext | None = None
+        _session_resolution: SessionResolution | None = None
+        _request_id: str = ""
 
         def log_message(self, format: str, *args: Any) -> None:
             sys.stderr.write("http_smoke: " + (format % args) + "\n")
@@ -1370,17 +1801,29 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
         def _common_headers(self) -> None:
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Cache-Control", "no-store")
+            response_path = urlsplit(self.path).path
+            if response_path.startswith(("/api/v1/auth/", "/api/v1/admin/")):
+                self.send_header("Pragma", "no-cache")
             origin = self._origin()
             if origin:
                 self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Access-Control-Allow-Credentials", "true")
                 self.send_header("Vary", "Origin")
 
-        def _json(self, status: HTTPStatus, payload: Any) -> None:
+        def _json(
+            self,
+            status: HTTPStatus,
+            payload: Any,
+            *,
+            extra_headers: Mapping[str, str] | None = None,
+        ) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             self.send_response(status.value)
             self._common_headers()
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            for key, value in (extra_headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -1403,7 +1846,14 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             self.end_headers()
             self.wfile.write(body)
 
-        def _error(self, status: HTTPStatus, code: str, text: str) -> None:
+        def _error(
+            self,
+            status: HTTPStatus,
+            code: str,
+            text: str,
+            *,
+            extra_headers: Mapping[str, str] | None = None,
+        ) -> None:
             catalog_entry = HTTP_ERROR_CATALOG.get(code)
             if catalog_entry is None:
                 raise RuntimeError(f"HTTP error code is not registered: {code}")
@@ -1422,7 +1872,125 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         "user_action": str(catalog_entry["user_action"]),
                     }
                 },
+                extra_headers=extra_headers,
             )
+
+        def _session_token(self) -> str | None:
+            raw_cookie = self.headers.get("Cookie")
+            if not raw_cookie:
+                return None
+            cookie = SimpleCookie()
+            try:
+                cookie.load(raw_cookie)
+            except Exception:
+                return None
+            morsel = cookie.get(application.settings.auth_cookie_name)
+            return morsel.value if morsel is not None else None
+
+        def _session_cookie(self, token: str) -> str:
+            parts = [
+                f"{application.settings.auth_cookie_name}={token}",
+                "Path=/api/v1",
+                "HttpOnly",
+                "SameSite=Lax",
+                f"Max-Age={application.settings.auth_session_ttl_seconds}",
+            ]
+            if application.settings.auth_cookie_secure:
+                parts.append("Secure")
+            return "; ".join(parts)
+
+        def _clear_session_cookie(self) -> str:
+            parts = [
+                f"{application.settings.auth_cookie_name}=",
+                "Path=/api/v1",
+                "HttpOnly",
+                "SameSite=Lax",
+                "Max-Age=0",
+            ]
+            if application.settings.auth_cookie_secure:
+                parts.append("Secure")
+            return "; ".join(parts)
+
+        def _auth_admin_error(self, error: AuthAdminError) -> None:
+            headers = None
+            if error.code in {"AUTH_SESSION_EXPIRED", "AUTH_ACCOUNT_DISABLED"}:
+                headers = {"Set-Cookie": self._clear_session_cookie()}
+            self._error(
+                HTTPStatus(error.http_status),
+                error.code,
+                error.display_text,
+                extra_headers=headers,
+            )
+
+        def _prepare_request(self, method: str, path: str) -> bool:
+            self._request_id = auth_opaque_id("req")
+            self._request_context = None
+            self._session_resolution = application.auth.identity_provider.resolve_session(
+                self._session_token(),
+                request_id=self._request_id,
+            )
+            permission = _required_permission(method, path)
+            if permission is None:
+                if self._session_resolution.context is not None:
+                    self._request_context = self._session_resolution.context
+                return True
+            try:
+                self._request_context = application.auth.authorization.require_permission(
+                    self._session_resolution,
+                    permission,
+                )
+            except AuthAdminError as exc:
+                self._auth_admin_error(exc)
+                return False
+            return True
+
+        def _validate_state_change(self) -> bool:
+            origin = self.headers.get("Origin")
+            if origin not in application.settings.allowed_origins:
+                self._auth_admin_error(
+                    AuthAdminError(
+                        "PERMISSION_DENIED",
+                        403,
+                        "Запрос отклонен проверкой безопасности. Обновите страницу и повторите действие.",
+                    )
+                )
+                return False
+            raw_host = self.headers.get("Host", "")
+            parsed_host = urlsplit(f"//{raw_host}")
+            allowed_hosts = {"127.0.0.1", "localhost"}
+            if application.settings.public_base_url:
+                public_host = urlsplit(application.settings.public_base_url).hostname
+                if public_host:
+                    allowed_hosts.add(public_host)
+            if (
+                parsed_host.hostname not in allowed_hosts
+                or parsed_host.username is not None
+                or parsed_host.password is not None
+            ):
+                self._auth_admin_error(
+                    AuthAdminError(
+                        "PERMISSION_DENIED",
+                        403,
+                        "Запрос отклонен проверкой безопасности. Обновите страницу и повторите действие.",
+                    )
+                )
+                return False
+            return True
+
+        def _json_body(self, *, maximum_bytes: int = MAX_JSON_BYTES) -> Mapping[str, Any]:
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("application/json"):
+                raise ValueError("JSON body is required")
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise ValueError("Invalid body length") from exc
+            if length <= 0 or length > maximum_bytes:
+                raise ValueError("Invalid body size")
+            payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, Mapping):
+                raise ValueError("JSON object is required")
+            return payload
 
         def _product_navigation_error(self, error: Exception) -> None:
             if isinstance(error, ProductNavigationQueryError):
@@ -1448,13 +2016,107 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
         def do_OPTIONS(self) -> None:  # noqa: N802
             self.send_response(HTTPStatus.NO_CONTENT.value)
             self._common_headers()
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key")
             self.send_header("Access-Control-Max-Age", "600")
             self.end_headers()
 
         def do_POST(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
+            if not self._prepare_request("POST", path):
+                return
+            if not self._validate_state_change():
+                return
+            if path == "/api/v1/auth/login":
+                try:
+                    payload = self._json_body(maximum_bytes=16 * 1024)
+                    if set(payload) != {"email", "password"}:
+                        raise ValueError("Invalid login body")
+                    email = payload.get("email")
+                    password = payload.get("password")
+                    if not isinstance(email, str) or not isinstance(password, str):
+                        raise ValueError("Invalid login body")
+                    context, token = application.auth.identity_provider.authenticate(
+                        email,
+                        password,
+                        request_id=self._request_id,
+                        client_key=str(self.client_address[0]),
+                    )
+                    response = validate_auth_session(authenticated_session_payload(context))
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except (json.JSONDecodeError, ValueError):
+                    self._auth_admin_error(auth_error("AUTH_INVALID_CREDENTIALS"))
+                    return
+                self._json(
+                    HTTPStatus.OK,
+                    response,
+                    extra_headers={"Set-Cookie": self._session_cookie(token)},
+                )
+                return
+
+            if path == "/api/v1/auth/logout":
+                application.auth.identity_provider.logout(
+                    self._session_token(),
+                    request_id=self._request_id,
+                )
+                self._json(
+                    HTTPStatus.OK,
+                    anonymous_session_payload(),
+                    extra_headers={"Set-Cookie": self._clear_session_cookie()},
+                )
+                return
+
+            if path == "/api/v1/admin/users":
+                try:
+                    payload = self._json_body(maximum_bytes=32 * 1024)
+                    validate_admin_user_create(payload)
+                    if self._request_context is None:
+                        raise auth_error("AUTH_REQUIRED")
+                    response = application.auth.admin.create_user(
+                        payload,
+                        actor=self._request_context,
+                    )
+                    validate_admin_user_detail(response)
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except (json.JSONDecodeError, ValueError):
+                    self._auth_admin_error(auth_error("ADMIN_STATE_INCONSISTENT"))
+                    return
+                self._json(HTTPStatus.CREATED, response)
+                return
+
+            admin_user_match = _ADMIN_USER_PATH_RE.fullmatch(path)
+            if admin_user_match and admin_user_match.group("action") in {
+                "disable",
+                "enable",
+                "sessions/revoke",
+            }:
+                try:
+                    if self._request_context is None:
+                        raise auth_error("AUTH_REQUIRED")
+                    user_id = admin_user_match.group("user_id")
+                    action = admin_user_match.group("action")
+                    if action == "sessions/revoke":
+                        response = application.auth.admin.revoke_user_sessions(
+                            user_id,
+                            actor=self._request_context,
+                        )
+                    else:
+                        response = application.auth.admin.set_user_enabled(
+                            user_id,
+                            enabled=action == "enable",
+                            actor=self._request_context,
+                        )
+                        validate_admin_user_detail(response)
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                self._json(HTTPStatus.OK, response)
+                return
+
             if path == "/api/v1/uploads":
                 if application.campaign_service is None:
                     self._error(HTTPStatus.SERVICE_UNAVAILABLE, "UPLOAD_SERVICE_DISABLED", "Upload service не настроен.")
@@ -1471,6 +2133,8 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     self._error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "INVALID_UPLOAD_SIZE", "Размер файла недопустим.")
                     return
                 try:
+                    if self._request_context is None:
+                        raise auth_error("AUTH_REQUIRED")
                     filename, content = _multipart_file(
                         self.headers.get("Content-Type", ""),
                         self.rfile.read(length),
@@ -1479,8 +2143,11 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         filename=filename,
                         content=content,
                         idempotency_key=idempotency_key,
-                        actor_id=_local_actor_id(),
+                        actor_id=self._request_context.user_id,
                     )
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
                 except FileExistsError as exc:
                     self._error(HTTPStatus.CONFLICT, "IDEMPOTENCY_CONFLICT", str(exc))
                     return
@@ -1591,9 +2258,40 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                 return
             self._error(HTTPStatus.NOT_FOUND, "ROUTE_NOT_FOUND", "Маршрут не найден.")
 
+        def do_PATCH(self) -> None:  # noqa: N802
+            path = urlsplit(self.path).path
+            if not self._prepare_request("PATCH", path):
+                return
+            if not self._validate_state_change():
+                return
+            admin_user_match = _ADMIN_USER_PATH_RE.fullmatch(path)
+            if admin_user_match and admin_user_match.group("action") is None:
+                try:
+                    payload = self._json_body(maximum_bytes=16 * 1024)
+                    validate_admin_user_update(payload)
+                    if self._request_context is None:
+                        raise auth_error("AUTH_REQUIRED")
+                    response = application.auth.admin.update_user(
+                        admin_user_match.group("user_id"),
+                        payload,
+                        actor=self._request_context,
+                    )
+                    validate_admin_user_detail(response)
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except (json.JSONDecodeError, ValueError):
+                    self._auth_admin_error(auth_error("ADMIN_STATE_INCONSISTENT"))
+                    return
+                self._json(HTTPStatus.OK, response)
+                return
+            self._error(HTTPStatus.NOT_FOUND, "ROUTE_NOT_FOUND", "Маршрут не найден.")
+
         def do_GET(self) -> None:  # noqa: N802
             request_url = urlsplit(self.path)
             path = request_url.path
+            if not self._prepare_request("GET", path):
+                return
             if path == "/health":
                 self._json(
                     HTTPStatus.OK,
@@ -1619,6 +2317,157 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if path == "/ready":
                 ready, payload = application.readiness()
                 self._json(HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE, payload)
+                return
+            if path == "/api/v1/auth/session":
+                resolution = self._session_resolution or SessionResolution("anonymous", None)
+                if resolution.context is None:
+                    headers = (
+                        {"Set-Cookie": self._clear_session_cookie()}
+                        if resolution.state in {"expired", "disabled"}
+                        else None
+                    )
+                    self._json(
+                        HTTPStatus.OK,
+                        validate_auth_session(anonymous_session_payload()),
+                        extra_headers=headers,
+                    )
+                else:
+                    self._json(
+                        HTTPStatus.OK,
+                        validate_auth_session(
+                            authenticated_session_payload(resolution.context)
+                        ),
+                    )
+                return
+            if path == "/api/v1/admin/users":
+                try:
+                    (
+                        page,
+                        page_size,
+                        search,
+                        role_id,
+                        status,
+                        sort,
+                    ) = _admin_user_parameters(request_url.query)
+                    response = application.auth.admin.list_users(
+                        page=page,
+                        page_size=page_size,
+                        search=search,
+                        role_id=role_id,
+                        status=status,
+                        sort=sort,
+                    )
+                    validate_admin_user_list(response)
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except Exception:
+                    self._auth_admin_error(auth_error("ADMIN_SERVICE_UNAVAILABLE"))
+                    return
+                self._json(HTTPStatus.OK, response)
+                return
+            admin_user_match = _ADMIN_USER_PATH_RE.fullmatch(path)
+            if admin_user_match and admin_user_match.group("action") is None:
+                if request_url.query:
+                    self._auth_admin_error(
+                        AuthAdminError(
+                            "ADMIN_QUERY_INVALID",
+                            422,
+                            "Этот запрос не поддерживает параметры просмотра.",
+                        )
+                    )
+                    return
+                try:
+                    response = application.auth.admin.user_detail(
+                        admin_user_match.group("user_id")
+                    )
+                    validate_admin_user_detail(response)
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except Exception:
+                    self._auth_admin_error(auth_error("ADMIN_SERVICE_UNAVAILABLE"))
+                    return
+                self._json(HTTPStatus.OK, response)
+                return
+            if path == "/api/v1/admin/roles":
+                if request_url.query:
+                    self._auth_admin_error(
+                        AuthAdminError(
+                            "ADMIN_QUERY_INVALID",
+                            422,
+                            "Этот запрос не поддерживает параметры просмотра.",
+                        )
+                    )
+                    return
+                response = application.auth.admin.role_catalog_payload()
+                self._json(
+                    HTTPStatus.OK,
+                    validate_admin_role_catalog(response),
+                )
+                return
+            if path == "/api/v1/admin/system/status":
+                if request_url.query:
+                    self._auth_admin_error(
+                        AuthAdminError(
+                            "ADMIN_QUERY_INVALID",
+                            422,
+                            "Этот запрос не поддерживает параметры просмотра.",
+                        )
+                    )
+                    return
+                try:
+                    if self._request_context is None:
+                        raise auth_error("AUTH_REQUIRED")
+                    response = application.system_status()
+                    application.auth.admin.append_view_event(
+                        "admin_viewed_system_status",
+                        actor=self._request_context,
+                        summary="Просмотрено состояние системы.",
+                    )
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except Exception:
+                    self._auth_admin_error(auth_error("ADMIN_SERVICE_UNAVAILABLE"))
+                    return
+                self._json(HTTPStatus.OK, response)
+                return
+            if path == "/api/v1/admin/audit":
+                try:
+                    if self._request_context is None:
+                        raise auth_error("AUTH_REQUIRED")
+                    (
+                        page,
+                        page_size,
+                        actor_user_id,
+                        event_type,
+                        occurred_from,
+                        occurred_to,
+                        sort,
+                    ) = _admin_audit_parameters(request_url.query)
+                    application.auth.admin.append_view_event(
+                        "admin_viewed_audit_log",
+                        actor=self._request_context,
+                        summary="Просмотрен журнал административных действий.",
+                    )
+                    response = application.auth.admin.audit_log(
+                        page=page,
+                        page_size=page_size,
+                        actor_user_id=actor_user_id,
+                        event_type=event_type,
+                        occurred_from=occurred_from,
+                        occurred_to=occurred_to,
+                        sort=sort,
+                    )
+                    validate_admin_audit_log(response)
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except Exception:
+                    self._auth_admin_error(auth_error("ADMIN_SERVICE_UNAVAILABLE"))
+                    return
+                self._json(HTTPStatus.OK, response)
                 return
             if path == "/api/v1/openapi.json":
                 self._json(HTTPStatus.OK, load_openapi_document())
@@ -1959,6 +2808,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python-executable", type=Path, default=Path(sys.executable))
     parser.add_argument("--timeout-seconds", type=float, default=7200.0)
     parser.add_argument("--max-workers", type=int, default=1)
+    parser.add_argument("--auth-database-path", type=Path)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args(argv)
@@ -1976,6 +2826,12 @@ def main(argv: list[str] | None = None) -> int:
             business_policy_path=args.business_policy_path,
             timeout_seconds=args.timeout_seconds,
             max_workers=args.max_workers,
+            auth_database_path=(
+                args.auth_database_path
+                or args.state_root.expanduser().resolve().parent / "auth" / "auth.sqlite3"
+            ),
+            auth_session_secret=os.environ.get("MMM_AUTH_SESSION_SECRET", ""),
+            auth_cookie_secure=False,
         )
     )
     print(

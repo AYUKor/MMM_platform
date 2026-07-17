@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5-mmm.local/contracts/admin_system_status_v1.schema.json",
+  "title": "Admin System Status V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "overall_status", "checked_at_utc", "subsystems", "build"],
+  "properties": {
+    "contract_name": {"const": "admin_system_status_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "overall_status": {"$ref": "#/$defs/status"},
+    "checked_at_utc": {"type": "string", "format": "date-time"},
+    "subsystems": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["application", "storage", "queue", "model", "reports", "auth_storage"],
+      "properties": {
+        "application": {"$ref": "#/$defs/subsystem"},
+        "storage": {"$ref": "#/$defs/subsystem"},
+        "queue": {"$ref": "#/$defs/subsystem"},
+        "model": {"$ref": "#/$defs/subsystem"},
+        "reports": {"$ref": "#/$defs/subsystem"},
+        "auth_storage": {"$ref": "#/$defs/subsystem"}
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["application_version", "api_version", "config_schema_version", "source_revision"],
+      "properties": {
+        "application_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "api_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "config_schema_version": {"type": "string", "minLength": 1, "maxLength": 100},
+        "source_revision": {
+          "oneOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9a-f]{40}$"}]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "status": {"enum": ["healthy", "degraded", "unavailable"]},
+    "fact": {"type": ["string", "integer", "number", "boolean", "null"]},
+    "subsystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "facts"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "display_text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "facts": {"type": "object", "additionalProperties": {"$ref": "#/$defs/fact"}}
+      }
+    }
+  }
+}

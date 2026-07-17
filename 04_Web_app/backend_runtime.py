@@ -11,7 +11,7 @@ import os
 import subprocess
 import sys
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Mapping
@@ -30,14 +30,25 @@ from services.product_api_service import (  # noqa: E402
     RuntimeRetentionManager,
     build_model_passport,
 )
+from services.auth_admin import (  # noqa: E402
+    Argon2idPasswordHasher,
+    LocalAuthSettings,
+    build_local_auth_stack,
+)
 
 
-CONFIG_SCHEMA_VERSION = "1.1.0"
-SUPPORTED_CONFIG_SCHEMA_VERSIONS = {"1.0.0", CONFIG_SCHEMA_VERSION}
+CONFIG_SCHEMA_VERSION = "1.2.0"
+SUPPORTED_CONFIG_SCHEMA_VERSIONS = {"1.0.0", "1.1.0", CONFIG_SCHEMA_VERSION}
 ENV_PUBLIC_BASE_URL = "MMM_BACKEND_PUBLIC_BASE_URL"
 ENV_ALLOWED_ORIGINS = "MMM_BACKEND_ALLOWED_ORIGINS"
 ENV_PORT = "MMM_BACKEND_PORT"
 ENV_RETENTION_DAYS = "MMM_BACKEND_RETENTION_DAYS"
+ENV_AUTH_MODE = "MMM_AUTH_MODE"
+ENV_AUTH_SESSION_SECRET = "MMM_AUTH_SESSION_SECRET"
+ENV_AUTH_COOKIE_SECURE = "MMM_AUTH_COOKIE_SECURE"
+ENV_BOOTSTRAP_ADMIN_EMAIL = "MMM_AUTH_BOOTSTRAP_ADMIN_EMAIL"
+ENV_BOOTSTRAP_ADMIN_PASSWORD = "MMM_AUTH_BOOTSTRAP_ADMIN_PASSWORD"
+ENV_BOOTSTRAP_ADMIN_NAME = "MMM_AUTH_BOOTSTRAP_ADMIN_NAME"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -75,8 +86,9 @@ def apply_environment_overrides(
     effective = copy.deepcopy(dict(config))
     server = effective.setdefault("server", {})
     retention = effective.setdefault("retention", {})
-    if not isinstance(server, dict) or not isinstance(retention, dict):
-        raise ValueError("server and retention config sections must be objects")
+    auth = effective.setdefault("auth", {})
+    if not isinstance(server, dict) or not isinstance(retention, dict) or not isinstance(auth, dict):
+        raise ValueError("server, retention and auth config sections must be objects")
     if environ.get(ENV_PUBLIC_BASE_URL):
         server["public_base_url"] = environ[ENV_PUBLIC_BASE_URL].strip()
     if environ.get(ENV_ALLOWED_ORIGINS):
@@ -92,6 +104,13 @@ def apply_environment_overrides(
         server["port"] = int(environ[ENV_PORT])
     if environ.get(ENV_RETENTION_DAYS):
         retention["days"] = int(environ[ENV_RETENTION_DAYS])
+    if environ.get(ENV_AUTH_MODE):
+        auth["mode"] = environ[ENV_AUTH_MODE].strip()
+    if environ.get(ENV_AUTH_COOKIE_SECURE):
+        raw_secure = environ[ENV_AUTH_COOKIE_SECURE].strip().casefold()
+        if raw_secure not in {"true", "false"}:
+            raise ValueError(f"{ENV_AUTH_COOKIE_SECURE} must be true or false")
+        auth["cookie_secure"] = raw_secure == "true"
     return effective
 
 
@@ -99,6 +118,7 @@ def build_settings(
     config: Mapping[str, Any],
     *,
     project_root: Path,
+    environ: Mapping[str, str] | None = None,
 ) -> tuple[HttpSmokeSettings, str, int]:
     schema_version = str(config.get("schema_version") or "")
     if schema_version not in SUPPORTED_CONFIG_SCHEMA_VERSIONS:
@@ -108,6 +128,8 @@ def build_settings(
     model = dict(config.get("model") or {})
     worker = dict(config.get("worker") or {})
     retention = dict(config.get("retention") or {})
+    auth = dict(config.get("auth") or {})
+    environment = os.environ if environ is None else environ
     host = str(server.get("host") or "127.0.0.1")
     if host not in {"127.0.0.1", "localhost"}:
         raise ValueError("Local backend may bind only to localhost")
@@ -132,10 +154,23 @@ def build_settings(
         if python_value in {None, ""}
         else _project_path(project_root, python_value, "worker.python_executable")
     )
+    state_root = _project_path(project_root, paths.get("state_root"), "paths.state_root")
+    runtime_root = _project_path(project_root, paths.get("runtime_root"), "paths.runtime_root")
+    artifact_root = _project_path(project_root, paths.get("artifact_root"), "paths.artifact_root")
+    auth_database_value = auth.get("database_path") or str(
+        state_root.parent / "auth" / "auth.sqlite3"
+    )
+    cookie_secure = auth.get(
+        "cookie_secure",
+        str(server.get("deployment_profile") or "local_development")
+        == "research_pilot",
+    )
+    if not isinstance(cookie_secure, bool):
+        raise ValueError("auth.cookie_secure must be boolean")
     settings = HttpSmokeSettings(
-        state_root=_project_path(project_root, paths.get("state_root"), "paths.state_root"),
-        runtime_root=_project_path(project_root, paths.get("runtime_root"), "paths.runtime_root"),
-        artifact_root=_project_path(project_root, paths.get("artifact_root"), "paths.artifact_root"),
+        state_root=state_root,
+        runtime_root=runtime_root,
+        artifact_root=artifact_root,
         project_root=project_root,
         python_executable=python_executable,
         registry_root=_project_path(project_root, paths.get("registry_root"), "paths.registry_root"),
@@ -170,6 +205,23 @@ def build_settings(
         access_control_mode=str(server.get("access_control_mode") or "local_only"),
         retention_days=int(retention.get("days", 30)),
         allowed_origins=allowed_origins,
+        auth_mode=str(auth.get("mode") or "local"),
+        auth_database_path=_project_path(
+            project_root,
+            auth_database_value,
+            "auth.database_path",
+        ),
+        auth_session_secret=str(environment.get(ENV_AUTH_SESSION_SECRET) or ""),
+        auth_cookie_name=str(auth.get("cookie_name") or "mmm_session"),
+        auth_cookie_secure=cookie_secure,
+        auth_session_ttl_seconds=int(auth.get("session_ttl_seconds", 28_800)),
+        auth_idle_timeout_seconds=int(auth.get("idle_timeout_seconds", 3_600)),
+        auth_login_window_seconds=int(auth.get("login_window_seconds", 900)),
+        auth_login_max_attempts=int(auth.get("login_max_attempts", 5)),
+        auth_login_cooldown_seconds=int(auth.get("login_cooldown_seconds", 900)),
+        auth_argon2_time_cost=int(auth.get("argon2_time_cost", 3)),
+        auth_argon2_memory_cost_kib=int(auth.get("argon2_memory_cost_kib", 65_536)),
+        auth_argon2_parallelism=int(auth.get("argon2_parallelism", 4)),
     )
     settings.validate()
     return settings, host, port
@@ -180,6 +232,11 @@ def preflight(
     *,
     config_sha256: str,
 ) -> dict[str, Any]:
+    Argon2idPasswordHasher(
+        time_cost=settings.auth_argon2_time_cost,
+        memory_cost_kib=settings.auth_argon2_memory_cost_kib,
+        parallelism=settings.auth_argon2_parallelism,
+    )
     required_files = (
         settings.python_executable,
         settings.optimizer_policy_path,
@@ -226,6 +283,8 @@ def preflight(
         "inventory_files_n": resolved["verified"]["inventory_files_n"],
         "git_commit": git_commit,
         "python_version": sys.version.split()[0],
+        "auth_mode": settings.auth_mode,
+        "password_hasher": "argon2id-v1",
         "model_passport": model_passport,
     }
 
@@ -264,9 +323,10 @@ def _write_runtime_card(
         "pid": os.getpid(),
         "url": f"http://{host}:{port}",
         "paths": {
-            key: str(value)
-            for key, value in asdict(settings).items()
-            if key in {"state_root", "runtime_root", "artifact_root", "registry_root"}
+            "state_root": str(settings.state_root),
+            "runtime_root": str(settings.runtime_root),
+            "artifact_root": str(settings.artifact_root),
+            "registry_root": str(settings.registry_root),
         },
     }
     target = settings.runtime_root / "backend_runtime_card.json"
@@ -293,6 +353,23 @@ def _console_preflight(preflight_result: Mapping[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _local_auth_settings(settings: HttpSmokeSettings) -> LocalAuthSettings:
+    if settings.auth_database_path is None:
+        raise ValueError("auth_database_path is required")
+    return LocalAuthSettings(
+        database_path=settings.auth_database_path,
+        session_secret=settings.auth_session_secret,
+        session_ttl_seconds=settings.auth_session_ttl_seconds,
+        idle_timeout_seconds=settings.auth_idle_timeout_seconds,
+        login_window_seconds=settings.auth_login_window_seconds,
+        login_max_attempts=settings.auth_login_max_attempts,
+        login_cooldown_seconds=settings.auth_login_cooldown_seconds,
+        argon2_time_cost=settings.auth_argon2_time_cost,
+        argon2_memory_cost_kib=settings.auth_argon2_memory_cost_kib,
+        argon2_parallelism=settings.auth_argon2_parallelism,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
@@ -301,6 +378,12 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--check-only", action="store_true")
     action.add_argument("--retention-report", action="store_true")
     action.add_argument("--apply-retention", action="store_true")
+    action.add_argument("--bootstrap-admin", action="store_true")
+    parser.add_argument(
+        "--bootstrap-update-existing",
+        action="store_true",
+        help="Explicitly replace the matching bootstrap administrator credentials.",
+    )
     args = parser.parse_args(argv)
     project_root = args.project_root.expanduser().resolve()
     config = apply_environment_overrides(
@@ -309,6 +392,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     config_sha = _config_sha256(config)
     settings, host, port = build_settings(config, project_root=project_root)
+    if args.bootstrap_update_existing and not args.bootstrap_admin:
+        parser.error("--bootstrap-update-existing requires --bootstrap-admin")
+    if args.bootstrap_admin:
+        email = os.environ.get(ENV_BOOTSTRAP_ADMIN_EMAIL, "")
+        password = os.environ.get(ENV_BOOTSTRAP_ADMIN_PASSWORD, "")
+        display_name = os.environ.get(
+            ENV_BOOTSTRAP_ADMIN_NAME,
+            "Локальный администратор",
+        )
+        if not email or not password:
+            raise ValueError(
+                f"{ENV_BOOTSTRAP_ADMIN_EMAIL} and {ENV_BOOTSTRAP_ADMIN_PASSWORD} are required"
+            )
+        stack = build_local_auth_stack(_local_auth_settings(settings))
+        result = stack.identity_provider.bootstrap_admin(
+            email=email,
+            password=password,
+            display_name=display_name,
+            update_existing=args.bootstrap_update_existing,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+        return 0
     if args.retention_report or args.apply_retention:
         manager = RuntimeRetentionManager(
             settings.state_root,
@@ -330,6 +435,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     lock_path = settings.state_root.parent / "backend.lock"
     with _single_instance_lock(lock_path):
+        settings = replace(
+            settings,
+            build_revision=str(preflight_result["git_commit"]),
+        )
         application = HttpSmokeApplication(
             settings,
             model_passport=preflight_result["model_passport"],

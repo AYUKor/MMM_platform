@@ -50,6 +50,8 @@ from services.job_result_view import (  # noqa: E402
 
 LIFECYCLE_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "application_lifecycle_v1_happy_path_synthetic.json"
 PASSPORT_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "model_passport_v1_synthetic.json"
+TEST_AUTH_SECRET = "http-smoke-test-session-secret-2026"
+TEST_ADMIN_PASSWORD = "Http-smoke-admin-2026"
 
 
 class _FakeResult:
@@ -188,6 +190,11 @@ class HttpSmokeV1Test(unittest.TestCase):
                 artifact_root=self.artifact_root,
                 project_root=WEB_APP_DIR.parent,
                 timeout_seconds=5,
+                auth_database_path=root / "auth.sqlite3",
+                auth_session_secret=TEST_AUTH_SECRET,
+                auth_argon2_time_cost=2,
+                auth_argon2_memory_cost_kib=19_456,
+                auth_argon2_parallelism=1,
             ),
             worker_factory=worker_factory,
             overview_builder=overview_builder,
@@ -219,6 +226,19 @@ class HttpSmokeV1Test(unittest.TestCase):
             self.application.submit_job,
         )
         self.application.state.write_validation(self.validation)
+        self.application.auth.identity_provider.bootstrap_admin(
+            email="admin@example.org",
+            password=TEST_ADMIN_PASSWORD,
+            display_name="Тестовый администратор",
+            update_existing=False,
+        )
+        _, token = self.application.auth.identity_provider.authenticate(
+            "admin@example.org",
+            TEST_ADMIN_PASSWORD,
+            request_id="req_aaaaaaaaaaaaaaaaaaaaaaaa",
+            client_key="127.0.0.1",
+        )
+        self.session_cookie = f"mmm_session={token}"
         self.server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
             make_handler(self.application),
@@ -243,7 +263,9 @@ class HttpSmokeV1Test(unittest.TestCase):
         payload: Mapping[str, Any] | None = None,
     ) -> tuple[int, Any, Mapping[str, str]]:
         body = None
-        headers = {}
+        headers = {"Cookie": self.session_cookie}
+        if method in {"POST", "PATCH"}:
+            headers["Origin"] = "http://localhost:4173"
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
             headers["Content-Type"] = "application/json"
@@ -485,7 +507,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.5.0")
+        self.assertEqual(openapi["info"]["version"], "1.6.0")
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/media-plan", openapi["paths"])
@@ -690,6 +712,8 @@ class HttpSmokeV1Test(unittest.TestCase):
             headers={
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
                 "Idempotency-Key": "http-upload-key-0001",
+                "Cookie": self.session_cookie,
+                "Origin": "http://localhost:4173",
             },
             method="POST",
         )
@@ -708,7 +732,11 @@ class HttpSmokeV1Test(unittest.TestCase):
         validation_request = urllib.request.Request(
             self.base_url + f"/api/v1/uploads/{upload['upload_id']}/validations",
             data=b"",
-            headers={"Idempotency-Key": "http-validation-key-0001"},
+            headers={
+                "Idempotency-Key": "http-validation-key-0001",
+                "Cookie": self.session_cookie,
+                "Origin": "http://localhost:4173",
+            },
             method="POST",
         )
         with urllib.request.urlopen(validation_request, timeout=3) as response:
@@ -731,6 +759,8 @@ class HttpSmokeV1Test(unittest.TestCase):
             headers={
                 "Content-Type": "application/json",
                 "Idempotency-Key": "http-job-key-0000001",
+                "Cookie": self.session_cookie,
+                "Origin": "http://localhost:4173",
             },
             method="POST",
         )
@@ -773,6 +803,11 @@ class HttpSmokeRecoveryTest(unittest.TestCase):
             artifact_root=self.root / "artifacts",
             project_root=WEB_APP_DIR.parent,
             timeout_seconds=5,
+            auth_database_path=self.root / "auth.sqlite3",
+            auth_session_secret=TEST_AUTH_SECRET,
+            auth_argon2_time_cost=2,
+            auth_argon2_memory_cost_kib=19_456,
+            auth_argon2_parallelism=1,
         )
 
     def test_queued_job_is_dispatched_after_restart(self) -> None:

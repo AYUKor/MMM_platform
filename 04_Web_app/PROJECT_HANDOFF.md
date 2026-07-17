@@ -29,7 +29,7 @@ As of 2026-07-17:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
-- Product API v1 with OpenAPI `1.5.0` provides readiness, a verified target-grain model passport,
+- Product API v1 with OpenAPI `1.6.0` provides readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
 - backend Phase D adds four additive browser-safe projections for Home,
@@ -37,6 +37,11 @@ As of 2026-07-17:
   published result state, the active Model Passport, real registry
   registrations and one versioned structured help catalog. React, MMM,
   forecast, optimizer, Scenario 6 and recommendation policy are unchanged;
+- backend Phase E adds local pilot authentication behind an `IdentityProvider`
+  boundary, Argon2id passwords, HMAC-digested opaque server-side sessions,
+  viewer/analyst/admin permissions, centralized guards, SQLite administration,
+  safe system status and append-only audit. Corporate SSO/MFA remain future
+  adapters rather than simulated integrations;
 - the Phase D regression boundary passed the complete 122-test web/backend
   suite with 11 expected skips, the unchanged 78-test MMM core suite with two
   expected skips, TypeScript, ESLint, all 285 frontend unit tests and the
@@ -56,15 +61,15 @@ As of 2026-07-17:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current Backend Phase D branch starts from
-  `origin/main@d68daa61bdf6d8f00931eb9bc148eeee1dd07726`, which includes merged
-  PRs through #18. Phase D changes only additive product-navigation
-  projections, generated contract types, tests and documentation;
+- current Backend Phase E branch starts from
+  `origin/main@bdb14a415c62b9e682a8559d7daf3e2efed89a9a`, which includes merged
+  PRs through #20. Phase E changes only application security/admin services,
+  additive contracts, generated contract types, tests and documentation;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
-- company queue, PostgreSQL/object-storage adapters, corporate authentication,
-  and company-contour deployment remain future work.
+- company queue, PostgreSQL/object-storage adapters, corporate SSO/MFA, and
+  company-contour deployment remain future work.
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
@@ -436,25 +441,35 @@ Each item is a separate reviewable milestone:
     remove Playwright's dependency on ambient `VITE_*` variables; make the
     real-package service fixture explicitly exercise panel-free
     `serving_bundle` verification. See ADR 0016.
-13. Backend Phase B implemented for review: publish additive
+13. Backend Phase B completed and merged: publish additive
     `job_progress_view_v1` and `mmm_fact_catalog_v1`, preserve raw progress,
     separate report publication, expose only real Scenario 6 counters and keep
-    unknown safe/blocked counts as `null`. See ADR 0017. The next frontend PR
-    should consume this endpoint without reconstructing worker phases.
-14. Backend Phase C implemented for review: publish additive
+    unknown safe/blocked counts as `null`. See ADR 0017.
+14. Backend Phase C completed and merged: publish additive
     `job_result_view_v1` and `scenario_media_plan_v1`; preserve `/result` and
     `/overview`; expose canonical recommendation, S01-S06 metric availability,
     artifact-backed safe/raw ranks, reliability components without a fake
     score, backend channel/geo/geo-channel aggregates, paginated scenario
-    allocations and real marketer-report metadata. See ADR 0018. The next
-    frontend Phase C PR should consume these endpoints instead of selecting a
-    winner, calculating ranks/reliability or aggregating plan rows in React.
-15. Backend Phase D implemented for review: publish additive
+    allocations and real marketer-report metadata. See ADR 0018.
+15. Backend and frontend Phase D completed and merged through PR #20: publish additive
     `workspace_home_v1`, `calculation_history_v1`, `model_overview_v1` and
     `help_catalog_v1`; keep pagination, filters, model-registry reads and help
-    content on the server. The next frontend Phase D PR should consume these
-    endpoints instead of reading lifecycle storage, registry files or Markdown.
-16. When company-contour or multi-node scale is approved, replace file-backed
+    content on the server; the browser consumes these projections instead of
+    reading lifecycle storage, registry files or Markdown.
+16. Backend Phase E implemented for review: publish `auth_session_v1`, admin
+    users/roles/system/audit contracts, local SQLite identity and session
+    storage, bootstrap CLI, centralized permission guards and security
+    documentation. The next frontend milestone may consume these endpoints;
+    it must use returned permissions and must not hardcode access from roles.
+    Local verification passed web/backend `135` tests with 19 explicit skips,
+    unchanged MMM core `78` tests with two skips, generated-contract drift,
+    TypeScript, ESLint, frontend `319/319` unit tests and production build.
+    Security review additionally verifies field/action-level users/roles/session
+    permissions and no-store/no-cache/nosniff headers on auth/admin success and
+    error responses.
+    The browser login/admin screens, corporate SSO, MFA, password recovery and
+    multi-node session storage remain outside this backend milestone.
+17. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 

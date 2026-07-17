@@ -65,6 +65,41 @@ const contracts = [
     typeName: "HelpCatalogV1",
     output: "help-catalog-v1.ts",
   },
+  {
+    schema: "auth_session_v1.schema.json",
+    typeName: "AuthSessionV1",
+    output: "auth-session-v1.ts",
+  },
+  {
+    schema: "admin_user_list_v1.schema.json",
+    typeName: "AdminUserListV1",
+    output: "admin-user-list-v1.ts",
+  },
+  {
+    schema: "admin_user_detail_v1.schema.json",
+    typeName: "AdminUserDetailV1",
+    output: "admin-user-detail-v1.ts",
+  },
+  {
+    schema: "admin_user_mutation_v1.schema.json",
+    typeName: "AdminUserMutationV1",
+    output: "admin-user-mutation-v1.ts",
+  },
+  {
+    schema: "admin_role_catalog_v1.schema.json",
+    typeName: "AdminRoleCatalogV1",
+    output: "admin-role-catalog-v1.ts",
+  },
+  {
+    schema: "admin_system_status_v1.schema.json",
+    typeName: "AdminSystemStatusV1",
+    output: "admin-system-status-v1.ts",
+  },
+  {
+    schema: "admin_audit_log_v1.schema.json",
+    typeName: "AdminAuditLogV1",
+    output: "admin-audit-log-v1.ts",
+  },
 ];
 
 for (const contract of contracts) {
