@@ -91,15 +91,37 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/calculation-profile", document["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", document["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", document["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/result-view-v2", document["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/media-plan", document["paths"])
+        self.assertIn("/api/v1/jobs/{job_id}/media-plan-v2", document["paths"])
         self.assertIn("/api/v1/meta/mmm-facts", document["paths"])
+        self.assertIn("/api/v1/meta/geo-catalog", document["paths"])
         self.assertIn("/api/v1/workspace/home", document["paths"])
+        self.assertIn("/api/v1/workspace/geo-budget", document["paths"])
         self.assertIn("/api/v1/calculations/history", document["paths"])
         self.assertIn("/api/v1/model/overview", document["paths"])
+        self.assertIn("/api/v1/model/overview-v2", document["paths"])
+        self.assertIn("/api/v1/models/active-v2", document["paths"])
+        self.assertIn(
+            "/api/v1/validations/{validation_id}/view-v2", document["paths"]
+        )
         self.assertIn("/api/v1/help/catalog", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.6.0")
+        self.assertEqual(document["info"]["version"], "1.7.0")
+        for schema_name in (
+            "JobResultViewV2",
+            "ValidationResultV2",
+            "ModelPassportV2",
+            "ModelOverviewV2",
+            "GeoCatalogV1",
+            "WorkspaceGeoBudgetV1",
+            "ScenarioMediaPlanV2",
+        ):
+            self.assertRegex(
+                document["components"]["schemas"][schema_name]["$ref"],
+                r"^/api/v1/contracts/.+\.json$",
+            )
         for path in (
             "/api/v1/auth/login",
             "/api/v1/auth/logout",

@@ -1,4 +1,4 @@
-# Frontend Handoff: Backend Product API v1.6
+# Frontend Handoff: Backend Product API v1.7
 
 ## What Is Stable
 
@@ -18,6 +18,11 @@ Stable result contracts:
 - `AuthSession v1`: current user, server-side session metadata and authoritative permissions;
 - `AdminUserList/Detail v1`, `AdminRoleCatalog v1`,
   `AdminSystemStatus v1`, `AdminAuditLog v1`: Phase E administration.
+- `JobResultView v2`, `ScenarioMediaPlan v2`, `ValidationResult v2`,
+  `ModelPassport v2` and `ModelOverview v2`: turnover-only E.1A product
+  semantics;
+- `GeoCatalog v1` and `WorkspaceGeoBudget v1`: map-ready identities and
+  explicit coordinate availability without guessed points.
 
 ## Authentication Boundary
 
@@ -43,6 +48,10 @@ backend validates both Origin and Host.
 | `GET /health` | Is the HTTP process alive? |
 | `GET /ready` | Are package, campaign service and local stores ready? |
 | `GET /api/v1/models/active` | Show model period, coverage and caveats. |
+| `GET /api/v1/models/active-v2` | Show turnover-only serving policy and four active serving fits. |
+| `GET /api/v1/model/overview-v2` | Show the turnover-only product model summary. |
+| `GET /api/v1/meta/geo-catalog` | Resolve canonical geo identities and coordinate availability. |
+| `GET /api/v1/workspace/geo-budget` | Load reconciled budget by geo for a future map/list view. |
 | `GET /api/v1/meta/errors` | Map stable error codes to user actions. |
 | `GET /api/v1/meta/mmm-facts` | Load reviewed optional MMM facts without live generation. |
 | `GET /api/v1/openapi.json` | Machine-readable route specification. |
@@ -58,6 +67,13 @@ backend validates both Origin and Host.
 | `GET /api/v1/contracts/admin-role-catalog-v1.json` | Role and permission catalog schema. |
 | `GET /api/v1/contracts/admin-system-status-v1.json` | Safe subsystem checks schema. |
 | `GET /api/v1/contracts/admin-audit-log-v1.json` | Append-only audit page schema. |
+| `GET /api/v1/contracts/job-result-view-v2.json` | Turnover-only scenario result schema. |
+| `GET /api/v1/contracts/scenario-media-plan-v2.json` | Typed scenario allocation rows and aggregates. |
+| `GET /api/v1/contracts/validation-result-v2.json` | Split file/model validation schema. |
+| `GET /api/v1/contracts/model-passport-v2.json` | Turnover-only Model Passport schema. |
+| `GET /api/v1/contracts/model-overview-v2.json` | Turnover-only model overview schema. |
+| `GET /api/v1/contracts/geo-catalog-v1.json` | Canonical geo catalog schema. |
+| `GET /api/v1/contracts/workspace-geo-budget-v1.json` | Workspace geo-budget schema. |
 
 ## Administration
 
@@ -85,6 +101,19 @@ Poll by `job_id`. Repeated GET requests are read-only. Navigate to the result
 only after `job_status.code=succeeded` and `result_available=true`; backend does
 not require an automatic redirect.
 
+## Turnover Result And Media Plan
+
+Use `GET /api/v1/jobs/{job_id}/result-view-v2` for new result screens. Use
+`GET /api/v1/jobs/{job_id}/media-plan-v2?scenario_id=S01` for the selected
+scenario's paginated allocation rows and backend aggregates. The scenario ID
+selects an already calculated plan for viewing; it never changes calculation,
+ranking or recommendation.
+
+The media-plan contract returns `channel_id` plus `channel_display_name` and
+`geo_id` plus `geo_display_name`. Render the supplied labels and use IDs for
+filters/machine identity. Do not join optimizer CSV files, maintain a frontend
+channel dictionary, shorten geo arrays or recalculate budget totals.
+
 ## Job History
 
 Use `GET /api/v1/jobs?limit=50&offset=0`. Optional `status` values are
@@ -93,6 +122,21 @@ and `timed_out`. The response contains `items`, `total`, `limit`, `offset` and
 `next_offset`. An absent `next_offset` means the last page.
 
 ## Model Passport Interpretation
+
+For new product work, use `GET /api/v1/models/active-v2`. The v1 interpretation
+below remains relevant only for backward-compatible screens and historical
+jobs.
+
+- v2 publishes one serving target: `turnover` / `turnover_per_user`;
+- `active_serving_models_n=4` describes the four turnover fits available to
+  application serving; `research_models_in_package_n=12` does not make the
+  eight diagnostic fits application KPIs;
+- channel policy rows in v2 contain both `channel_id` and approved
+  `channel_display_name`;
+- orders and average basket must not be recovered from v1 or local files when
+  rendering a v2 result;
+- v2 remains research/preprod and allocation-only; it does not change the OOT
+  or production-claim status.
 
 - `serving.calculation_allowed=true` means the verified package can serve
   research forecast/allocation jobs. It does not mean formal production.

@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmm-platform.local/contracts/scenario_media_plan_v2.schema.json",
+  "title": "ScenarioMediaPlanV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "record_origin", "job_id", "result_id", "campaign_id", "scenario", "source_artifact", "grain", "filters", "pagination", "totals", "filtered_totals", "rows", "aggregates", "map", "working_media_plan", "limitations", "updated_at_utc"],
+  "properties": {
+    "contract_name": {"const": "scenario_media_plan_v2"},
+    "schema_version": {"const": "2.0.0"},
+    "record_origin": {"enum": ["application_runtime", "sanitized_fixture"]},
+    "job_id": {"$ref": "#/$defs/opaqueId"},
+    "result_id": {"$ref": "#/$defs/opaqueId"},
+    "campaign_id": {"$ref": "#/$defs/opaqueId"},
+    "scenario": {"$ref": "#/$defs/scenario"},
+    "source_artifact": {"$ref": "#/$defs/sourceArtifact"},
+    "grain": {"const": "geo_channel_total"},
+    "filters": {"$ref": "#/$defs/filters"},
+    "pagination": {"$ref": "#/$defs/pagination"},
+    "totals": {"$ref": "#/$defs/totals"},
+    "filtered_totals": {"$ref": "#/$defs/filteredTotals"},
+    "rows": {"type": "array", "items": {"$ref": "#/$defs/mediaPlanRow"}},
+    "aggregates": {"$ref": "#/$defs/aggregates"},
+    "map": {"$ref": "#/$defs/map"},
+    "working_media_plan": {"$ref": "#/$defs/artifactAvailability"},
+    "limitations": {"type": "array", "items": {"$ref": "#/$defs/limitation"}},
+    "updated_at_utc": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "opaqueId": {"type": "string", "pattern": "^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$"},
+    "scenarioId": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]},
+    "nullableNumber": {"type": ["number", "null"]},
+    "qualityStatus": {"type": "string", "minLength": 1},
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel_id", "channel_display_name"],
+      "properties": {
+        "channel_id": {"type": "string", "minLength": 1},
+        "channel_display_name": {"type": "string", "minLength": 1}
+      }
+    },
+    "geo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo_id", "geo_display_name"],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1}
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "title", "status", "is_selected", "safe_rank", "raw_rank", "quality_status", "quality_display_text"],
+      "properties": {
+        "scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "title": {"type": "string", "minLength": 1},
+        "status": {"enum": ["completed", "unavailable"]},
+        "is_selected": {"type": "boolean"},
+        "safe_rank": {"type": ["integer", "null"], "minimum": 1},
+        "raw_rank": {"type": ["integer", "null"], "minimum": 1},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "sourceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "kind", "sha256"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "kind": {"const": "recommended_allocations_csv"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel_id", "geo_display_name", "date"],
+      "properties": {
+        "channel_id": {"type": ["string", "null"]},
+        "geo_display_name": {"type": ["string", "null"]},
+        "date": {"type": "null"}
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "page_size", "total_rows", "total_pages"],
+      "properties": {
+        "page": {"type": "integer", "minimum": 1},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500},
+        "total_rows": {"type": "integer", "minimum": 0},
+        "total_pages": {"type": "integer", "minimum": 0}
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested_budget_rub", "source_budget_rub", "selected_budget_rub", "unallocated_budget_rub", "delta_rub", "reconciliation_status"],
+      "properties": {
+        "requested_budget_rub": {"type": "number", "minimum": 0},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "unallocated_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"},
+        "reconciliation_status": {"const": "reconciled"}
+      }
+    },
+    "filteredTotals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_budget_rub", "selected_budget_rub", "delta_rub"],
+      "properties": {
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"}
+      }
+    },
+    "mediaPlanRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "campaign_id", "segment", "geo_id", "geo_display_name", "channel_id", "channel_display_name", "date", "source_budget_rub", "selected_budget_rub", "delta_rub", "delta_pct", "source_budget_share", "selected_budget_share", "quality_status", "quality_display_text"],
+      "properties": {
+        "scenario_id": {"$ref": "#/$defs/scenarioId"},
+        "campaign_id": {"$ref": "#/$defs/opaqueId"},
+        "segment": {"type": "string", "minLength": 1},
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "channel_id": {"type": "string", "minLength": 1},
+        "channel_display_name": {"type": "string", "minLength": 1},
+        "date": {"type": "null"},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"},
+        "delta_pct": {"$ref": "#/$defs/nullableNumber"},
+        "source_budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "selected_budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "channelAggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel_id", "channel_display_name", "source_budget_rub", "selected_budget_rub", "delta_rub", "delta_pct", "quality_status", "quality_display_text"],
+      "properties": {
+        "channel_id": {"type": "string", "minLength": 1},
+        "channel_display_name": {"type": "string", "minLength": 1},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"},
+        "delta_pct": {"$ref": "#/$defs/nullableNumber"},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "geoAggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo_id", "geo_display_name", "source_budget_rub", "selected_budget_rub", "delta_rub", "delta_pct", "quality_status", "quality_display_text"],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"},
+        "delta_pct": {"$ref": "#/$defs/nullableNumber"},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "geoChannelAggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo_id", "geo_display_name", "channel_id", "channel_display_name", "source_budget_rub", "selected_budget_rub", "delta_rub", "delta_pct", "quality_status", "quality_display_text"],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "channel_id": {"type": "string", "minLength": 1},
+        "channel_display_name": {"type": "string", "minLength": 1},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "selected_budget_rub": {"type": "number", "minimum": 0},
+        "delta_rub": {"type": "number"},
+        "delta_pct": {"$ref": "#/$defs/nullableNumber"},
+        "quality_status": {"$ref": "#/$defs/qualityStatus"},
+        "quality_display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "unavailableRows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "rows"],
+      "properties": {
+        "status": {"const": "unavailable"},
+        "display_text": {"type": "string", "minLength": 1},
+        "rows": {"type": "null"}
+      }
+    },
+    "readyGeoChannelMatrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "rows"],
+      "properties": {
+        "status": {"const": "ready"},
+        "display_text": {"type": "string", "minLength": 1},
+        "rows": {"type": "array", "items": {"$ref": "#/$defs/geoChannelAggregate"}}
+      }
+    },
+    "aggregates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["by_channel", "by_geo", "by_geo_channel", "by_date", "channel_date_matrix", "geo_channel_matrix"],
+      "properties": {
+        "by_channel": {"type": "array", "items": {"$ref": "#/$defs/channelAggregate"}},
+        "by_geo": {"type": "array", "items": {"$ref": "#/$defs/geoAggregate"}},
+        "by_geo_channel": {"type": "array", "items": {"$ref": "#/$defs/geoChannelAggregate"}},
+        "by_date": {"$ref": "#/$defs/unavailableRows"},
+        "channel_date_matrix": {"$ref": "#/$defs/unavailableRows"},
+        "geo_channel_matrix": {"$ref": "#/$defs/readyGeoChannelMatrix"}
+      }
+    },
+    "map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "geo_points", "coordinate_catalog_version"],
+      "properties": {
+        "status": {"const": "unavailable"},
+        "display_text": {"type": "string", "minLength": 1},
+        "geo_points": {"type": "null"},
+        "coordinate_catalog_version": {"type": "null"}
+      }
+    },
+    "artifactAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "display_text", "artifact"],
+      "properties": {
+        "status": {"enum": ["available", "unavailable"]},
+        "display_text": {"type": "string", "minLength": 1},
+        "artifact": {"type": ["object", "null"]}
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

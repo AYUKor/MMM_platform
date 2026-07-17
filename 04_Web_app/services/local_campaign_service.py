@@ -558,7 +558,7 @@ class LocalCampaignService:
                 "business_threshold_policy": str(self.settings.business_policy_path.resolve()),
             },
             "optimizer": {
-                "targets": ["turnover_per_user", "orders_per_user", "avg_basket"],
+                "targets": ["turnover_per_user"],
                 "scenario_6": {"enabled": True},
             },
             "report": {"intervals": ["p10", "p50", "p90"]},

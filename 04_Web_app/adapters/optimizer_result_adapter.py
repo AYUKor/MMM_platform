@@ -12,6 +12,7 @@ import csv
 import hashlib
 import json
 import math
+import re
 import sys
 from collections import defaultdict
 from datetime import date, timedelta
@@ -72,6 +73,7 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
     "cell_support_status": {
         "Внутри p95 support-zone": "within_p95",
         "Между p95 и p99": "between_p95_p99",
+        "Между p99 и robust upper": "above_p99_within_robust_upper",
         "Выше p99, требуется ручная проверка": "above_p99_within_robust_upper",
         "Вне надежной наблюдаемой зоны": "above_robust_upper",
         "Не оценено": "not_evaluated",
@@ -81,6 +83,7 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
         "Лучший безопасный S6 рассчитан": "best_safe_available",
         "Частичный безопасный план": "partial_safe_available",
         "Безопасный автоматический план не найден": "no_safe_candidate",
+        "Автоматический план не найден": "no_safe_candidate",
         "Только ручное распределение": "no_safe_candidate",
         "Перераспределение недоступно по gate policy": "gate_policy_blocked",
         "Оптимизация не запускалась": "not_run",
@@ -105,6 +108,7 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
     },
     "recommendation_type": {
         "Оставить исходный план": "keep_uploaded_plan",
+        "Сохранить загруженный план для проверки": "keep_uploaded_plan",
         "Перераспределить ради надежности": "reallocate_for_reliability",
         "Перераспределить ради эффекта": "reallocate_for_effect",
         "Частичный безопасный план": "partial_safe_plan",
@@ -114,6 +118,9 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
         "Рекомендованный медиаплан": "recommended_media_plan",
         "Полный медиаплан; частичное покрытие модели": "full_plan_partial_model_coverage",
         "Частичный безопасный план": "partial_safe_plan",
+        "Безопасно распределяемая часть; не рекомендация": "partial_safe_plan",
+        "Исходный план для ручной проверки": "no_automatic_plan",
+        "Требуется ручная проверка": "no_automatic_plan",
         "Автоматический медиаплан недоступен": "no_automatic_plan",
     },
 }
@@ -247,6 +254,11 @@ def _bool(row: dict[str, Any], key: str, default: bool = False) -> bool:
 def _split_list(value: Any) -> tuple[str, ...]:
     if value is None:
         return ()
+    normalized = str(value).lower().replace("ё", "е")
+    if re.search(r"\.\.\.\s*еще\s+\d+", normalized):
+        raise OptimizerResultAdapterError(
+            "Presentation-truncated list cannot be used as machine-readable data"
+        )
     items = [item.strip() for item in str(value).split(",")]
     return tuple(item for item in items if item and item.lower() != "nan")
 
@@ -804,6 +816,15 @@ def _build_campaign(
         geographies=_split_list(recommendation_row.get("geos")),
         creatives=creatives,
     )
+    allocation_geographies = {
+        str(row.get("geo") or "").strip()
+        for row in allocation_rows
+        if str(row.get("geo") or "").strip() not in {"", "—"}
+    }
+    if allocation_geographies and allocation_geographies != set(passport.geographies):
+        raise OptimizerResultAdapterError(
+            "Campaign geography list does not reconcile with media-plan allocation rows"
+        )
 
     return CampaignDecisionResult(
         campaign_id=_opaque_id("campaign", campaign_name),

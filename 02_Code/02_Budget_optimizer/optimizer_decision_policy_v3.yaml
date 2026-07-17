@@ -1,0 +1,64 @@
+# Product-serving allocation policy for turnover-only Scenario 5 and Scenario 6.
+# Existing v2 jobs keep their immutable policy snapshot; new application jobs use v3.
+schema_version: 3.0.0
+policy_id: optimizer_turnover_serving_scenario_semantics_v3
+currency: RUB
+
+serving:
+  target_id: turnover
+  core_target: turnover_per_user
+  active_models_n: 4
+
+reliability:
+  full_coverage_min: 0.99
+  usable_partial_coverage_min: 0.95
+  prefer_support_safety_before_expected_rto: true
+  interval_width_is_tiebreak_only: true
+
+materiality:
+  min_incremental_rto_gain_rub: 1000000
+  min_incremental_rto_gain_share: 0.01
+  min_positive_delta_probability: 0.80
+  min_moved_budget_rub: 500000
+  min_moved_budget_share: 0.005
+  line_item_rounding_rub: 0
+  max_p10_degradation_share: 0.01
+  noninferiority_probability: 0.80
+
+recommendation:
+  reliability_improvement_can_override_economic_materiality: true
+  keep_source_when_change_is_not_material: true
+  partial_safe_plan_requires_manual_remainder: true
+  never_claim_global_optimum: true
+  uploaded_plan_status: keep_uploaded_plan
+  uploaded_plan_review_status: manual_review_required
+
+scenario_5:
+  public_scenario_id: S5
+  full_variant: full_conservative
+  partial_variant: safe_partial
+  support_expansion_levels:
+    - p95
+    - p99
+    - robust_upper
+  approved_maximum_risk_boundary: robust_upper
+  allocation_objective:
+    - minimize_high_risk_budget
+    - minimize_controlled_extrapolation_budget
+    - minimize_concentration
+    - minimize_source_deviation
+    - maximize_incremental_turnover_p50
+  projection_modes:
+    - proportional
+    - additive
+  preserve_source_cells: true
+  allow_new_geo_channel_cells: false
+  allow_partial_only_after_full_infeasible: true
+
+scenario_6:
+  require_full_budget: true
+  support_limits:
+    - p99
+    - robust_upper
+  approved_maximum_risk_boundary: robust_upper
+  infeasible_when_full_budget_cannot_be_allocated: true

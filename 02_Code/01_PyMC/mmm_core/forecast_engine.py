@@ -44,6 +44,12 @@ else:
 from .io import ensure_dir, read_json, resolve_path, write_json
 from .model_package import sha256_file
 from .model_package_reader import ModelPackage
+from .serving_semantics import (
+    SERVING_CORE_TARGET,
+    SERVING_POLICY_VERSION,
+    serving_model_inventory,
+    validate_serving_model_inventory,
+)
 
 TARGETS = ["turnover_per_user", "orders_per_user", "avg_basket"]
 DEFAULT_FORECAST_SAMPLES = 300
@@ -243,6 +249,7 @@ def _compile_decision_policy(policy_config: dict[str, Any] | None) -> dict[str, 
         "materiality": materiality,
         "recommendation": source.get("recommendation") or {},
         "scenario_5": source.get("scenario_5") or {},
+        "scenario_6": source.get("scenario_6") or {},
     }
 
 
@@ -1802,6 +1809,7 @@ def _candidate_budget_summary(candidate: pd.DataFrame, requested_budget_rub: flo
         "allocated_budget_rub": allocated,
         "unallocated_budget_rub": unallocated,
         "allocated_budget_share": allocated / requested if requested > 0 else 0.0,
+        "allocation_share": allocated / requested if requested > 0 else None,
         "support_limit_policy": support_policy,
     }
     for column in [
@@ -1825,10 +1833,129 @@ def _candidate_budget_summary(candidate: pd.DataFrame, requested_budget_rub: flo
         "search_allocation_quantum_rub",
         "search_smallest_transfer_rub",
         "search_budget_exhausted",
+        "scenario_kind",
+        "scenario_variant",
+        "scenario_feasibility_status",
+        "full_allocation_impossible_reason",
+        "limiting_constraints",
     ]:
         if column in candidate and not candidate.empty:
             summary[column] = candidate[column].iloc[0]
     return summary
+
+
+def _candidate_risk_budget_summary(
+    candidate: pd.DataFrame,
+    source_plan: pd.DataFrame,
+    engine: ForecastEngine,
+) -> dict[str, Any]:
+    """Decompose allocated money into support-backed risk tranches.
+
+    The p95 tranche is `within support`; spend between p95 and the robust
+    observed upper boundary is controlled extrapolation; spend above that
+    boundary is high risk.  A cell can therefore contribute to more than one
+    monetary tranche without its full budget being mislabeled.
+    """
+
+    within = 0.0
+    controlled = 0.0
+    high = 0.0
+    within_cells = 0
+    controlled_cells = 0
+    high_cells = 0
+    for _, cell in candidate.iterrows():
+        budget = max(float(cell.get("budget_rub") or 0.0), 0.0)
+        p95_cap = max(
+            _support_cap_rub_for_cell(cell, source_plan, engine, limit="p95"),
+            0.0,
+        )
+        robust_cap = max(
+            _support_cap_rub_for_cell(cell, source_plan, engine, limit="robust_upper"),
+            p95_cap,
+        )
+        cell_within = min(budget, p95_cap)
+        cell_controlled = min(max(budget - p95_cap, 0.0), robust_cap - p95_cap)
+        cell_high = max(budget - robust_cap, 0.0)
+        within += cell_within
+        controlled += cell_controlled
+        high += cell_high
+        within_cells += int(cell_within > SUPPORT_ABS_TOL_RUB)
+        controlled_cells += int(cell_controlled > SUPPORT_ABS_TOL_RUB)
+        high_cells += int(cell_high > SUPPORT_ABS_TOL_RUB)
+
+    allocated = float(
+        pd.to_numeric(candidate.get("budget_rub"), errors="coerce").fillna(0.0).sum()
+    )
+    tolerance = max(
+        BUDGET_RECONCILIATION_ABS_TOL_RUB,
+        abs(allocated) * BUDGET_RECONCILIATION_REL_TOL,
+    )
+    if abs((within + controlled + high) - allocated) > tolerance:
+        raise CandidateFeasibilityError("Risk-budget tranches do not reconcile to allocated budget")
+
+    def share(value: float) -> float | None:
+        return value / allocated if allocated > 0 else None
+
+    return {
+        "within_support_budget_rub": within,
+        "within_support_share": share(within),
+        "controlled_extrapolation_budget_rub": controlled,
+        "controlled_extrapolation_share": share(controlled),
+        "high_risk_budget_rub": high,
+        "high_risk_share": share(high),
+        "within_support_cells_n": within_cells,
+        "controlled_extrapolation_cells_n": controlled_cells,
+        "high_risk_cells_n": high_cells,
+    }
+
+
+def _candidate_concentration(candidate: pd.DataFrame) -> float:
+    budget = pd.to_numeric(candidate.get("budget_rub"), errors="coerce").fillna(0.0)
+    total = float(budget.sum())
+    if total <= 0:
+        return 1.0
+    shares = budget.to_numpy(dtype=float) / total
+    return float(np.square(shares).sum())
+
+
+def _candidate_source_deviation(
+    candidate: pd.DataFrame,
+    source_cells: pd.DataFrame,
+    requested_budget_rub: float,
+) -> float:
+    keys = ["segment", "geo", "channel"]
+    candidate_budget = {
+        tuple(str(row[key]) for key in keys): float(row["budget_rub"])
+        for _, row in candidate.iterrows()
+    }
+    source_budget = {
+        tuple(str(row[key]) for key in keys): float(row["budget_rub"])
+        for _, row in source_cells.iterrows()
+    }
+    moved_twice = sum(
+        abs(candidate_budget.get(key, 0.0) - source_budget.get(key, 0.0))
+        for key in set(candidate_budget) | set(source_budget)
+    )
+    denominator = max(float(requested_budget_rub) * 2.0, 1.0)
+    return float(moved_twice / denominator)
+
+
+def _annotate_scenario_semantics(
+    candidate: pd.DataFrame,
+    *,
+    scenario_kind: str,
+    scenario_variant: str,
+    feasibility_status: str,
+    full_allocation_impossible_reason: str = "",
+    limiting_constraints: str = "",
+) -> pd.DataFrame:
+    out = candidate.copy()
+    out["scenario_kind"] = scenario_kind
+    out["scenario_variant"] = scenario_variant
+    out["scenario_feasibility_status"] = feasibility_status
+    out["full_allocation_impossible_reason"] = full_allocation_impossible_reason
+    out["limiting_constraints"] = limiting_constraints
+    return out
 
 
 def _make_candidate_daily(cell_budget: pd.DataFrame, source_plan: pd.DataFrame, candidate_name: str) -> list[dict[str, Any]]:
@@ -2041,6 +2168,7 @@ def _candidate_policy_bounds(
     engine: ForecastEngine,
     *,
     support_limit: str,
+    allow_fixed_contraction: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     lower: list[float] = []
     upper: list[float] = []
@@ -2068,7 +2196,17 @@ def _candidate_policy_bounds(
         elif policy == "fixed_at_plan":
             # Gate policy has precedence: diagnostic effects may be shown, but
             # the optimizer must not manufacture a change in their budget.
-            lo, hi = current, current
+            if current <= support_cap + SUPPORT_ABS_TOL_RUB:
+                lo, hi = current, current
+            elif allow_fixed_contraction:
+                # S5 safe_partial may retain only the support-backed part and
+                # expose the remainder.  It still cannot score that diagnostic
+                # cell as a source of incremental budget.
+                lo, hi = support_cap, support_cap
+            else:
+                raise CandidateFeasibilityError(
+                    "A fixed-at-plan cell exceeds the selected support boundary"
+                )
         else:
             lo, hi = 0.0, 0.0
         lower.append(lo)
@@ -2156,6 +2294,7 @@ def _enforce_candidate_constraints(
         source_plan,
         engine,
         support_limit=selected_limit,
+        allow_fixed_contraction=allow_partial,
     )
     constraints = business_constraints or {}
     allowed_channels = {str(value) for value in constraints.get("channels_allowed") or []}
@@ -2347,6 +2486,113 @@ def _support_weighted_candidate(
         allow_partial=True,
         projection_mode="proportional",
     )
+
+
+def _generate_scenario5_candidates(
+    cells: pd.DataFrame,
+    source_plan: pd.DataFrame,
+    engine: ForecastEngine,
+    total_budget: float,
+    scenario_policy: dict[str, Any] | None,
+    business_constraints: dict[str, Any] | None,
+) -> list[tuple[str, pd.DataFrame]]:
+    """Build the internal S5 pool and expose partial only after full infeasibility."""
+
+    policy = scenario_policy or {}
+    support_levels = [
+        str(value)
+        for value in policy.get("support_expansion_levels")
+        or ["p95", "p99", "robust_upper"]
+    ]
+    if not support_levels or any(
+        value not in {"p95", "p99", "robust_upper"} for value in support_levels
+    ):
+        raise ValueError("Scenario 5 support expansion levels are invalid")
+    approved_max = str(
+        policy.get("approved_maximum_risk_boundary") or support_levels[-1]
+    )
+    if approved_max not in support_levels:
+        raise ValueError("Scenario 5 approved maximum must be one configured expansion level")
+    support_levels = support_levels[: support_levels.index(approved_max) + 1]
+    projection_modes = [
+        str(value)
+        for value in policy.get("projection_modes") or ["proportional", "additive"]
+    ]
+    if any(value not in {"proportional", "additive"} for value in projection_modes):
+        raise ValueError("Scenario 5 projection mode is invalid")
+
+    candidates: list[tuple[str, pd.DataFrame]] = []
+    for support_limit in support_levels:
+        level_candidates: list[tuple[str, pd.DataFrame]] = []
+        for projection_mode in projection_modes:
+            try:
+                candidate = _enforce_candidate_constraints(
+                    cells.copy(),
+                    source_plan,
+                    engine,
+                    total_budget,
+                    support_limit=support_limit,
+                    allow_partial=False,
+                    business_constraints=business_constraints,
+                    projection_mode=projection_mode,
+                )
+            except CandidateFeasibilityError:
+                continue
+            candidate = _annotate_scenario_semantics(
+                candidate,
+                scenario_kind="conservative_plan",
+                scenario_variant="full_conservative",
+                feasibility_status="feasible_full",
+            )
+            level_candidates.append(
+                (
+                    f"scenario5_full_conservative_{support_limit}_{projection_mode}",
+                    candidate,
+                )
+            )
+        if level_candidates:
+            return level_candidates
+
+    limiting_constraints = (
+        "model_policy_and_support_capacity_at_" + approved_max
+    )
+    reason = (
+        "Весь бюджет превышает доступную емкость ячеек в пределах утвержденной "
+        "границы риска. Остаток не включен в расчет эффекта."
+    )
+    for projection_mode in projection_modes:
+        try:
+            candidate = _enforce_candidate_constraints(
+                cells.copy(),
+                source_plan,
+                engine,
+                total_budget,
+                support_limit=approved_max,
+                allow_partial=True,
+                business_constraints=business_constraints,
+                projection_mode=projection_mode,
+            )
+        except CandidateFeasibilityError:
+            continue
+        candidate = _annotate_scenario_semantics(
+            candidate,
+            scenario_kind="conservative_plan",
+            scenario_variant="safe_partial",
+            feasibility_status="feasible_partial",
+            full_allocation_impossible_reason=reason,
+            limiting_constraints=limiting_constraints,
+        )
+        candidates.append(
+            (
+                f"scenario5_safe_partial_{approved_max}_{projection_mode}",
+                candidate,
+            )
+        )
+    if not candidates:
+        raise CandidateFeasibilityError(
+            "Scenario 5 cannot allocate even a partial budget within model-policy bounds"
+        )
+    return candidates
 
 
 def _enforce_support_caps(cells: pd.DataFrame, source_plan: pd.DataFrame, engine: ForecastEngine, total_budget: float) -> pd.DataFrame:
@@ -2804,9 +3050,18 @@ def _candidate_from_allocation(
 ) -> pd.DataFrame:
     out = cells.copy().reset_index(drop=True)
     out["budget_rub"] = np.asarray(allocation, dtype=float)
+    allocated = float(out["budget_rub"].sum())
+    tolerance = max(
+        BUDGET_RECONCILIATION_ABS_TOL_RUB,
+        abs(float(total_budget)) * BUDGET_RECONCILIATION_REL_TOL,
+    )
+    if abs(allocated - float(total_budget)) > tolerance:
+        raise CandidateFeasibilityError(
+            "Scenario 6 candidate does not allocate the full requested budget"
+        )
     out["requested_budget_rub"] = float(total_budget)
-    out["allocated_budget_rub"] = float(out["budget_rub"].sum())
-    out["unallocated_budget_rub"] = max(float(total_budget) - float(out["budget_rub"].sum()), 0.0)
+    out["allocated_budget_rub"] = allocated
+    out["unallocated_budget_rub"] = 0.0
     out["support_limit_policy"] = support_limit
     out["allocation_projection_mode"] = "adaptive_marginal_posterior"
     out["operational_rounding_step_rub"] = 0.0
@@ -2814,7 +3069,12 @@ def _candidate_from_allocation(
     out["operational_rounding_status"] = "disabled_pre_score"
     for key, value in diagnostics.items():
         out[key] = value
-    return out
+    return _annotate_scenario_semantics(
+        out,
+        scenario_kind="optimized_plan",
+        scenario_variant="full_effect_maximizing",
+        feasibility_status="feasible_full",
+    )
 
 
 def _generate_adaptive_scenario6_candidates(
@@ -2834,6 +3094,10 @@ def _generate_adaptive_scenario6_candidates(
     analog_missing_geo_policy: str,
 ) -> tuple[list[tuple[str, pd.DataFrame]], list[dict[str, Any]], dict[str, Any]]:
     """Generate a compact finalist pool after a high-resolution posterior marginal search."""
+    if scenario_config.get("require_full_budget") is False:
+        raise ValueError("Scenario 6 policy must require the full requested budget")
+    if scenario_config.get("infeasible_when_full_budget_cannot_be_allocated") is False:
+        raise ValueError("Scenario 6 policy must expose full-budget infeasibility")
     aggregate_constraint_keys = {
         "channels_allowed",
         "geos_allowed",
@@ -2849,16 +3113,6 @@ def _generate_adaptive_scenario6_candidates(
             "Adaptive marginal search requires aggregate business constraints to be compiled into cell bounds"
         )
     cells = cells.reset_index(drop=True)
-    kernels = _build_turnover_response_kernels(
-        engine,
-        source_plan,
-        cells,
-        campaign_name,
-        n_samples=search_samples,
-        seed=seed,
-        analog_year=analog_year,
-        analog_missing_geo_policy=analog_missing_geo_policy,
-    )
     quantum = float(
         scenario_config.get("allocation_quantum_rub")
         or DEFAULT_OPTIMIZER_ALLOCATION_QUANTUM_RUB
@@ -2876,17 +3130,57 @@ def _generate_adaptive_scenario6_candidates(
     attempts = 0
     convergence_flags: list[bool] = []
     exhaustion_flags: list[bool] = []
-    support_limits = [str(value) for value in scenario_config.get("support_limits") or ["p99", "robust_upper"]]
+    ordered_support_limits = ["p95", "p99", "robust_upper"]
+    approved_max = str(
+        scenario_config.get("approved_maximum_risk_boundary") or "robust_upper"
+    )
+    if approved_max not in ordered_support_limits:
+        raise ValueError("Scenario 6 approved maximum risk boundary is invalid")
+    approved_index = ordered_support_limits.index(approved_max)
+    default_support_limits = [
+        value
+        for value in ("p99", approved_max)
+        if ordered_support_limits.index(value) <= approved_index
+    ] or [approved_max]
+    support_limits = [
+        str(value)
+        for value in scenario_config.get("support_limits")
+        or default_support_limits
+    ]
+    if not support_limits or any(value not in ordered_support_limits for value in support_limits):
+        raise ValueError("Scenario 6 support limits are invalid")
+    if any(ordered_support_limits.index(value) > approved_index for value in support_limits):
+        raise ValueError("Scenario 6 support limit exceeds the approved risk boundary")
+    support_limits = list(dict.fromkeys(support_limits))
 
+    infeasible_capacities: list[str] = []
+    tolerance = max(
+        BUDGET_RECONCILIATION_ABS_TOL_RUB,
+        abs(float(total_budget)) * BUDGET_RECONCILIATION_REL_TOL,
+    )
+    feasible_bounds: list[tuple[str, np.ndarray, np.ndarray, np.ndarray]] = []
     for support_limit in support_limits:
-        lower, upper, policies = _candidate_policy_bounds(
-            cells,
-            source_plan,
-            engine,
-            support_limit=support_limit,
-        )
-        target_budget = min(float(total_budget), float(upper.sum()))
-        if float(lower.sum()) > target_budget + BUDGET_RECONCILIATION_ABS_TOL_RUB:
+        try:
+            lower, upper, _ = _candidate_policy_bounds(
+                cells,
+                source_plan,
+                engine,
+                support_limit=support_limit,
+            )
+        except CandidateFeasibilityError as exc:
+            infeasible_capacities.append(f"{support_limit}:{exc}")
+            continue
+        lower_total = float(lower.sum())
+        upper_total = float(upper.sum())
+        if lower_total > float(total_budget) + tolerance:
+            infeasible_capacities.append(
+                f"{support_limit}:required_minimum={lower_total:.6f}>requested={total_budget:.6f}"
+            )
+            continue
+        if upper_total < float(total_budget) - tolerance:
+            infeasible_capacities.append(
+                f"{support_limit}:capacity={upper_total:.6f}<requested={total_budget:.6f}"
+            )
             continue
         projected_source = _enforce_candidate_constraints(
             cells.copy(),
@@ -2894,9 +3188,33 @@ def _generate_adaptive_scenario6_candidates(
             engine,
             total_budget,
             support_limit=support_limit,
-            allow_partial=True,
+            allow_partial=False,
             business_constraints=business_constraints,
         )["budget_rub"].to_numpy(dtype=float)
+        feasible_bounds.append((support_limit, lower, upper, projected_source))
+
+    if not feasible_bounds:
+        detail = "; ".join(infeasible_capacities) or "no feasible full-budget allocation"
+        raise CandidateFeasibilityError(
+            "Scenario 6 full-budget allocation is infeasible within approved risk limits: "
+            + detail
+        )
+
+    # Posterior kernels are expensive to compile.  A campaign that cannot place
+    # its full budget under any approved support limit must fail before this
+    # point, without opening posterior fits or spending candidate attempts.
+    kernels = _build_turnover_response_kernels(
+        engine,
+        source_plan,
+        cells,
+        campaign_name,
+        n_samples=search_samples,
+        seed=seed,
+        analog_year=analog_year,
+        analog_missing_geo_policy=analog_missing_geo_policy,
+    )
+
+    for support_limit, lower, upper, projected_source in feasible_bounds:
         base_specs: list[tuple[str, str, np.ndarray]] = [
             ("source_projected", "p50", projected_source)
         ]
@@ -2994,7 +3312,9 @@ def _generate_adaptive_scenario6_candidates(
             unique[digest] = record
     unique_records = list(unique.values())
     if not unique_records:
-        raise CandidateFeasibilityError("Adaptive search produced no feasible unique allocations")
+        raise CandidateFeasibilityError(
+            "Scenario 6 search produced no full-budget candidate inside approved risk limits"
+        )
     selected: list[dict[str, Any]] = []
     per_limit = max(max_pool // max(len(support_limits), 1), 2)
     for support_limit in support_limits:
@@ -3118,8 +3438,12 @@ def _candidate_method(candidate_name: str) -> str:
         return "scenario3_channel_balanced"
     if "__scenario4_geo_balanced" in candidate_name:
         return "scenario4_geo_balanced"
+    if "__scenario5_full_conservative" in candidate_name:
+        return "scenario5_full_conservative"
+    if "__scenario5_safe_partial" in candidate_name:
+        return "scenario5_safe_partial"
     if "__scenario5_support_weighted" in candidate_name:
-        return "scenario5_support_weighted"
+        return "scenario5_support_weighted_legacy"
     if "__scenario6_" in candidate_name:
         return "scenario6_search"
     return "other"
@@ -3379,6 +3703,10 @@ def run_optimizer_from_flighting(
     objective_cfg = workflow_config.get("objective") or {}
     objective_contract = _compile_optimizer_objective(objective_cfg)
     decision_policy = _compile_decision_policy(workflow_config.get("decision_policy") or {})
+    scenario6_execution_policy = {
+        **(decision_policy.get("scenario_6") or {}),
+        **scenario_cfg,
+    }
     guardrail_cfg = objective_cfg.get("guardrails") or {}
     budget_cfg = workflow_config.get("budget") or {}
     constraints_cfg = workflow_config.get("constraints") or {}
@@ -3398,6 +3726,9 @@ def run_optimizer_from_flighting(
         auto_export=verification_mode == "full_lineage",
         validate_package_lineage=verification_mode == "full_lineage",
     )
+    model_inventory = serving_model_inventory(engine.metadata)
+    if str(decision_policy.get("schema_version") or "").startswith("3."):
+        model_inventory = validate_serving_model_inventory(engine.metadata)
     plan = pd.DataFrame(read_daily_flighting(flighting_path))
     plan["date"] = pd.to_datetime(plan["date"]).dt.date
     output_dir = ensure_dir(output_dir)
@@ -3406,6 +3737,9 @@ def run_optimizer_from_flighting(
     allocation_rows: list[dict[str, Any]] = []
     paired_comparison_rows: list[dict[str, Any]] = []
     search_trace_rows: list[dict[str, Any]] = []
+    scenario_evaluations_n = 0
+    posterior_fit_loads_before_turnover_only_n = 0
+    posterior_fit_loads_after_turnover_only_n = 0
 
     campaign_names = sorted(plan["campaign_name"].unique())
     for campaign_pos, campaign_name in enumerate(campaign_names, start=1):
@@ -3426,6 +3760,7 @@ def run_optimizer_from_flighting(
         total_budget = float(cells["budget_rub"].sum())
         if total_budget <= 0 or cells.empty:
             continue
+        campaign_segments_n = int(cells["segment"].astype(str).nunique())
         configured_total = budget_cfg.get("total_budget_rub")
         if configured_total is not None:
             configured_total = float(configured_total)
@@ -3440,28 +3775,65 @@ def run_optimizer_from_flighting(
         candidates.append(
             (
                 f"{campaign_name}__scenario1_current_plan",
-                _annotate_candidate_budget(cells, total_budget),
+                _annotate_scenario_semantics(
+                    _annotate_candidate_budget(cells, total_budget),
+                    scenario_kind="uploaded_plan",
+                    scenario_variant="uploaded_plan",
+                    feasibility_status="feasible_full",
+                ),
             )
         )
         equal = cells.copy()
         equal["budget_rub"] = total_budget / len(equal)
         candidates.append(
-            (f"{campaign_name}__scenario2_equal_cell_split", _annotate_candidate_budget(equal, total_budget))
+            (
+                f"{campaign_name}__scenario2_equal_cell_split",
+                _annotate_scenario_semantics(
+                    _annotate_candidate_budget(equal, total_budget),
+                    scenario_kind="benchmark_plan",
+                    scenario_variant="equal_geo_channel_cells",
+                    feasibility_status="feasible_full",
+                ),
+            )
         )
         candidates.append(
             (
                 f"{campaign_name}__scenario3_channel_balanced",
-                _annotate_candidate_budget(_channel_balanced_candidate(cells, total_budget), total_budget),
+                _annotate_scenario_semantics(
+                    _annotate_candidate_budget(
+                        _channel_balanced_candidate(cells, total_budget), total_budget
+                    ),
+                    scenario_kind="benchmark_plan",
+                    scenario_variant="channel_totals_geo_equal",
+                    feasibility_status="feasible_full",
+                ),
             )
         )
         candidates.append(
             (
                 f"{campaign_name}__scenario4_geo_balanced",
-                _annotate_candidate_budget(_geo_balanced_candidate(cells, total_budget), total_budget),
+                _annotate_scenario_semantics(
+                    _annotate_candidate_budget(
+                        _geo_balanced_candidate(cells, total_budget), total_budget
+                    ),
+                    scenario_kind="benchmark_plan",
+                    scenario_variant="geo_totals_channel_equal",
+                    feasibility_status="feasible_full",
+                ),
             )
         )
-        support_safe = _support_weighted_candidate(cells, plan, engine, total_budget)
-        candidates.append((f"{campaign_name}__scenario5_support_weighted", support_safe))
+        scenario5_candidates = _generate_scenario5_candidates(
+            cells,
+            plan,
+            engine,
+            total_budget,
+            decision_policy.get("scenario_5") or {},
+            constraints_cfg,
+        )
+        candidates.extend(
+            (f"{campaign_name}__{suffix}", candidate)
+            for suffix, candidate in scenario5_candidates
+        )
 
         n_cells = len(cells)
         precheck_rejections: list[dict[str, Any]] = []
@@ -3488,6 +3860,22 @@ def run_optimizer_from_flighting(
                 }
             )
         elif scenario6_enabled:
+            # The pre-E.1A adaptive path compiled one turnover kernel per
+            # campaign segment before discovering aggregate infeasibility.
+            adaptive_constraint_keys = {
+                "channels_allowed",
+                "geos_allowed",
+                "channel_min_share",
+                "channel_max_share",
+                "geo_min_share",
+                "geo_max_share",
+                "mandatory_channels",
+                "mandatory_geos",
+            }
+            if not any(
+                constraints_cfg.get(key) for key in adaptive_constraint_keys
+            ):
+                posterior_fit_loads_before_turnover_only_n += campaign_segments_n
             try:
                 adaptive_candidates, adaptive_trace, adaptive_diagnostics = (
                     _generate_adaptive_scenario6_candidates(
@@ -3500,12 +3888,13 @@ def run_optimizer_from_flighting(
                         seed=seed,
                         max_evaluations=search_candidates,
                         finalists=finalists,
-                        scenario_config=scenario_cfg,
+                        scenario_config=scenario6_execution_policy,
                         business_constraints=constraints_cfg,
                         analog_year=analog_year,
                         analog_missing_geo_policy=analog_missing_geo_policy,
                     )
                 )
+                posterior_fit_loads_after_turnover_only_n += campaign_segments_n
                 candidates.extend(adaptive_candidates)
                 search_trace_rows.extend(adaptive_trace)
                 print(
@@ -3564,6 +3953,9 @@ def run_optimizer_from_flighting(
             independent_scenarios=True,
             targets=[str(objective_contract["target"])],
         )
+        scenario_evaluations_n += len(candidates)
+        posterior_fit_loads_before_turnover_only_n += campaign_segments_n
+        posterior_fit_loads_after_turnover_only_n += campaign_segments_n
         scored: list[dict[str, Any]] = []
         for cand_name, cand_cells in cand_by_name.items():
             cand_summary = search_summary[search_summary["campaign_name"] == cand_name]
@@ -3594,6 +3986,13 @@ def run_optimizer_from_flighting(
                 caution_rows,
                 objective_contract,
             )
+            risk_budget = _candidate_risk_budget_summary(cand_cells, plan, engine)
+            concentration = _candidate_concentration(cand_cells)
+            source_deviation = _candidate_source_deviation(
+                cand_cells,
+                cells,
+                total_budget,
+            )
             scored.append(
                 {
                     "score": score,
@@ -3609,6 +4008,9 @@ def run_optimizer_from_flighting(
                     "risk_policy_violations_n": risk_policy_violations,
                     "diagnostic_target_rows": diagnostic_rows,
                     "caution_target_rows": caution_rows,
+                    **risk_budget,
+                    "allocation_concentration_hhi": concentration,
+                    "source_budget_deviation_share": source_deviation,
                 }
             )
 
@@ -3657,12 +4059,44 @@ def run_optimizer_from_flighting(
                 "is_best_reliable_search": reliable_rank.get(cand_name) == 1,
                 "total_budget_rub": total_budget,
                 **budget_summary,
+                "within_support_budget_rub": item["within_support_budget_rub"],
+                "within_support_share": item["within_support_share"],
+                "controlled_extrapolation_budget_rub": item["controlled_extrapolation_budget_rub"],
+                "controlled_extrapolation_share": item["controlled_extrapolation_share"],
+                "high_risk_budget_rub": item["high_risk_budget_rub"],
+                "high_risk_share": item["high_risk_share"],
+                "within_support_cells_n": item["within_support_cells_n"],
+                "controlled_extrapolation_cells_n": item["controlled_extrapolation_cells_n"],
+                "high_risk_cells_n": item["high_risk_cells_n"],
+                "allocation_concentration_hhi": item["allocation_concentration_hhi"],
+                "source_budget_deviation_share": item["source_budget_deviation_share"],
                 "cells_n": n_cells,
                 "modifiable_cells_n": modifiable_cells_n,
                 "search_samples": search_samples,
             })
 
-        deterministic = [item for item in scored if not str(item["candidate_name"]).split("__", 1)[1].startswith("scenario6_")]
+        deterministic = [
+            item
+            for item in scored
+            if "__scenario5_" not in str(item["candidate_name"])
+            and "__scenario6_" not in str(item["candidate_name"])
+        ]
+        scenario5_scored = [
+            item for item in scored if "__scenario5_" in str(item["candidate_name"])
+        ]
+        if scenario5_scored:
+            selected_scenario5 = min(
+                scenario5_scored,
+                key=lambda item: (
+                    float(item["high_risk_budget_rub"]),
+                    float(item["controlled_extrapolation_budget_rub"]),
+                    float(item["allocation_concentration_hhi"]),
+                    float(item["source_budget_deviation_share"]),
+                    -float(item["score"]),
+                    str(item["candidate_name"]),
+                ),
+            )
+            deterministic.append(selected_scenario5)
         scenario6_raw = [item for item in raw_sorted if str(item["candidate_name"]).split("__", 1)[1].startswith("scenario6_")]
         scenario6_reliable = [item for item in reliable_sorted if str(item["candidate_name"]).split("__", 1)[1].startswith("scenario6_")]
         selected_by_name: dict[str, dict[str, Any]] = {str(item["candidate_name"]): item for item in deterministic}
@@ -3684,7 +4118,11 @@ def run_optimizer_from_flighting(
             analog_missing_geo_policy=analog_missing_geo_policy,
             independent_scenarios=True,
             return_campaign_draws=True,
+            targets=[SERVING_CORE_TARGET],
         )
+        scenario_evaluations_n += len(selected)
+        posterior_fit_loads_before_turnover_only_n += campaign_segments_n * len(TARGETS)
+        posterior_fit_loads_after_turnover_only_n += campaign_segments_n
         campaign_comparisons = _paired_candidate_comparisons(
             finalist_draws,
             source_campaign_name=campaign_name,
@@ -3773,8 +4211,19 @@ def run_optimizer_from_flighting(
             cand_summary["strong_support_warnings_n"] = final_by_name[cand_name]["strong_support_warnings_n"]
             cand_summary["hard_support_warnings_n"] = final_by_name[cand_name]["hard_support_warnings_n"]
             candidate_budget = _candidate_budget_summary(cand_by_name[cand_name], total_budget)
+            candidate_risk = _candidate_risk_budget_summary(
+                cand_by_name[cand_name], plan, engine
+            )
             for key, value in candidate_budget.items():
                 cand_summary[key] = value
+            for key, value in candidate_risk.items():
+                cand_summary[key] = value
+            cand_summary["allocation_concentration_hhi"] = _candidate_concentration(
+                cand_by_name[cand_name]
+            )
+            cand_summary["source_budget_deviation_share"] = _candidate_source_deviation(
+                cand_by_name[cand_name], cells, total_budget
+            )
             cand_summary["candidate_name"] = cand_name
             cand_summary["source_campaign_name"] = campaign_name
             finalist_rows.extend(cand_summary.to_dict("records"))
@@ -3782,6 +4231,31 @@ def run_optimizer_from_flighting(
             allocated_budget = float(candidate_budget["allocated_budget_rub"])
             for _, cell in cand_cells.iterrows():
                 capability = engine._capability_row(str(cell["segment"]), "turnover_per_user", str(cell["channel"]))
+                safe_cap = _support_cap_rub_for_cell(
+                    cell,
+                    plan,
+                    engine,
+                    limit="p95",
+                )
+                automatic_cap = _support_cap_rub_for_cell(
+                    cell,
+                    plan,
+                    engine,
+                    limit="p99",
+                )
+                robust_cap = _support_cap_rub_for_cell(
+                    cell,
+                    plan,
+                    engine,
+                    limit="robust_upper",
+                )
+                cell_budget = float(cell["budget_rub"])
+                cell_within = min(cell_budget, safe_cap)
+                cell_controlled = min(
+                    max(cell_budget - safe_cap, 0.0),
+                    max(robust_cap - safe_cap, 0.0),
+                )
+                cell_high = max(cell_budget - robust_cap, 0.0)
                 allocation_rows.append({
                     "source_campaign_name": campaign_name,
                     "candidate_name": cand_name,
@@ -3795,27 +4269,16 @@ def run_optimizer_from_flighting(
                     "budget_share": float(cell["budget_rub"] / allocated_budget) if allocated_budget > 0 else 0.0,
                     "share_of_uploaded_budget": float(cell["budget_rub"] / total_budget) if total_budget > 0 else 0.0,
                     **candidate_budget,
+                    **candidate_risk,
+                    "cell_within_support_budget_rub": cell_within,
+                    "cell_controlled_extrapolation_budget_rub": cell_controlled,
+                    "cell_high_risk_budget_rub": cell_high,
                     "optimizer_policy": capability.get("optimizer_use", "blocked"),
                     "allowed_use": capability.get("allowed_use", "unavailable"),
                     "gate_reason_codes": capability.get("gate_reason_codes", "MISSING_GATE_POLICY"),
-                    "safe_support_cap_rub": _support_cap_rub_for_cell(
-                        cell,
-                        plan,
-                        engine,
-                        limit="p95",
-                    ),
-                    "automatic_support_cap_rub": _support_cap_rub_for_cell(
-                        cell,
-                        plan,
-                        engine,
-                        limit="p99",
-                    ),
-                    "robust_support_cap_rub": _support_cap_rub_for_cell(
-                        cell,
-                        plan,
-                        engine,
-                        limit="robust_upper",
-                    ),
+                    "safe_support_cap_rub": safe_cap,
+                    "automatic_support_cap_rub": automatic_cap,
+                    "robust_support_cap_rub": robust_cap,
                 })
 
     candidate_df = pd.DataFrame(candidate_summaries)
@@ -3884,8 +4347,21 @@ def run_optimizer_from_flighting(
         "duration_seconds": round(time.monotonic() - started_perf, 3),
         "scenario6_enabled": scenario6_enabled,
         "scenario6_method": requested_method,
-        "scenario6_config": scenario_cfg,
+        "scenario6_config": scenario6_execution_policy,
         "scenario6_search_trace_rows_n": int(len(search_trace_df)),
+        "serving_policy_version": SERVING_POLICY_VERSION,
+        "research_models_in_package_n": int(
+            model_inventory["research_models_in_package_n"]
+        ),
+        "active_serving_models_n": int(model_inventory["active_serving_models_n"]),
+        "serving_targets": [SERVING_CORE_TARGET],
+        "scenario_evaluations_n": int(scenario_evaluations_n),
+        "posterior_fit_loads_before_turnover_only_n": int(
+            posterior_fit_loads_before_turnover_only_n
+        ),
+        "posterior_fit_loads_after_turnover_only_n": int(
+            posterior_fit_loads_after_turnover_only_n
+        ),
         "objective": objective_cfg,
         "compiled_objective": objective_contract,
         "decision_policy": decision_policy,

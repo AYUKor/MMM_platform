@@ -100,6 +100,15 @@ from services.job_result_view import (  # noqa: E402
     build_job_result_view,
     build_scenario_media_plan,
 )
+from services.business_semantics_v2 import (  # noqa: E402
+    build_geo_catalog,
+    build_job_result_view_v2,
+    build_model_overview_v2,
+    build_model_passport_v2,
+    build_scenario_media_plan_v2,
+    build_validation_result_v2,
+    build_workspace_geo_budget_v1,
+)
 from services.auth_admin import (  # noqa: E402
     AUDIT_EVENT_TYPES,
     ROLE_IDS,
@@ -127,10 +136,10 @@ from contracts.admin_user_mutation_v1 import (  # noqa: E402
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.6.0"
+SERVER_VERSION = "0.7.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
-    r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|result-view|media-plan|cancel))?$"
+    r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|result-view|result-view-v2|media-plan|media-plan-v2|cancel))?$"
 )
 _ARTIFACT_PATH_RE = re.compile(
     r"^/api/v1/artifacts/(?P<artifact_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})/download$"
@@ -139,7 +148,7 @@ _UPLOAD_PATH_RE = re.compile(
     r"^/api/v1/uploads/(?P<upload_id>upload_[0-9a-f]{12,64})(?:/(?P<resource>validations))?$"
 )
 _VALIDATION_PATH_RE = re.compile(
-    r"^/api/v1/validations/(?P<validation_id>validation_[0-9a-f]{12,64})(?:/(?P<resource>jobs))?$"
+    r"^/api/v1/validations/(?P<validation_id>validation_[0-9a-f]{12,64})(?:/(?P<resource>jobs|view-v2))?$"
 )
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9._:-]{16,128}$")
 _SCHEMA_PATH_RE = re.compile(
@@ -168,6 +177,13 @@ _CONTRACT_SCHEMA_FILES = {
     "admin-role-catalog-v1": WEB_APP_DIR / "contracts" / "admin_role_catalog_v1.schema.json",
     "admin-system-status-v1": WEB_APP_DIR / "contracts" / "admin_system_status_v1.schema.json",
     "admin-audit-log-v1": WEB_APP_DIR / "contracts" / "admin_audit_log_v1.schema.json",
+    "job-result-view-v2": WEB_APP_DIR / "contracts" / "job_result_view_v2.schema.json",
+    "validation-result-v2": WEB_APP_DIR / "contracts" / "validation_result_v2.schema.json",
+    "model-passport-v2": WEB_APP_DIR / "contracts" / "model_passport_v2.schema.json",
+    "model-overview-v2": WEB_APP_DIR / "contracts" / "model_overview_v2.schema.json",
+    "geo-catalog-v1": WEB_APP_DIR / "contracts" / "geo_catalog_v1.schema.json",
+    "workspace-geo-budget-v1": WEB_APP_DIR / "contracts" / "workspace_geo_budget_v1.schema.json",
+    "scenario-media-plan-v2": WEB_APP_DIR / "contracts" / "scenario_media_plan_v2.schema.json",
 }
 
 
@@ -904,7 +920,7 @@ class HttpSmokeApplication:
                     model_verification_mode=settings.model_verification_mode,
                     optimizer_policy_path=(
                         settings.optimizer_policy_path
-                        or project_root / "02_Code" / "02_Budget_optimizer" / "optimizer_decision_policy_v2.yaml"
+                        or project_root / "02_Code" / "02_Budget_optimizer" / "optimizer_decision_policy_v3.yaml"
                     ).expanduser().resolve(),
                     business_policy_path=(
                         settings.business_policy_path
@@ -1100,6 +1116,51 @@ class HttpSmokeApplication:
             self.model_passport,
             registry_root=registry_root,
             registry_channel=self.settings.registry_channel,
+        )
+
+    def model_passport_v2(self) -> dict[str, Any]:
+        """Expose only the four active turnover serving models."""
+
+        if self.model_passport is None:
+            raise ResultProjectionUnavailableError("Active model passport is unavailable")
+        return build_model_passport_v2(self.model_passport)
+
+    def model_overview_v2(self) -> dict[str, Any]:
+        """Build the turnover-only model-page projection."""
+
+        passport = self.model_passport_v2()
+        return build_model_overview_v2(self.model_overview(), passport)
+
+    def geo_catalog(self) -> dict[str, Any]:
+        """Publish catalog identities for geographies already seen by the app."""
+
+        geographies = {
+            str(geo)
+            for validation in self.state.list_validations()
+            for campaign in validation.get("campaigns") or []
+            for geo in campaign.get("geographies") or []
+        }
+        return build_geo_catalog(geographies)
+
+    def workspace_geo_budget(self) -> dict[str, Any]:
+        """Aggregate validated campaign budgets by canonical geography identity."""
+
+        return build_workspace_geo_budget_v1(self.state.list_validations())
+
+    def validation_view_v2(self, validation_id: str) -> dict[str, Any]:
+        """Separate file validity from grouped turnover-model limitations."""
+
+        validation = self.state.read_validation(validation_id)
+        normalized = validation.get("normalized_plan") or {}
+        storage_key = str(normalized.get("storage_key") or "")
+        normalized_path = (
+            _safe_child(self.settings.artifact_root, *storage_key.split("/"))
+            if storage_key
+            else None
+        )
+        return build_validation_result_v2(
+            validation,
+            normalized_plan_path=normalized_path,
         )
 
     def calculation_history(
@@ -1333,6 +1394,25 @@ class HttpSmokeApplication:
             ),
         )
 
+    def result_view_v2(self, job_id: str) -> dict[str, Any]:
+        """Build the turnover-only browser result with explicit budget semantics."""
+
+        job = self.state.read_job(job_id)
+        result = self.state.read_resource(job_id, "result")
+        overview = self.state.read_resource(job_id, "overview")
+        if not isinstance(result, Mapping) or not isinstance(overview, Mapping):
+            raise ResultProjectionStateError("Published result resources have an invalid shape")
+        return build_job_result_view_v2(
+            job_id=job_id,
+            job=job,
+            result=result,
+            overview=overview,
+            artifact_resolver=lambda artifact_id: self.state.resolve_artifact(
+                artifact_id,
+                self.settings.runtime_root,
+            ),
+        )
+
     def media_plan(
         self,
         job_id: str,
@@ -1366,6 +1446,13 @@ class HttpSmokeApplication:
             channel=channel,
             geo=geo,
             date=date,
+        )
+
+    def media_plan_v2(self, job_id: str, **parameters: Any) -> dict[str, Any]:
+        """Add stable browser channel/geo identities to a validated media plan."""
+
+        return build_scenario_media_plan_v2(
+            self.media_plan(job_id, **parameters)
         )
 
     def cancel(self, job_id: str) -> bool:
@@ -1466,11 +1553,13 @@ def _required_permission(method: str, path: str) -> str | None:
         if job and job.group("resource") == "cancel":
             return "calculation.cancel"
     if method == "GET":
-        if path == "/api/v1/workspace/home":
+        if path in {"/api/v1/workspace/home", "/api/v1/workspace/geo-budget"}:
             return "workspace.read"
         if path in {
             "/api/v1/models/active",
+            "/api/v1/models/active-v2",
             "/api/v1/model/overview",
+            "/api/v1/model/overview-v2",
             "/api/v1/calculation-profile",
         }:
             return "model.read"
@@ -1478,6 +1567,7 @@ def _required_permission(method: str, path: str) -> str | None:
             "/api/v1/openapi.json",
             "/api/v1/meta/errors",
             "/api/v1/meta/mmm-facts",
+            "/api/v1/meta/geo-catalog",
             "/api/v1/help/catalog",
         } or _SCHEMA_PATH_RE.fullmatch(path):
             return "help.read"
@@ -1491,7 +1581,7 @@ def _required_permission(method: str, path: str) -> str | None:
             return "report.download"
         job = _JOB_PATH_RE.fullmatch(path)
         if job:
-            if job.group("resource") in {"result", "overview", "result-view", "media-plan"}:
+            if job.group("resource") in {"result", "overview", "result-view", "result-view-v2", "media-plan", "media-plan-v2"}:
                 return "result.read"
             return "calculation.read"
     return "workspace.read"
@@ -2501,6 +2591,28 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if path == "/api/v1/meta/mmm-facts":
                 self._json(HTTPStatus.OK, build_mmm_fact_catalog())
                 return
+            if path == "/api/v1/meta/geo-catalog":
+                if request_url.query:
+                    self._error(
+                        HTTPStatus.BAD_REQUEST,
+                        "INVALID_QUERY",
+                        "Этот запрос не поддерживает параметры.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, application.geo_catalog())
+                return
+            if path == "/api/v1/models/active-v2":
+                try:
+                    payload = application.model_passport_v2()
+                except Exception:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "MODEL_PASSPORT_UNAVAILABLE",
+                        "Паспорт активной модели временно недоступен.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, payload)
+                return
             if path == "/api/v1/models/active":
                 if application.model_passport is None:
                     self._error(
@@ -2540,8 +2652,10 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                 return
             if path in {
                 "/api/v1/workspace/home",
+                "/api/v1/workspace/geo-budget",
                 "/api/v1/calculations/history",
                 "/api/v1/model/overview",
+                "/api/v1/model/overview-v2",
                 "/api/v1/help/catalog",
             }:
                 try:
@@ -2571,8 +2685,12 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                             )
                         if path == "/api/v1/workspace/home":
                             payload = application.workspace_home()
+                        elif path == "/api/v1/workspace/geo-budget":
+                            payload = application.workspace_geo_budget()
                         elif path == "/api/v1/model/overview":
                             payload = application.model_overview()
+                        elif path == "/api/v1/model/overview-v2":
+                            payload = application.model_overview_v2()
                         else:
                             payload = application.help_catalog()
                 except (
@@ -2620,6 +2738,34 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     return
                 self._json(HTTPStatus.OK, payload)
                 return
+            if validation_match and validation_match.group("resource") == "view-v2":
+                if request_url.query:
+                    self._error(
+                        HTTPStatus.BAD_REQUEST,
+                        "INVALID_QUERY",
+                        "Этот запрос не поддерживает параметры.",
+                    )
+                    return
+                try:
+                    payload = application.validation_view_v2(
+                        validation_match.group("validation_id")
+                    )
+                except FileNotFoundError:
+                    self._error(
+                        HTTPStatus.NOT_FOUND,
+                        "VALIDATION_NOT_FOUND",
+                        "Проверка не найдена.",
+                    )
+                    return
+                except Exception:
+                    self._error(
+                        HTTPStatus.CONFLICT,
+                        "VALIDATION_VIEW_INCONSISTENT",
+                        "Опубликованные сведения о проверке не согласованы между собой.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, payload)
+                return
             artifact_match = _ARTIFACT_PATH_RE.fullmatch(path)
             if artifact_match:
                 try:
@@ -2653,7 +2799,7 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             if match:
                 job_id = match.group("job_id")
                 resource = match.group("resource")
-                if resource in {"result-view", "media-plan"}:
+                if resource in {"result-view", "result-view-v2", "media-plan", "media-plan-v2"}:
                     try:
                         application.state.read_job(job_id)
                     except FileNotFoundError:
@@ -2663,7 +2809,7 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                             "Расчет не найден.",
                         )
                         return
-                    if resource == "result-view" and request_url.query:
+                    if resource in {"result-view", "result-view-v2"} and request_url.query:
                         self._error(
                             HTTPStatus.BAD_REQUEST,
                             "INVALID_QUERY",
@@ -2673,6 +2819,8 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     try:
                         if resource == "result-view":
                             payload = application.result_view(job_id)
+                        elif resource == "result-view-v2":
+                            payload = application.result_view_v2(job_id)
                         else:
                             (
                                 scenario_id,
@@ -2682,14 +2830,24 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                                 geo,
                                 date,
                             ) = _media_plan_parameters(request_url.query)
-                            payload = application.media_plan(
-                                job_id,
-                                scenario_id=scenario_id,
-                                page=page,
-                                page_size=page_size,
-                                channel=channel,
-                                geo=geo,
-                                date=date,
+                            media_plan_parameters = {
+                                "scenario_id": scenario_id,
+                                "page": page,
+                                "page_size": page_size,
+                                "channel": channel,
+                                "geo": geo,
+                                "date": date,
+                            }
+                            payload = (
+                                application.media_plan_v2(
+                                    job_id,
+                                    **media_plan_parameters,
+                                )
+                                if resource == "media-plan-v2"
+                                else application.media_plan(
+                                    job_id,
+                                    **media_plan_parameters,
+                                )
                             )
                     except FileNotFoundError:
                         self._error(
@@ -2715,12 +2873,12 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     except ResultProjectionUnavailableError:
                         code = (
                             "MEDIA_PLAN_VIEW_UNAVAILABLE"
-                            if resource == "media-plan"
+                            if resource in {"media-plan", "media-plan-v2"}
                             else "RESULT_VIEW_UNAVAILABLE"
                         )
                         text = (
                             "Медиаплан временно недоступен."
-                            if resource == "media-plan"
+                            if resource in {"media-plan", "media-plan-v2"}
                             else "Представление результата временно недоступно."
                         )
                         self._error(HTTPStatus.SERVICE_UNAVAILABLE, code, text)
@@ -2728,12 +2886,12 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     except Exception:
                         code = (
                             "MEDIA_PLAN_VIEW_UNAVAILABLE"
-                            if resource == "media-plan"
+                            if resource in {"media-plan", "media-plan-v2"}
                             else "RESULT_VIEW_UNAVAILABLE"
                         )
                         text = (
                             "Медиаплан временно недоступен."
-                            if resource == "media-plan"
+                            if resource in {"media-plan", "media-plan-v2"}
                             else "Представление результата временно недоступно."
                         )
                         self._error(HTTPStatus.SERVICE_UNAVAILABLE, code, text)

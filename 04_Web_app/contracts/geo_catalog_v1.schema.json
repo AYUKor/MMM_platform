@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmm-platform.local/contracts/geo_catalog_v1.schema.json",
+  "title": "GeoCatalogV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "catalog_version", "status", "display_text", "geographies_n", "entries"],
+  "properties": {
+    "contract_name": {"const": "geo_catalog_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "catalog_version": {"type": "string"},
+    "status": {"enum": ["available", "partial", "unavailable"]},
+    "display_text": {"type": "string", "minLength": 1},
+    "geographies_n": {"type": "integer", "minimum": 0},
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo_id", "geo_display_name", "latitude", "longitude", "coordinates_status", "region_id", "region_display_name"],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "latitude": {"type": ["number", "null"]},
+        "longitude": {"type": ["number", "null"]},
+        "coordinates_status": {"enum": ["canonical", "unavailable"]},
+        "region_id": {"type": ["string", "null"]},
+        "region_display_name": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

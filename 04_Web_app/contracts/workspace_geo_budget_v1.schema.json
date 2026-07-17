@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmm-platform.local/contracts/workspace_geo_budget_v1.schema.json",
+  "title": "WorkspaceGeoBudgetV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_name", "schema_version", "catalog_version", "status", "display_text", "total_budget_rub", "campaigns_n", "geographies_n", "rows"],
+  "properties": {
+    "contract_name": {"const": "workspace_geo_budget_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "catalog_version": {"type": "string"},
+    "status": {"enum": ["available", "partial", "unavailable"]},
+    "display_text": {"type": "string"},
+    "total_budget_rub": {"type": "number", "minimum": 0},
+    "campaigns_n": {"type": "integer", "minimum": 0},
+    "geographies_n": {"type": "integer", "minimum": 0},
+    "rows": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["geo_id", "geo_display_name", "latitude", "longitude", "coordinates_status", "total_budget_rub", "campaigns_n", "budget_share"], "properties": {"geo_id": {"type": "string"}, "geo_display_name": {"type": "string"}, "latitude": {"type": ["number", "null"]}, "longitude": {"type": ["number", "null"]}, "coordinates_status": {"enum": ["canonical", "unavailable"]}, "total_budget_rub": {"type": "number", "minimum": 0}, "campaigns_n": {"type": "integer", "minimum": 0}, "budget_share": {"type": ["number", "null"], "minimum": 0, "maximum": 1}}}}
+  }
+}
