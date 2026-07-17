@@ -1,5 +1,7 @@
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { CalculationsPage } from "../pages/CalculationsPage";
+import { HelpPage } from "../pages/HelpPage";
+import { HomePage } from "../pages/HomePage";
 import { JobProgressPage } from "../pages/JobProgressPage";
 import { NewCalculationPage } from "../pages/NewCalculationPage";
 import { ModelPassportPage } from "../pages/ModelPassportPage";
@@ -24,7 +26,7 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <CalculationsPage />,
+        element: <HomePage />,
       },
       {
         path: "calculations",
@@ -42,12 +44,7 @@ export const routes: RouteObject[] = [
       },
       {
         path: "help",
-        element: (
-          <PlaceholderPage
-            title="Справка"
-            description="Контекстная справка не входит в Phase 1."
-          />
-        ),
+        element: <HelpPage />,
       },
       { path: "admin/system", element: <PermissionDeniedPage /> },
       { path: "admin/jobs", element: <PermissionDeniedPage /> },
@@ -58,8 +55,8 @@ export const routes: RouteObject[] = [
         path: "*",
         element: (
           <PlaceholderPage
-            title="Страница не найдена"
-            description="Проверьте адрес или вернитесь к списку расчётов."
+            title="Раздел не найден"
+            description="Проверьте адрес или вернитесь в рабочее пространство."
           />
         ),
       },
