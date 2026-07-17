@@ -4,7 +4,7 @@
 
 This handoff defines the frozen integration boundary for the future enterprise application. Current package, run, QA, and blocker facts live only in `04_Web_app/CURRENT_TRUTH.md` and must be verified from its cited evidence before implementation.
 
-As of 2026-07-16:
+As of 2026-07-17:
 
 - the verified serving channel is `preprod`;
 - that pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b` with fingerprint `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`;
@@ -29,9 +29,18 @@ As of 2026-07-16:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
-- Product API v1 with OpenAPI `1.4.0` provides readiness, a verified target-grain model passport,
+- Product API v1 with OpenAPI `1.5.0` provides readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
+- backend Phase D adds four additive browser-safe projections for Home,
+  Calculation History, Model Overview and Help. They read persisted jobs,
+  published result state, the active Model Passport, real registry
+  registrations and one versioned structured help catalog. React, MMM,
+  forecast, optimizer, Scenario 6 and recommendation policy are unchanged;
+- the Phase D regression boundary passed the complete 122-test web/backend
+  suite with 11 expected skips, the unchanged 78-test MMM core suite with two
+  expected skips, TypeScript, ESLint, all 285 frontend unit tests and the
+  production build. No refit, MCMC or optimizer rerun was performed;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -47,10 +56,10 @@ As of 2026-07-16:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current Backend Phase C branch starts from
-  `origin/main@72b236f81d2d7a16845a2ea6dae8095f064bbb19`, which includes merged
-  PRs through #16 and frontend Phase B. Phase C changes only additive backend
-  result projections, generated contract types, tests and documentation;
+- current Backend Phase D branch starts from
+  `origin/main@d68daa61bdf6d8f00931eb9bc148eeee1dd07726`, which includes merged
+  PRs through #18. Phase D changes only additive product-navigation
+  projections, generated contract types, tests and documentation;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -440,7 +449,12 @@ Each item is a separate reviewable milestone:
     allocations and real marketer-report metadata. See ADR 0018. The next
     frontend Phase C PR should consume these endpoints instead of selecting a
     winner, calculating ranks/reliability or aggregating plan rows in React.
-14. When company-contour or multi-node scale is approved, replace file-backed
+15. Backend Phase D implemented for review: publish additive
+    `workspace_home_v1`, `calculation_history_v1`, `model_overview_v1` and
+    `help_catalog_v1`; keep pagination, filters, model-registry reads and help
+    content on the server. The next frontend Phase D PR should consume these
+    endpoints instead of reading lifecycle storage, registry files or Markdown.
+16. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 

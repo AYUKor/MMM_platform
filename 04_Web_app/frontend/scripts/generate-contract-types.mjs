@@ -45,6 +45,26 @@ const contracts = [
     typeName: "MmmFactCatalogV1",
     output: "mmm-fact-catalog-v1.ts",
   },
+  {
+    schema: "workspace_home_v1.schema.json",
+    typeName: "WorkspaceHomeV1",
+    output: "workspace-home-v1.ts",
+  },
+  {
+    schema: "calculation_history_v1.schema.json",
+    typeName: "CalculationHistoryV1",
+    output: "calculation-history-v1.ts",
+  },
+  {
+    schema: "model_overview_v1.schema.json",
+    typeName: "ModelOverviewV1",
+    output: "model-overview-v1.ts",
+  },
+  {
+    schema: "help_catalog_v1.schema.json",
+    typeName: "HelpCatalogV1",
+    output: "help-catalog-v1.ts",
+  },
 ];
 
 for (const contract of contracts) {

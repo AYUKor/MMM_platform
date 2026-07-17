@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5.example/contracts/help_catalog_v1.schema.json",
+  "title": "HelpCatalogV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "sections",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "contract_name": { "const": "help_catalog_v1" },
+    "schema_version": { "const": "1.0.0" },
+    "record_origin": {
+      "enum": ["versioned_help_catalog", "synthetic_fixture"]
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "updated_at_utc": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "nonEmptyText": { "type": "string", "minLength": 1 },
+    "articleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,80}$"
+    },
+    "safeRoute": {
+      "enum": ["/", "/calculations", "/calculations/new", "/model", "/help"]
+    },
+    "paragraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_type", "text"],
+      "properties": {
+        "block_type": { "const": "paragraph" },
+        "text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "steps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_type", "items"],
+      "properties": {
+        "block_type": { "const": "steps" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_type", "tone", "title", "text"],
+      "properties": {
+        "block_type": { "const": "note" },
+        "tone": { "enum": ["info", "warning"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "bodyBlock": {
+      "oneOf": [
+        { "$ref": "#/$defs/paragraph" },
+        { "$ref": "#/$defs/steps" },
+        { "$ref": "#/$defs/note" }
+      ]
+    },
+    "article": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "article_id",
+        "title",
+        "summary",
+        "body",
+        "related_routes",
+        "related_article_ids",
+        "keywords"
+      ],
+      "properties": {
+        "article_id": { "$ref": "#/$defs/articleId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "body": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/bodyBlock" }
+        },
+        "related_routes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/safeRoute" }
+        },
+        "related_article_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/articleId" }
+        },
+        "keywords": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "order", "title", "articles"],
+      "properties": {
+        "section_id": {
+          "enum": [
+            "getting_started",
+            "data_preparation",
+            "scenarios",
+            "result_reading",
+            "reliability",
+            "media_plan",
+            "report",
+            "common_errors",
+            "limitations"
+          ]
+        },
+        "order": { "type": "integer", "minimum": 1, "maximum": 9 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "articles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/article" }
+        }
+      }
+    }
+  }
+}
