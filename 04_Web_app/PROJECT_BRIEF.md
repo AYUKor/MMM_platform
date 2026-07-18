@@ -24,8 +24,11 @@ decisions. S5 now publishes a full conservative plan when feasible or an
 explicit partial plan; S6 publishes a full plan or explicit infeasibility.
 The merged Phase E.1B frontend consumes those v2 semantics. Backend Phase E.1C
 adds a versioned 220-geography static coordinate/alias catalog, server-side
-canonical geo aggregation and explicit partial/unavailable map coverage. Map
-rendering remains a separate frontend milestone.
+canonical geo aggregation and explicit partial/unavailable map coverage. The
+merged Phase E.1D frontend renders workspace and campaign maps from those
+server projections. Backend Phase E.1E adds a separate package-bound historical
+model geo-budget aggregate and endpoint so a following E.1F frontend change can
+give the Home map the correct model-history business meaning.
 Panel-free model transfer, reverse-proxy/systemd rendering, health, retention
 and backup/restore are implemented. There is still no provisioned hosted
 VM/domain/TLS secret, durable company queue, PostgreSQL runtime, approved
@@ -62,7 +65,7 @@ deployment can replace runtime adapters without changing MMM calculation logic
 or browser contracts.
 
 The backend has an asynchronous HTTP boundary for immutable jobs, progress
-polling, verified results and artifact downloads. Product API OpenAPI v1.8 additionally
+polling, verified results and artifact downloads. Product API OpenAPI v1.9 additionally
 publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
 and paginated history. Phase B adds a fixed nine-stage `progress-view`, real
 Scenario 6 counters where available, a separate report status and a reviewed
@@ -151,6 +154,10 @@ A support warning must not be translated into a blanket statement that advertisi
   fields.
 - Workspace geo aggregates are built from saved job-backed validations and
   deduplicate repeated validation references before summing budget.
+- Historical model geo budget is built offline from the panel registered to the
+  selected package using one versioned non-overlapping spend policy. Home
+  requests read only the hash-bound small aggregate; they never scan the source
+  panel or substitute workspace campaign history.
 - Scenario 6 distinguishes `best_raw`, `best_safe` and `no_safe_candidate`.
 - The UI never hides warnings, but translates them into business language.
 - Production activation remains fail-closed when mandatory model gates are not passed.

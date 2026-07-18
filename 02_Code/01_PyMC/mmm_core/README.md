@@ -50,3 +50,23 @@ code. Resolve the current package through the live registry and verify its
 registration and inventory. The evidence-backed status and remaining blockers
 are maintained in `04_Web_app/CURRENT_TRUTH.md`; production activation remains
 fail-closed until its required gates pass.
+
+## Historical Geo Budget Artifact
+
+`historical_geo_budget.py` builds a deterministic package-bound aggregate for
+the Home historical-spend map. It resolves the source panel only through model
+registry registration metadata, verifies size and SHA-256, projects date, geo
+and the six columns declared in
+`configs/historical_geo_budget_spend_columns_v1.json`, and writes:
+
+- `historical_geo_budget_v1.parquet`;
+- `historical_geo_budget_v1.metadata.json`;
+- `package_artifacts_manifest_v1.json`.
+
+The extension lives under
+`03_Outputs/01_PyMC_outputs/00_Model_registry/package_artifacts/<package_id>/`
+so an already registered immutable package is not mutated. The web service
+verifies this identity chain and reads the small metadata aggregate; it never
+opens the training panel during a Home request. Null, infinite and negative
+spend values fail closed, and aggregate OOH cannot be combined with its raw
+components.

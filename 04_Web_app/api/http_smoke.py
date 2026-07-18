@@ -109,6 +109,10 @@ from services.business_semantics_v2 import (  # noqa: E402
     build_validation_result_v2,
     build_workspace_geo_budget_v1,
 )
+from services.historical_model_geo_budget import (  # noqa: E402
+    HistoricalModelGeoBudgetError,
+    build_historical_model_geo_budget_v1,
+)
 from services.auth_admin import (  # noqa: E402
     AUDIT_EVENT_TYPES,
     ROLE_IDS,
@@ -136,7 +140,7 @@ from contracts.admin_user_mutation_v1 import (  # noqa: E402
 
 
 API_VERSION = "v1"
-SERVER_VERSION = "0.7.0"
+SERVER_VERSION = "0.8.0"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 _JOB_PATH_RE = re.compile(
     r"^/api/v1/jobs/(?P<job_id>[a-z][a-z0-9_]*_[0-9a-f]{12,64})(?:/(?P<resource>progress|progress-view|errors|result|overview|result-view|result-view-v2|media-plan|media-plan-v2|cancel))?$"
@@ -183,6 +187,7 @@ _CONTRACT_SCHEMA_FILES = {
     "model-overview-v2": WEB_APP_DIR / "contracts" / "model_overview_v2.schema.json",
     "geo-catalog-v1": WEB_APP_DIR / "contracts" / "geo_catalog_v1.schema.json",
     "workspace-geo-budget-v1": WEB_APP_DIR / "contracts" / "workspace_geo_budget_v1.schema.json",
+    "historical-model-geo-budget-v1": WEB_APP_DIR / "contracts" / "historical_model_geo_budget_v1.schema.json",
     "scenario-media-plan-v2": WEB_APP_DIR / "contracts" / "scenario_media_plan_v2.schema.json",
 }
 
@@ -1150,6 +1155,31 @@ class HttpSmokeApplication:
         )
         return build_workspace_geo_budget_v1(validations)
 
+    def historical_model_geo_budget(self) -> dict[str, Any]:
+        """Read the package-bound aggregate without opening the source panel."""
+
+        registry_root = (
+            self.settings.registry_root
+            or self.settings.project_root
+            / "03_Outputs"
+            / "01_PyMC_outputs"
+            / "00_Model_registry"
+        ).expanduser().resolve()
+        passport_package = (
+            (self.model_passport or {}).get("package")
+            if isinstance(self.model_passport, Mapping)
+            else {}
+        ) or {}
+        package_id = str(
+            self.settings.expected_package_id
+            or passport_package.get("package_id")
+            or "pkg_unavailable_model"
+        )
+        return build_historical_model_geo_budget_v1(
+            registry_root=registry_root,
+            package_id=package_id,
+        )
+
     def validation_view_v2(self, validation_id: str) -> dict[str, Any]:
         """Separate file validity from grouped turnover-model limitations."""
 
@@ -1563,6 +1593,7 @@ def _required_permission(method: str, path: str) -> str | None:
             "/api/v1/models/active-v2",
             "/api/v1/model/overview",
             "/api/v1/model/overview-v2",
+            "/api/v1/model/historical-geo-budget",
             "/api/v1/calculation-profile",
         }:
             return "model.read"
@@ -2603,6 +2634,32 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     )
                     return
                 self._json(HTTPStatus.OK, application.geo_catalog())
+                return
+            if path == "/api/v1/model/historical-geo-budget":
+                if request_url.query:
+                    self._error(
+                        HTTPStatus.BAD_REQUEST,
+                        "INVALID_QUERY",
+                        "Этот запрос не поддерживает параметры.",
+                    )
+                    return
+                try:
+                    payload = application.historical_model_geo_budget()
+                except HistoricalModelGeoBudgetError:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "HISTORICAL_MODEL_GEO_BUDGET_UNAVAILABLE",
+                        "Исторические расходы активной модели временно недоступны.",
+                    )
+                    return
+                except Exception:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "HISTORICAL_MODEL_GEO_BUDGET_UNAVAILABLE",
+                        "Исторические расходы активной модели временно недоступны.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, payload)
                 return
             if path == "/api/v1/models/active-v2":
                 try:

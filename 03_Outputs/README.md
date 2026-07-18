@@ -8,6 +8,12 @@ Typed output storage for model and business calculations.
 - `02_Budget_optimizer_outputs/` - budget optimization runs.
 - `03_AC_forecast_outputs/` - advertising campaign forecast and scenario runs.
 
+Model-registry derived serving extensions belong under
+`01_PyMC_outputs/00_Model_registry/package_artifacts/<package_id>/`. They must
+carry the registered package identity and source hashes and must not rewrite an
+existing immutable model run or registration. Phase E.1E uses this location for
+`historical_geo_budget_v1` and its package extension manifest.
+
 ## Run Naming
 
 Use a numeric prefix plus run type and date:

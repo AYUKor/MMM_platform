@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmm-platform.local/contracts/historical_model_geo_budget_v1.schema.json",
+  "title": "HistoricalModelGeoBudgetV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "status",
+    "title",
+    "display_text",
+    "period_display_text",
+    "package_id",
+    "model_version",
+    "artifact_id",
+    "artifact_version",
+    "catalog_version",
+    "period_start",
+    "period_end",
+    "spend_columns_version",
+    "total_budget_rub",
+    "geographies_n",
+    "coverage",
+    "rows",
+    "limitations",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "contract_name": {"const": "historical_model_geo_budget_v1"},
+    "schema_version": {"const": "1.0.0"},
+    "record_origin": {
+      "enum": [
+        "verified_model_package_artifact",
+        "model_package_artifact_unavailable"
+      ]
+    },
+    "status": {"enum": ["available", "partial", "unavailable"]},
+    "title": {"const": "Исторический рекламный бюджет в данных модели"},
+    "display_text": {"type": "string", "minLength": 1},
+    "period_display_text": {"type": "string", "minLength": 1},
+    "package_id": {
+      "type": "string",
+      "pattern": "^pkg_[A-Za-z0-9._-]{8,128}$"
+    },
+    "model_version": {"type": ["string", "null"], "minLength": 1},
+    "artifact_id": {
+      "type": ["string", "null"],
+      "pattern": "^artifact_[0-9a-f]{24}$"
+    },
+    "artifact_version": {"type": ["string", "null"], "minLength": 1},
+    "catalog_version": {"type": "string", "minLength": 1},
+    "period_start": {"type": ["string", "null"], "format": "date"},
+    "period_end": {"type": ["string", "null"], "format": "date"},
+    "spend_columns_version": {"type": ["string", "null"], "minLength": 1},
+    "total_budget_rub": {"type": ["number", "null"], "minimum": 0},
+    "geographies_n": {"type": "integer", "minimum": 0},
+    "coverage": {"$ref": "#/$defs/coverage"},
+    "rows": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/row"}
+    },
+    "limitations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/limitation"}
+    },
+    "updated_at_utc": {"type": ["string", "null"], "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "record_origin": {"const": "model_package_artifact_unavailable"}
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {"const": "unavailable"},
+          "artifact_id": {"type": "null"},
+          "artifact_version": {"type": "null"},
+          "period_start": {"type": "null"},
+          "period_end": {"type": "null"},
+          "spend_columns_version": {"type": "null"},
+          "total_budget_rub": {"type": "null"},
+          "geographies_n": {"const": 0},
+          "rows": {"maxItems": 0},
+          "updated_at_utc": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "artifact_id": {"type": "string"},
+          "artifact_version": {"type": "string"},
+          "period_start": {"type": "string", "format": "date"},
+          "period_end": {"type": "string", "format": "date"},
+          "spend_columns_version": {"type": "string"},
+          "total_budget_rub": {"type": "number", "minimum": 0},
+          "geographies_n": {"type": "integer", "minimum": 1},
+          "rows": {"minItems": 1},
+          "updated_at_utc": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "geoIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geo_id", "geo_display_name"],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1}
+      }
+    },
+    "row": {
+      "oneOf": [
+        {"$ref": "#/$defs/canonicalRow"},
+        {"$ref": "#/$defs/unavailableRow"}
+      ]
+    },
+    "canonicalRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "geo_id",
+        "geo_display_name",
+        "latitude",
+        "longitude",
+        "coordinates_status",
+        "historical_total_budget_rub",
+        "budget_share",
+        "active_days_n",
+        "active_rows_n"
+      ],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+        "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+        "coordinates_status": {"const": "canonical"},
+        "historical_total_budget_rub": {"type": "number", "minimum": 0},
+        "budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "active_days_n": {"type": "integer", "minimum": 0},
+        "active_rows_n": {"type": "integer", "minimum": 0}
+      }
+    },
+    "unavailableRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "geo_id",
+        "geo_display_name",
+        "latitude",
+        "longitude",
+        "coordinates_status",
+        "historical_total_budget_rub",
+        "budget_share",
+        "active_days_n",
+        "active_rows_n"
+      ],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "latitude": {"type": "null"},
+        "longitude": {"type": "null"},
+        "coordinates_status": {"const": "unavailable"},
+        "historical_total_budget_rub": {"type": "number", "minimum": 0},
+        "budget_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "active_days_n": {"type": "integer", "minimum": 0},
+        "active_rows_n": {"type": "integer", "minimum": 0}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "located_geographies_n",
+        "unlocated_geographies_n",
+        "unlocated_geographies",
+        "located_budget_rub",
+        "unlocated_budget_rub",
+        "unlocated_budget_share"
+      ],
+      "properties": {
+        "status": {"enum": ["available", "partial", "unavailable"]},
+        "located_geographies_n": {"type": "integer", "minimum": 0},
+        "unlocated_geographies_n": {"type": "integer", "minimum": 0},
+        "unlocated_geographies": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/geoIdentity"},
+          "uniqueItems": true
+        },
+        "located_budget_rub": {"type": "number", "minimum": 0},
+        "unlocated_budget_rub": {"type": "number", "minimum": 0},
+        "unlocated_budget_share": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

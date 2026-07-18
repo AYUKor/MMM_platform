@@ -24,6 +24,9 @@ from mmm_core.serving_semantics import (  # noqa: E402
     SERVING_CORE_TARGET,
     SERVING_TARGET_ID,
 )
+from contracts.historical_model_geo_budget_v1 import (  # noqa: E402
+    load_historical_model_geo_budget_v1_schema,
+)
 
 
 SCHEMA_VERSION = "2.0.0"
@@ -828,5 +831,6 @@ SCHEMA_LOADERS: dict[str, Callable[[], dict[str, Any]]] = {
     "model-overview-v2": load_model_overview_v2_schema,
     "geo-catalog-v1": load_geo_catalog_v1_schema,
     "workspace-geo-budget-v1": load_workspace_geo_budget_v1_schema,
+    "historical-model-geo-budget-v1": load_historical_model_geo_budget_v1_schema,
     "scenario-media-plan-v2": load_scenario_media_plan_v2_schema,
 }

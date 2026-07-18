@@ -515,6 +515,43 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(geo_budget["status"], "unavailable")
         self.assertEqual(geo_budget["coverage"]["unlocated_budget_rub"], 0.0)
 
+        status, historical_geo_budget, _ = self._request(
+            "GET", "/api/v1/model/historical-geo-budget"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            historical_geo_budget["contract_name"],
+            "historical_model_geo_budget_v1",
+        )
+        self.assertEqual(historical_geo_budget["status"], "unavailable")
+        self.assertEqual(historical_geo_budget["rows"], [])
+        self.assertNotIn(
+            "campaigns_n",
+            json.dumps(historical_geo_budget, ensure_ascii=False),
+        )
+        status, invalid_historical_query, _ = self._request(
+            "GET", "/api/v1/model/historical-geo-budget?mode=workspace"
+        )
+        self.assertEqual(status, 400)
+        self.assertEqual(invalid_historical_query["error"]["code"], "INVALID_QUERY")
+        with patch.object(
+            self.application,
+            "historical_model_geo_budget",
+            side_effect=RuntimeError("synthetic protected filesystem detail"),
+        ):
+            status, unavailable_historical, _ = self._request(
+                "GET", "/api/v1/model/historical-geo-budget"
+            )
+        self.assertEqual(status, 503)
+        self.assertEqual(
+            unavailable_historical["error"]["code"],
+            "HISTORICAL_MODEL_GEO_BUDGET_UNAVAILABLE",
+        )
+        self.assertNotIn(
+            "synthetic protected filesystem detail",
+            json.dumps(unavailable_historical, ensure_ascii=False),
+        )
+
         status, profile, _ = self._request("GET", "/api/v1/calculation-profile")
         self.assertEqual(status, 200)
         self.assertEqual(profile["contract_name"], "calculation_profile_v1")
@@ -543,7 +580,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.8.0")
+        self.assertEqual(openapi["info"]["version"], "1.9.0")
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view-v2", openapi["paths"])
@@ -556,6 +593,7 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertIn("/api/v1/models/active-v2", openapi["paths"])
         self.assertIn("/api/v1/meta/geo-catalog", openapi["paths"])
         self.assertIn("/api/v1/workspace/geo-budget", openapi["paths"])
+        self.assertIn("/api/v1/model/historical-geo-budget", openapi["paths"])
         self.assertIn("/api/v1/help/catalog", openapi["paths"])
         for contract in (
             "application-lifecycle-v1",
@@ -570,6 +608,7 @@ class HttpSmokeV1Test(unittest.TestCase):
             "model-overview-v2",
             "geo-catalog-v1",
             "workspace-geo-budget-v1",
+            "historical-model-geo-budget-v1",
             "scenario-media-plan-v1",
             "scenario-media-plan-v2",
             "mmm-fact-catalog-v1",
@@ -590,6 +629,7 @@ class HttpSmokeV1Test(unittest.TestCase):
             "ModelOverviewV2",
             "GeoCatalogV1",
             "WorkspaceGeoBudgetV1",
+            "HistoricalModelGeoBudgetV1",
             "ScenarioMediaPlanV2",
         ):
             reference = openapi["components"]["schemas"][schema_name]["$ref"]
