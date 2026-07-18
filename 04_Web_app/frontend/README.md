@@ -1,9 +1,10 @@
 # X5 MMM Frontend
 
 React/Vite frontend for the local X5 MMM research-pilot application. The
-current Phase E.1B milestone migrates business presentation to turnover-only
-v2 contracts while preserving the existing authenticated product shell,
-upload flow, progress screen, history and administration.
+current Phase E.1D milestone adds one contract-backed interactive geo-budget
+map to Home and campaign validation while preserving the turnover-only product
+semantics, authenticated shell, upload flow, progress, history and
+administration.
 
 The browser never calculates MMM effects, ROAS quantiles, recommendation,
 allocation deltas, risk composition or optimizer policy. It validates and
@@ -14,7 +15,7 @@ semantics.
 ## Product routes
 
 - `/login` — session login;
-- `/` — workspace summary and server-projected geo budget readiness;
+- `/` — workspace summary and server-projected geo budget map;
 - `/calculations/new` — upload, file validation and grouped model limitations;
 - `/calculations/:id/progress` — backend-projected calculation progress;
 - `/calculations/:id/result` — turnover-only result, scenarios, media plan and
@@ -28,7 +29,7 @@ Protected requests use `credentials: "include"`. The HttpOnly session cookie
 is not read by JavaScript, auth state is not persisted in browser storage and
 permissions come only from `session.user.permissions[]`.
 
-## Phase E.1B projections
+## Product projections
 
 | View | Endpoint |
 |---|---|
@@ -58,16 +59,45 @@ Validation keeps `Проверка файла` separate from grouped
 IDs remain query identities. All structured geographies stay available in
 filters.
 
-Approved coordinates are currently unavailable, so the UI does not draw a
-pseudo-map. `job_result_view_v2` remains the only source of KPI, ROAS, budget,
-scenario, recommendation and reliability semantics. A separate fail-closed
-client reads only the `report` artifact envelope from `job_result_view_v1`;
-legacy campaign and scenario fields are neither returned nor rendered.
+## Phase E.1D maps
+
+Home and campaign validation share `GeoBudgetMap`. Raw API objects are first
+converted by typed adapters; the visual component receives only canonical
+located points and server-published coverage/totals. Home uses
+`workspace_geo_budget_v1`, labels its backend-budget top ten and does not sum
+jobs or recalculate shares. Campaign validation uses `validation_result_v2`,
+labels every located geography and keeps the complete text list beside the
+map.
+
+Both modes use one fixed spherical Albers Equal Area projection and a local
+Natural Earth 1:50m outline. The outline is bundled into JavaScript and causes
+no runtime tile or map-provider request. There is no browser geocoding, alias
+matching or per-response min/max fitting. Bubble radius and brightness use a
+square-root presentation scale; smaller points are painted first and larger
+points last. Zero-budget points are intentionally not interactive.
+
+`available`, `partial`, `unavailable`, empty, loading, network-error and
+unsupported-contract states are distinct. Partial coverage retains the
+unlocated geography list and the backend-published unlocated budget/share.
+Visible attribution:
+
+- `Координаты городов: GeoNames, CC BY 4.0.`
+- `Контур карты: Natural Earth, public domain.`
+
+Source, license, projection and product-use boundaries are documented in
+`src/assets/maps/RUSSIA_OUTLINE_SOURCE.md` and
+`../docs/adr/0024-frontend-fixed-geo-map-projection-v1.md`.
+
+`job_result_view_v2` remains the only source of KPI, ROAS, budget, scenario,
+recommendation and reliability semantics. A separate fail-closed client reads
+only the `report` artifact envelope from `job_result_view_v1`; legacy campaign
+and scenario fields are neither returned nor rendered.
 
 Detailed boundary and current verification status:
 
 - `../docs/integration/FRONTEND_PHASE_E1B_BUSINESS_SEMANTICS_V1.md`;
-- `../docs/ui-review/phase-e1b-business-semantics-v1/REVIEW_NOTES.md`.
+- `../docs/integration/FRONTEND_PHASE_E1D_INTERACTIVE_GEO_MAPS_V1.md`;
+- `../docs/ui-review/phase-e1d-interactive-geo-maps-v1/REVIEW_NOTES.md`.
 
 ## Local development
 
@@ -99,4 +129,4 @@ npm run test:e2e
 Fixture Playwright, live backend acceptance without interception, Chromium
 automation, Safari manual smoke and light/dark/mobile visual review are
 separate evidence. A check is not considered passed until its actual result is
-recorded in Phase E.1B review notes.
+recorded in the current phase review notes.

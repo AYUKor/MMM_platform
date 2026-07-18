@@ -24,6 +24,9 @@ const SCENARIO6_ATTEMPTS = 3_217;
 const REVIEW_DIRECTORY = fileURLToPath(
   new URL("../../docs/ui-review/phase-e1b-business-semantics-v1/", import.meta.url),
 );
+const GEO_REVIEW_DIRECTORY = fileURLToPath(
+  new URL("../../docs/ui-review/phase-e1d-interactive-geo-maps-v1/", import.meta.url),
+);
 
 const FORBIDDEN_COPY = [
   "Дополнительные заказы",
@@ -43,7 +46,7 @@ const VALIDATION_CONTRAST_TARGETS = [
   { name: "limitation metadata", selector: '[class*="limitationList"] header span:first-child' },
   { name: "limitation labels", selector: '[class*="limitationList"] dt' },
   { name: "limitation guidance", selector: '[class*="limitationList"] dd' },
-  { name: "map unavailable guidance", selector: '[class*="mapUnavailable"] span' },
+  { name: "map attribution", selector: '[class*="attribution"] span' },
 ] as const satisfies readonly ContrastTarget[];
 
 const artifact = (kind: string, suffix: string): ArtifactIdentity => ({
@@ -391,8 +394,79 @@ function buildPassedValidation(): ValidationResultV2 {
   validation.geo_points = validation.geo_points.map((point) => ({
     ...point,
     has_model_limitations: false,
+    model_limitations_n: 0,
   }));
   return validation;
+}
+
+function asUnavailableGeoPoint(
+  point: ValidationResultV2["geo_points"][number],
+): Extract<ValidationResultV2["geo_points"][number], { coordinates_status: "unavailable" }> {
+  return {
+    geo_id: point.geo_id,
+    geo_display_name: point.geo_display_name,
+    input_geo_name: point.input_geo_name,
+    canonical_geo_id: null,
+    canonical_geo_display_name: null,
+    normalization_status: "unknown",
+    normalization_rule: "no_registered_alias",
+    latitude: null,
+    longitude: null,
+    coordinates_status: "unavailable",
+    region_id: null,
+    region_display_name: null,
+    budget_rub: point.budget_rub,
+    budget_share: point.budget_share,
+    channels: point.channels,
+    has_model_limitations: point.has_model_limitations,
+    model_limitations_n: point.model_limitations_n,
+  };
+}
+
+function buildPartialMapValidation(): ValidationResultV2 {
+  const validation = structuredClone(buildValidationResultV2());
+  const unlocatedIndex = validation.geo_points.length - 1;
+  const unlocated = asUnavailableGeoPoint(validation.geo_points[unlocatedIndex]);
+  validation.geo_points[unlocatedIndex] = unlocated;
+  validation.map_coverage = {
+    status: "partial",
+    located_geographies_n: validation.geo_points.length - 1,
+    unlocated_geographies_n: 1,
+    unlocated_geographies: [{
+      geo_id: unlocated.geo_id,
+      geo_display_name: unlocated.geo_display_name,
+    }],
+    located_budget_rub: CONTROL_REQUESTED_BUDGET - unlocated.budget_rub,
+    unlocated_budget_rub: unlocated.budget_rub,
+    unlocated_budget_share: unlocated.budget_rub / CONTROL_REQUESTED_BUDGET,
+  };
+  return validation;
+}
+
+function buildUnavailableMapValidation(): ValidationResultV2 {
+  const validation = structuredClone(buildValidationResultV2());
+  validation.geo_points = validation.geo_points.map(asUnavailableGeoPoint);
+  validation.map_coverage = {
+    status: "unavailable",
+    located_geographies_n: 0,
+    unlocated_geographies_n: validation.geo_points.length,
+    unlocated_geographies: validation.geo_points.map((point) => ({
+      geo_id: point.geo_id,
+      geo_display_name: point.geo_display_name,
+    })),
+    located_budget_rub: 0,
+    unlocated_budget_rub: CONTROL_REQUESTED_BUDGET,
+    unlocated_budget_share: 1,
+  };
+  return validation;
+}
+
+function mapMarkers(page: Page) {
+  return page.locator("[data-map-marker]");
+}
+
+function mapLabels(page: Page) {
+  return page.locator("[data-map-label]");
 }
 
 test("upload screen offers the working campaign-plan template", async ({ page }) => {
@@ -454,11 +528,93 @@ test("validation view-v2 separates file checks from grouped model limitations", 
   );
   await expect(page.getByText("Показать географии (15)", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "15 географий сохранены" })).toBeVisible();
-  await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
-  await expect(page.getByText(/подключения утвержденного справочника координат/)).toBeVisible();
+  await expect(page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" }))
+    .toBeVisible();
+  await expect(mapMarkers(page)).toHaveCount(15);
+  await expect(mapLabels(page)).toHaveCount(15);
+  await expect(page.getByText("Координаты городов: GeoNames, CC BY 4.0.", { exact: true }))
+    .toBeVisible();
+  await expect(page.getByText("Карта пока недоступна", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Продолжить с ограничениями" })).toBeVisible();
   expect(calls.validationV2Gets).toBeGreaterThan(0);
   await expectNoForbiddenCopy(page);
+});
+
+test("campaign map preserves all canonical geographies and supports pointer, keyboard, and click tooltips", async ({ page }) => {
+  await installNewCalculationRoutes(page);
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+
+  const map = page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
+  await expect(map).toBeVisible();
+  await expect(mapMarkers(page)).toHaveCount(15);
+  await expect(mapLabels(page)).toHaveCount(15);
+  await expect(page.getByText("Подписаны все географии кампании", { exact: true })).toBeVisible();
+  await expect(page.getByText("267,8 млн ₽", { exact: true })).toBeVisible();
+
+  const markerBudgets = await mapMarkers(page).evaluateAll((markers) => markers.map((marker) => (
+    Number(marker.getAttribute("data-budget-rub"))
+  )));
+  expect(markerBudgets.reduce((total, budget) => total + budget, 0)).toBe(CONTROL_REQUESTED_BUDGET);
+
+  const firstMarker = mapMarkers(page).first();
+  await firstMarker.hover();
+  let tooltip = page.locator('[role="tooltip"]');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("Цифровая реклама, Наружная реклама, Радио");
+  await expect(tooltip.getByText("Ограничения модели", { exact: true }).locator("..")).toContainText("1");
+
+  await page.mouse.move(0, 0);
+  await expect(tooltip).toHaveCount(0);
+  const keyboardMarker = page.locator(`[data-map-marker="${TEST_GEOS[1].geo_id}"]`);
+  await keyboardMarker.focus();
+  await expect(tooltip).toContainText("Воронеж");
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCount(0);
+  await expect(keyboardMarker).toBeFocused();
+
+  const clickMarker = page.locator(`[data-map-marker="${TEST_GEOS[2].geo_id}"]`);
+  await clickMarker.dispatchEvent("click");
+  tooltip = page.locator('[role="tooltip"]');
+  await expect(tooltip).toContainText("Краснодар");
+  await expect(tooltip).toContainText("Цифровая реклама, Наружная реклама, Радио");
+
+  await expect(page.getByText("Координаты городов: GeoNames, CC BY 4.0.", { exact: true }))
+    .toBeVisible();
+  await expect(page.getByText("Контур карты: Natural Earth, public domain.", { exact: true }))
+    .toBeVisible();
+  await expect(page.locator("body")).not.toContainText("Digital_Performance");
+  await expect(page.locator("body")).not.toContainText("OOH_Total");
+  await expectNoOverflow(page);
+});
+
+test("campaign map keeps unlocated budget visible in partial coverage", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildPartialMapValidation() });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+
+  await expect(page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" }))
+    .toBeVisible();
+  await expect(mapMarkers(page)).toHaveCount(14);
+  await expect(mapLabels(page)).toHaveCount(14);
+  await expect(page.getByText("Частичное покрытие", { exact: true })).toBeVisible();
+  await expect(page.getByText("Не удалось разместить географий: 1", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Неразмещенный бюджет:/)).toContainText(/8,8\s+млн ₽/);
+  await page.getByText("Показать географии", { exact: true }).last().click();
+  await expect(page.getByText("Ярославль", { exact: true }).last()).toBeVisible();
+});
+
+test("campaign map has a controlled unavailable state without losing budget", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildUnavailableMapValidation() });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+
+  await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
+  await expect(page.getByText(
+    "Сервис не опубликовал координаты для географий этой кампании.",
+    { exact: true },
+  )).toBeVisible();
+  await expect(page.getByText("Без координат: 15 географий", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Бюджет сохранен:/)).toContainText(/267,8\s+млн ₽/);
+  await expect(mapMarkers(page)).toHaveCount(0);
+  await expect(mapLabels(page)).toHaveCount(0);
 });
 
 test("passed validation keeps file checks separate and reports no model limitations", async ({ page }) => {
@@ -590,6 +746,96 @@ for (const theme of ["dark", "light"] as const) {
       JSON.stringify(minimum),
     );
     expect(minimum.ratio, JSON.stringify(minimum, null, 2)).toBeGreaterThanOrEqual(4.5);
+  });
+}
+
+for (const theme of ["dark", "light"] as const) {
+  test(`campaign map desktop and tooltip screenshots in ${theme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 1_440, height: 1_000 });
+    await setTheme(page, theme);
+    await installNewCalculationRoutes(page);
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const map = page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
+    await map.scrollIntoViewIfNeeded();
+    await expect(mapMarkers(page)).toHaveCount(15);
+    await expect(mapLabels(page)).toHaveCount(15);
+    await expectNoOverflow(page);
+
+    mkdirSync(GEO_REVIEW_DIRECTORY, { recursive: true });
+    await page.screenshot({
+      path: `${GEO_REVIEW_DIRECTORY}campaign-map-${theme}.png`,
+      fullPage: false,
+      animations: "disabled",
+      caret: "hide",
+    });
+
+    await mapMarkers(page).first().hover();
+    await expect(page.locator('[role="tooltip"]')).toBeVisible();
+    await page.screenshot({
+      path: `${GEO_REVIEW_DIRECTORY}campaign-map-tooltip-${theme}.png`,
+      fullPage: false,
+      animations: "disabled",
+      caret: "hide",
+    });
+  });
+
+  test(`campaign map partial coverage screenshot in ${theme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 1_440, height: 1_000 });
+    await setTheme(page, theme);
+    await installNewCalculationRoutes(page, { validationV2: buildPartialMapValidation() });
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    const map = page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
+    await map.scrollIntoViewIfNeeded();
+    await expect(mapMarkers(page)).toHaveCount(14);
+    await expect(page.getByText("Частичное покрытие", { exact: true })).toBeVisible();
+    await expectNoOverflow(page);
+    mkdirSync(GEO_REVIEW_DIRECTORY, { recursive: true });
+    await page.screenshot({
+      path: `${GEO_REVIEW_DIRECTORY}campaign-map-partial-${theme}.png`,
+      fullPage: false,
+      animations: "disabled",
+      caret: "hide",
+    });
+  });
+
+  test(`campaign map unavailable screenshot in ${theme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 1_440, height: 1_000 });
+    await setTheme(page, theme);
+    await installNewCalculationRoutes(page, { validationV2: buildUnavailableMapValidation() });
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    const unavailable = page.getByText("Карта пока недоступна", { exact: true });
+    await unavailable.scrollIntoViewIfNeeded();
+    await expect(unavailable).toBeVisible();
+    await expect(page.getByText(/Бюджет сохранен:/)).toContainText(/267,8\s+млн ₽/);
+    await expectNoOverflow(page);
+    mkdirSync(GEO_REVIEW_DIRECTORY, { recursive: true });
+    await page.screenshot({
+      path: `${GEO_REVIEW_DIRECTORY}campaign-map-unavailable-${theme}.png`,
+      fullPage: false,
+      animations: "disabled",
+      caret: "hide",
+    });
+  });
+
+  test(`campaign map mobile screenshot in ${theme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await setTheme(page, theme);
+    await installNewCalculationRoutes(page);
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    const map = page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
+    await map.scrollIntoViewIfNeeded();
+    await expect(mapMarkers(page)).toHaveCount(15);
+    await mapMarkers(page).last().dispatchEvent("click");
+    await expect(page.locator('[role="tooltip"]')).toBeVisible();
+    await expectNoOverflow(page);
+    mkdirSync(GEO_REVIEW_DIRECTORY, { recursive: true });
+    await page.screenshot({
+      path: `${GEO_REVIEW_DIRECTORY}campaign-map-mobile-${theme}.png`,
+      fullPage: false,
+      animations: "disabled",
+      caret: "hide",
+    });
   });
 }
 

@@ -24,10 +24,46 @@ export const TEST_CHANNELS = [
   { channel_id: "Радио", channel_display_name: "Радио" },
 ] as const;
 
-export const TEST_GEOS = Array.from({ length: 15 }, (_, index) => ({
-  geo_id: `geo_${(index + 1).toString(16).padStart(16, "0")}`,
-  geo_display_name: `География ${String(index + 1).padStart(2, "0")}`,
+export const TEST_GEO_CATALOG = [
+  { geo_id: "geo_84e5fcec31012b88", geo_display_name: "Волгоград", latitude: 48.71378, longitude: 44.4976, region_id: "region_geonames_472755", region_display_name: "Волгоградская область" },
+  { geo_id: "geo_c5bbbb417c2f21f1", geo_display_name: "Воронеж", latitude: 51.66833, longitude: 39.19204, region_id: "region_geonames_472039", region_display_name: "Воронежская область" },
+  { geo_id: "geo_603847d7490bba77", geo_display_name: "Краснодар", latitude: 45.04534, longitude: 38.98178, region_id: "region_geonames_542415", region_display_name: "Краснодарский край" },
+  { geo_id: "geo_93a89aa2fbcf50f7", geo_display_name: "Красноярск", latitude: 56.03742, longitude: 92.93136, region_id: "region_geonames_1502020", region_display_name: "Красноярский край" },
+  { geo_id: "geo_ae4b572fa4c02f42", geo_display_name: "Новосибирск", latitude: 55.02259, longitude: 82.93175, region_id: "region_geonames_1496745", region_display_name: "Новосибирская область" },
+  { geo_id: "geo_093a1766328e66ca", geo_display_name: "Омск", latitude: 54.99244, longitude: 73.36859, region_id: "region_geonames_1496152", region_display_name: "Омская область" },
+  { geo_id: "geo_654946621661ed59", geo_display_name: "Ростов-на-Дону", latitude: 47.21997, longitude: 39.70769, region_id: "region_geonames_501165", region_display_name: "Ростовская область" },
+  { geo_id: "geo_2a7d6797adab975f", geo_display_name: "Самара", latitude: 53.20767, longitude: 50.13553, region_id: "region_geonames_499068", region_display_name: "Самарская область" },
+  { geo_id: "geo_94835d40a52e5a3a", geo_display_name: "Санкт-Петербург", latitude: 59.93863, longitude: 30.31413, region_id: "region_geonames_536203", region_display_name: "Санкт-Петербург" },
+  { geo_id: "geo_5fa9084303383362", geo_display_name: "Саратов", latitude: 51.54048, longitude: 45.9901, region_id: "region_geonames_498671", region_display_name: "Саратовская область" },
+  { geo_id: "geo_6de565131413b901", geo_display_name: "Тюмень", latitude: 57.15222, longitude: 65.52722, region_id: "region_geonames_1488747", region_display_name: "Тюменская область" },
+  { geo_id: "geo_965336b61d1b679c", geo_display_name: "Уфа", latitude: 54.74306, longitude: 55.96779, region_id: "region_geonames_578853", region_display_name: "Республика Башкортостан" },
+  { geo_id: "geo_b25fd4fb102fd0bb", geo_display_name: "Чебоксары", latitude: 56.13218, longitude: 47.246, region_id: "region_geonames_567395", region_display_name: "Чувашская Республика" },
+  { geo_id: "geo_5d01870a3a173190", geo_display_name: "Челябинск", latitude: 55.1611, longitude: 61.42877, region_id: "region_geonames_1508290", region_display_name: "Челябинская область" },
+  { geo_id: "geo_212302479b4c065e", geo_display_name: "Ярославль", latitude: 57.62987, longitude: 39.87368, region_id: "region_geonames_468898", region_display_name: "Ярославская область" },
+] as const;
+
+export const TEST_GEOS = TEST_GEO_CATALOG.map(({ geo_id, geo_display_name }) => ({
+  geo_id,
+  geo_display_name,
 }));
+
+export const CONTROL_GEO_BUDGETS = [
+  25_000_000,
+  24_000_000,
+  23_000_000,
+  22_000_000,
+  21_000_000,
+  20_000_000,
+  19_000_000,
+  18_000_000,
+  17_000_000,
+  16_000_000,
+  15_000_000,
+  14_000_000,
+  13_000_000,
+  12_000_000,
+  8_818_706,
+] as const;
 
 function available(unit: string, p50: number, displayText: string): Quantiles {
   return {
@@ -365,7 +401,6 @@ export function buildScenarioMediaPlanV2(
 }
 
 export function buildValidationResultV2(): ValidationResultV2 {
-  const geoBudgets = splitTotal(CONTROL_REQUESTED_BUDGET, TEST_GEOS.length);
   return {
     contract_name: "validation_result_v2",
     schema_version: "2.0.0",
@@ -403,28 +438,24 @@ export function buildValidationResultV2(): ValidationResultV2 {
       recommended_action: "Проверьте отмеченные географии перед изменением бюджета.",
     }],
     map_coverage: {
-      status: "unavailable",
-      located_geographies_n: 0,
-      unlocated_geographies_n: TEST_GEOS.length,
-      unlocated_geographies: TEST_GEOS.map((geo) => ({ ...geo })),
-      located_budget_rub: 0,
-      unlocated_budget_rub: CONTROL_REQUESTED_BUDGET,
-      unlocated_budget_share: 1,
+      status: "available",
+      located_geographies_n: TEST_GEOS.length,
+      unlocated_geographies_n: 0,
+      unlocated_geographies: [],
+      located_budget_rub: CONTROL_REQUESTED_BUDGET,
+      unlocated_budget_rub: 0,
+      unlocated_budget_share: 0,
     },
-    geo_points: TEST_GEOS.map((geo, index) => ({
+    geo_points: TEST_GEO_CATALOG.map((geo, index) => ({
       ...geo,
       input_geo_name: geo.geo_display_name,
-      canonical_geo_id: null,
-      canonical_geo_display_name: null,
-      normalization_status: "unknown" as const,
-      normalization_rule: "synthetic_fixture_without_coordinates",
-      latitude: null,
-      longitude: null,
-      coordinates_status: "unavailable" as const,
-      region_id: null,
-      region_display_name: null,
-      budget_rub: geoBudgets[index],
-      budget_share: geoBudgets[index] / CONTROL_REQUESTED_BUDGET,
+      canonical_geo_id: geo.geo_id,
+      canonical_geo_display_name: geo.geo_display_name,
+      normalization_status: "canonical" as const,
+      normalization_rule: "canonical_catalog_match",
+      coordinates_status: "canonical" as const,
+      budget_rub: CONTROL_GEO_BUDGETS[index],
+      budget_share: CONTROL_GEO_BUDGETS[index] / CONTROL_REQUESTED_BUDGET,
       channels: [...TEST_CHANNELS],
       has_model_limitations: true,
       model_limitations_n: 1,

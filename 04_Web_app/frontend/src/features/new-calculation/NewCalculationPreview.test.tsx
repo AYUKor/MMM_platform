@@ -123,7 +123,12 @@ describe("new calculation preview", () => {
     expect(screen.getAllByText("15", { selector: "dd" })).toHaveLength(2);
     expect(screen.getByText("Показать географии (15)")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "15 географий сохранены" })).toBeInTheDocument();
-    expect(screen.getByText("Карта будет доступна после подключения утвержденного справочника координат.")).toBeInTheDocument();
+    const map = screen.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
+    expect(map.querySelectorAll("[data-map-marker]")).toHaveLength(15);
+    expect(map.querySelectorAll("[data-map-label]")).toHaveLength(15);
+    expect(screen.getByText("Координаты городов: GeoNames, CC BY 4.0.")).toBeInTheDocument();
+    expect(screen.queryByText("Карта будет доступна после подключения утвержденного справочника координат."))
+      .not.toBeInTheDocument();
     expect(container.querySelectorAll("details")).toHaveLength(1);
     expect(container.querySelectorAll("[class*='contextChip']")).toHaveLength(0);
     expect(container.textContent).not.toContain("Digital_Performance");
