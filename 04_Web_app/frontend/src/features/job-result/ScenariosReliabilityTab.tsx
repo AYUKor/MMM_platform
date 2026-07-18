@@ -1,455 +1,175 @@
 import type {
-  JobResultViewV1,
-  QuantileMetric,
-  ReliabilityComponent,
+  JobResultViewV2,
   Scenario,
-} from "../../shared/api/generated/job-result-view-v1";
-import { formatInteger, formatRub } from "../../shared/formatters/metrics";
+} from "../../shared/api/generated/job-result-view-v2";
+import { formatInteger, formatPercent, formatRub } from "../../shared/formatters/metrics";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import {
-  metricUsageLabel,
-  metricValue,
-  qualityLabel,
-  qualityTone,
+  decisionLabel,
+  decisionTone,
+  quantileRange,
+  quantileValue,
+  reliabilityLabel,
   reliabilityTone,
+  reviewLabel,
   scenarioAnchorLabel,
   scenarioDisplayName,
   scenarioNumber,
-  type ResultMetricId,
-  type ResultTone,
+  scenarioStatusLabel,
+  scenarioVariantTitle,
 } from "./jobResultFormatting";
-import { MetricSummary, ScenarioRangeChart } from "./ResultVisuals";
 import styles from "./job-result.module.css";
 
-type ScenarioStatus = Scenario["status"];
-
-const scenarioStatusCopy: Record<
-  ScenarioStatus,
-  { label: string; tone: ResultTone }
-> = {
-  completed: { label: "Рассчитан", tone: "accent" },
-  unavailable: { label: "Нет данных", tone: "neutral" },
-  failed: { label: "Не рассчитан", tone: "danger" },
-};
-
-const scenarioRoleCopy: Record<Scenario["role"], string> = {
-  source: "Исходная точка",
-  control: "Контрольный сценарий",
-  benchmark: "Ориентир для сравнения",
-  adaptive: "Адаптивный поиск",
-};
-
-const reliabilityStatusCopy: Record<
-  ReliabilityComponent["status"],
-  string
-> = {
-  good: "Хорошо",
-  caution: "Осторожно",
-  poor: "Требует проверки",
-  unavailable: "Нет данных",
-};
-
-function rankText(value: number | null): string {
-  return value === null ? "Нет данных" : `№ ${formatInteger(value)}`;
-}
-
-function MetricCell({ metric }: { metric: QuantileMetric }) {
-  const available =
-    metric.status === "available" &&
-    metric.p10 !== null &&
-    metric.p50 !== null &&
-    metric.p90 !== null;
-  const usage = metricUsageLabel(metric);
-
-  if (!available) {
+function ScenarioSpecificCopy({ scenario }: { scenario: Scenario }) {
+  if (
+    scenario.scenario_id === "S01" &&
+    scenario.decision_status === "keep_uploaded_plan" &&
+    scenario.review_status === "manual_review_required"
+  ) {
     return (
-      <div className={styles.scenarioMetricEmpty}>
-        <strong>Нет данных</strong>
-        <span>{metric.display_text}</span>
-      </div>
+      <p className={styles.scenarioCallout}>
+        Исходный план показан как точка отсчета. Он не является рекомендацией системы и требует ручной проверки.
+      </p>
     );
   }
-
-  return (
-    <div className={styles.scenarioMetricCell}>
-      <strong>P50: {metricValue(metric, metric.p50)}</strong>
-      <span>P10: {metricValue(metric, metric.p10)}</span>
-      <span>P90: {metricValue(metric, metric.p90)}</span>
-      {usage ? <small>{usage}</small> : null}
-    </div>
-  );
-}
-
-function ScenarioBadges({
-  result,
-  scenario,
-}: {
-  result: JobResultViewV1;
-  scenario: Scenario;
-}) {
-  const anchor = scenarioAnchorLabel(scenario.scenario_id);
-  const isCanonicalRecommendation =
-    result.recommendation.status === "recommended" &&
-    result.recommendation.scenario_id === scenario.scenario_id &&
-    scenario.is_recommended;
-
-  return (
-    <div className={styles.scenarioBadges}>
-      {anchor ? <StatusBadge tone="neutral">{anchor}</StatusBadge> : null}
-      {isCanonicalRecommendation ? (
-        <StatusBadge tone="accent">Рекомендован</StatusBadge>
-      ) : null}
-      {scenario.is_best_safe ? (
-        <StatusBadge tone="accent">Лучший безопасный</StatusBadge>
-      ) : null}
-      {scenario.is_best_raw ? (
-        <StatusBadge tone="warning">Лучший математический</StatusBadge>
-      ) : null}
-    </div>
-  );
-}
-
-function ScenarioComparisonTable({ result }: { result: JobResultViewV1 }) {
-  return (
-    <section
-      className={styles.scenarioComparisonSection}
-      aria-labelledby="scenario-comparison-title"
-    >
-      <div className={styles.sectionHeading}>
-        <div>
-          <span className={styles.eyebrow}>Подробное сравнение</span>
-          <h2 id="scenario-comparison-title">Все шесть сценариев</h2>
-        </div>
-        <p>
-          Места сценариев учитывают ожидаемый эффект и ограничения надежности.
-        </p>
-      </div>
-
-      <div
-        className={styles.scenarioTableWrap}
-        role="region"
-        aria-label="Таблица сравнения сценариев"
-        tabIndex={0}
-      >
-        <table className={styles.scenarioTable}>
-          <caption className="sr-only">
-            Сценарии 1–6: статусы, места, бюджеты и диапазоны показателей
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Сценарий</th>
-              <th scope="col">Статус и качество</th>
-              <th scope="col">Места</th>
-              <th scope="col">Дополнительный оборот</th>
-              <th scope="col">ROAS</th>
-              <th scope="col">Дополнительные заказы</th>
-              <th scope="col">Заказы на 100 000 ₽</th>
-              <th scope="col">Изменение среднего чека</th>
-              <th scope="col">Вклад механизма среднего чека</th>
-              <th scope="col">Бюджет</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.scenarios.map((scenario) => {
-              const statusCopy = scenarioStatusCopy[scenario.status];
-              return (
-                <tr key={scenario.scenario_id}>
-                  <th scope="row">
-                    <div className={styles.scenarioIdentity}>
-                      <strong>S{scenarioNumber(scenario.scenario_id)}</strong>
-                      <span>{scenarioDisplayName(scenario)}</span>
-                      <small>{scenarioRoleCopy[scenario.role]}</small>
-                      <p>{scenario.description}</p>
-                      <ScenarioBadges result={result} scenario={scenario} />
-                    </div>
-                  </th>
-                  <td>
-                    <div className={styles.scenarioStatusCell}>
-                      <StatusBadge tone={statusCopy.tone}>
-                        {statusCopy.label}
-                      </StatusBadge>
-                      <StatusBadge tone={qualityTone(scenario.quality_status)}>
-                        {qualityLabel(scenario.quality_status)}
-                      </StatusBadge>
-                      <span>{scenario.quality_display_text}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <dl className={styles.scenarioRanks}>
-                      <div>
-                        <dt>Среди устойчивых</dt>
-                        <dd>{rankText(scenario.safe_rank)}</dd>
-                      </div>
-                      <div>
-                        <dt>По математической оценке</dt>
-                        <dd>{rankText(scenario.raw_rank)}</dd>
-                      </div>
-                    </dl>
-                  </td>
-                  <td>
-                    <MetricCell metric={scenario.metrics.incremental_turnover_rub} />
-                  </td>
-                  <td>
-                    <MetricCell metric={scenario.metrics.roas} />
-                  </td>
-                  <td>
-                    <MetricCell metric={scenario.metrics.incremental_orders} />
-                  </td>
-                  <td>
-                    <MetricCell metric={scenario.metrics.orders_per_100k_rub} />
-                  </td>
-                  <td>
-                    <MetricCell metric={scenario.metrics.avg_basket_delta_rub} />
-                  </td>
-                  <td>
-                    <MetricCell
-                      metric={scenario.metrics.avg_basket_turnover_bridge_rub}
-                    />
-                  </td>
-                  <td>
-                    <dl className={styles.scenarioBudgetCell}>
-                      <div>
-                        <dt>Запрошено</dt>
-                        <dd>{formatRub(scenario.budget.requested_budget_rub)}</dd>
-                      </div>
-                      <div>
-                        <dt>Распределено</dt>
-                        <dd>{formatRub(scenario.budget.allocated_budget_rub)}</dd>
-                      </div>
-                      <div>
-                        <dt>Не распределено</dt>
-                        <dd>{formatRub(scenario.budget.unallocated_budget_rub)}</dd>
-                      </div>
-                    </dl>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function ReliabilityComponents({ result }: { result: JobResultViewV1 }) {
-  const selected = result.scenarios.find(
-    (scenario) => scenario.scenario_id === result.overview.selected_scenario_id,
-  );
-
-  return (
-    <section
-      className={styles.reliabilitySection}
-      aria-labelledby="scenario-reliability-title"
-    >
-      <div className={styles.reliabilityIntro}>
-        <span className={styles.eyebrow}>Надежность</span>
-        <h2 id="scenario-reliability-title">
-          Надежность S
-          {selected ? scenarioNumber(selected.scenario_id) : "—"}
-        </h2>
-        <p>{result.reliability.display_text}</p>
-        <StatusBadge tone="neutral">
-          Числовая оценка надежности недоступна
-        </StatusBadge>
-      </div>
-
-      <ul className={styles.reliabilityComponentGrid}>
-        {result.reliability.components.map((component) => (
-          <li key={component.component_id}>
-            <StatusBadge tone={reliabilityTone(component.status)}>
-              {reliabilityStatusCopy[component.status]}
-            </StatusBadge>
-            <h3>{component.title}</h3>
-            <p>{component.display_text}</p>
-          </li>
-        ))}
-      </ul>
-
-      <div
-        className={styles.reliabilityMatrixWrap}
-        role="region"
-        aria-label="Надежность всех сценариев"
-        tabIndex={0}
-      >
-        <table className={styles.reliabilityMatrix}>
-          <caption className="sr-only">
-            Качественные признаки надежности для каждого сценария
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Сценарий</th>
-              {result.reliability.components.map((component) => (
-                <th key={component.component_id} scope="col">
-                  {component.title}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {result.scenarios.map((scenario) => (
-              <tr key={scenario.scenario_id}>
-                <th scope="row">
-                  S{scenarioNumber(scenario.scenario_id)} · {scenarioDisplayName(scenario)}
-                </th>
-                {scenario.reliability.components.map((component) => (
-                  <td key={component.component_id}>
-                    <StatusBadge tone={reliabilityTone(component.status)}>
-                      {reliabilityStatusCopy[component.status]}
-                    </StatusBadge>
-                    <span>{component.display_text}</span>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function BestRawPanel({ result }: { result: JobResultViewV1 }) {
-  const bestRaw = result.best_raw;
-  if (!bestRaw.available) return null;
-
-  return (
-    <section className={styles.bestRawPanel} aria-labelledby="best-raw-title">
-      <div className={styles.bestRawHeading}>
-        <div>
-          <span className={styles.eyebrow}>Только для проверки расчета</span>
-          <h2 id="best-raw-title">
-            Математически сильный, но не рекомендованный вариант
-          </h2>
-        </div>
-        <StatusBadge tone="warning">Не является рекомендацией</StatusBadge>
-      </div>
-
-      <p className={styles.bestRawReason}>
-        {bestRaw.reason_not_recommended ?? "Нет данных"}
+  if (scenario.scenario_id === "S05" && scenario.scenario_variant === "full_conservative") {
+    return (
+      <p className={styles.scenarioCallout}>
+        Система распределила весь бюджет по наименее рискованному из доступных вариантов.
       </p>
-      <dl className={styles.bestRawMeta}>
-        <div>
-          <dt>Сценарий</dt>
-          <dd>
-            {bestRaw.scenario_id === null
-              ? "Нет данных"
-              : `S${scenarioNumber(bestRaw.scenario_id)}`}
-          </dd>
-        </div>
-        <div>
-          <dt>Место по математической оценке</dt>
-          <dd>{rankText(bestRaw.raw_rank)}</dd>
-        </div>
-        <div>
-          <dt>Место среди устойчивых</dt>
-          <dd>{rankText(bestRaw.safe_rank)}</dd>
-        </div>
-      </dl>
-
-      {bestRaw.metrics ? (
-        <div className={styles.bestRawMetrics}>
-          <MetricSummary
-            title="Дополнительный оборот"
-            metric={bestRaw.metrics.incremental_turnover_rub}
-          />
-          <MetricSummary title="ROAS по обороту" metric={bestRaw.metrics.roas} />
-        </div>
-      ) : (
-        <p className={styles.inlineUnavailable}>Нет данных о показателях.</p>
-      )}
-
-      {bestRaw.blocking_cells_status === "available" &&
-      bestRaw.blocking_cells.length > 0 ? (
-        <div
-          className={styles.blockingCellsWrap}
-          role="region"
-          aria-label="Связки, требующие ручной проверки"
-          tabIndex={0}
-        >
-          <table className={styles.blockingCellsTable}>
-            <caption>Связки, из-за которых вариант не рекомендован</caption>
-            <thead>
-              <tr>
-                <th scope="col">Сегмент</th>
-                <th scope="col">География</th>
-                <th scope="col">Канал</th>
-                <th scope="col">Причина</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bestRaw.blocking_cells.map((cell, index) => (
-                <tr key={`${cell.segment}:${cell.geo}:${cell.channel}:${index}`}>
-                  <td>{cell.segment}</td>
-                  <td>{cell.geo}</td>
-                  <td>{cell.channel}</td>
-                  <td>{cell.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : bestRaw.blocking_cells_status === "unavailable" ? (
-        <p className={styles.inlineUnavailable}>
-          Подробности по отдельным связкам пока недоступны.
-        </p>
-      ) : null}
-    </section>
-  );
+    );
+  }
+  if (scenario.scenario_id === "S05" && scenario.scenario_variant === "safe_partial") {
+    return (
+      <p className={styles.scenarioCallout}>
+        Весь бюджет нельзя распределить с приемлемой надежностью. Показана только безопасно распределяемая часть; остаток требует ручного решения.
+      </p>
+    );
+  }
+  return null;
 }
 
-function Limitations({ result }: { result: JobResultViewV1 }) {
+function InfeasibleScenario({ scenario }: { scenario: Scenario }) {
   return (
-    <section className={styles.limitationsSection} aria-labelledby="limitations-title">
-      <div className={styles.sectionHeading}>
-        <div>
-          <span className={styles.eyebrow}>Границы результата</span>
-          <h2 id="limitations-title">Ограничения данных</h2>
-        </div>
-      </div>
-      <ul>
-        {result.limitations.map((limitation) => (
-          <li key={limitation.code}>{limitation.display_text}</li>
-        ))}
-      </ul>
-    </section>
+    <div className={styles.infeasibleScenario} role="status">
+      <StatusBadge tone="neutral">Недоступно при текущих ограничениях</StatusBadge>
+      <h3>Полный план максимального эффекта недоступен</h3>
+      <p>При текущих каналах, географиях и ограничениях модели невозможно распределить весь бюджет.</p>
+      {scenario.limiting_constraints.length > 0 ? (
+        <details>
+          <summary>Что ограничило расчет</summary>
+          <ul>{scenario.limiting_constraints.map((constraint) => <li key={constraint}>{constraint}</li>)}</ul>
+        </details>
+      ) : null}
+    </div>
   );
 }
 
-export function ScenariosReliabilityTab({
-  result,
-  metricId,
-  onMetricChange,
-}: {
-  result: JobResultViewV1;
-  metricId: ResultMetricId;
-  onMetricChange: (metricId: ResultMetricId) => void;
-}) {
+function ScenarioBudget({ scenario }: { scenario: Scenario }) {
+  return (
+    <dl className={styles.scenarioBudget}>
+      <div><dt>Запрошенный бюджет</dt><dd>{formatRub(scenario.budget.requested_budget_rub)}</dd></div>
+      <div><dt>Распределено</dt><dd>{formatRub(scenario.budget.allocated_budget_rub)}</dd></div>
+      <div><dt>Не распределено</dt><dd>{formatRub(scenario.budget.unallocated_budget_rub)}</dd></div>
+      <div><dt>Доля распределения</dt><dd>{formatPercent(scenario.budget.allocation_share)}</dd></div>
+    </dl>
+  );
+}
+
+function ScenarioMetrics({ scenario }: { scenario: Scenario }) {
+  const partial = scenario.scenario_id === "S05" && scenario.scenario_variant === "safe_partial";
+  return (
+    <div className={styles.scenarioMetrics}>
+      <dl>
+        <div>
+          <dt>Дополнительный оборот · P50</dt>
+          <dd>{quantileValue(scenario.incremental_turnover, scenario.incremental_turnover.p50)}</dd>
+          <small>P10–P90: {quantileRange(scenario.incremental_turnover)}</small>
+        </div>
+        <div>
+          <dt>{partial ? "ROAS распределенной части" : "ROAS"}</dt>
+          <dd>{quantileValue(scenario.roas.allocated_budget, scenario.roas.allocated_budget.p50)}</dd>
+          <small>Знаменатель: распределенный бюджет</small>
+        </div>
+        {partial ? (
+          <div>
+            <dt>Отдача относительно всего запрошенного бюджета</dt>
+            <dd>{quantileValue(scenario.roas.requested_budget, scenario.roas.requested_budget.p50)}</dd>
+            <small>Знаменатель: весь запрошенный бюджет</small>
+          </div>
+        ) : null}
+      </dl>
+      <dl className={styles.compactRisk} aria-label="Состав риска">
+        <div><dt>Внутри надежного диапазона</dt><dd>{formatRub(scenario.risk_budget.within_support_budget_rub)} · {formatPercent(scenario.risk_budget.within_support_share)}</dd></div>
+        <div><dt>Контролируемое расширение</dt><dd>{formatRub(scenario.risk_budget.controlled_extrapolation_budget_rub)} · {formatPercent(scenario.risk_budget.controlled_extrapolation_share)}</dd></div>
+        <div><dt>Высокий риск</dt><dd>{formatRub(scenario.risk_budget.high_risk_budget_rub)} · {formatPercent(scenario.risk_budget.high_risk_share)}</dd></div>
+      </dl>
+    </div>
+  );
+}
+
+function ScenarioCard({ scenario }: { scenario: Scenario }) {
+  const partial = scenario.scenario_id === "S05" && scenario.scenario_variant === "safe_partial";
+  const anchor = scenarioAnchorLabel(scenario);
+  const displayName = scenarioDisplayName(scenario);
+  const variantTitle = scenarioVariantTitle(scenario);
+  const canUseGreenRecommendation = scenario.is_recommended && scenario.decision_status === "recommended_reallocation" && !partial;
+  return (
+    <article className={`${styles.scenarioDetailCard} ${partial ? styles.partialCard : ""}`} id={`scenario-${scenario.scenario_id}`}>
+      <header>
+        <div className={styles.scenarioIdentity}>
+          <span>S{scenarioNumber(scenario.scenario_id)}</span>
+          <div>
+            <h2>{displayName}</h2>
+            {variantTitle && variantTitle !== displayName ? <strong>{variantTitle}</strong> : null}
+          </div>
+        </div>
+        <div className={styles.badgeCluster}>
+          {anchor ? <StatusBadge tone={partial ? "warning" : "neutral"}>{anchor}</StatusBadge> : null}
+          <StatusBadge tone={scenario.status === "completed" ? "neutral" : "warning"}>{scenarioStatusLabel(scenario)}</StatusBadge>
+          {canUseGreenRecommendation ? <StatusBadge tone="accent">Рекомендованный вариант</StatusBadge> : null}
+        </div>
+      </header>
+      <p className={styles.scenarioDescription}>{scenario.description}</p>
+      <div className={styles.scenarioDecisionRow}>
+        <StatusBadge tone={decisionTone(scenario.decision_status)}>{decisionLabel(scenario.decision_status)}</StatusBadge>
+        {scenario.review_status === "manual_review_required" ? (
+          <StatusBadge tone="warning">{reviewLabel(scenario.review_status)}</StatusBadge>
+        ) : null}
+        <StatusBadge tone={reliabilityTone(scenario.reliability.status)}>{reliabilityLabel(scenario.reliability.status)}</StatusBadge>
+      </div>
+      <ScenarioSpecificCopy scenario={scenario} />
+      {scenario.status === "infeasible" ? (
+        <InfeasibleScenario scenario={scenario} />
+      ) : scenario.status === "completed" ? (
+        <>
+          <ScenarioBudget scenario={scenario} />
+          <ScenarioMetrics scenario={scenario} />
+        </>
+      ) : (
+        <p className={styles.inlineUnavailable}>Показатели для этого сценария не опубликованы.</p>
+      )}
+      <footer className={styles.scenarioFooter}>
+        <span>{scenario.reliability.display_text}</span>
+        <span>Место с учетом надежности: {scenario.reliability.safe_rank === null ? "Нет данных" : formatInteger(scenario.reliability.safe_rank)}</span>
+      </footer>
+    </article>
+  );
+}
+
+export function ScenariosReliabilityTab({ result }: { result: JobResultViewV2 }) {
   return (
     <div className={styles.tabStack}>
-      <header className={styles.tabIntro}>
+      <section className={styles.tabIntro}>
         <div>
-          <span className={styles.eyebrow}>Сценарии и надежность</span>
-          <h2>Сравнение рассчитанных вариантов</h2>
+          <span className={styles.eyebrow}>Шесть рассчитанных вариантов</span>
+          <h2>Сценарии и надежность</h2>
         </div>
-        <p>
-          S1 всегда остается исходным планом, S5 — устойчивым ориентиром.
-          Рекомендация, лучшие безопасный и математический варианты показаны
-          раздельно.
-        </p>
-      </header>
-
-      <ScenarioRangeChart
-        scenarios={[...result.scenarios]}
-        recommendationScenarioId={result.recommendation.scenario_id}
-        metricId={metricId}
-        onMetricChange={onMetricChange}
-        title="Диапазоны по сценариям"
-      />
-      <ScenarioComparisonTable result={result} />
-      <ReliabilityComponents result={result} />
-      <BestRawPanel result={result} />
-      <Limitations result={result} />
+        <p>Места сценариев учитывают ожидаемый эффект и ограничения надежности. S1 всегда остается точкой отсчета, S5 — осторожным сценарием.</p>
+      </section>
+      <div className={styles.scenarioDetailList}>
+        {result.scenarios.map((scenario) => <ScenarioCard key={scenario.scenario_id} scenario={scenario} />)}
+      </div>
     </div>
   );
 }

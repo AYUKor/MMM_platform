@@ -2,108 +2,89 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type {
+  ArtifactIdentity,
   CampaignUpload,
   DecisionJob,
-  ValidationIssue,
   ValidationResult,
-} from "../src/entities/lifecycle/types";
+} from "../src/shared/api/generated/application-lifecycle-v1";
+import type { ValidationResultV2 } from "../src/shared/api/generated/validation-result-v2";
+import {
+  buildValidationResultV2,
+  CONTROL_REQUESTED_BUDGET,
+  TEST_GEOS,
+  TEST_VALIDATION_ID,
+} from "../src/test/businessSemanticsV2Fixtures";
 import { installAuthenticatedAdminSession } from "./support/auth";
+import { measureContentContrast, type ContrastTarget } from "./support/contrast";
 
-const UPLOAD_ID = "upload_000000000001";
-const VALIDATION_ID = "validation_000000000002";
-const JOB_ID = "job_000000000003";
-const CAMPAIGN_ID = "campaign_000000000004";
-const SYNTHETIC_SCENARIO6_ATTEMPTS = 3_217;
+const UPLOAD_ID = "upload_eeeeeeeeeeeeeeeeeeee";
+const JOB_ID = "job_dddddddddddddddddddd";
+const CAMPAIGN_ID = "campaign_dddddddddddddddddddd";
+const SCENARIO6_ATTEMPTS = 3_217;
 const REVIEW_DIRECTORY = fileURLToPath(
-  new URL("../../docs/ui-review/calculations-new-v2/", import.meta.url),
+  new URL("../../docs/ui-review/phase-e1b-business-semantics-v1/", import.meta.url),
 );
 
-test.beforeEach(async ({ page }) => {
-  await installAuthenticatedAdminSession(page);
+const FORBIDDEN_COPY = [
+  "Дополнительные заказы",
+  "Заказы на 100 000 ₽",
+  "Механизм среднего чека",
+  "Часть дополнительного оборота",
+  "Digital_Performance",
+  "OOH_Total",
+  "orders_per_user",
+  "avg_basket",
+  "... ещё",
+] as const;
+
+const VALIDATION_CONTRAST_TARGETS = [
+  { name: "validation facts", selector: '[class*="validationFacts"] dt' },
+  { name: "validation checks", selector: '[class*="compactChecks"] p' },
+  { name: "limitation metadata", selector: '[class*="limitationList"] header span:first-child' },
+  { name: "limitation labels", selector: '[class*="limitationList"] dt' },
+  { name: "limitation guidance", selector: '[class*="limitationList"] dd' },
+  { name: "map unavailable guidance", selector: '[class*="mapUnavailable"] span' },
+] as const satisfies readonly ContrastTarget[];
+
+const artifact = (kind: string, suffix: string): ArtifactIdentity => ({
+  artifact_id: `artifact_${suffix.padEnd(20, suffix)}`,
+  kind,
+  display_name: `${kind}.json`,
+  media_type: "application/json",
+  sha256: suffix.repeat(64).slice(0, 64),
+  size_bytes: 2_048,
+  storage_key: `synthetic/${kind}`,
 });
 
-const sourceArtifact: CampaignUpload["original_file"] = {
-  artifact_id: "artifact_synthetic_source_0001",
-  kind: "campaign_upload_source",
-  display_name: "synthetic-media-plan.xlsx",
-  media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  sha256: "a".repeat(64),
-  size_bytes: 2_048,
-  storage_key: "synthetic-review/source.xlsx",
-};
-
-const parsedArtifact: NonNullable<CampaignUpload["parsed_payload"]> = {
-  artifact_id: "artifact_synthetic_parsed_0001",
-  kind: "campaign_upload_parsed",
-  display_name: "synthetic-parsed.json",
-  media_type: "application/json",
-  sha256: "b".repeat(64),
-  size_bytes: 1_024,
-  storage_key: "synthetic-review/parsed.json",
-};
-
-const normalizedArtifact: NonNullable<ValidationResult["normalized_plan"]> = {
-  artifact_id: "artifact_synthetic_normalized_0001",
-  kind: "campaign_plan_normalized",
-  display_name: "synthetic-normalized.csv",
-  media_type: "text/csv",
-  sha256: "c".repeat(64),
-  size_bytes: 1_536,
-  storage_key: "synthetic-review/normalized.csv",
-};
-
-const flightingArtifact: NonNullable<ValidationResult["daily_flighting"]> = {
-  artifact_id: "artifact_synthetic_flighting_0001",
-  kind: "campaign_flighting_daily",
-  display_name: "synthetic-flighting.csv",
-  media_type: "text/csv",
-  sha256: "d".repeat(64),
-  size_bytes: 4_096,
-  storage_key: "synthetic-review/flighting.csv",
-};
-
-const modelValidationArtifact: NonNullable<ValidationResult["model_validation"]> = {
-  artifact_id: "artifact_synthetic_model_validation_0001",
-  kind: "campaign_model_validation",
-  display_name: "synthetic-model-validation.csv",
-  media_type: "text/csv",
-  sha256: "e".repeat(64),
-  size_bytes: 768,
-  storage_key: "synthetic-review/model-validation.csv",
-};
-
-const workflowArtifact: DecisionJob["workflow_config"] = {
-  artifact_id: "artifact_synthetic_workflow_0001",
-  kind: "workflow_config",
-  display_name: "synthetic-workflow.yaml",
-  media_type: "application/yaml",
-  sha256: "f".repeat(64),
-  size_bytes: 512,
-  storage_key: "synthetic-review/workflow.yaml",
-};
+const sourceArtifact = artifact("campaign_upload_source", "a");
+const parsedArtifact = artifact("campaign_upload_parsed", "b");
+const normalizedArtifact = artifact("campaign_plan_normalized", "c");
+const flightingArtifact = artifact("campaign_flighting_daily", "d");
+const modelValidationArtifact = artifact("campaign_model_validation", "e");
+const workflowArtifact = artifact("workflow_config", "f");
 
 const parsedUpload: CampaignUpload = {
   contract_name: "campaign_upload_v1",
   schema_version: "1.0.0",
   record_origin: "synthetic_fixture",
   upload_id: UPLOAD_ID,
-  actor_id: "actor_synthetic_0001",
-  status: { code: "parsed", display_text: "Синтетический файл прочитан" },
-  received_at_utc: "2026-01-10T10:00:00Z",
-  parsed_at_utc: "2026-01-10T10:00:01Z",
+  actor_id: "actor_eeeeeeeeeeeeeeeeeeee",
+  status: { code: "parsed", display_text: "Файл прочитан" },
+  received_at_utc: "2026-07-18T10:00:00Z",
+  parsed_at_utc: "2026-07-18T10:00:01Z",
   rejected_at_utc: null,
-  original_file: sourceArtifact,
-  parser_name: "synthetic_parser",
+  original_file: { ...sourceArtifact, display_name: "synthetic-media-plan.xlsx" },
+  parser_name: "campaign_plan_parser",
   parser_version: "1.0.0",
   parsed_payload: parsedArtifact,
-  source_rows_n: 12,
+  source_rows_n: 45,
   detected_campaigns_n: 1,
   rejection_error_id: null,
 };
 
 const receivedUpload: CampaignUpload = {
   ...parsedUpload,
-  status: { code: "received", display_text: "Синтетический файл принят" },
+  status: { code: "received", display_text: "Файл принят" },
   parsed_at_utc: null,
   parser_name: null,
   parser_version: null,
@@ -112,244 +93,76 @@ const receivedUpload: CampaignUpload = {
   detected_campaigns_n: null,
 };
 
-const campaign: ValidationResult["campaigns"][number] = {
-  campaign_id: CAMPAIGN_ID,
-  campaign_name: "Синтетическая кампания А",
-  segments: ["Синтетический сегмент"],
-  start_date: "2026-02-01",
-  end_date: "2026-02-28",
-  active_days: 28,
-  channels: ["Синтетический канал А", "Синтетический канал Б"],
-  geographies: ["Синтетический город А", "Синтетический город Б"],
-  creatives: ["Синтетический креатив"],
-  source_rows_n: 12,
-  normalized_rows_n: 12,
-  daily_rows_n: 336,
-  uploaded_budget_rub: 12_345_600,
-  model_input_budget_rub: 12_000_000,
-  unmodeled_budget_rub: 345_600,
-  daily_budget_rub: 12_000_000,
-};
-
-const calculationProfile = {
-  contract_name: "calculation_profile_v1",
-  schema_version: "1.0.0",
-  scenario6_attempt_budget: SYNTHETIC_SCENARIO6_ATTEMPTS,
-  profile_label: "Синтетический профиль поиска",
-  model_version_label: "Синтетическая версия модели",
-} as const;
-
-const syntheticWarning: ValidationIssue = {
-  code: "SYNTHETIC_LIMITED_HISTORY",
-  severity: "warning",
-  display_text: "Для синтетического канала доступна ограниченная история расходов.",
-  what: "Для канала Б доступно меньше исторических наблюдений.",
-  why: "Короткая история повышает неопределенность оценки эффекта канала.",
-  recommended_action: "Проверьте период и бюджет канала Б перед запуском расчета.",
-  scope: "cell",
-  recoverable: true,
-  source_row_ids: [4],
-  affected_cells: [
-    {
-      campaign_id: CAMPAIGN_ID,
-      segment: "Синтетический сегмент",
-      geo: "Синтетический город А",
-      channel: "Синтетический канал Б",
-      target: "synthetic_target",
-    },
-  ],
-};
-
-const syntheticBlockingIssue: ValidationIssue = {
-  code: "SYNTHETIC_UNKNOWN_CHANNEL",
-  severity: "blocking",
-  display_text: "Синтетический канал не распознан и должен быть исправлен.",
-  what: "Канал из строки 7 не найден среди поддерживаемых каналов модели.",
-  why: "Модель не сможет оценить бюджет для неизвестного канала.",
-  recommended_action: "Исправьте название канала в строке 7 и загрузите файл снова.",
-  scope: "cell",
-  recoverable: true,
-  source_row_ids: [7],
-  affected_cells: [
-    {
-      campaign_id: CAMPAIGN_ID,
-      segment: "Синтетический сегмент",
-      geo: "Синтетический город Б",
-      channel: "Синтетический неизвестный канал",
-      target: "synthetic_target",
-    },
-  ],
-};
-
-const syntheticLegacyWarning: ValidationIssue = {
-  code: syntheticWarning.code,
-  severity: syntheticWarning.severity,
-  display_text: syntheticWarning.display_text,
-  scope: syntheticWarning.scope,
-  recoverable: syntheticWarning.recoverable,
-  source_row_ids: syntheticWarning.source_row_ids,
-  affected_cells: syntheticWarning.affected_cells,
-};
-
-const validValidation: ValidationResult = {
+const validationV1: ValidationResult = {
   contract_name: "validation_result_v1",
   schema_version: "1.0.0",
   record_origin: "synthetic_fixture",
-  validation_id: VALIDATION_ID,
+  validation_id: TEST_VALIDATION_ID,
   upload_id: UPLOAD_ID,
-  status: { code: "valid", display_text: "Синтетическая кампания проверена" },
-  validator_name: "synthetic_validator",
+  status: { code: "valid", display_text: "Кампания проверена" },
+  validator_name: "campaign_validator",
   validator_version: "1.0.0",
-  started_at_utc: "2026-01-10T10:00:02Z",
-  finished_at_utc: "2026-01-10T10:00:03Z",
+  started_at_utc: "2026-07-18T10:00:02Z",
+  finished_at_utc: "2026-07-18T10:00:03Z",
   source_payload: parsedArtifact,
   model: {
-    registry_channel: "synthetic_channel",
-    registry_event_id: "event_synthetic_0001",
-    package_id: "package_synthetic_0001",
+    registry_channel: "preprod",
+    registry_event_id: "registry_event_synthetic",
+    package_id: "pkg_1111111111111111_2222222222222222",
     package_fingerprint: "1".repeat(64),
     package_manifest_sha256: "2".repeat(64),
-    activation_status: "synthetic_restricted",
-    production_blockers: ["SYNTHETIC_BLOCKER"],
+    activation_status: "preprod_restricted",
+    production_blockers: ["research_preprod"],
   },
   normalized_plan: normalizedArtifact,
   daily_flighting: flightingArtifact,
   model_validation: modelValidationArtifact,
-  campaigns: [campaign],
+  campaigns: [{
+    campaign_id: CAMPAIGN_ID,
+    campaign_name: "Демонстрационная кампания",
+    segments: ["Сегмент A"],
+    start_date: "2026-08-01",
+    end_date: "2026-08-15",
+    active_days: 15,
+    // Lifecycle v1 may carry model-facing identifiers. User-facing channel
+    // names must therefore come from validation view-v2, not this array.
+    channels: ["Digital_Performance", "OOH_Total", "Радио"],
+    geographies: TEST_GEOS.map((geo) => geo.geo_display_name),
+    creatives: [],
+    source_rows_n: 45,
+    normalized_rows_n: 45,
+    daily_rows_n: 675,
+    uploaded_budget_rub: CONTROL_REQUESTED_BUDGET,
+    model_input_budget_rub: CONTROL_REQUESTED_BUDGET,
+    unmodeled_budget_rub: 0,
+    daily_budget_rub: CONTROL_REQUESTED_BUDGET,
+  }],
   totals: {
-    source_rows_n: 12,
-    normalized_rows_n: 12,
-    daily_rows_n: 336,
-    uploaded_budget_rub: 12_345_600,
-    model_input_budget_rub: 12_000_000,
-    unmodeled_budget_rub: 345_600,
-    daily_budget_rub: 12_000_000,
+    source_rows_n: 45,
+    normalized_rows_n: 45,
+    daily_rows_n: 675,
+    uploaded_budget_rub: CONTROL_REQUESTED_BUDGET,
+    model_input_budget_rub: CONTROL_REQUESTED_BUDGET,
+    unmodeled_budget_rub: 0,
+    daily_budget_rub: CONTROL_REQUESTED_BUDGET,
     raw_to_normalized_abs_diff_rub: 0,
     normalized_to_daily_abs_diff_rub: 0,
   },
   blocking_errors: [],
   warnings: [],
-  preview: {
-    budget_by_channel: [
-      {
-        channel: "Синтетический канал А",
-        total_budget_rub: 7_200_000,
-        max_daily_budget_rub: 300_000,
-        status: { code: "passed", display_text: "Данные готовы" },
-      },
-      {
-        channel: "Синтетический канал Б",
-        total_budget_rub: 4_800_000,
-        max_daily_budget_rub: 200_000,
-        status: { code: "warning", display_text: "Проверьте историю" },
-      },
-    ],
-    budget_by_geo: [
-      {
-        geo: "Синтетический город А",
-        total_budget_rub: 8_000_000,
-        max_daily_budget_rub: 340_000,
-        status: { code: "passed", display_text: "Данные готовы" },
-      },
-      {
-        geo: "Синтетический город Б",
-        total_budget_rub: 4_000_000,
-        max_daily_budget_rub: 160_000,
-        status: { code: "passed", display_text: "Данные готовы" },
-      },
-    ],
-    channel_flighting: [
-      {
-        channel: "Синтетический канал А",
-        date: "2026-02-01",
-        daily_budget_rub: 300_000,
-        status: { code: "passed", display_text: "Активен" },
-      },
-      {
-        channel: "Синтетический канал А",
-        date: "2026-02-02",
-        daily_budget_rub: 250_000,
-        status: { code: "passed", display_text: "Активен" },
-      },
-      {
-        channel: "Синтетический канал А",
-        date: "2026-02-03",
-        daily_budget_rub: 180_000,
-        status: { code: "passed", display_text: "Активен" },
-      },
-      {
-        channel: "Синтетический канал Б",
-        date: "2026-02-01",
-        daily_budget_rub: 120_000,
-        status: { code: "warning", display_text: "Ограниченная история" },
-      },
-      {
-        channel: "Синтетический канал Б",
-        date: "2026-02-02",
-        daily_budget_rub: 200_000,
-        status: { code: "warning", display_text: "Ограниченная история" },
-      },
-      {
-        channel: "Синтетический канал Б",
-        date: "2026-02-03",
-        daily_budget_rub: 140_000,
-        status: { code: "warning", display_text: "Ограниченная история" },
-      },
-    ],
-    geo_points: [
-      {
-        geo: "Синтетическая точка только для geo_points",
-        latitude: 55.7558,
-        longitude: 37.6173,
-        total_budget_rub: 12_000_000,
-      },
-    ],
-    checks: [
-      {
-        code: "CHECK_SINGLE_CAMPAIGN",
-        status: "passed",
-        display_text: "Файл содержит ровно одну кампанию.",
-      },
-      {
-        code: "CHECK_BUDGET_RECONCILIATION",
-        status: "passed",
-        display_text: "Бюджет файла и дневного плана совпадает.",
-      },
-      {
-        code: "CHECK_HISTORY_COVERAGE",
-        status: "warning",
-        display_text: "Для одного канала доступна ограниченная история.",
-      },
-    ],
-  },
   job_creation_allowed: true,
 };
 
-const runningValidation: ValidationResult = {
-  ...validValidation,
-  status: { code: "running", display_text: "Синтетическая проверка выполняется" },
+const runningValidationV1: ValidationResult = {
+  ...validationV1,
+  status: { code: "running", display_text: "Проверяем кампанию" },
   finished_at_utc: null,
+  campaigns: [],
+  totals: null,
   model: null,
   normalized_plan: null,
   daily_flighting: null,
   model_validation: null,
-  campaigns: [],
-  totals: null,
-  warnings: [],
-  blocking_errors: [],
-  job_creation_allowed: false,
-};
-
-const warningValidation: ValidationResult = {
-  ...validValidation,
-  warnings: [syntheticWarning],
-};
-
-const invalidValidation: ValidationResult = {
-  ...validValidation,
-  status: { code: "invalid", display_text: "Синтетическая кампания требует исправления" },
-  blocking_errors: [syntheticBlockingIssue],
-  warnings: [],
   job_creation_allowed: false,
 };
 
@@ -358,1074 +171,451 @@ const queuedJob: DecisionJob = {
   schema_version: "1.0.0",
   record_origin: "synthetic_fixture",
   job_id: JOB_ID,
-  idempotency_key: "job:synthetic-review-0001",
+  idempotency_key: `job:${TEST_VALIDATION_ID}`,
   job_type: "forecast_optimizer_report",
-  created_by_actor_id: "actor_synthetic_0001",
+  created_by_actor_id: "actor_eeeeeeeeeeeeeeeeeeee",
   upload_id: UPLOAD_ID,
-  validation_id: VALIDATION_ID,
+  validation_id: TEST_VALIDATION_ID,
   normalized_plan: normalizedArtifact,
   daily_flighting: flightingArtifact,
   workflow_config: workflowArtifact,
   model_selector: {
     mode: "registry_channel",
-    registry_channel: "synthetic_channel",
-    package_id: "package_synthetic_0001",
-    expected_package_fingerprint: "1".repeat(64),
+    registry_channel: "preprod",
+    package_id: null,
+    expected_package_fingerprint: null,
   },
   policies: {
-    optimizer_policy_id: "synthetic_optimizer_policy",
+    optimizer_policy_id: "optimizer-v1",
     optimizer_policy_sha256: "3".repeat(64),
-    gate_policy_version: "synthetic_gate_policy",
-    business_policy_id: "synthetic_business_policy",
+    gate_policy_version: "gate-v1",
+    business_policy_id: "business-v1",
     business_policy_sha256: "4".repeat(64),
-    business_decision_mode: "allocation_only",
+    business_decision_mode: "manual_review",
   },
   sampling: {
-    scenario6_attempt_budget: 2_048,
-    search_posterior_draws: 32,
-    final_posterior_draws: 64,
-    search_seed: 11,
-    final_seed: 22,
+    scenario6_attempt_budget: SCENARIO6_ATTEMPTS,
+    search_posterior_draws: 100,
+    final_posterior_draws: 500,
+    search_seed: 42,
+    final_seed: 43,
   },
-  code_reference: "synthetic:review",
-  status: { code: "queued", display_text: "Синтетический расчет поставлен в очередь" },
-  created_at_utc: "2026-01-10T10:00:04Z",
-  queued_at_utc: "2026-01-10T10:00:04Z",
+  code_reference: "synthetic-test",
+  status: { code: "queued", display_text: "Расчет поставлен в очередь" },
+  created_at_utc: "2026-07-18T10:00:04Z",
+  queued_at_utc: "2026-07-18T10:00:04Z",
   started_at_utc: null,
   cancel_requested_at_utc: null,
   finished_at_utc: null,
-  attempt_number: 0,
+  attempt_number: 1,
   result_id: null,
   terminal_error_id: null,
 };
 
-interface MockApiOptions {
-  parsed?: CampaignUpload;
-  validation?: ValidationResult;
-  calculationProfile?: unknown;
-  calculationProfileStatus?: number;
-  uploadFailuresBeforeSuccess?: number;
-  uploadPollsBeforeParsed?: number;
-  uploadGetError?: boolean;
-  validationFailuresBeforeSuccess?: number;
-  jobFailuresBeforeSuccess?: number;
-  jobResponseGate?: Promise<void>;
+interface ApiOptions {
+  upload?: CampaignUpload;
+  validationV1?: ValidationResult;
+  validationV2?: unknown;
+  validationViewStatus?: number;
+  profileStatus?: number;
 }
 
-interface MockApiCalls {
+interface ApiCalls {
   templateGets: number;
-  profileGets: number;
   uploadPosts: number;
-  uploadGets: number;
-  uploadIdempotencyKeys: string[];
   validationPosts: number;
-  validationGets: number;
-  validationIdempotencyKeys: string[];
+  validationV1Gets: number;
+  validationV2Gets: number;
+  profileGets: number;
   jobPosts: number;
-  jobBodies: unknown[];
-  jobIdempotencyKeys: string[];
+  forbidden: string[];
 }
 
-function clone<T>(value: T): T {
-  return structuredClone(value);
+const routeCalls = new WeakMap<Page, ApiCalls>();
+
+test.beforeEach(async ({ page }) => {
+  await installAuthenticatedAdminSession(page);
+});
+
+test.afterEach(async ({ page }) => {
+  const calls = routeCalls.get(page);
+  if (calls) expect(calls.forbidden, "unapproved new-calculation requests").toEqual([]);
+});
+
+function errorPayload(code: string, displayText: string) {
+  return { error: { code, display_text: displayText, retryable: true, user_action: "Повторите запрос." } };
 }
 
-async function fulfillJson(route: Route, status: number, json: unknown) {
-  await route.fulfill({ status, json });
+async function fulfill(route: Route, status: number, payload: unknown) {
+  await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(payload) });
 }
 
-async function mockNewCalculationApi(
+async function installNewCalculationRoutes(
   page: Page,
-  options: MockApiOptions = {},
-): Promise<MockApiCalls> {
-  const calls: MockApiCalls = {
+  options: ApiOptions = {},
+): Promise<ApiCalls> {
+  const calls: ApiCalls = {
     templateGets: 0,
-    profileGets: 0,
     uploadPosts: 0,
-    uploadGets: 0,
-    uploadIdempotencyKeys: [],
     validationPosts: 0,
-    validationGets: 0,
-    validationIdempotencyKeys: [],
+    validationV1Gets: 0,
+    validationV2Gets: 0,
+    profileGets: 0,
     jobPosts: 0,
-    jobBodies: [],
-    jobIdempotencyKeys: [],
+    forbidden: [],
   };
-  const parsed = clone(options.parsed ?? parsedUpload);
-  const validation = clone(options.validation ?? validValidation);
+  routeCalls.set(page, calls);
+  const upload = structuredClone(options.upload ?? parsedUpload);
+  const legacyValidation = structuredClone(options.validationV1 ?? validationV1);
+  const businessValidation = structuredClone(options.validationV2 ?? buildValidationResultV2());
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
-    const pathname = url.pathname;
-
-    if (method === "GET" && pathname === "/api/v1/auth/session" && url.search === "") {
+    const path = url.pathname;
+    if (method === "GET" && path === "/api/v1/auth/session" && !url.search) {
       await route.fallback();
       return;
     }
-
-    if (method === "GET" && pathname === "/api/v1/templates/campaign-plan.xlsx") {
+    if (method === "GET" && path === "/api/v1/templates/campaign-plan.xlsx") {
       calls.templateGets += 1;
       await route.fulfill({
         status: 200,
-        body: Buffer.from("PK\u0003\u0004synthetic-xlsx-template", "utf8"),
+        body: Buffer.from("PK\u0003\u0004synthetic-template", "utf8"),
         headers: {
-          "cache-control": "no-store",
           "content-disposition": 'attachment; filename="campaign-plan-template.xlsx"',
           "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         },
       });
       return;
     }
-
-    if (method === "GET" && pathname === "/api/v1/calculation-profile") {
-      calls.profileGets += 1;
-      const status = options.calculationProfileStatus ?? 200;
-      await fulfillJson(
+    if (method === "POST" && path === "/api/v1/uploads") {
+      calls.uploadPosts += 1;
+      await fulfill(route, 202, receivedUpload);
+      return;
+    }
+    if (method === "GET" && path === `/api/v1/uploads/${UPLOAD_ID}`) {
+      await fulfill(route, 200, upload);
+      return;
+    }
+    if (method === "POST" && path === `/api/v1/uploads/${UPLOAD_ID}/validations`) {
+      calls.validationPosts += 1;
+      await fulfill(route, 202, runningValidationV1);
+      return;
+    }
+    if (method === "GET" && path === `/api/v1/validations/${TEST_VALIDATION_ID}`) {
+      calls.validationV1Gets += 1;
+      await fulfill(route, 200, legacyValidation);
+      return;
+    }
+    if (method === "GET" && path === `/api/v1/validations/${TEST_VALIDATION_ID}/view-v2`) {
+      calls.validationV2Gets += 1;
+      const status = options.validationViewStatus ?? 200;
+      await fulfill(
         route,
         status,
         status === 200
-          ? (options.calculationProfile ?? calculationProfile)
-          : {
-              error: {
-                code: "SYNTHETIC_CALCULATION_PROFILE_UNAVAILABLE",
-                display_text: "Параметры расчета временно недоступны.",
-              },
-            },
+          ? businessValidation
+          : errorPayload("VALIDATION_VIEW_UNAVAILABLE", "Результат проверки временно недоступен."),
       );
       return;
     }
-
-    if (method === "POST" && pathname === "/api/v1/uploads") {
-      calls.uploadPosts += 1;
-      calls.uploadIdempotencyKeys.push(request.headers()["idempotency-key"] ?? "");
-      if (calls.uploadPosts <= (options.uploadFailuresBeforeSuccess ?? 0)) {
-        await fulfillJson(route, 503, {
-          error: {
-            code: "SYNTHETIC_UPLOAD_RESPONSE_LOST",
-            display_text: "Не удалось подтвердить загрузку файла.",
-          },
-        });
-        return;
-      }
-      await fulfillJson(route, 202, receivedUpload);
+    if (method === "GET" && path === "/api/v1/calculation-profile") {
+      calls.profileGets += 1;
+      const status = options.profileStatus ?? 200;
+      await fulfill(route, status, status === 200 ? {
+        contract_name: "calculation_profile_v1",
+        schema_version: "1.0.0",
+        scenario6_attempt_budget: SCENARIO6_ATTEMPTS,
+        profile_label: "Профиль поиска",
+        model_version_label: "Версия модели",
+      } : errorPayload("PROFILE_UNAVAILABLE", "Параметры поиска временно недоступны."));
       return;
     }
-
-    if (method === "GET" && pathname === `/api/v1/uploads/${UPLOAD_ID}`) {
-      calls.uploadGets += 1;
-      if (options.uploadGetError) {
-        await fulfillJson(route, 503, {
-          error: {
-            code: "SYNTHETIC_UPLOAD_UNAVAILABLE",
-            display_text: "Не удалось получить результат обработки файла.",
-          },
-        });
-        return;
-      }
-      if (calls.uploadGets <= (options.uploadPollsBeforeParsed ?? 0)) {
-        await fulfillJson(route, 200, receivedUpload);
-        return;
-      }
-      await fulfillJson(route, 200, parsed);
-      return;
-    }
-
-    if (
-      method === "POST" &&
-      pathname === `/api/v1/uploads/${UPLOAD_ID}/validations`
-    ) {
-      calls.validationPosts += 1;
-      calls.validationIdempotencyKeys.push(request.headers()["idempotency-key"] ?? "");
-      if (calls.validationPosts <= (options.validationFailuresBeforeSuccess ?? 0)) {
-        await fulfillJson(route, 503, {
-          error: {
-            code: "SYNTHETIC_VALIDATION_RESPONSE_LOST",
-            display_text: "Не удалось подтвердить начало проверки.",
-          },
-        });
-        return;
-      }
-      await fulfillJson(route, 202, runningValidation);
-      return;
-    }
-
-    if (method === "GET" && pathname === `/api/v1/validations/${VALIDATION_ID}`) {
-      calls.validationGets += 1;
-      await fulfillJson(route, 200, validation);
-      return;
-    }
-
-    if (
-      method === "POST" &&
-      pathname === `/api/v1/validations/${VALIDATION_ID}/jobs`
-    ) {
+    if (method === "POST" && path === `/api/v1/validations/${TEST_VALIDATION_ID}/jobs`) {
       calls.jobPosts += 1;
-      calls.jobBodies.push(JSON.parse(request.postData() ?? "{}") as unknown);
-      calls.jobIdempotencyKeys.push(request.headers()["idempotency-key"] ?? "");
-      await options.jobResponseGate;
-      if (calls.jobPosts <= (options.jobFailuresBeforeSuccess ?? 0)) {
-        await fulfillJson(route, 503, {
-          error: {
-            code: "SYNTHETIC_RESPONSE_LOST",
-            display_text: "Не удалось подтвердить запуск расчета.",
-          },
-        });
-        return;
-      }
-      await fulfillJson(route, 202, queuedJob);
+      await fulfill(route, 202, queuedJob);
       return;
     }
-
-    await fulfillJson(route, 404, {
-      error: {
-        code: "SYNTHETIC_UNEXPECTED_ROUTE",
-        display_text: "Synthetic test route was not configured.",
-      },
-    });
+    if (
+      method === "GET"
+      && (path === `/api/v1/jobs/${JOB_ID}/progress-view` || path === "/api/v1/meta/mmm-facts")
+    ) {
+      await fulfill(
+        route,
+        503,
+        errorPayload("POST_START_VIEW_UNAVAILABLE", "Экран процесса не входит в этот тест."),
+      );
+      return;
+    }
+    calls.forbidden.push(`${method} ${path}${url.search}`);
+    await fulfill(route, 599, errorPayload("UNEXPECTED_ROUTE", "Маршрут теста не настроен."));
   });
 
   return calls;
 }
 
+async function selectFile(page: Page, name = "synthetic-media-plan.xlsx") {
+  await page.locator('input[type="file"]').setInputFiles({
+    name,
+    mimeType: name.endsWith(".csv")
+      ? "text/csv"
+      : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.alloc(2_048, "synthetic-review"),
+  });
+}
+
+async function expectNoForbiddenCopy(page: Page) {
+  const text = await page.locator("body").innerText();
+  for (const forbidden of FORBIDDEN_COPY) expect(text).not.toContain(forbidden);
+}
+
+async function expectNoOverflow(page: Page) {
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )).toBeLessThanOrEqual(0);
+}
+
 async function setTheme(page: Page, theme: "dark" | "light") {
+  await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
   await page.addInitScript((value) => {
     window.localStorage.setItem("mmm-frontend-theme", value);
   }, theme);
 }
 
-async function selectSyntheticFile(
-  page: Page,
-  name = "synthetic-media-plan.xlsx",
-  sizeBytes = 2_048,
-) {
-  const mimeType = name.toLowerCase().endsWith(".csv")
-    ? "text/csv"
-    : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  await page.locator('input[type="file"]').setInputFiles({
-    name,
-    mimeType,
-    buffer: Buffer.alloc(sizeBytes, "synthetic-review"),
+function buildPassedValidation(): ValidationResultV2 {
+  const validation = structuredClone(buildValidationResultV2());
+  validation.status = "passed";
+  validation.model_limitations = [];
+  validation.geo_points = validation.geo_points.map((point) => ({
+    ...point,
+    has_model_limitations: false,
+  }));
+  return validation;
+}
+
+test("upload screen offers the working campaign-plan template", async ({ page }) => {
+  const calls = await installNewCalculationRoutes(page);
+  await page.goto("/calculations/new");
+  await expect(page.getByRole("heading", { name: "Новый расчет", exact: true })).toBeVisible();
+  const template = page.getByRole("link", { name: "Скачать шаблон медиаплана" });
+  await expect(template).toHaveAttribute("href", "/api/v1/templates/campaign-plan.xlsx");
+  await expect(page.getByText(/с примером заполнения$/)).toBeVisible();
+  const response = await page.evaluate(async () => {
+    const value = await fetch("/api/v1/templates/campaign-plan.xlsx");
+    return { ok: value.ok, type: value.headers.get("content-type") };
   });
-}
-
-async function dropSyntheticFile(
-  page: Page,
-  name = "synthetic-dropped-media-plan.csv",
-) {
-  await page.locator('input[type="file"]').evaluate((input, fileName) => {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(new File(["synthetic-review"], fileName, { type: "text/csv" }));
-    input.closest("label")?.dispatchEvent(new DragEvent("drop", {
-      bubbles: true,
-      cancelable: true,
-      dataTransfer,
-    }));
-  }, name);
-}
-
-async function expectQueryStep(page: Page, step: string) {
-  await expect.poll(() => new URL(page.url()).searchParams.get("step")).toBe(step);
-}
-
-async function expectNoInternalNames(page: Page) {
-  const text = await page.locator("body").innerText();
-  expect(text).not.toMatch(/\bAPI\b/i);
-  for (const internalName of [
-    "backend",
-    "Validation preview",
-    "support",
-    "candidate_id",
-    "attempt_id",
-    "posterior",
-    "campaign_upload_v1",
-    "validation_result_v1",
-    "storage_key",
-    "SYNTHETIC_LIMITED_HISTORY",
-    "SYNTHETIC_UNKNOWN_CHANNEL",
-    "CHECK_SINGLE_CAMPAIGN",
-    "CHECK_BUDGET_RECONCILIATION",
-    "CHECK_HISTORY_COVERAGE",
-    "calculation_profile_v1",
-    "synthetic_target",
-    "/Users/",
-  ]) {
-    expect(text.toLowerCase()).not.toContain(internalName.toLowerCase());
-  }
-}
-
-async function expectNoDocumentOverflow(page: Page) {
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-    ),
-  ).toBe(false);
-}
-
-async function expectWorkingTemplateAction(page: Page, calls: MockApiCalls) {
-  const action = page.getByRole("link", {
-    name: "Скачать шаблон медиаплана",
-    exact: true,
-  });
-  await expect(action).toHaveAttribute("href", "/api/v1/templates/campaign-plan.xlsx");
-  await expect(action).toHaveAttribute("download", "campaign-plan-template.xlsx");
-
-  const templateResponse = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/templates/campaign-plan.xlsx");
-    const bytes = [...new Uint8Array(await response.arrayBuffer()).slice(0, 2)];
-    return {
-      contentType: response.headers.get("content-type"),
-      ok: response.ok,
-      bytes,
-    };
-  });
-  expect(templateResponse).toEqual({
-    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  expect(response).toEqual({
     ok: true,
-    bytes: [80, 75],
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   expect(calls.templateGets).toBe(1);
-
-  const downloadPromise = page.waitForEvent("download");
-  await action.click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("campaign-plan-template.xlsx");
-}
-
-async function reachParsedUpload(page: Page) {
-  await page.goto("/calculations/new");
-  await selectSyntheticFile(page);
-  await page.getByRole("button", { name: "Загрузить файл", exact: true }).click();
-  await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible();
-  await expectQueryStep(page, "upload-result");
-}
-
-async function reachReview(
-  page: Page,
-  expectedStatus: string,
-) {
-  await reachParsedUpload(page);
-  await page.getByRole("button", { name: "Продолжить к проверке", exact: true }).click();
-  await expect(page.getByRole("heading", { name: expectedStatus, exact: true })).toBeVisible();
-  await expectQueryStep(page, "review");
-}
-
-const scenarioTitles = [
-  "Как загружено",
-  "Равномерно по всем связкам",
-  "Гео выровнены внутри каналов",
-  "Каналы выровнены внутри гео",
-  "Самый устойчивый план",
-  "Адаптивный поиск",
-] as const;
-
-async function expectScenarioScreen(page: Page) {
-  for (const title of scenarioTitles) {
-    await expect(
-      page.getByRole("heading", { name: new RegExp(`${title}$`) }),
-    ).toBeVisible();
-  }
-  await expect(page.getByText("S5 — сначала устойчивость", { exact: true })).toBeVisible();
-  await expect(page.getByText("Ориентир по устойчивости", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText(
-      "S6 — поиск эффективности с обязательной проверкой устойчивости",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await expect(page.getByText("Общий бюджет", { exact: true })).toBeVisible();
-  await expect(page.getByText("Даты", { exact: true })).toBeVisible();
-  await expect(page.getByText("Исходные каналы", { exact: true })).toBeVisible();
-  await expect(page.getByText("Исходные гео", { exact: true })).toBeVisible();
-  await expect(page.getByText("Исходные связки гео × канал", { exact: true })).toBeVisible();
-  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toBeVisible();
-  await expect(page.getByText("Синтетический профиль поиска", { exact: false })).toBeVisible();
-  await expect(page.getByText("Синтетическая версия модели", { exact: false })).toBeVisible();
-
-  const text = await page.locator("body").innerText();
-  expect(text).not.toContain("150");
-  expect(text).not.toContain("2048");
-  expect(text).not.toContain("2 048");
-}
-
-async function captureExactViewport(page: Page, fileName: string) {
-  mkdirSync(REVIEW_DIRECTORY, { recursive: true });
-  await page.evaluate(() => document.fonts.ready);
-  const image = await page.screenshot({
-    path: `${REVIEW_DIRECTORY}${fileName}`,
-    animations: "disabled",
-    caret: "hide",
-    fullPage: false,
-    scale: "css",
-  });
-  expect(image.readUInt32BE(16)).toBe(1_440);
-  expect(image.readUInt32BE(20)).toBe(900);
-}
-
-test("1. empty upload screen is controlled", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page);
-  await page.goto("/calculations/new");
-
-  await expect(page.getByRole("heading", { name: "Новый расчет", exact: true })).toBeVisible();
-  await expect(page.getByText("Один файл = одна кампания", { exact: true })).toBeVisible();
-  await expect(page.getByText("XLSX или CSV", { exact: true })).toBeVisible();
-  await expect(page.getByText(/с примером заполнения$/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Загрузить файл", exact: true })).toBeDisabled();
-  await expectWorkingTemplateAction(page, calls);
-  await expect(page.locator('nav a[aria-current="page"]')).toHaveCount(1);
-  await expect(page.getByRole("link", { name: "Новый расчёт", exact: true })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  expect(calls.uploadPosts).toBe(0);
-  expect(calls.validationPosts).toBe(0);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
 });
 
-test("2. selected valid file is parsed before validation", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page);
+test("upload and lifecycle validation remain orchestration-only", async ({ page }) => {
+  const calls = await installNewCalculationRoutes(page);
   await page.goto("/calculations/new");
-  await selectSyntheticFile(page);
-
-  await expect(page.getByText("synthetic-media-plan.xlsx", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Заменить файл", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Удалить", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Загрузить файл", exact: true }).click();
-
+  await selectFile(page);
+  await page.getByRole("button", { name: "Загрузить файл" }).click();
   await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Строк", { exact: true }).locator("..").getByText("12", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Кампаний", { exact: true }).locator("..").getByText("1", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Продолжить к проверке", exact: true })).toBeVisible();
+  await expect(page.getByText("45", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Продолжить к проверке" }).click();
+  await expect(page.getByRole("heading", { name: "Кампания готова к расчету" })).toBeVisible();
   expect(calls.uploadPosts).toBe(1);
-  expect(calls.validationPosts).toBe(0);
-  expect(calls.jobPosts).toBe(0);
-  await expectQueryStep(page, "upload-result");
-
-  await page.reload();
-  await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible();
-  await expectQueryStep(page, "upload-result");
-  expect(calls.uploadPosts).toBe(1);
-  await expectNoInternalNames(page);
-});
-
-test("2a. drag and drop selects a valid campaign file", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page);
-  await page.goto("/calculations/new");
-
-  await dropSyntheticFile(page);
-
-  await expect(page.getByText("synthetic-dropped-media-plan.csv", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Загрузить файл", exact: true })).toBeEnabled();
-  expect(calls.uploadPosts).toBe(0);
-});
-
-test("2b. received upload stays in a controlled loading state until parsed", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { uploadPollsBeforeParsed: 1 });
-  await page.goto("/calculations/new");
-  await selectSyntheticFile(page);
-  await page.getByRole("button", { name: "Загрузить файл", exact: true }).click();
-
-  await expect(page.getByRole("heading", { name: "Читаем файл", exact: true })).toBeVisible();
-  await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible();
-  expect(calls.uploadGets).toBeGreaterThanOrEqual(2);
-});
-
-test("2c. upload polling error replaces loading with a recovery action", async ({ page }) => {
-  await mockNewCalculationApi(page, { uploadGetError: true });
-  await page.goto(`/calculations/new?uploadId=${UPLOAD_ID}&step=upload-result`);
-
-  await expect(page.getByRole("alert")).toContainText("Не удалось получить результат обработки файла.");
-  await expect(page.getByRole("heading", { name: "Читаем файл", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Загрузить другой файл", exact: true })).toBeVisible();
-});
-
-test("2d. replacing a file resets the native picker for the same file name", async ({ page }) => {
-  await mockNewCalculationApi(page);
-  await page.goto("/calculations/new");
-  await selectSyntheticFile(page, "same-name-plan.xlsx", 2_048);
-  await expect(page.getByText("2 КБ", { exact: true })).toBeVisible();
-
-  const chooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Заменить файл", exact: true }).click();
-  const chooser = await chooserPromise;
-  await expect(page.locator('input[type="file"]')).toHaveValue("");
-  await chooser.setFiles({
-    name: "same-name-plan.xlsx",
-    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    buffer: Buffer.alloc(4_096, "synthetic-review-replacement"),
-  });
-
-  await expect(page.getByText("same-name-plan.xlsx", { exact: true })).toBeVisible();
-  await expect(page.getByText("4 КБ", { exact: true })).toBeVisible();
-});
-
-test("2e. retrying upload reuses the selected file idempotency key", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { uploadFailuresBeforeSuccess: 1 });
-  await page.goto("/calculations/new");
-  await selectSyntheticFile(page);
-  const uploadButton = page.getByRole("button", { name: "Загрузить файл", exact: true });
-
-  await uploadButton.click();
-  await expect(page.getByRole("alert")).toContainText("Не удалось подтвердить загрузку файла.");
-  await uploadButton.click();
-  await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible();
-
-  expect(calls.uploadPosts).toBe(2);
-  expect(calls.uploadIdempotencyKeys[0]).not.toBe("");
-  expect(calls.uploadIdempotencyKeys[1]).toBe(calls.uploadIdempotencyKeys[0]);
-});
-
-test("3. multiple campaigns are blocked before validation", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, {
-    parsed: { ...parsedUpload, detected_campaigns_n: 2 },
-  });
-  await page.goto("/calculations/new");
-  await selectSyntheticFile(page);
-  await page.getByRole("button", { name: "Загрузить файл", exact: true }).click();
-
-  await expect(
-    page.getByRole("heading", { name: "В файле обнаружено несколько кампаний", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/каждую кампанию.*отдельн/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Загрузить другой файл", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Продолжить к проверке", exact: true })).toHaveCount(0);
-  expect(calls.validationPosts).toBe(0);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
-});
-
-test("3a. a parsed file without a campaign has accurate blocked copy", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, {
-    parsed: { ...parsedUpload, detected_campaigns_n: 0 },
-  });
-  await page.goto("/calculations/new");
-  await selectSyntheticFile(page);
-  await page.getByRole("button", { name: "Загрузить файл", exact: true }).click();
-
-  await expect(
-    page.getByRole("heading", { name: "Кампания в файле не обнаружена", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/проверьте обязательные поля/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Продолжить к проверке", exact: true })).toHaveCount(0);
-  expect(calls.validationPosts).toBe(0);
-});
-
-test("4. valid campaign without warnings reaches ready review", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validation: validValidation });
-  await reachReview(page, "Кампания готова к расчету");
-
-  await expect(page.getByText("Синтетическая кампания А", { exact: true })).toBeVisible();
-  await expect(page.getByText("Синтетический сегмент", { exact: true })).toBeVisible();
-  await expect(page.getByText(/12,3[\s\u00a0]*млн[\s\u00a0]*₽/)).toBeVisible();
-  await expect(page.getByText("Бюджет по каналам", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: /Синтетический канал А:/ })).toBeVisible();
-  await expect(page.getByRole("img", { name: /Синтетический канал Б:/ })).toBeVisible();
-  await expect(page.getByText("Бюджет по географиям", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: /Синтетический город А:/ })).toBeVisible();
-  await expect(page.getByRole("img", { name: /Синтетический город Б:/ })).toBeVisible();
-  await expect(page.getByText("Активность каналов", { exact: true })).toBeVisible();
-  await expect(
-    page.getByLabel("Временная диаграмма активности каналов", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("cell")).toHaveCount(6);
-  await expect(page.getByText("География кампании", { exact: true })).toBeVisible();
-  await expect(page.getByText("Данные для карты пока недоступны.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("img", { name: /координаты географий/i })).toHaveCount(0);
-  await expect(page.getByText("Синтетическая точка только для geo_points", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Результаты проверки", exact: true })).toBeVisible();
-  await expect(page.getByText("Файл содержит ровно одну кампанию.", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Бюджет файла и дневного плана совпадает.", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Для одного канала доступна ограниченная история.", { exact: true }),
-  ).toBeVisible();
-  for (const manualLabel of [
-    "Структура файла",
-    "Сверка бюджета",
-    "Поддержка сегмента",
-    "Распознавание каналов",
-    "Распознавание географий",
-    "Сходство с историческими тратами",
-    "Ограничения использования модели",
-    "Детализация проверки не предоставлена",
-  ]) {
-    await expect(page.getByText(manualLabel, { exact: true })).toHaveCount(0);
-  }
-  await expect(
-    page.getByRole("button", { name: "Продолжить к сценариям", exact: true }),
-  ).toBeVisible();
   expect(calls.validationPosts).toBe(1);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
+  expect(calls.validationV1Gets).toBeGreaterThan(0);
+  expect(calls.validationV2Gets).toBeGreaterThan(0);
 });
 
-test("4a. retrying validation reuses the upload-scoped idempotency key", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validationFailuresBeforeSuccess: 1 });
-  await reachParsedUpload(page);
-  const validationButton = page.getByRole("button", {
-    name: "Продолжить к проверке",
-    exact: true,
-  });
+test("validation view-v2 separates file checks from grouped model limitations", async ({ page }) => {
+  const calls = await installNewCalculationRoutes(page);
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
 
-  await validationButton.click();
-  await expect(page.getByRole("alert")).toContainText("Не удалось подтвердить начало проверки.");
-  await validationButton.click();
-  await expect(
-    page.getByRole("heading", { name: "Кампания готова к расчету", exact: true }),
-  ).toBeVisible();
-
-  expect(calls.validationPosts).toBe(2);
-  expect(calls.validationIdempotencyKeys).toEqual([
-    `validation:${UPLOAD_ID}`,
-    `validation:${UPLOAD_ID}`,
-  ]);
-});
-
-test("5. valid campaign with warnings stays calculable", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validation: warningValidation });
-  await reachReview(page, "Кампанию можно рассчитать, но есть замечания");
-
-  await expect(page.getByText("Что обнаружено", { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticWarning.what!, { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticWarning.why!, { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticWarning.recommended_action!, { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticWarning.display_text, { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/Гео: Синтетический город А/)).toBeVisible();
-  await expect(page.getByText(/Канал: Синтетический канал Б/)).toBeVisible();
-  await expect(
-    page.getByText(/Связка гео × канал: Синтетический город А × Синтетический канал Б/),
-  ).toBeVisible();
-  await expect(page.getByText("Не блокирует расчет", { exact: true })).toBeVisible();
-  await expect(page.getByText(/пояснение не предоставлено/i)).toHaveCount(0);
-  await expect(page.getByText(/рекомендация по исправлению не предоставлена/i)).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Продолжить с замечаниями", exact: true }),
-  ).toBeVisible();
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
-});
-
-test("6. invalid campaign is blocked", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validation: invalidValidation });
-  await reachReview(page, "Кампанию нужно исправить");
-
-  await expect(page.getByText(syntheticBlockingIssue.what!, { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticBlockingIssue.why!, { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticBlockingIssue.recommended_action!, { exact: true })).toBeVisible();
-  await expect(page.getByText(syntheticBlockingIssue.display_text, { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Блокирует расчет", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Загрузить исправленный файл", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Продолжить.*сценар/i })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toHaveCount(0);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
-});
-
-test("6a. a validation without preview arrays stays controlled", async ({ page }) => {
-  await mockNewCalculationApi(page, {
-    validation: { ...validValidation, preview: undefined },
-  });
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=review`);
-
-  await expect(page.getByText("Детализация проверок пока недоступна.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Данные по каналам пока недоступны.", { exact: true })).toBeVisible();
-  await expect(page.getByText("Данные по географиям пока недоступны.", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Дневная активность каналов пока недоступна.", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Данные для карты пока недоступны.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Продолжить к сценариям", exact: true })).toBeVisible();
-});
-
-test("6b. legacy issue guidance is omitted without invented placeholders", async ({ page }) => {
-  await mockNewCalculationApi(page, {
-    validation: { ...warningValidation, warnings: [syntheticLegacyWarning] },
-  });
-  await reachReview(page, "Кампанию можно рассчитать, но есть замечания");
-
-  await expect(page.getByText(syntheticLegacyWarning.display_text, { exact: true })).toBeVisible();
-  await expect(page.getByText("Почему это важно", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Что можно сделать", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/пояснение не предоставлено/i)).toHaveCount(0);
-  await expect(page.getByText(/рекомендация по исправлению не предоставлена/i)).toHaveCount(0);
-});
-
-test("6c. missing campaign uses grammatically correct blocked copy", async ({ page }) => {
-  await mockNewCalculationApi(page, {
-    validation: { ...invalidValidation, campaigns: [] },
-  });
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=review`);
-
-  await expect(
-    page.getByText("В результате проверки должна быть ровно одна кампания.", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("В результате проверки должно быть ровно одна кампания.", {
-    exact: true,
-  })).toHaveCount(0);
-});
-
-test("7. scenario screen contains all six approved scenarios", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validation: validValidation });
-  await page.goto(
-    `/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`,
+  const fileValidation = page.getByRole("heading", { name: "Проверка файла" })
+    .locator("xpath=ancestor::section[1]");
+  await expect(fileValidation).toBeVisible();
+  await expect(fileValidation.getByText("Строк", { exact: true }).locator("..")).toContainText("45");
+  await expect(fileValidation.getByText("Кампаний", { exact: true }).locator("..")).toContainText("1");
+  await expect(fileValidation.getByText("Географий", { exact: true }).locator("..")).toContainText("15");
+  await expect(fileValidation.getByText("Каналов", { exact: true }).locator("..")).toContainText("3");
+  await expect(fileValidation.getByText("Запрошенный бюджет", { exact: true }).locator("..")).toContainText("267,8 млн ₽");
+  await expect(page.getByText("Структура файла корректна.", { exact: true })).toBeVisible();
+  await expect(page.getByText("В файле одна кампания.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ограничения модели" })).toBeVisible();
+  await expect(page.getByRole("heading", {
+    name: "Для цифровой рекламы часть прогноза требует осторожной интерпретации.",
+  })).toBeVisible();
+  await expect(page.getByText("Почему это важно", { exact: true }).locator("..")).toContainText(
+    "историческая поддержка ограничена",
   );
-
-  await expectQueryStep(page, "scenarios");
-  await expectScenarioScreen(page);
-  await expect(
-    page.getByRole("button", { name: "Назад к проверке", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
-  expect(calls.profileGets).toBeGreaterThanOrEqual(1);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
-});
-
-test("7a. unavailable calculation profile keeps scenario launch controlled", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, {
-    validation: validValidation,
-    calculationProfileStatus: 503,
-  });
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-
-  await expect(page.getByText("Число вариантов пока недоступно", { exact: true })).toBeVisible();
-  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
-  expect(calls.profileGets).toBeGreaterThanOrEqual(1);
-});
-
-test("7b. unsupported calculation profile fails closed without hardcoded count", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, {
-    validation: validValidation,
-    calculationProfile: {
-      ...calculationProfile,
-      unsupported_field: "synthetic-contract-drift",
-    },
-  });
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-
-  await expect(page.getByText("Число вариантов пока недоступно", { exact: true })).toBeVisible();
-  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toHaveCount(0);
-  const text = await page.locator("body").innerText();
-  expect(text).not.toContain("2048");
-  expect(text).not.toContain("2 048");
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
-  expect(calls.profileGets).toBeGreaterThanOrEqual(1);
-});
-
-test("8. a job can only be created from the scenario screen", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validation: validValidation });
-  await page.goto(
-    `/calculations/new?validationId=${VALIDATION_ID}&step=review`,
+  await expect(page.getByText("Что можно сделать", { exact: true }).locator("..")).toContainText(
+    "Проверьте отмеченные географии",
   );
-  await expect(
-    page.getByRole("heading", { name: "Кампания готова к расчету", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toHaveCount(0);
-  expect(calls.jobPosts).toBe(0);
+  await expect(page.getByText("Показать географии (15)", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "15 географий сохранены" })).toBeVisible();
+  await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
+  await expect(page.getByText(/подключения утвержденного справочника координат/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Продолжить с ограничениями" })).toBeVisible();
+  expect(calls.validationV2Gets).toBeGreaterThan(0);
+  await expectNoForbiddenCopy(page);
+});
 
-  await page.getByRole("button", { name: "Продолжить к сценариям", exact: true }).click();
-  await expectQueryStep(page, "scenarios");
-  expect(calls.jobPosts).toBe(0);
-  await page.getByRole("button", { name: "Запустить расчет", exact: true }).click();
+test("passed validation keeps file checks separate and reports no model limitations", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildPassedValidation() });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
 
+  await expect(page.getByRole("heading", { name: "Проверка файла" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ограничения модели" })).toBeVisible();
+  await expect(page.getByText("Нет ограничений", { exact: true })).toBeVisible();
+  await expect(page.getByText("Дополнительные ограничения для этой кампании не опубликованы.", { exact: true }))
+    .toBeVisible();
+  await expect(page.getByRole("button", { name: "Продолжить к сценариям" })).toBeVisible();
+  await expectNoForbiddenCopy(page);
+});
+
+test("failed validation view-v2 blocks calculation without a crash state", async ({ page }) => {
+  const failed: ValidationResultV2 = buildValidationResultV2();
+  failed.status = "failed";
+  failed.job_creation_allowed = false;
+  failed.file_validation.status = "failed";
+  failed.file_validation.blocking_errors_n = 1;
+  failed.file_validation.checks[0] = {
+    code: "FILE_STRUCTURE",
+    status: "failed",
+    display_text: "Структуру файла нужно исправить.",
+  };
+  await installNewCalculationRoutes(page, { validationV2: failed });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+
+  await expect(page.getByRole("heading", { name: "Файл нужно исправить" })).toBeVisible();
+  await expect(page.getByText("Расчет недоступен", { exact: true })).toBeVisible();
+  await expect(page.getByText("Структуру файла нужно исправить.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Продолжить/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Загрузить исправленный файл" })).toBeVisible();
+});
+
+test("unsupported validation view fails closed", async ({ page }) => {
+  await installNewCalculationRoutes(page, {
+    validationV2: { ...buildValidationResultV2(), schema_version: "3.0.0" },
+  });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+  await expect(page.getByRole("alert")).toContainText(/неподдерживаем|не удалось/i);
+  await expect(page.getByRole("heading", { name: "Проверка файла" })).toHaveCount(0);
+});
+
+test("scenario page keeps six pre-calculation options and backend profile count", async ({ page }) => {
+  const calls = await installNewCalculationRoutes(page);
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=scenarios`);
+
+  await expect(page.getByRole("heading", { name: "Шесть сценариев будут рассчитаны автоматически" }))
+    .toBeVisible();
+  for (const title of [
+    "Как загружено",
+    "Равномерно по всем связкам",
+    "Гео выровнены внутри каналов",
+    "Каналы выровнены внутри гео",
+    "Самый устойчивый план",
+    "Адаптивный поиск",
+  ]) {
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  }
+  await expect(page.getByText(/3[\s\u00a0]*217 вариантов/)).toBeVisible();
+  await expect(page.getByText("Цифровая реклама", { exact: false })).toBeVisible();
+  await expect(page.getByText("Наружная реклама", { exact: false })).toBeVisible();
+  await expect(page.getByText("Радио", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Запустить расчет" })).toBeVisible();
+  expect(calls.profileGets).toBeGreaterThan(0);
+  await expectNoForbiddenCopy(page);
+});
+
+test("job starts only after the scenario page", async ({ page }) => {
+  const calls = await installNewCalculationRoutes(page);
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+  await expect(page.getByRole("button", { name: "Запустить расчет" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Продолжить с ограничениями" }).click();
+  await page.getByRole("button", { name: "Запустить расчет" }).click();
   await expect(page).toHaveURL(`/calculations/${JOB_ID}/progress`);
   expect(calls.jobPosts).toBe(1);
-  expect(calls.jobBodies).toEqual([{}]);
-  expect(calls.jobIdempotencyKeys).toEqual([`job:${VALIDATION_ID}`]);
 });
 
-test("8a. retrying an ambiguous job response reuses the same idempotency key", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, {
-    validation: validValidation,
-    jobFailuresBeforeSuccess: 1,
-  });
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-  const start = page.getByRole("button", { name: "Запустить расчет", exact: true });
-  await expect(start).toBeVisible();
-
-  await start.click();
-  await expect(page.getByRole("alert")).toContainText("Не удалось подтвердить запуск расчета.");
-  await expect(start).toBeEnabled();
-  await start.click();
-
-  await expect(page).toHaveURL(`/calculations/${JOB_ID}/progress`);
-  expect(calls.jobPosts).toBe(2);
-  expect(calls.jobIdempotencyKeys).toEqual([
-    `job:${VALIDATION_ID}`,
-    `job:${VALIDATION_ID}`,
-  ]);
-});
-
-test("8b. a late action response does not pull the user back into an old flow", async ({ page }) => {
-  let releaseJobResponse: () => void = () => undefined;
-  const jobResponseGate = new Promise<void>((resolve) => {
-    releaseJobResponse = resolve;
-  });
-  const calls = await mockNewCalculationApi(page, {
-    validation: validValidation,
-    jobResponseGate,
-  });
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-  await page.getByRole("button", { name: "Запустить расчет", exact: true }).click();
-  await expect.poll(() => calls.jobPosts).toBe(1);
-
-  await page.getByRole("link", { name: "Новый расчёт", exact: true }).click();
-  await expect(page).toHaveURL("/calculations/new");
-  await expect(page.getByRole("heading", { name: "Загрузите медиаплан", exact: true })).toBeVisible();
-  const responsePromise = page.waitForResponse((response) => (
-    response.request().method() === "POST"
-    && new URL(response.url()).pathname === `/api/v1/validations/${VALIDATION_ID}/jobs`
-  ));
-  releaseJobResponse();
-  await responsePromise;
-  await page.waitForTimeout(50);
-
-  await expect(page).toHaveURL("/calculations/new");
-  await page.evaluate((nextUrl) => {
-    window.history.pushState({}, "", nextUrl);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, `/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-  await expect(
-    page.getByRole("button", { name: "Запустить расчет", exact: true }),
-  ).toBeEnabled();
-});
-
-test("9. refresh restores review and scenario state", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page, { validation: validValidation });
-  await page.goto(
-    `/calculations/new?validationId=${VALIDATION_ID}&step=review`,
-  );
-  await expect(
-    page.getByRole("heading", { name: "Кампания готова к расчету", exact: true }),
-  ).toBeVisible();
-  await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Кампания готова к расчету", exact: true }),
-  ).toBeVisible();
-  await expectQueryStep(page, "review");
-
-  await page.getByRole("button", { name: "Продолжить к сценариям", exact: true }).click();
-  await expectQueryStep(page, "scenarios");
-  await page.reload();
-  await expectScenarioScreen(page);
-  await expectQueryStep(page, "scenarios");
-
-  expect(calls.validationGets).toBeGreaterThanOrEqual(3);
-  expect(calls.uploadPosts).toBe(0);
-  expect(calls.validationPosts).toBe(0);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
-});
-
-test("9a. URL navigation never exposes or submits a stale validation", async ({ page }) => {
-  const alternateValidationId = "validation_00000000000a";
-  const alternateJobId = "job_00000000000b";
-  const alternateValidation: ValidationResult = {
-    ...validValidation,
-    validation_id: alternateValidationId,
-  };
-  const alternateJob: DecisionJob = {
-    ...queuedJob,
-    job_id: alternateJobId,
-    validation_id: alternateValidationId,
-  };
-  let releaseAlternateValidation: () => void = () => undefined;
-  const alternateValidationGate = new Promise<void>((resolve) => {
-    releaseAlternateValidation = resolve;
-  });
-  const submittedValidationPaths: string[] = [];
-
-  await page.route("**/api/v1/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const method = request.method();
-    const pathname = url.pathname;
-
-    if (method === "GET" && pathname === "/api/v1/auth/session" && url.search === "") {
-      await route.fallback();
-      return;
-    }
-
-    if (method === "GET" && pathname === `/api/v1/validations/${VALIDATION_ID}`) {
-      await fulfillJson(route, 200, validValidation);
-      return;
-    }
-    if (method === "GET" && pathname === `/api/v1/validations/${alternateValidationId}`) {
-      await alternateValidationGate;
-      await fulfillJson(route, 200, alternateValidation);
-      return;
-    }
-    if (method === "GET" && pathname === `/api/v1/uploads/${UPLOAD_ID}`) {
-      await fulfillJson(route, 200, parsedUpload);
-      return;
-    }
-    if (method === "GET" && pathname === "/api/v1/calculation-profile") {
-      await fulfillJson(route, 200, calculationProfile);
-      return;
-    }
-    if (method === "POST" && pathname === `/api/v1/validations/${alternateValidationId}/jobs`) {
-      submittedValidationPaths.push(pathname);
-      await fulfillJson(route, 202, alternateJob);
-      return;
-    }
-    await fulfillJson(route, 404, {
-      error: { code: "SYNTHETIC_UNEXPECTED_ROUTE", display_text: "Маршрут теста не настроен." },
-    });
-  });
-
-  await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
-
-  await page.evaluate((nextUrl) => {
-    window.history.pushState({}, "", nextUrl);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, `/calculations/new?validationId=${alternateValidationId}&step=scenarios`);
-  await expect.poll(() => new URL(page.url()).searchParams.get("validationId"))
-    .toBe(alternateValidationId);
-  await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toHaveCount(0);
-
-  releaseAlternateValidation();
-  const start = page.getByRole("button", { name: "Запустить расчет", exact: true });
-  await expect(start).toBeVisible();
-  await start.click();
-
-  await expect(page).toHaveURL(`/calculations/${alternateJobId}/progress`);
-  expect(submittedValidationPaths).toEqual([
-    `/api/v1/validations/${alternateValidationId}/jobs`,
-  ]);
-});
-
-test("10. XLS and TSV files are rejected before upload", async ({ page }) => {
-  const calls = await mockNewCalculationApi(page);
-
-  for (const fileName of ["synthetic-media-plan.xls", "synthetic-media-plan.tsv"]) {
+test("XLS and TSV are rejected before upload", async ({ page }) => {
+  const calls = await installNewCalculationRoutes(page);
+  for (const fileName of ["media-plan.xls", "media-plan.tsv"]) {
     await page.goto("/calculations/new");
-    const input = page.locator('input[type="file"]');
-    await expect(input).toHaveAttribute("accept", /\.xlsx.*\.csv|\.csv.*\.xlsx/i);
-    await selectSyntheticFile(page, fileName);
+    await selectFile(page, fileName);
     await expect(page.getByRole("alert")).toContainText(/только.*XLSX.*CSV/i);
-    await expect(page.getByRole("button", { name: "Загрузить файл", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Загрузить файл" })).toBeDisabled();
   }
-
   expect(calls.uploadPosts).toBe(0);
-  expect(calls.validationPosts).toBe(0);
-  expect(calls.jobPosts).toBe(0);
-  await expectNoInternalNames(page);
 });
 
-test("11. desktop, mobile and landscape layouts do not overflow", async ({ page }) => {
-  const longUnbrokenValue = "СинтетическоеЗначениеБезПробеловДляПроверкиПереноса".repeat(5);
-  const longCampaign: ValidationResult["campaigns"][number] = {
-    ...campaign,
-    campaign_name: longUnbrokenValue,
-    segments: [longUnbrokenValue],
-    channels: [longUnbrokenValue],
-    geographies: [longUnbrokenValue],
-  };
-  const longWarning: ValidationIssue = {
-    ...syntheticWarning,
-    affected_cells: [{
-      ...syntheticWarning.affected_cells[0],
-      segment: longUnbrokenValue,
-      geo: longUnbrokenValue,
-      channel: longUnbrokenValue,
-    }],
-  };
-  const longStringValidation: ValidationResult = {
-    ...warningValidation,
-    campaigns: [longCampaign],
-    warnings: [longWarning],
-  };
-  await mockNewCalculationApi(page, { validation: longStringValidation });
-  await page.emulateMedia({ reducedMotion: "reduce" });
-
-  for (const viewport of [
-    { width: 375, height: 812 },
-    { width: 812, height: 375 },
-    { width: 1_024, height: 768 },
-    { width: 1_440, height: 900 },
-  ]) {
+for (const viewport of [
+  { width: 375, height: 812 },
+  { width: 812, height: 375 },
+  { width: 1_440, height: 900 },
+]) {
+  test(`validation has no overflow at ${viewport.width}x${viewport.height}`, async ({ page }) => {
     await page.setViewportSize(viewport);
-    await page.goto("/calculations/new");
-    await expect(page.getByRole("heading", { name: "Новый расчет", exact: true })).toBeVisible();
-    await expectNoDocumentOverflow(page);
-
-    await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=review`);
-    await expect(
-      page.getByRole("heading", { name: "Кампанию можно рассчитать, но есть замечания", exact: true }),
-    ).toBeVisible();
-    await expectNoDocumentOverflow(page);
-
-    await page.goto(`/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`);
-    await expectScenarioScreen(page);
-    await expectNoDocumentOverflow(page);
-    await expect(page.getByRole("button", { name: "Запустить расчет", exact: true })).toBeVisible();
-  }
-});
+    await installNewCalculationRoutes(page);
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    await expect(page.getByRole("heading", { name: "Проверка файла" })).toBeVisible();
+    await expectNoOverflow(page);
+    await expectNoForbiddenCopy(page);
+  });
+}
 
 for (const theme of ["dark", "light"] as const) {
-  test(`visual review is exact 1440x900 in ${theme} theme`, async ({ page }) => {
+  test(`small validation copy meets WCAG contrast in ${theme} theme`, async ({ page }) => {
     await page.setViewportSize({ width: 1_440, height: 900 });
     await setTheme(page, theme);
-    await mockNewCalculationApi(page, { validation: warningValidation });
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error") consoleErrors.push(message.text());
+    await installNewCalculationRoutes(page);
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    await expect(page.getByRole("heading", { name: "Проверка файла" })).toBeVisible();
+
+    const samples = await measureContentContrast(page, VALIDATION_CONTRAST_TARGETS);
+    const coveredTargets = new Set(samples.map((sample) => sample.target));
+    for (const target of VALIDATION_CONTRAST_TARGETS) {
+      expect(coveredTargets, `${target.name} was not measured`).toContain(target.name);
+    }
+    const minimum = samples.reduce((current, sample) => (
+      sample.ratio < current.ratio ? sample : current
+    ));
+    test.info().annotations.push({
+      type: "contrast",
+      description: `${minimum.ratio.toFixed(3)}:1 — ${minimum.text}`,
     });
-
-    await page.goto("/calculations/new");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expectNoDocumentOverflow(page);
-    await expectNoInternalNames(page);
-    await captureExactViewport(page, `01-upload-empty-${theme}.png`);
-
-    await selectSyntheticFile(page);
-    await expect(page.getByText("synthetic-media-plan.xlsx", { exact: true })).toBeVisible();
-    await expectNoDocumentOverflow(page);
-    await captureExactViewport(page, `02-upload-selected-${theme}.png`);
-
-    await page.goto(
-      `/calculations/new?validationId=${VALIDATION_ID}&step=review`,
+    console.info(
+      `[phase-e1b-validation-contrast:${theme}] minimum ${minimum.ratio.toFixed(3)}:1`,
+      JSON.stringify(minimum),
     );
-    await expect(
-      page.getByRole("heading", {
-        name: "Кампанию можно рассчитать, но есть замечания",
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(page.getByText("Демонстрационные данные", { exact: true }).first()).toBeVisible();
-    await expectNoDocumentOverflow(page);
-    await expectNoInternalNames(page);
-    await captureExactViewport(page, `03-validation-warning-${theme}.png`);
-
-    await page.locator("#preview-title").evaluate((element) => {
-      element.closest("section")?.scrollIntoView({ block: "start" });
-    });
-    await expect(
-      page.getByLabel("Временная диаграмма активности каналов", { exact: true }),
-    ).toBeVisible();
-    await expectNoDocumentOverflow(page);
-    await captureExactViewport(page, `05-validation-preview-${theme}.png`);
-
-    await page.goto(
-      `/calculations/new?validationId=${VALIDATION_ID}&step=scenarios`,
-    );
-    await expectScenarioScreen(page);
-    await expect(page.getByText("Демонстрационные данные", { exact: true }).first()).toBeVisible();
-    await expectNoDocumentOverflow(page);
-    await expectNoInternalNames(page);
-    await captureExactViewport(page, `04-scenarios-${theme}.png`);
-
-    expect(consoleErrors).toEqual([]);
+    expect(minimum.ratio, JSON.stringify(minimum, null, 2)).toBeGreaterThanOrEqual(4.5);
   });
+}
+
+for (const theme of ["dark", "light"] as const) {
+  for (const screenshotCase of [
+    { stem: "validation-limitations", payload: undefined, button: "Продолжить с ограничениями" },
+    { stem: "validation-passed", payload: buildPassedValidation(), button: "Продолжить к сценариям" },
+  ] as const) {
+    test(`${screenshotCase.stem}-${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1_440, height: 900 });
+      await setTheme(page, theme);
+      await installNewCalculationRoutes(page, { validationV2: screenshotCase.payload });
+      await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await expect(page.getByRole("heading", { name: "Проверка файла" })).toBeVisible();
+      await expect(page.getByRole("button", { name: screenshotCase.button })).toBeVisible();
+      await page.getByRole("heading", { name: "Ограничения модели" }).scrollIntoViewIfNeeded();
+      await expectNoOverflow(page);
+      await expectNoForbiddenCopy(page);
+      mkdirSync(REVIEW_DIRECTORY, { recursive: true });
+      await page.screenshot({
+        path: `${REVIEW_DIRECTORY}${screenshotCase.stem}-${theme}.png`,
+        fullPage: false,
+        animations: "disabled",
+        caret: "hide",
+      });
+    });
+  }
 }

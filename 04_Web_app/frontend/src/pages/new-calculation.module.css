@@ -42,7 +42,7 @@
 .heroCopy { max-width: 760px; }
 .hero h1 { margin: 0.35rem 0 0; font-size: clamp(2rem, 4vw, 3.8rem); line-height: 0.98; letter-spacing: -0.045em; }
 .hero p { max-width: 690px; margin: 0.8rem 0 0; color: var(--text-secondary); line-height: 1.55; }
-.eyebrow { color: var(--text-tertiary); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
+.eyebrow { color: var(--text-secondary); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
 .rulePill { flex: 0 0 auto; padding: 0.65rem 0.9rem; border: 1px solid var(--accent-strong); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--accent) 13%, var(--surface-primary)); font-size: 0.78rem; font-weight: 800; }
 
 .stepper {
@@ -56,7 +56,7 @@
   list-style: none;
 }
 
-.stepper li { position: relative; min-height: 58px; display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 1rem; color: var(--text-tertiary); }
+.stepper li { position: relative; min-height: 58px; display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 1rem; color: var(--text-secondary); }
 .stepper li:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: 0; width: 1px; height: 28px; transform: translateY(-50%); background: var(--border-default); }
 .stepNumber { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 50%; font: 800 0.7rem/1 var(--font-mono); }
 .stepLabel { font-size: 0.82rem; font-weight: 700; }
@@ -152,7 +152,7 @@
 .fileSummary dt,
 .summaryGrid dt,
 .issueDetails dt,
-.invariants dt { color: var(--text-tertiary); font-size: 0.7rem; }
+.invariants dt { color: var(--text-secondary); font-size: 0.7rem; }
 .fileSummary dd,
 .summaryGrid dd,
 .issueDetails dd,

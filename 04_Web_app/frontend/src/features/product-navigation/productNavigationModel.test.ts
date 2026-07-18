@@ -9,6 +9,7 @@ import {
   historyEmptyCopy,
   historyQueryFromSearch,
   historySearchParams,
+  navigationErrorCopy,
   searchHelpArticles,
 } from "./productNavigationModel";
 
@@ -80,5 +81,22 @@ describe("product navigation URL and search model", () => {
     const bodyOnlyNeedle = "только-в-теле-статьи";
     requestedArticle.body.push({ block_type: "paragraph", text: bodyOnlyNeedle });
     expect(searchHelpArticles(catalog, bodyOnlyNeedle)).toEqual([]);
+  });
+
+  it("keeps v2 contract and not-ready failures in distinct fail-closed states", () => {
+    expect(navigationErrorCopy({
+      name: "UnsupportedBusinessSemanticsContractError",
+      status: 200,
+    })).toEqual(expect.objectContaining({
+      title: "Формат сведений не поддерживается",
+      retryable: true,
+    }));
+    expect(navigationErrorCopy({
+      name: "BusinessSemanticsNotReadyError",
+      status: 404,
+    })).toEqual(expect.objectContaining({
+      title: "Сведения еще готовятся",
+      retryable: true,
+    }));
   });
 });

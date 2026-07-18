@@ -97,7 +97,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.55rem;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 0.82rem;
 }
 
@@ -178,7 +178,7 @@
 .campaignMeta {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1.25fr 1.5fr repeat(4, minmax(105px, 0.72fr));
+  grid-template-columns: 1.25fr 1.5fr repeat(3, minmax(105px, 0.72fr));
   margin: 0;
   border-top: 1px solid var(--border-default);
   border-bottom: 1px solid var(--border-default);
@@ -437,11 +437,11 @@
 .metricHeading h3 { margin: 0; color: var(--text-secondary); font-size: 0.82rem; }
 .metricValue,
 .metricUnavailable { font-size: clamp(1.65rem, 2.8vw, 2.45rem); line-height: 1; letter-spacing: -0.045em; }
-.metricUnavailable { color: var(--text-tertiary); }
+.metricUnavailable { color: var(--text-secondary); }
 .metricRange { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0; padding-top: 0.75rem; border-top: 1px solid var(--border-default); }
 .metricRange div:nth-child(2) { text-align: center; }
 .metricRange div:nth-child(3) { text-align: right; }
-.metricRange dt { color: var(--text-tertiary); font-size: 0.64rem; }
+.metricRange dt { color: var(--text-secondary); font-size: 0.64rem; }
 .metricRange dd { margin: 0.25rem 0 0; font-size: 0.74rem; font-weight: 750; }
 .metricNote { margin: 0; color: var(--text-secondary); font-size: 0.74rem; line-height: 1.45; }
 
@@ -489,7 +489,7 @@
 .intervalValues { display: grid; grid-template-columns: repeat(3, 1fr); color: var(--text-secondary); font-size: 0.68rem; }
 .intervalValues strong { color: var(--text-primary); text-align: center; }
 .intervalValues span:last-child { text-align: right; }
-.intervalEmpty { color: var(--text-tertiary); }
+.intervalEmpty { color: var(--text-secondary); }
 
 .reliabilityOverview { display: grid; grid-template-columns: minmax(250px, 0.68fr) minmax(0, 1.5fr); gap: var(--space-6); padding: clamp(1.3rem, 3vw, 2.3rem); }
 .reliabilityIntro { display: grid; align-content: start; gap: 0.75rem; }
@@ -511,7 +511,7 @@
 .budgetChart li { display: grid; grid-template-columns: minmax(110px, 0.85fr) minmax(150px, 1.5fr) auto; gap: 0.75rem; align-items: center; }
 .budgetIdentity { min-width: 0; display: grid; justify-items: start; gap: 0.35rem; }
 .budgetName { min-width: 0; font-size: 0.78rem; overflow-wrap: anywhere; }
-.budgetIdentity small { color: var(--text-tertiary); font-size: 0.66rem; line-height: 1.35; }
+.budgetIdentity small { color: var(--text-secondary); font-size: 0.66rem; line-height: 1.35; }
 .budgetBars { display: grid; gap: 4px; }
 .budgetBars > span { height: 5px; overflow: hidden; border-radius: var(--radius-pill); background: var(--surface-secondary); }
 .budgetBars i { display: block; height: 100%; border-radius: inherit; }
@@ -543,7 +543,7 @@
 .warning-blocking { border-left-color: var(--danger) !important; }
 .warning-manual_review { border-left-color: var(--danger) !important; }
 
-.resultFootnote { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding-top: var(--space-4); border-top: 1px solid var(--border-default); color: var(--text-tertiary); font-size: 0.72rem; }
+.resultFootnote { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding-top: var(--space-4); border-top: 1px solid var(--border-default); color: var(--text-secondary); font-size: 0.72rem; }
 
 .scenarioComparisonSection,
 .reliabilitySection,
@@ -579,7 +579,7 @@
 .scenarioIdentity { display: grid; gap: 0.45rem; }
 .scenarioIdentity > strong { font: 850 0.78rem/1 var(--font-mono); color: var(--accent-strong); }
 .scenarioIdentity > span { font-size: 1rem; }
-.scenarioIdentity > small { color: var(--text-tertiary); }
+.scenarioIdentity > small { color: var(--text-secondary); }
 .scenarioIdentity > p { margin: 0; color: var(--text-secondary); font-size: 0.74rem; line-height: 1.45; }
 .scenarioBadges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .scenarioStatusCell,
@@ -635,7 +635,7 @@
 .scenarioChoice > strong,
 .scenarioChoiceActive > strong { overflow-wrap: anywhere; }
 .scenarioChoice > small,
-.scenarioChoiceActive > small { color: var(--text-tertiary); }
+.scenarioChoiceActive > small { color: var(--text-secondary); }
 .scenarioChoice:has(input:disabled) { opacity: 0.48; cursor: not-allowed; }
 
 .inlineLoading { min-height: 210px; display: grid; place-content: center; gap: 1rem; text-align: center; }
@@ -674,7 +674,7 @@
 .report-unavailable { border-left-color: var(--warning); }
 .reportHero h2 { margin: 0.4rem 0 0; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 0.98; letter-spacing: -0.05em; }
 .reportHero p { max-width: 68ch; margin: 1rem 0 0; color: var(--text-secondary); line-height: 1.55; }
-.reportTimestamp { display: block; margin-top: 1rem; color: var(--text-tertiary); font-size: 0.75rem; }
+.reportTimestamp { display: block; margin-top: 1rem; color: var(--text-secondary); font-size: 0.75rem; }
 .reportDownload { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding: var(--space-5); }
 .reportDownload > div { display: flex; align-items: center; gap: 1rem; }
 .reportDownload h3,
@@ -687,13 +687,98 @@
 .sheetList { display: grid; margin: 0; padding: 0; list-style: none; }
 .sheetList li { display: grid; grid-template-columns: 42px 1fr; gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid var(--border-default); }
 .sheetList li:last-child { border-bottom: 0; }
-.sheetList li > span { font: 800 0.72rem/1 var(--font-mono); color: var(--text-tertiary); }
+.sheetList li > span { font: 800 0.72rem/1 var(--font-mono); color: var(--text-secondary); }
 .sheetList strong { display: block; }
 .sheetList p { margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.78rem; line-height: 1.45; }
 .reportGuidance { display: grid; gap: 0.65rem; padding: clamp(1.2rem, 3vw, 2rem); border-left: 3px solid var(--info); background: color-mix(in srgb, var(--info) 7%, var(--surface-primary)); }
 .reportGuidance h3,
 .reportGuidance p { margin: 0; }
 .reportGuidance p { max-width: 72ch; color: var(--text-secondary); line-height: 1.55; }
+
+/* Phase E.1B turnover-only result presentation. */
+.badgeCluster { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+.partialCard { border-color: var(--warning); background: color-mix(in srgb, var(--warning) 5%, var(--surface-primary)); }
+.partialCallout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.7fr); gap: var(--space-5); padding: clamp(1.3rem, 3vw, 2.2rem); border: 1px solid var(--warning); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--warning) 7%, var(--surface-primary)); }
+.partialCallout h2 { margin: 0.75rem 0 0; font-size: clamp(1.7rem, 3vw, 2.6rem); letter-spacing: -0.04em; }
+.partialCallout p { max-width: 72ch; margin: 0.75rem 0 0; color: var(--text-secondary); line-height: 1.55; }
+.partialCallout dl { display: grid; gap: 0.65rem; margin: 0; }
+.partialCallout dl div { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border-default)); }
+.partialCallout dt { color: var(--text-secondary); font-size: 0.72rem; }
+.partialCallout dd { margin: 0; font-weight: 820; text-align: right; }
+.partialAction { grid-column: 1 / -1; padding: 0.85rem 1rem; border-left: 3px solid var(--warning); background: var(--surface-primary); color: var(--text-primary) !important; }
+
+.metricRange { display: block; grid-template-columns: none; color: var(--text-secondary); font-size: 0.72rem; line-height: 1.5; }
+.metricHelp { margin: 0; color: var(--text-secondary); font-size: 0.72rem; line-height: 1.45; }
+.riskPanel { min-width: 0; display: grid; gap: var(--space-5); padding: clamp(1.2rem, 2.8vw, 2rem); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.riskBars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.riskRow { min-width: 0; display: grid; gap: 0.8rem; padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--background); }
+.riskRow > div:first-child { display: flex; justify-content: space-between; gap: 0.7rem; }
+.riskRow > div:first-child span { color: var(--text-secondary); font-size: 0.68rem; white-space: nowrap; }
+.riskTrack { height: 8px; overflow: hidden; border-radius: var(--radius-pill); background: var(--surface-secondary); }
+.riskTrack span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.risk_controlled .riskTrack span { background: var(--warning); }
+.risk_high .riskTrack span { background: var(--danger); }
+.riskRow dl { display: grid; gap: 0.45rem; margin: 0; }
+.riskRow dl div { display: flex; justify-content: space-between; gap: 1rem; }
+.riskRow dt { color: var(--text-secondary); font-size: 0.7rem; }
+.riskRow dd { margin: 0; font-weight: 780; text-align: right; }
+.unavailableBlock { display: grid; gap: 0.6rem; padding: clamp(1.2rem, 2.6vw, 2rem); }
+.unavailableBlock > span { display: inline; width: auto; height: auto; border: 0; border-radius: 0; color: var(--text-secondary); }
+.unavailableBlock h2 { margin: 0; font-size: clamp(1.35rem, 2.5vw, 2rem); letter-spacing: -0.03em; }
+.unavailableBlock p { max-width: 68ch; margin: 0; }
+.limitationsList { margin-top: var(--space-4) !important; }
+
+.scenarioDetailList { display: grid; gap: var(--space-4); }
+.scenarioDetailCard { min-width: 0; display: grid; gap: var(--space-4); padding: clamp(1.1rem, 2.8vw, 2rem); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.scenarioDetailCard > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
+.scenarioIdentity { display: flex; align-items: flex-start; gap: 1rem; }
+.scenarioIdentity > span { min-width: 42px; height: 42px; display: grid; place-content: center; border: 1px solid var(--border-strong); border-radius: 50%; color: var(--text-secondary); font: 820 0.76rem/1 var(--font-mono); }
+.scenarioIdentity h2 { margin: 0; font-size: clamp(1.35rem, 2.6vw, 2rem); letter-spacing: -0.035em; }
+.scenarioIdentity > div > strong { display: block; margin-top: 0.35rem; color: var(--warning); font-size: 0.82rem; }
+.scenarioDescription { max-width: 82ch; margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.scenarioDecisionRow { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.scenarioCallout { margin: 0; padding: 0.85rem 1rem; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 7%, var(--surface-primary)); line-height: 1.5; }
+.infeasibleScenario { display: grid; justify-items: start; gap: 0.75rem; padding: clamp(1.1rem, 2.5vw, 1.8rem); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--background); }
+.infeasibleScenario h3, .infeasibleScenario p { margin: 0; }
+.infeasibleScenario p { color: var(--text-secondary); line-height: 1.5; }
+.infeasibleScenario details { width: 100%; border-top: 1px solid var(--border-default); }
+.infeasibleScenario summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 760; }
+.infeasibleScenario li { margin-top: 0.5rem; color: var(--text-secondary); }
+.scenarioBudget { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.scenarioBudget div { padding: 0.85rem 1rem; border-right: 1px solid var(--border-default); }
+.scenarioBudget div:last-child { border-right: 0; }
+.scenarioBudget dt, .scenarioMetrics dt, .compactRisk dt { color: var(--text-secondary); font-size: 0.7rem; }
+.scenarioBudget dd, .scenarioMetrics dd, .compactRisk dd { margin: 0.3rem 0 0; font-weight: 800; }
+.scenarioMetrics { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); gap: var(--space-4); }
+.scenarioMetrics > dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border-top: 1px solid var(--border-default); }
+.scenarioMetrics > dl > div { min-width: 0; padding: 1rem; border-right: 1px solid var(--border-default); }
+.scenarioMetrics > dl > div:last-child { border-right: 0; }
+.scenarioMetrics small { display: block; margin-top: 0.45rem; color: var(--text-secondary); font-size: 0.68rem; line-height: 1.4; }
+.compactRisk { grid-template-columns: 1fr !important; gap: 0 !important; border: 1px solid var(--border-default) !important; border-radius: var(--radius-md); }
+.compactRisk > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.75rem 0.85rem !important; border-right: 0 !important; border-bottom: 1px solid var(--border-default); }
+.compactRisk > div:last-child { border-bottom: 0; }
+.compactRisk dd { text-align: right; }
+.scenarioFooter { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-default); color: var(--text-secondary); font-size: 0.72rem; }
+
+.scenarioSelect { min-width: 280px; display: grid; gap: 0.35rem; color: var(--text-secondary); font-size: 0.7rem; }
+.scenarioSelect select { min-height: 44px; padding: 0.6rem 2rem 0.6rem 0.75rem; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--surface-primary); color: var(--text-primary); font: inherit; }
+.mediaUnavailableNotice { display: flex; align-items: center; gap: 1rem; padding: 0.9rem 1rem; border-left: 3px solid var(--text-secondary); background: var(--surface-primary); }
+.mediaUnavailableNotice > div { display: grid; gap: 0.25rem; }
+.mediaUnavailableNotice span:last-child { color: var(--text-secondary); font-size: 0.75rem; }
+.mediaError { display: grid; justify-items: start; gap: 0.75rem; padding: var(--space-5); border: 1px solid var(--danger); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.mediaError h3, .mediaError p { margin: 0; }
+.mediaAggregateGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.mediaAggregate { min-width: 0; display: grid; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
+.aggregateList { display: grid; gap: 0.65rem; }
+.aggregateList article { display: grid; gap: 0.55rem; padding: 0.8rem; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--background); }
+.aggregateList dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin: 0; }
+.aggregateList dt { color: var(--text-secondary); font-size: 0.65rem; }
+.aggregateList dd { margin: 0.2rem 0 0; font-size: 0.75rem; font-weight: 750; }
+.aggregateList article > span { color: var(--text-secondary); font-size: 0.7rem; }
+.tableScroll table { width: 100%; min-width: 1120px; border-collapse: collapse; background: var(--surface-primary); }
+.tableScroll th, .tableScroll td { padding: 0.8rem; border-bottom: 1px solid var(--border-default); text-align: left; vertical-align: top; }
+.tableScroll thead th { position: sticky; z-index: 1; top: 0; background: var(--surface-secondary); color: var(--text-secondary); font-size: 0.68rem; white-space: nowrap; }
+.tableScroll tbody tr:last-child > * { border-bottom: 0; }
 
 @keyframes result-sweep {
   from { transform: translateX(-100%); }
@@ -749,6 +834,14 @@
   .loadingHeader dl { grid-template-columns: repeat(2, 1fr); }
   .loadingHeader dl div:nth-child(2n) { border-right: 0; }
   .loadingDecision { grid-template-columns: 1fr; }
+  .partialCallout,
+  .scenarioMetrics,
+  .mediaAggregateGrid { grid-template-columns: 1fr; }
+  .riskBars { grid-template-columns: 1fr; }
+  .scenarioDetailCard > header { flex-direction: column; }
+  .scenarioBudget { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .scenarioBudget div:nth-child(2n) { border-right: 0; }
+  .scenarioBudget div:nth-child(-n + 2) { border-bottom: 1px solid var(--border-default); }
 }
 
 @media (max-width: 560px) {
@@ -804,6 +897,17 @@
   .loadingHeader dl div:last-child { border-bottom: 0; }
   .loadingTabs { grid-template-columns: repeat(4, minmax(72px, 1fr)); gap: 0.6rem; overflow: hidden; }
   .loadingDecision aside { display: none; }
+  .scenarioBudget,
+  .scenarioMetrics > dl,
+  .aggregateList dl { grid-template-columns: 1fr; }
+  .scenarioBudget div,
+  .scenarioBudget div:nth-child(2n),
+  .scenarioBudget div:nth-child(-n + 2) { border-right: 0; border-bottom: 1px solid var(--border-default); }
+  .scenarioBudget div:last-child { border-bottom: 0; }
+  .scenarioMetrics > dl > div { border-right: 0; border-bottom: 1px solid var(--border-default); }
+  .scenarioMetrics > dl > div:last-child { border-bottom: 0; }
+  .scenarioSelect { width: 100%; min-width: 0; }
+  .mediaUnavailableNotice { align-items: flex-start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {

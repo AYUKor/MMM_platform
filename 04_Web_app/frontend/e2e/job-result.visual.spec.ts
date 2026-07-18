@@ -1,70 +1,55 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type {
-  JobResultViewV1,
-  ScenarioId,
-} from "../src/shared/api/generated/job-result-view-v1";
-import type {
-  MediaPlanRow,
-  ScenarioMediaPlanV1,
-} from "../src/shared/api/generated/scenario-media-plan-v1";
+import type { JobResultViewV2 } from "../src/shared/api/generated/job-result-view-v2";
+import type { ScenarioId } from "../src/shared/api/generated/scenario-media-plan-v2";
 import {
-  createBestRawJobResultFixture,
-  createNoSafeJobResultFixture,
-  createPartialCoverageJobResultFixture,
-  createRecommendedJobResultFixture,
-  createReportReadyJobResultFixture,
-  createScenarioMediaPlanFixture,
-  createUnavailableJobResultFixture,
-} from "../src/test/jobResultFixtures";
+  buildJobResultViewV2,
+  buildScenarioMediaPlanV2,
+  CONTROL_REQUESTED_BUDGET,
+  TEST_JOB_ID,
+} from "../src/test/businessSemanticsV2Fixtures";
 import { installAuthenticatedAdminSession } from "./support/auth";
+import { measureContentContrast, type ContrastTarget } from "./support/contrast";
 
 const REVIEW_DIRECTORY = fileURLToPath(
-  new URL("../../docs/ui-review/job-result-v1/", import.meta.url),
+  new URL("../../docs/ui-review/phase-e1b-business-semantics-v1/", import.meta.url),
 );
-const SCENARIO_IDS = new Set<ScenarioId>(["S01", "S02", "S03", "S04", "S05", "S06"]);
-const RAW_TERMS = [
-  "backend",
-  "api",
-  "worker",
-  "posterior",
-  "candidate_id",
-  "optimizer_raw_rank",
-  "optimizer_reliable_rank",
-  "scenario_id",
-  "page_size",
-] as const;
-const FORBIDDEN_USER_COPY = [
-  "Каноническая рекомендация",
-  "Открытый сценарий",
-  "Без выдуманной оценки",
-  "Готовые сводки сервиса",
-  "Интерфейс не пересортировывает",
+
+const FORBIDDEN_COPY = [
+  "Дополнительные заказы",
+  "Заказы на 100 000 ₽",
+  "Механизм среднего чека",
+  "Часть дополнительного оборота",
+  "Рекомендован системой",
+  "Digital_Performance",
+  "OOH_Total",
+  "orders_per_user",
+  "avg_basket",
+  "S5.1",
+  "S5.2",
+  "... ещё",
 ] as const;
 
-mkdirSync(REVIEW_DIRECTORY, { recursive: true });
+const RESULT_CONTRAST_TARGETS = [
+  { name: "campaign facts", selector: '[class*="campaignMeta"] dt' },
+  { name: "metric range labels", selector: '[class*="metricRange"]' },
+  { name: "metric guidance", selector: '[class*="metricNote"], [class*="metricHelp"]' },
+  { name: "risk facts", selector: '[class*="riskRow"] dt, [class*="riskRow"] > div:first-child span' },
+  { name: "scenario budget labels", selector: '[class*="scenarioBudget"] dt' },
+  { name: "scenario metric labels", selector: '[class*="scenarioMetrics"] dt, [class*="scenarioMetrics"] small' },
+  { name: "scenario risk labels", selector: '[class*="compactRisk"] dt' },
+  { name: "scenario footnotes", selector: '[class*="scenarioFooter"]' },
+] as const satisfies readonly ContrastTarget[];
 
-type MediaMode = "normal" | "large" | "empty";
-
-interface ProductRouteOptions {
-  resultStatus?: number;
-  resultErrorCode?: string;
-  resultPayload?: unknown;
-  resultDelayMs?: number;
-  mediaStatus?: number;
-  mediaMode?: MediaMode;
-  artifactStatus?: number;
-}
-
-interface ProductRouteGuard {
-  resultViewCalls: number;
-  mediaPlanCalls: number;
-  artifactCalls: number;
+interface RouteGuard {
+  resultCalls: string[];
+  mediaCalls: string[];
+  mediaSelections: Array<{ scenarioId: ScenarioId; isSelected: boolean }>;
   forbiddenCalls: string[];
 }
 
-const routeGuards = new WeakMap<Page, ProductRouteGuard>();
+const routeGuards = new WeakMap<Page, RouteGuard>();
 
 test.beforeEach(async ({ page }) => {
   await installAuthenticatedAdminSession(page);
@@ -72,221 +57,135 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async ({ page }) => {
   const guard = routeGuards.get(page);
-  if (guard) expect(guard.forbiddenCalls, "legacy or unapproved API calls").toEqual([]);
+  if (guard) expect(guard.forbiddenCalls, "legacy or malformed result requests").toEqual([]);
 });
 
-function errorPayload(code: string) {
+function errorPayload(code: string, displayText = "Контролируемое тестовое состояние.") {
   return {
     error: {
       code,
-      display_text: "Контролируемое тестовое состояние.",
-      retryable: code === "RESOURCE_NOT_READY",
-      user_action: "Следуйте инструкции на экране.",
+      display_text: displayText,
+      retryable: true,
+      user_action: "Повторите запрос позже.",
     },
   };
 }
 
-function queryScenario(url: URL): ScenarioId | null {
-  const value = url.searchParams.get("scenario_id");
-  return value !== null && SCENARIO_IDS.has(value as ScenarioId)
-    ? value as ScenarioId
-    : null;
-}
-
-function queryPositiveInteger(url: URL, name: string, fallback: number): number {
-  const raw = url.searchParams.get(name);
-  if (raw === null) return fallback;
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
-}
-
-function splitRows(rows: readonly MediaPlanRow[], parts = 5): MediaPlanRow[] {
-  return rows
-    .flatMap((row) => Array.from({ length: parts }, (_, index) => ({
-      ...row,
-      segment: `${String(index + 1).padStart(2, "0")} · ${row.segment}`,
-      source_budget_rub: row.source_budget_rub / parts,
-      selected_budget_rub: row.selected_budget_rub / parts,
-      delta_rub: row.delta_rub / parts,
-      source_budget_share: row.source_budget_share / parts,
-      selected_budget_share: row.selected_budget_share / parts,
-    })))
-    .sort((left, right) => {
-      const leftKey = `${left.segment}\u0000${left.geo}\u0000${left.channel}`;
-      const rightKey = `${right.segment}\u0000${right.geo}\u0000${right.channel}`;
-      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-    });
-}
-
-function largeMediaPlan(
-  result: JobResultViewV1,
-  scenarioId: ScenarioId,
-  page: number,
-  pageSize: number,
-  channel: string | null,
-  geo: string | null,
-): ScenarioMediaPlanV1 {
-  const plan = structuredClone(createScenarioMediaPlanFixture({
-    resultView: result,
-    scenarioId,
-    page: 1,
-    pageSize: 100,
-  }));
-  const allRows = splitRows(plan.rows);
-  const filteredRows = allRows.filter((row) =>
-    (channel === null || row.channel === channel) &&
-    (geo === null || row.geo === geo));
-  const start = (page - 1) * pageSize;
-  plan.filters = { channel, geo, date: null };
-  plan.pagination = {
-    page,
-    page_size: pageSize,
-    total_rows: filteredRows.length,
-    total_pages: filteredRows.length === 0 ? 0 : Math.ceil(filteredRows.length / pageSize),
-  };
-  plan.filtered_totals = {
-    source_budget_rub: filteredRows.reduce((sum, row) => sum + row.source_budget_rub, 0),
-    selected_budget_rub: filteredRows.reduce((sum, row) => sum + row.selected_budget_rub, 0),
-    delta_rub: filteredRows.reduce((sum, row) => sum + row.delta_rub, 0),
-  };
-  plan.rows = filteredRows.slice(start, start + pageSize);
-  return plan;
-}
-
-function emptyMediaPlan(
-  result: JobResultViewV1,
-  scenarioId: ScenarioId,
-  page: number,
-  pageSize: number,
-  channel: string | null,
-  geo: string | null,
-): ScenarioMediaPlanV1 {
-  const plan = structuredClone(createScenarioMediaPlanFixture({
-    resultView: result,
-    scenarioId,
-    channel: "Синтетический канал без строк",
-    page,
-    pageSize,
-  }));
-  plan.filters = { channel, geo, date: null };
-  return plan;
-}
-
-function buildMediaPlan(
-  result: JobResultViewV1,
-  url: URL,
-  mode: MediaMode,
-): ScenarioMediaPlanV1 | null {
-  const scenarioId = queryScenario(url);
-  const page = queryPositiveInteger(url, "page", 1);
-  const pageSize = queryPositiveInteger(url, "page_size", 100);
-  const channel = url.searchParams.get("channel");
-  const geo = url.searchParams.get("geo");
-  if (scenarioId === null || !Number.isFinite(page) || !Number.isFinite(pageSize) || pageSize > 500) {
-    return null;
-  }
-  if (mode === "large") return largeMediaPlan(result, scenarioId, page, pageSize, channel, geo);
-  if (mode === "empty") return emptyMediaPlan(result, scenarioId, page, pageSize, channel, geo);
-  return createScenarioMediaPlanFixture({
-    resultView: result,
-    scenarioId,
-    page,
-    pageSize,
-    channel,
-    geo,
-  });
-}
-
-async function installProductRoutes(
+async function installResultRoutes(
   page: Page,
-  result: JobResultViewV1,
-  options: ProductRouteOptions = {},
-): Promise<ProductRouteGuard> {
-  const guard: ProductRouteGuard = {
-    resultViewCalls: 0,
-    mediaPlanCalls: 0,
-    artifactCalls: 0,
+  options: {
+    resultStatus?: number;
+    resultPayload?: unknown;
+    resultDelayMs?: number;
+    mediaStatus?: number;
+  } = {},
+): Promise<RouteGuard> {
+  const result = buildJobResultViewV2();
+  const guard: RouteGuard = {
+    resultCalls: [],
+    mediaCalls: [],
+    mediaSelections: [],
     forbiddenCalls: [],
   };
   routeGuards.set(page, guard);
 
-  // Registered first: exact product routes below take precedence. Everything
-  // else under /api/v1 is a hard test failure, including legacy result,
-  // overview, errors and progress endpoints.
+  // Register the catch-all first: the exact handlers registered afterwards
+  // take precedence in Playwright's LIFO route order.
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (request.method() === "GET" && url.pathname === "/api/v1/auth/session" && url.search === "") {
+    if (request.method() === "GET" && url.pathname === "/api/v1/auth/session" && !url.search) {
       await route.fallback();
       return;
     }
-    guard.forbiddenCalls.push(`${request.method()} ${url.pathname}`);
+    guard.forbiddenCalls.push(`${request.method()} ${url.pathname}${url.search}`);
     await route.fulfill({ status: 599, body: "blocked unapproved endpoint" });
   });
 
-  await page.route("**/api/v1/jobs/*/result-view", async (route: Route) => {
+  await page.route("**/api/v1/jobs/*/result-view-v2", async (route: Route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (request.method() !== "GET" || url.pathname !== `/api/v1/jobs/${result.job_id}/result-view` || url.search) {
+    const expected = `/api/v1/jobs/${TEST_JOB_ID}/result-view-v2`;
+    if (request.method() !== "GET" || url.pathname !== expected || url.search) {
       guard.forbiddenCalls.push(`${request.method()} ${url.pathname}${url.search}`);
-      await route.fulfill({ status: 599, body: "blocked malformed result-view request" });
+      await route.fulfill({ status: 599, body: "blocked malformed result-view-v2 request" });
       return;
     }
-    guard.resultViewCalls += 1;
-    if (options.resultDelayMs) await new Promise((resolve) => setTimeout(resolve, options.resultDelayMs));
+    guard.resultCalls.push(url.toString());
+    if (options.resultDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, options.resultDelayMs));
+    }
     const status = options.resultStatus ?? 200;
     await route.fulfill({
       status,
       contentType: "application/json",
       body: JSON.stringify(status === 200
         ? (options.resultPayload ?? result)
-        : errorPayload(options.resultErrorCode ?? (status === 404 ? "JOB_NOT_FOUND" : status === 409 ? "RESULT_VIEW_INCONSISTENT" : "RESULT_VIEW_UNAVAILABLE"))),
+        : errorPayload(status === 404 ? "RESOURCE_NOT_READY" : "RESULT_VIEW_UNAVAILABLE")),
     });
   });
 
-  await page.route("**/api/v1/jobs/*/media-plan*", async (route: Route) => {
+  await page.route("**/api/v1/jobs/*/media-plan-v2*", async (route: Route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (request.method() !== "GET" || url.pathname !== `/api/v1/jobs/${result.job_id}/media-plan`) {
+    const expected = `/api/v1/jobs/${TEST_JOB_ID}/media-plan-v2`;
+    const scenarioId = url.searchParams.get("scenario_id") as ScenarioId | null;
+    const pageNumber = Number(url.searchParams.get("page"));
+    const pageSize = Number(url.searchParams.get("page_size"));
+    if (
+      request.method() !== "GET"
+      || url.pathname !== expected
+      || !scenarioId
+      || !["S01", "S02", "S03", "S04", "S05", "S06"].includes(scenarioId)
+      || !Number.isInteger(pageNumber)
+      || pageNumber < 1
+      || !Number.isInteger(pageSize)
+      || pageSize < 1
+    ) {
       guard.forbiddenCalls.push(`${request.method()} ${url.pathname}${url.search}`);
-      await route.fulfill({ status: 599, body: "blocked malformed media-plan request" });
+      await route.fulfill({ status: 599, body: "blocked malformed media-plan-v2 request" });
       return;
     }
-    guard.mediaPlanCalls += 1;
+    guard.mediaCalls.push(url.toString());
     const status = options.mediaStatus ?? 200;
-    const plan = status === 200 ? buildMediaPlan(result, url, options.mediaMode ?? "normal") : null;
+    const plan = status === 200
+      ? buildScenarioMediaPlanV2(scenarioId, {
+          page: pageNumber,
+          pageSize,
+          channel: url.searchParams.get("channel"),
+          geo: url.searchParams.get("geo"),
+        })
+      : null;
+    if (plan) {
+      plan.scenario.is_selected = scenarioId === result.recommendation.scenario_id;
+      guard.mediaSelections.push({ scenarioId, isSelected: plan.scenario.is_selected });
+    }
     await route.fulfill({
-      status: plan === null && status === 200 ? 422 : status,
+      status,
       contentType: "application/json",
-      body: JSON.stringify(plan ?? errorPayload("MEDIA_PLAN_QUERY_UNSUPPORTED")),
+      body: JSON.stringify(plan
+        ? plan
+        : errorPayload("MEDIA_PLAN_QUERY_INVALID")),
     });
   });
-
-  const artifactHandler = async (route: Route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const expectedPath = result.report.artifact?.download_path;
-    if (request.method() !== "GET" || expectedPath === undefined || url.pathname !== expectedPath || url.search) {
-      guard.forbiddenCalls.push(`${request.method()} ${url.pathname}${url.search}`);
-      await route.fulfill({ status: 599, body: "blocked malformed artifact request" });
-      return;
-    }
-    guard.artifactCalls += 1;
-    await route.fulfill({
-      status: options.artifactStatus ?? 200,
-      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      headers: {
-        "Content-Disposition": `attachment; filename="${result.report.artifact?.display_name ?? "result.xlsx"}"`,
-      },
-      body: "synthetic xlsx review artifact",
-    });
-  };
-  // Register at both levels: Chrome's native download stream is context-owned,
-  // while the explicit endpoint integrity probe below is a page fetch.
-  await page.route("**/api/v1/artifacts/*/download", artifactHandler);
-  await page.context().route("**/api/v1/artifacts/*/download", artifactHandler);
 
   return guard;
+}
+
+async function openResult(page: Page, search = "?tab=overview") {
+  await page.goto(`/calculations/${TEST_JOB_ID}/result${search}`);
+  await expect(page.getByRole("heading", { name: "Демонстрационная кампания" })).toBeVisible();
+}
+
+async function expectNoForbiddenCopy(page: Page) {
+  const text = await page.locator("body").innerText();
+  for (const forbidden of FORBIDDEN_COPY) expect(text).not.toContain(forbidden);
+}
+
+async function expectNoDocumentOverflow(page: Page) {
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )).toBeLessThanOrEqual(0);
 }
 
 async function setTheme(page: Page, theme: "dark" | "light") {
@@ -296,419 +195,331 @@ async function setTheme(page: Page, theme: "dark" | "light") {
   }, theme);
 }
 
-async function openResult(
-  page: Page,
-  result: JobResultViewV1,
-  search = "?tab=overview",
-) {
-  await page.goto(`/calculations/${result.job_id}/result${search}`);
-  await expect(page.getByRole("heading", { name: result.campaign.campaign_name })).toBeVisible();
-  if (result.record_origin === "sanitized_fixture") {
-    await expect(page.getByText("Демонстрационные данные", { exact: true }).first()).toBeVisible();
-  }
-  await page.evaluate(async () => { await document.fonts.ready; });
+function buildFullConservativeResult(): JobResultViewV2 {
+  const result = structuredClone(buildJobResultViewV2());
+  const scenario = result.scenarios.find((item) => item.scenario_id === "S05");
+  if (!scenario) throw new Error("S05 fixture is missing");
+  scenario.scenario_variant = "full_conservative";
+  scenario.budget.allocated_budget_rub = CONTROL_REQUESTED_BUDGET;
+  scenario.budget.unallocated_budget_rub = 0;
+  scenario.budget.allocation_share = 1;
+  scenario.roas.allocated_budget = structuredClone(scenario.roas.requested_budget);
+  scenario.roas.primary_denominator_kind = "requested_budget";
+  scenario.roas.primary_denominator_budget_rub = CONTROL_REQUESTED_BUDGET;
+  scenario.risk_budget = {
+    within_support_budget_rub: CONTROL_REQUESTED_BUDGET,
+    within_support_share: 1,
+    controlled_extrapolation_budget_rub: 0,
+    controlled_extrapolation_share: 0,
+    high_risk_budget_rub: 0,
+    high_risk_share: 0,
+    within_support_cells_n: 45,
+    controlled_extrapolation_cells_n: 0,
+    high_risk_cells_n: 0,
+  };
+  scenario.limiting_constraints = [];
+  scenario.reliability.display_text = "Весь бюджет находится внутри опубликованного надежного диапазона.";
+  return result;
 }
 
-async function expectNoDocumentOverflow(page: Page) {
-  const diagnostic = await page.evaluate(() => {
-    const viewportWidth = document.documentElement.clientWidth;
-    const offenders = [...document.querySelectorAll<HTMLElement>("body *")]
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          selector: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${typeof element.className === "string" && element.className ? `.${element.className.split(/\s+/).join(".")}` : ""}`,
-          right: Math.round(rect.right),
-          width: Math.round(rect.width),
-          scrollWidth: element.scrollWidth,
-          clientWidth: element.clientWidth,
-        };
-      })
-      .filter((item) => item.right > viewportWidth + 1 && item.width > 0)
-      .sort((left, right) => right.right - left.right)
-      .slice(0, 12);
-    return {
-      overflow: document.documentElement.scrollWidth - viewportWidth,
-      viewportWidth,
-      documentWidth: document.documentElement.scrollWidth,
-      offenders,
-    };
+function buildFeasibleS6Result(): JobResultViewV2 {
+  const result = structuredClone(buildJobResultViewV2());
+  const source = result.scenarios.find((item) => item.scenario_id === "S04");
+  const targetIndex = result.scenarios.findIndex((item) => item.scenario_id === "S06");
+  if (!source || targetIndex < 0) throw new Error("S04 or S06 fixture is missing");
+  result.scenarios[targetIndex] = {
+    ...structuredClone(source),
+    scenario_id: "S06",
+    name: "План максимального эффекта",
+    description: "Полный оптимизированный план сформирован в опубликованных ограничениях.",
+    scenario_kind: "optimized_plan",
+    scenario_variant: "feasible",
+    status: "completed",
+    is_recommended: false,
+    decision_status: "unavailable",
+    review_status: "manual_review_required",
+    reliability: {
+      ...structuredClone(source.reliability),
+      status: "within_support",
+      display_text: "Полный план находится внутри опубликованного надежного диапазона.",
+      safe_rank: 6,
+      raw_rank: 6,
+    },
+    limiting_constraints: [],
+  };
+  return result;
+}
+
+test.describe("Phase E.1B result semantics", () => {
+  test("uses only result-view-v2 and renders S1 as the manual point of reference", async ({ page }) => {
+    const guard = await installResultRoutes(page);
+    await openResult(page);
+
+    await expect(page.getByText("Исходный план", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Точка отсчета", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Требуется ручная проверка", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Сохранить исходный план", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Оборот и ROAS" })).toBeVisible();
+    await expect(page.getByText("Дополнительный оборот", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Где находится распределенный бюджет" }))
+      .toBeVisible();
+    await expect(page.getByText("Внутри надежного диапазона", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Контролируемое расширение", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Высокий риск", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Карта географий" })).toBeVisible();
+    expect(guard.resultCalls.length).toBeGreaterThan(0);
+    expect(new Set(guard.resultCalls).size).toBe(1);
+    expect(guard.mediaCalls).toHaveLength(0);
+    await expectNoForbiddenCopy(page);
   });
-  expect(diagnostic.overflow, JSON.stringify(diagnostic, null, 2)).toBeLessThanOrEqual(0);
-}
 
-async function expectNoRawTerms(page: Page) {
-  const visibleText = (await page.locator("body").innerText()).toLowerCase();
-  for (const term of RAW_TERMS) expect(visibleText).not.toContain(term.toLowerCase());
-}
+  test("renders S5 safe_partial with both ROAS meanings and budget reconciliation", async ({ page }) => {
+    await installResultRoutes(page);
+    await openResult(page, "?tab=scenarios");
 
-async function expectNoForbiddenUserCopy(page: Page) {
-  const visibleText = (await page.locator("body").innerText()).toLowerCase();
-  for (const phrase of FORBIDDEN_USER_COPY) {
-    expect(visibleText).not.toContain(phrase.toLowerCase());
+    const s5 = page.locator("#scenario-S05");
+    await expect(s5).toBeVisible();
+    await expect(s5.getByRole("heading", { name: "Безопасно распределяемая часть" })).toBeVisible();
+    await expect(s5.getByText("Безопасно распределяемая часть", { exact: true })).toBeVisible();
+    await expect(s5.getByText("ROAS распределенной части", { exact: true })).toBeVisible();
+    await expect(s5.getByText("Отдача относительно всего запрошенного бюджета", { exact: true }))
+      .toBeVisible();
+    await expect(s5).toContainText("173,9 млн ₽");
+    await expect(s5).toContainText("93,9 млн ₽");
+    await expect(s5).toContainText("64,9 %");
+    await expect(s5).toContainText("1,98");
+    await expect(s5).toContainText("1,29");
+    await expectNoForbiddenCopy(page);
+  });
+
+  test("renders S5 full_conservative as a full cautious plan without partial-only copy", async ({ page }) => {
+    await installResultRoutes(page, { resultPayload: buildFullConservativeResult() });
+    await openResult(page, "?tab=scenarios");
+
+    const s5 = page.locator("#scenario-S05");
+    await expect(s5.getByRole("heading", { name: "Полный осторожный план" })).toBeVisible();
+    await expect(s5.getByText("Полный осторожный план", { exact: true })).toBeVisible();
+    await expect(s5.getByText("Весь бюджет распределен", { exact: true })).toBeVisible();
+    await expect(s5.getByText("ROAS", { exact: true })).toBeVisible();
+    await expect(s5.getByText("ROAS распределенной части", { exact: true })).toHaveCount(0);
+    await expect(s5.getByText("Отдача относительно всего запрошенного бюджета", { exact: true }))
+      .toHaveCount(0);
+    await expect(s5).toContainText("267,8 млн ₽");
+    await expect(s5).toContainText("100 %");
+    await expectNoForbiddenCopy(page);
+  });
+
+  test("renders S6 infeasible as controlled unavailable without fake KPI", async ({ page }) => {
+    const guard = await installResultRoutes(page);
+    await openResult(page, "?tab=scenarios");
+
+    const s6 = page.locator("#scenario-S06");
+    await expect(s6.getByRole("heading", { name: "План максимального эффекта", exact: true }))
+      .toBeVisible();
+    await expect(s6.getByText("Недоступно при текущих ограничениях", { exact: true })).toBeVisible();
+    await expect(s6.getByRole("heading", { name: "Полный план максимального эффекта недоступен" }))
+      .toBeVisible();
+    await expect(s6.getByText("Дополнительный оборот", { exact: false })).toHaveCount(0);
+    await expect(s6.getByText(/ROAS/)).toHaveCount(0);
+    await expect(s6.getByText("Распределено", { exact: true })).toHaveCount(0);
+    expect(guard.mediaCalls.some((call) => call.includes("scenario_id=S06"))).toBe(false);
+    await expectNoForbiddenCopy(page);
+  });
+
+  test("renders an explicitly feasible S6 with only backend-published KPI", async ({ page }) => {
+    await installResultRoutes(page, { resultPayload: buildFeasibleS6Result() });
+    await openResult(page, "?tab=scenarios");
+
+    const s6 = page.locator("#scenario-S06");
+    await expect(s6.getByRole("heading", { name: "План максимального эффекта", exact: true }))
+      .toBeVisible();
+    await expect(s6.getByText("Рассчитан", { exact: true })).toBeVisible();
+    await expect(s6.getByText("Дополнительный оборот · P50", { exact: true })).toBeVisible();
+    await expect(s6.getByText("ROAS", { exact: true })).toBeVisible();
+    await expect(s6.getByText("Недоступно при текущих ограничениях", { exact: true })).toHaveCount(0);
+    await expectNoForbiddenCopy(page);
+  });
+
+  test("media selector changes only the viewed plan and excludes infeasible S6", async ({ page }) => {
+    const guard = await installResultRoutes(page);
+    await openResult(page, "?tab=media-plan&scenario=S01");
+
+    const scenario = page.getByLabel("Сценарий");
+    await expect(scenario).toHaveValue("S01");
+    await expect(scenario.locator('option[value="S06"]')).toHaveCount(0);
+    await scenario.selectOption("S05");
+    await expect(page).toHaveURL(/tab=media-plan&scenario=S05/);
+    await expect(page.getByRole("heading", { name: "План согласован с результатом" })).toBeVisible();
+    await expect(page.getByText("Частичное распределение", { exact: true })).toBeVisible();
+    await expect(page.getByText("173,9 млн ₽", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("93,9 млн ₽", { exact: true }).first()).toBeVisible();
+    const channelBudget = page.getByRole("heading", { name: "Бюджет по каналам" })
+      .locator("xpath=ancestor::section[1]");
+    await expect(channelBudget.getByText("Цифровая реклама", { exact: true })).toBeVisible();
+    await expect(channelBudget.getByText("Наружная реклама", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Карта географий" })).toBeVisible();
+    expect(guard.mediaCalls.some((call) => call.includes("scenario_id=S05"))).toBe(true);
+    expect(guard.mediaSelections.some((item) => item.scenarioId === "S05" && !item.isSelected))
+      .toBe(true);
+    await expect(page.getByText("Сохранить исходный план", { exact: true }).first()).toBeVisible();
+    await expectNoForbiddenCopy(page);
+  });
+
+  test("four tabs restore through URL and report is honestly unavailable", async ({ page }) => {
+    await installResultRoutes(page);
+    await openResult(page);
+
+    for (const [name, query, heading] of [
+      ["Обзор", "overview", "Оборот и ROAS"],
+      ["Сценарии и надежность", "scenarios", "Сценарии и надежность"],
+      ["Медиаплан", "media-plan", "Исходный план → просматриваемый сценарий"],
+      ["Отчет", "report", "Выгрузка результата"],
+    ] as const) {
+      await page.getByRole("tab", { name }).click();
+      await expect(page).toHaveURL(new RegExp(`tab=${query}`));
+      await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
+    }
+    await expect(page.getByRole("heading", { name: "Excel-отчет пока недоступен" })).toBeVisible();
+  });
+
+  test("fails closed for an unsupported result contract", async ({ page }) => {
+    const unsupported = { ...buildJobResultViewV2(), schema_version: "3.0.0" };
+    await installResultRoutes(page, { resultPayload: unsupported });
+    await page.goto(`/calculations/${TEST_JOB_ID}/result`);
+    await expect(page.getByRole("heading", { name: "Данные результата имеют неподдерживаемый формат" }))
+      .toBeVisible();
+    await expect(page.getByText("Демонстрационная кампания", { exact: true })).toHaveCount(0);
+  });
+
+  test("loading and not-ready states remain controlled", async ({ page }) => {
+    await installResultRoutes(page, { resultDelayMs: 700 });
+    const navigation = page.goto(`/calculations/${TEST_JOB_ID}/result`);
+    await expect(page.getByText("Получаем результат расчета…", { exact: true })).toBeVisible();
+    await navigation;
+    await expect(page.getByRole("heading", { name: "Демонстрационная кампания" })).toBeVisible();
+
+    await page.unroute("**/api/v1/jobs/*/result-view-v2");
+    await page.route("**/api/v1/jobs/*/result-view-v2", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify(errorPayload("RESOURCE_NOT_READY")),
+      });
+    });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Результат еще не опубликован" })).toBeVisible();
+  });
+
+  for (const viewport of [
+    { width: 375, height: 812 },
+    { width: 812, height: 375 },
+    { width: 1_440, height: 900 },
+  ]) {
+    test(`has no document overflow at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await installResultRoutes(page);
+      await openResult(page, "?tab=scenarios");
+      await expectNoDocumentOverflow(page);
+      await expectNoForbiddenCopy(page);
+    });
   }
-}
 
-async function expectAllowedCallsOnly(page: Page) {
-  expect(routeGuards.get(page)?.forbiddenCalls ?? []).toEqual([]);
-}
+  for (const theme of ["dark", "light"] as const) {
+    test(`small result copy meets WCAG contrast in ${theme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width: 1_440, height: 900 });
+      await setTheme(page, theme);
+      await installResultRoutes(page);
+      await openResult(page, "?tab=overview");
 
-type ScreenshotCase = {
-  name: string;
-  result: () => JobResultViewV1;
-  search: string;
-  expected: string;
-  focusExpected?: boolean;
-};
+      const samples = [
+        ...await measureContentContrast(page, RESULT_CONTRAST_TARGETS),
+      ];
+      await page.getByRole("tab", { name: "Сценарии и надежность" }).click();
+      samples.push(...await measureContentContrast(page, RESULT_CONTRAST_TARGETS));
 
-const screenshotCases: readonly ScreenshotCase[] = [
-  {
-    name: "01-overview-recommended",
-    result: createRecommendedJobResultFixture,
-    search: "?tab=overview",
-    expected: "Рекомендуемое распределение бюджета",
-  },
-  {
-    name: "02-overview-no-safe",
-    result: createNoSafeJobResultFixture,
-    search: "?tab=overview",
-    expected: "Безопасная автоматическая рекомендация не сформирована",
-  },
-  {
-    name: "03-scenarios",
-    result: createRecommendedJobResultFixture,
-    search: "?tab=scenarios",
-    expected: "Сравнение рассчитанных вариантов",
-  },
-  {
-    name: "04-best-raw",
-    result: createBestRawJobResultFixture,
-    search: "?tab=scenarios",
-    expected: "Математически сильный, но не рекомендованный вариант",
-    focusExpected: true,
-  },
-  {
-    name: "05-media-plan",
-    result: createRecommendedJobResultFixture,
-    search: "?tab=media-plan&scenario=S06",
-    expected: "Изменение бюджета по каналам и географиям",
-    focusExpected: true,
-  },
-  {
-    name: "06-media-plan-partial",
-    result: createPartialCoverageJobResultFixture,
-    search: "?tab=media-plan&scenario=S06",
-    expected: "Не распределено",
-    focusExpected: true,
-  },
-  {
-    name: "07-report",
-    result: createReportReadyJobResultFixture,
-    search: "?tab=report",
-    expected: "mmm_campaign_result.xlsx",
-    focusExpected: true,
-  },
-  {
-    name: "08-unavailable",
-    result: createUnavailableJobResultFixture,
-    search: "?tab=overview",
-    expected: "Рекомендация недоступна",
-  },
-] as const;
+      const coveredTargets = new Set(samples.map((sample) => sample.target));
+      for (const target of RESULT_CONTRAST_TARGETS) {
+        expect(coveredTargets, `${target.name} was not measured`).toContain(target.name);
+      }
+      const minimum = samples.reduce((current, sample) => (
+        sample.ratio < current.ratio ? sample : current
+      ));
+      test.info().annotations.push({
+        type: "contrast",
+        description: `${minimum.ratio.toFixed(3)}:1 — ${minimum.text}`,
+      });
+      console.info(
+        `[phase-e1b-result-contrast:${theme}] minimum ${minimum.ratio.toFixed(3)}:1`,
+        JSON.stringify(minimum),
+      );
+      expect(minimum.ratio, JSON.stringify(minimum, null, 2)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
 
-test.describe("job result review screenshots", () => {
-  for (const screenshotCase of screenshotCases) {
-    for (const theme of ["dark", "light"] as const) {
-      test(`${screenshotCase.name}-${theme}`, async ({ page }) => {
-        const result = screenshotCase.result();
+test.describe("Phase E.1B result review screenshots", () => {
+  for (const theme of ["dark", "light"] as const) {
+    for (const screenshotCase of [
+      { stem: "result-s1", search: "?tab=overview", heading: "Оборот и ROAS", resultPayload: undefined },
+      { stem: "result-s5-safe-partial", search: "?tab=scenarios", heading: "Безопасно распределяемая часть", resultPayload: undefined },
+      { stem: "result-s5-full-conservative", search: "?tab=scenarios", heading: "Полный осторожный план", resultPayload: buildFullConservativeResult() },
+      { stem: "result-s6-infeasible", search: "?tab=scenarios", heading: "Полный план максимального эффекта недоступен", resultPayload: undefined },
+      { stem: "result-s6-feasible", search: "?tab=scenarios", heading: "План максимального эффекта", resultPayload: buildFeasibleS6Result() },
+      { stem: "result-media-s5", search: "?tab=media-plan&scenario=S05", heading: "План согласован с результатом", resultPayload: undefined },
+    ] as const) {
+      test(`${screenshotCase.stem}-${theme}`, async ({ page }) => {
         await page.setViewportSize({ width: 1_440, height: 900 });
         await setTheme(page, theme);
-        await installProductRoutes(page, result);
-        await openResult(page, result, screenshotCase.search);
-        const expected = page.getByText(screenshotCase.expected, { exact: false }).first();
-        await expect(expected).toBeVisible();
-        if (screenshotCase.focusExpected) {
-          await expected.evaluate((element) => {
-            (element.closest("section") ?? element).scrollIntoView({ block: "start" });
-          });
-          await page.evaluate(() => window.scrollBy(0, -152));
-          await expect(expected).toBeInViewport();
-        }
-        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await installResultRoutes(page, { resultPayload: screenshotCase.resultPayload });
+        await openResult(page, screenshotCase.search);
+        const focus = page.getByText(screenshotCase.heading, { exact: true }).first();
+        await focus.scrollIntoViewIfNeeded();
+        await expect(focus).toBeVisible();
         await expectNoDocumentOverflow(page);
-        await expectNoRawTerms(page);
-        await expectNoForbiddenUserCopy(page);
-        await expectAllowedCallsOnly(page);
+        await expectNoForbiddenCopy(page);
+        mkdirSync(REVIEW_DIRECTORY, { recursive: true });
         await page.screenshot({
-          path: `${REVIEW_DIRECTORY}${screenshotCase.name}-${theme}.png`,
+          path: `${REVIEW_DIRECTORY}${screenshotCase.stem}-${theme}.png`,
           fullPage: false,
           animations: "disabled",
+          caret: "hide",
         });
       });
     }
-  }
-});
 
-test.describe("job result tabs and URL state", () => {
-  test("renders four tabs and restores each section in the URL", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result);
-    await openResult(page, result);
-
-    for (const [tab, query, heading] of [
-      ["Обзор", "overview", "Рекомендуемое распределение бюджета"],
-      ["Сценарии и надежность", "scenarios", "Сравнение рассчитанных вариантов"],
-      ["Медиаплан", "media-plan", "Медиаплан было → рекомендуется"],
-      ["Отчет", "report", "Отчет готов"],
-    ] as const) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
-      await expect(page.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
-      await expect(page.getByText(heading, { exact: false }).first()).toBeVisible();
-      await expect(page).toHaveURL(new RegExp(`tab=${query}`));
-    }
-    await expectNoRawTerms(page);
-  });
-
-  test("scenario selector is view-only and does not mutate recommendation", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result);
-    await openResult(page, result, "?tab=media-plan&scenario=S05");
-    await expect(page.getByRole("radio", { name: /S5.*Устойчивый ориентир/ })).toBeChecked();
-    await expect(page.getByText("Только просмотр", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Исходный план → просматриваемый сценарий" })).toBeVisible();
-    await expectNoForbiddenUserCopy(page);
-
-    const sourceRadio = page.getByRole("radio", { name: /S1.*Как загружено/ });
-    await sourceRadio.focus();
-    await sourceRadio.press("Space");
-    await expect(page).toHaveURL(/tab=media-plan&scenario=S01/);
-    await expect(page.getByText("Только просмотр", { exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "Обзор", exact: true }).click();
-    await expect(page.getByText("S6 · Адаптивное распределение", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Рекомендован системой", { exact: true })).toBeVisible();
-  });
-
-  test("back and forward restore media scenario without changing it", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result);
-    await openResult(page, result, "?tab=media-plan&scenario=S05");
-    await expect(page.getByRole("radio", { name: /S5.*Устойчивый ориентир/ })).toBeChecked();
-    await page.getByRole("tab", { name: "Сценарии и надежность", exact: true }).click();
-    await expect(page).toHaveURL(/tab=scenarios/);
-    await page.goBack();
-    await expect(page).toHaveURL(/tab=media-plan&scenario=S05/);
-    await expect(page.getByRole("radio", { name: /S5.*Устойчивый ориентир/ })).toBeChecked();
-    await page.goForward();
-    await expect(page).toHaveURL(/tab=scenarios/);
-  });
-
-  test("tabs support arrows, Home and End", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result);
-    await openResult(page, result);
-    const overview = page.getByRole("tab", { name: "Обзор", exact: true });
-    await overview.focus();
-    await overview.press("ArrowRight");
-    const scenarios = page.getByRole("tab", { name: "Сценарии и надежность", exact: true });
-    await expect(scenarios).toBeFocused();
-    await expect(scenarios).toHaveAttribute("aria-selected", "true");
-    await scenarios.press("End");
-    const report = page.getByRole("tab", { name: "Отчет", exact: true });
-    await expect(report).toBeFocused();
-    await report.press("Home");
-    await expect(overview).toBeFocused();
-    await expect(overview).toHaveAttribute("aria-selected", "true");
-  });
-});
-
-test.describe("job result media plan", () => {
-  test("switches scenarios and applies channel and geo filters", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    const guard = await installProductRoutes(page, result);
-    await openResult(page, result, "?tab=media-plan&scenario=S06");
-    await expect(page.locator("tbody tr")).toHaveCount(4);
-    await expect(page.getByText("Запрошенный бюджет", { exact: true })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Изменение, %" })).toBeVisible();
-    await expect(page.getByText("Строка прошла опубликованные проверки качества.").first()).toBeVisible();
-
-    await page.getByRole("combobox", { name: "Канал", exact: true }).selectOption("Онлайн-видео");
-    await expect(page.locator("tbody tr")).toHaveCount(2);
-    await page.getByRole("combobox", { name: "География", exact: true }).selectOption("Москва");
-    await expect(page.locator("tbody tr")).toHaveCount(1);
-    await page.getByRole("button", { name: "Сбросить", exact: true }).click();
-    await expect(page.locator("tbody tr")).toHaveCount(4);
-
-    const benchmarkRadio = page.getByRole("radio", { name: /S5.*Устойчивый ориентир/ });
-    await benchmarkRadio.focus();
-    await benchmarkRadio.press("Space");
-    await expect(page).toHaveURL(/scenario=S05/);
-    await expect(page.getByText("Только просмотр", { exact: true })).toBeVisible();
-    expect(guard.mediaPlanCalls).toBeGreaterThanOrEqual(5);
-  });
-
-  test("paginates a long synthetic media plan", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result, { mediaMode: "large" });
-    await openResult(page, result, "?tab=media-plan&scenario=S06");
-    await page.getByLabel("Строк на странице").selectOption("10");
-    await expect(page.getByText("Страница 1 из 2", { exact: true })).toBeVisible();
-    await expect(page.locator("tbody tr")).toHaveCount(10);
-    await page.getByRole("button", { name: "Далее", exact: true }).click();
-    await expect(page.getByText("Страница 2 из 2", { exact: true })).toBeVisible();
-    await expect(page.locator("tbody tr")).toHaveCount(10);
-  });
-
-  test("renders a controlled empty filtered result", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result, { mediaMode: "empty" });
-    await openResult(page, result, "?tab=media-plan&scenario=S06");
-    await expect(page.getByText("По выбранным фильтрам строк нет", { exact: true })).toBeVisible();
-    await expect(page.getByText("Это корректный пустой результат", { exact: false })).toBeVisible();
-    const globalTotals = page.getByRole("region", { name: "Итоги медиаплана" });
-    await expect(globalTotals.getByText("Исходный бюджет").locator("..")).toContainText("12 млн ₽");
-  });
-
-  test("renders media-plan 422 inside its tab", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result, { mediaStatus: 422 });
-    await openResult(page, result, "?tab=media-plan&scenario=S06");
-    await expect(page.getByRole("heading", { name: "Такие параметры пока не поддерживаются" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Сбросить фильтры" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: result.campaign.campaign_name })).toBeVisible();
-  });
-});
-
-test.describe("job result report and controlled failures", () => {
-  test("downloads only the canonical report artifact", async ({ page }) => {
-    const result = createReportReadyJobResultFixture();
-    const guard = await installProductRoutes(page, result);
-    await openResult(page, result, "?tab=report");
-    const downloadLinks = page.getByRole("link", { name: "Скачать отчет", exact: true });
-    await expect(downloadLinks).toHaveCount(2);
-    for (const link of await downloadLinks.all()) {
-      const href = await link.getAttribute("href");
-      expect(new URL(href ?? "", page.url()).pathname).toBe(result.report.artifact?.download_path);
-    }
-    const downloadPromise = page.waitForEvent("download");
-    await page
-      .getByRole("region", { name: result.report.artifact?.display_name })
-      .getByRole("link", { name: "Скачать отчет", exact: true })
-      .click();
-    const download = await downloadPromise;
-    await expect(page.getByRole("heading", { name: result.report.artifact?.display_name })).toBeVisible();
-    expect(await download.failure()).toBeNull();
-    expect(new URL(download.url()).pathname).toBe(result.report.artifact?.download_path);
-    const mediaType = await page.evaluate(async (downloadPath) => {
-      const response = await fetch(downloadPath);
-      return response.headers.get("content-type");
-    }, result.report.artifact?.download_path ?? "");
-    expect(mediaType).toContain("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    // Depending on the Chrome channel, the native download is observed by the
-    // context route, the page route, or both. Every observed call is already
-    // guarded above against any non-canonical path or query.
-    expect(guard.artifactCalls).toBeGreaterThanOrEqual(1);
-  });
-
-  for (const [status, heading] of [
-    [404, "Результат не найден"],
-    [409, "Данные временно не согласованы"],
-    [503, "Результат временно недоступен"],
-  ] as const) {
-    test(`renders result-view HTTP ${status}`, async ({ page }) => {
-      const result = createRecommendedJobResultFixture();
-      await installProductRoutes(page, result, { resultStatus: status });
-      await page.goto(`/calculations/${result.job_id}/result`);
-      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
-      await expect(page.locator("body")).not.toContainText("RESULT_VIEW_");
+    test(`result-unsupported-${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1_440, height: 900 });
+      await setTheme(page, theme);
+      await installResultRoutes(page, {
+        resultPayload: { ...buildJobResultViewV2(), schema_version: "3.0.0" },
+      });
+      await page.goto(`/calculations/${TEST_JOB_ID}/result`);
+      await expect(page.getByRole("heading", { name: "Данные результата имеют неподдерживаемый формат" }))
+        .toBeVisible();
+      mkdirSync(REVIEW_DIRECTORY, { recursive: true });
+      await page.screenshot({
+        path: `${REVIEW_DIRECTORY}result-unsupported-${theme}.png`,
+        fullPage: false,
+        animations: "disabled",
+        caret: "hide",
+      });
     });
-  }
 
-  test("distinguishes a not-ready result from a missing job", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result, {
-      resultStatus: 404,
-      resultErrorCode: "RESOURCE_NOT_READY",
-    });
-    await page.goto(`/calculations/${result.job_id}/result`);
-    await expect(page.getByRole("heading", { name: "Результат еще не готов" })).toBeVisible();
-    await expect(page.getByText("Откройте ход расчета", { exact: false })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Открыть ход расчета" })).toBeVisible();
-  });
-
-  test("rejects an unsupported result contract", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result, {
-      resultPayload: { ...result, schema_version: "2.0.0" },
-    });
-    await page.goto(`/calculations/${result.job_id}/result`);
-    await expect(page.getByRole("heading", { name: "Формат результата не поддерживается" })).toBeVisible();
-  });
-
-  test("shows a matching skeleton while result-view is loading", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await installProductRoutes(page, result, { resultDelayMs: 600 });
-    const navigation = page.goto(`/calculations/${result.job_id}/result`);
-    await expect(page.getByText("Получаем результат расчета…", { exact: true })).toBeVisible();
-    await navigation;
-    await expect(page.getByRole("heading", { name: result.campaign.campaign_name })).toBeVisible();
-  });
-});
-
-test.describe("job result responsive and visual QA", () => {
-  test("mobile long campaign and warning have no document overflow", async ({ page }) => {
-    const result = createPartialCoverageJobResultFixture();
-    result.campaign.campaign_name = "Очень длинное название кампании для Москвы, Санкт-Петербурга и нескольких регионов присутствия";
-    result.campaign.segments = [
-      "Очень длинный сегмент покупателей с повышенной частотой покупок",
-      "Покупатели новых магазинов и форматов с дополнительными условиями",
-    ];
-    result.warnings[0].display_text = "Очень подробное пользовательское объяснение ограничения покрытия с длинным текстом, который должен переноситься внутри карточки и не выходить за границы мобильного экрана.";
-    await page.setViewportSize({ width: 375, height: 812 });
-    await installProductRoutes(page, result);
-    await openResult(page, result);
-    await expectNoDocumentOverflow(page);
-  });
-
-  test("mobile media table scroll remains inside its own region", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await page.setViewportSize({ width: 375, height: 812 });
-    await installProductRoutes(page, result, { mediaMode: "large" });
-    await openResult(page, result, "?tab=media-plan&scenario=S06");
-    const tableRegion = page.getByRole("region", { name: "Таблица медиаплана, прокручивается по горизонтали" });
-    await expect(tableRegion).toBeVisible();
-    const hasInnerOverflow = await tableRegion.evaluate((element) => element.scrollWidth > element.clientWidth);
-    expect(hasInnerOverflow).toBe(true);
-    await expectNoDocumentOverflow(page);
-  });
-
-  test("landscape layout has no document overflow", async ({ page }) => {
-    const result = createBestRawJobResultFixture();
-    await page.setViewportSize({ width: 812, height: 375 });
-    await installProductRoutes(page, result);
-    await openResult(page, result, "?tab=scenarios");
-    await expectNoDocumentOverflow(page);
-  });
-
-  test("reduced motion leaves no active looping animations", async ({ page }) => {
-    const result = createRecommendedJobResultFixture();
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await installProductRoutes(page, result);
-    await openResult(page, result);
-    const animated = await page.locator("body *").evaluateAll((elements) => elements.filter((element) => {
-      const style = getComputedStyle(element);
-      return style.animationName !== "none" && style.animationDuration !== "0s";
-    }).length);
-    expect(animated).toBe(0);
-  });
-
-  test("all product tabs avoid raw names and body overlap", async ({ page }) => {
-    const result = createBestRawJobResultFixture();
-    await installProductRoutes(page, result, { mediaMode: "large" });
-    await openResult(page, result);
-    for (const tab of ["Обзор", "Сценарии и надежность", "Медиаплан", "Отчет"] as const) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
-      await expectNoRawTerms(page);
-      await expectNoForbiddenUserCopy(page);
+    test(`result-mobile-s5-${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await setTheme(page, theme);
+      await installResultRoutes(page);
+      await openResult(page, "?tab=scenarios");
+      await page.locator("#scenario-S05").scrollIntoViewIfNeeded();
       await expectNoDocumentOverflow(page);
-    }
-  });
+      await expectNoForbiddenCopy(page);
+      mkdirSync(REVIEW_DIRECTORY, { recursive: true });
+      await page.screenshot({
+        path: `${REVIEW_DIRECTORY}result-mobile-s5-${theme}.png`,
+        fullPage: false,
+        animations: "disabled",
+        caret: "hide",
+      });
+    });
+  }
 });

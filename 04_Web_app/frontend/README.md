@@ -1,39 +1,74 @@
-# X5 MMM Frontend v1
+# X5 MMM Frontend
 
-Phase 1 implements the application foundation and the core marketer flow.
-Phase 2 extends the completed-result workspace with scenario comparison,
-status-based reliability, warnings, line-level media-plan comparison, report
-downloads, and controlled incomplete/error states.
-The Model Passport milestone connects `/model` to the versioned Product API
-without reading registry, documentation, or model files in the browser.
+React/Vite frontend for the local X5 MMM research-pilot application. The
+current Phase E.1B milestone migrates business presentation to turnover-only
+v2 contracts while preserving the existing authenticated product shell,
+upload flow, progress screen, history and administration.
 
-The browser prioritizes `GET /api/v1/jobs/{job_id}/overview` and keeps the full
-`/result` payload as an audit contract outside the product presentation. It does
-not calculate MMM effects, ROAS quantiles, reliability scores, allocation
-deltas, or optimizer recommendations.
+The browser never calculates MMM effects, ROAS quantiles, recommendation,
+allocation deltas, risk composition or optimizer policy. It validates and
+formats versioned backend projections. Unknown or internally inconsistent
+payloads fail closed; v2 screens do not silently fall back to legacy v1
+semantics.
 
-The local core marketer flow is also available:
+## Product routes
 
-- `/calculations/new`: upload and model-aware validation;
-- `/calculations/:id/progress`: background-job progress and cancellation;
-- `/calculations/:id/result`: completed forecast and optimizer result;
-- `/calculations`: server-side local job history.
-- `/model`: active `ModelPassport v1` from `GET /api/v1/models/active`, with
-  fail-closed runtime validation and explicit research/preprod boundaries.
+- `/login` — session login;
+- `/` — workspace summary and server-projected geo budget readiness;
+- `/calculations/new` — upload, file validation and grouped model limitations;
+- `/calculations/:id/progress` — backend-projected calculation progress;
+- `/calculations/:id/result` — turnover-only result, scenarios, media plan and
+  report state;
+- `/calculations` — server-side history search, filtering and pagination;
+- `/model` — turnover-only model overview and Model Passport;
+- `/help` — structured help catalog;
+- `/admin/*` — permission-protected administration.
 
-The result workspace contains five tabs:
+Protected requests use `credentials: "include"`. The HttpOnly session cookie
+is not read by JavaScript, auth state is not persisted in browser storage and
+permissions come only from `session.user.permissions[]`.
 
-- Overview;
-- Scenarios 1–6;
-- Reliability and warnings;
-- Media plan (`segment × geo × channel` line items);
-- Report downloads.
+## Phase E.1B projections
 
-Channel/geo aggregates and report preview/status remain explicit contract
-gaps. The Model Passport page shows loading, ready, unavailable, error and
-unsupported-contract states and never reconstructs missing values.
+| View | Endpoint |
+|---|---|
+| Result and scenarios | `GET /api/v1/jobs/{job_id}/result-view-v2` |
+| Scenario media plan | `GET /api/v1/jobs/{job_id}/media-plan-v2` |
+| Validation presentation | `GET /api/v1/validations/{validation_id}/view-v2` |
+| Active Model Passport | `GET /api/v1/models/active-v2` |
+| Model overview | `GET /api/v1/model/overview-v2` |
+| Geo catalog readiness | `GET /api/v1/meta/geo-catalog` |
+| Workspace geo budget | `GET /api/v1/workspace/geo-budget` |
+
+The result shows incremental turnover, both explicit ROAS denominators,
+requested/allocated/unallocated budget, allocation share, uncertainty, risk
+composition and the published media plan. Orders, orders per budget,
+average-basket mechanics and turnover pseudo-decomposition are not product
+metrics.
+
+S1 is the uploaded reference plan and requires manual review. S5 is one public
+conservative scenario: either `full_conservative` or `safe_partial`. S6 is
+either a full feasible plan or a controlled infeasible state without fake KPI.
+Changing the media-plan scenario changes only the viewed calculated plan; it
+does not change the recommendation.
+
+Validation keeps `Проверка файла` separate from grouped
+`Ограничения модели`. Channel labels come from `channel_display_name`, while
+IDs remain query identities. All structured geographies stay available in
+filters.
+
+Approved coordinates are currently unavailable, so the UI does not draw a
+pseudo-map. `job_result_view_v2` also has no report artifact metadata; the
+Report tab remains controlled unavailable instead of calling legacy v1.
+
+Detailed boundary and current verification status:
+
+- `../docs/integration/FRONTEND_PHASE_E1B_BUSINESS_SEMANTICS_V1.md`;
+- `../docs/ui-review/phase-e1b-business-semantics-v1/REVIEW_NOTES.md`.
 
 ## Local development
+
+Start the local backend first, then:
 
 ```bash
 cp .env.example .env.local
@@ -42,18 +77,15 @@ npm run generate:contracts
 npm run dev
 ```
 
-Start `04_Web_app/backend_runtime.py` first, then open
-`http://127.0.0.1:4173/calculations/<job_id>/result`. When a result contains
-multiple campaigns, add `?campaignId=<campaign_id>` or select one on the page.
-
-Set `VITE_RESULT_PROVIDER=fixture` when the backend is intentionally not used.
-Fixture mode is available only in a development build and always shows the
-`Демонстрационные данные` badge. A production build without an API provider
-fails closed with a controlled unavailable state.
+The default Vite address is `http://127.0.0.1:4173`. Configure
+`VITE_API_BASE_URL` for the local backend. Synthetic fixtures are allowed only
+in tests and review screenshots and must be visibly marked
+`Демонстрационные данные`.
 
 ## Checks
 
 ```bash
+npm run generate:contracts
 npm run typecheck
 npm test
 npm run lint
@@ -61,9 +93,7 @@ npm run build
 npm run test:e2e
 ```
 
-Browser tests intercept the existing API routes with explicit sanitized or
-synthetic responses. They cover desktop/mobile, dark/light themes, S6
-unavailable, partial coverage, result failure states, all Model Passport
-states, keyboard tabs, document overflow, and raw internal-name leakage.
-
-The approved visual references live under `../docs/design/reference/`.
+Fixture Playwright, live backend acceptance without interception, Chromium
+automation, Safari manual smoke and light/dark/mobile visual review are
+separate evidence. A check is not considered passed until its actual result is
+recorded in Phase E.1B review notes.

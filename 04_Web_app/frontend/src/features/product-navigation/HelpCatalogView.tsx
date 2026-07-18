@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { HelpCatalogV1 } from "../../shared/api/generated/help-catalog-v1";
+import type { BodyBlock, HelpCatalogV1 } from "../../shared/api/generated/help-catalog-v1";
+import { containsLegacyTargetClaim } from "../../shared/presentation/turnover-only";
 import { RefreshNotice } from "./ProductNavigationPageState";
 import {
   searchHelpArticles,
@@ -24,6 +25,46 @@ const ROUTE_LABELS: Record<string, string> = {
   "/help": "Справка",
 };
 
+function turnoverOnlyCatalog(catalog: HelpCatalogV1): HelpCatalogV1 {
+  const sections = catalog.sections.map((section) => ({
+    ...section,
+    title: containsLegacyTargetClaim(section.title) ? "Обновляемый раздел" : section.title,
+    articles: section.articles.map((article) => {
+      const body = article.body.reduce<BodyBlock[]>((items, block) => {
+        if (block.block_type === "paragraph") {
+          if (!containsLegacyTargetClaim(block.text)) items.push(block);
+          return items;
+        }
+        if (block.block_type === "note") {
+          if (!containsLegacyTargetClaim(`${block.title} ${block.text}`)) items.push(block);
+          return items;
+        }
+        const safeSteps = block.items.filter((item) => !containsLegacyTargetClaim(item));
+        if (safeSteps.length > 0) {
+          items.push({ ...block, items: safeSteps as typeof block.items });
+        }
+        return items;
+      }, []);
+      const keywords = article.keywords.filter((item) => !containsLegacyTargetClaim(item));
+      const safeKeywords = [...keywords, "дополнительный оборот", "бюджет"]
+        .filter((item, index, items) => items.indexOf(item) === index);
+      return {
+        ...article,
+        title: containsLegacyTargetClaim(article.title) ? "Материал обновляется" : article.title,
+        summary: containsLegacyTargetClaim(article.summary)
+          ? "Содержание приводится к семантике дополнительного оборота."
+          : article.summary,
+        body: (body.length > 0 ? body : [{
+          block_type: "paragraph" as const,
+          text: "Содержание приводится к семантике дополнительного оборота.",
+        }]) as typeof article.body,
+        keywords: safeKeywords as typeof article.keywords,
+      };
+    }) as typeof section.articles,
+  })) as typeof catalog.sections;
+  return { ...catalog, sections };
+}
+
 export function HelpCatalogView({
   catalog,
   selection,
@@ -32,16 +73,17 @@ export function HelpCatalogView({
   onRefresh,
 }: HelpCatalogViewProps) {
   const [search, setSearch] = useState("");
-  const section = catalog.sections.find((item) => item.section_id === selection.sectionId)
-    ?? catalog.sections[0];
+  const visibleCatalog = useMemo(() => turnoverOnlyCatalog(catalog), [catalog]);
+  const section = visibleCatalog.sections.find((item) => item.section_id === selection.sectionId)
+    ?? visibleCatalog.sections[0];
   const article = section.articles.find((item) => item.article_id === selection.articleId)
     ?? section.articles[0];
   const searchResults = useMemo(
-    () => searchHelpArticles(catalog, search),
-    [catalog, search],
+    () => searchHelpArticles(visibleCatalog, search),
+    [visibleCatalog, search],
   );
   const articleIndex = new Map(
-    catalog.sections.flatMap((catalogSection) =>
+    visibleCatalog.sections.flatMap((catalogSection) =>
       catalogSection.articles.map((catalogArticle) => [
         catalogArticle.article_id,
         { section: catalogSection, article: catalogArticle },
@@ -117,7 +159,7 @@ export function HelpCatalogView({
         <aside className={styles.helpNavigation} aria-label="Разделы справки">
           <span className={styles.eyebrow}>Разделы</span>
           <nav>
-            {catalog.sections.map((item) => {
+            {visibleCatalog.sections.map((item) => {
               const active = item.section_id === section.section_id;
               return (
                 <button

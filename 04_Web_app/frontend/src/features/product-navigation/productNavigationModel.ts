@@ -102,6 +102,20 @@ export function navigationErrorMessage(error: unknown): string | null {
 export function navigationErrorCopy(error: unknown): NavigationErrorCopy {
   const value = errorLike(error);
   const status = navigationErrorStatus(error);
+  if (value.name === "UnsupportedProductNavigationContractError" || value.name === "UnsupportedBusinessSemanticsContractError") {
+    return {
+      title: "Формат сведений не поддерживается",
+      description: "Ответ не прошел защитную проверку и поэтому не показан.",
+      retryable: true,
+    };
+  }
+  if (value.name === "BusinessSemanticsNotReadyError") {
+    return {
+      title: "Сведения еще готовятся",
+      description: "Расчет или публикация данных еще не завершены. Повторите запрос позже.",
+      retryable: true,
+    };
+  }
   if (status === 404) {
     return {
       title: "Раздел не найден",
@@ -127,13 +141,6 @@ export function navigationErrorCopy(error: unknown): NavigationErrorCopy {
     return {
       title: "Сведения временно недоступны",
       description: "Повторите запрос после восстановления доступа.",
-      retryable: true,
-    };
-  }
-  if (value.name === "UnsupportedProductNavigationContractError") {
-    return {
-      title: "Формат сведений не поддерживается",
-      description: "Ответ не прошел защитную проверку и поэтому не показан.",
       retryable: true,
     };
   }

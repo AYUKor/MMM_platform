@@ -1,57 +1,23 @@
-import { useState } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import {
-  createBestRawJobResultFixture,
-  createNoSafeJobResultFixture,
-  createReportFailedJobResultFixture,
-  createReportReadyJobResultFixture,
-  createReportUnavailableJobResultFixture,
-  createRecommendedJobResultFixture,
-  createScenarioMediaPlanFixture,
-} from "../../test/jobResultFixtures";
-import type { JobResultViewV1, ScenarioId } from "../../shared/api/generated/job-result-view-v1";
-import type { ScenarioMediaPlanV1 } from "../../shared/api/generated/scenario-media-plan-v1";
-import type { MediaPlanControls } from "./MediaPlanTab";
-import type { ResultMetricId } from "./jobResultFormatting";
+  buildJobResultViewV2,
+  buildScenarioMediaPlanV2,
+} from "../../test/businessSemanticsV2Fixtures";
 import { JobResultView, type JobResultViewProps } from "./JobResultView";
-import type { ResultTabId } from "./jobResultModel";
 
-const DEFAULT_CONTROLS: MediaPlanControls = {
-  channel: null,
-  geo: null,
-  page: 1,
-  pageSize: 25,
-};
-
-interface RenderOptions {
-  result?: JobResultViewV1;
-  activeTab?: ResultTabId;
-  mediaPlan?: ScenarioMediaPlanV1;
-  mediaScenarioId?: ScenarioId | null;
-  overrides?: Partial<JobResultViewProps>;
-}
-
-function renderResultView({
-  result = createRecommendedJobResultFixture(),
-  activeTab = "overview",
-  mediaPlan,
-  mediaScenarioId = "S06",
-  overrides = {},
-}: RenderOptions = {}) {
+function renderView(overrides: Partial<JobResultViewProps> = {}) {
   const props: JobResultViewProps = {
-    result,
-    activeTab,
-    metricId: "incremental_turnover_rub",
-    mediaPlan,
-    mediaScenarioId,
-    mediaControls: DEFAULT_CONTROLS,
+    result: buildJobResultViewV2(),
+    activeTab: "overview",
+    mediaPlan: undefined,
+    mediaScenarioId: "S01",
+    mediaControls: { channel: null, geo: null, page: 1, pageSize: 25 },
     mediaLoading: false,
     mediaError: null,
     refreshNotice: null,
     onTabChange: vi.fn(),
-    onMetricChange: vi.fn(),
     onMediaScenarioChange: vi.fn(),
     onMediaControlsChange: vi.fn(),
     onMediaPageChange: vi.fn(),
@@ -59,235 +25,96 @@ function renderResultView({
     onRefresh: vi.fn(),
     ...overrides,
   };
-  return {
-    ...render(
-      <MemoryRouter>
-        <JobResultView {...props} />
-      </MemoryRouter>,
-    ),
-    props,
-  };
+  const rendered = render(<MemoryRouter><JobResultView {...props} /></MemoryRouter>);
+  return { props, ...rendered };
 }
 
-function ResultViewHarness({ result }: { result: JobResultViewV1 }) {
-  const [tab, setTab] = useState<ResultTabId>("overview");
-  const [scenarioId, setScenarioId] = useState<ScenarioId>("S06");
-  const [metricId, setMetricId] = useState<ResultMetricId>("incremental_turnover_rub");
-  const plan = createScenarioMediaPlanFixture({
-    resultView: result,
-    scenarioId,
-    pageSize: 25,
-  });
-  return (
-    <MemoryRouter>
-      <JobResultView
-        result={result}
-        activeTab={tab}
-        metricId={metricId}
-        mediaPlan={plan}
-        mediaScenarioId={scenarioId}
-        mediaControls={DEFAULT_CONTROLS}
-        mediaLoading={false}
-        mediaError={null}
-        refreshNotice={null}
-        onTabChange={setTab}
-        onMetricChange={setMetricId}
-        onMediaScenarioChange={setScenarioId}
-        onMediaControlsChange={() => undefined}
-        onMediaPageChange={() => undefined}
-        onMediaRetry={() => undefined}
-        onRefresh={() => undefined}
-      />
-    </MemoryRouter>
-  );
-}
-
-describe("JobResultView", () => {
-  it("exposes all four product tabs and switches their controlled panels", () => {
-    render(<ResultViewHarness result={createRecommendedJobResultFixture()} />);
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
-    expect(screen.getByRole("heading", { name: "Рекомендуемое распределение бюджета" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Сценарии и надежность" }));
-    expect(screen.getByRole("heading", { name: "Сравнение рассчитанных вариантов" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Медиаплан" }));
-    expect(screen.getByRole("heading", { name: "Медиаплан было → рекомендуется" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Отчет" }));
-    expect(screen.getByRole("heading", { name: "Отчет готов" })).toBeInTheDocument();
-  });
-
-  it("uses the approved product copy and rejects deprecated user-facing phrases", () => {
-    const { container } = render(<ResultViewHarness result={createRecommendedJobResultFixture()} />);
-    const visitedCopy: string[] = [];
-    const captureCopy = () => visitedCopy.push(container.textContent ?? "");
-
-    expect(screen.getByRole("heading", { name: "Надежность результата" })).toBeInTheDocument();
-    expect(screen.getByText(/Числовая оценка пока недоступна, поэтому показаны отдельные признаки надежности\./)).toBeInTheDocument();
-    expect(screen.getByText("Сравнение исходного и выбранного плана", { exact: true })).toBeInTheDocument();
-    captureCopy();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Сценарии и надежность" }));
-    expect(screen.getByText("Места сценариев учитывают ожидаемый эффект и ограничения надежности.")).toBeInTheDocument();
-    captureCopy();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Медиаплан" }));
-    expect(screen.getByText("Рекомендованный вариант", { exact: true })).toBeInTheDocument();
-    captureCopy();
-
-    fireEvent.click(screen.getByRole("radio", { name: /S1.*Как загружено/ }));
-    expect(screen.getByRole("heading", { name: "Исходный план → просматриваемый сценарий" })).toBeInTheDocument();
-    captureCopy();
-
-    const allVisitedCopy = visitedCopy.join("\n").toLowerCase();
-    for (const phrase of [
-      "Каноническая рекомендация",
-      "Открытый сценарий",
-      "Без выдуманной оценки",
-      "Готовые сводки сервиса",
-      "Интерфейс не пересортировывает",
-    ]) {
-      expect(allVisitedCopy).not.toContain(phrase.toLowerCase());
-    }
-  });
-
-  it("keeps S1 as source and S5 as the stable reference", () => {
-    renderResultView();
+describe("JobResultView turnover-only", () => {
+  it("shows S1 as a manual-review point of reference, never a system recommendation", () => {
+    renderView({ activeTab: "scenarios" });
     expect(screen.getAllByText("Исходный план").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Как загружено").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Устойчивый ориентир").length).toBeGreaterThan(0);
-  });
-
-  it("renders unavailable metric data as missing rather than zero", () => {
-    const result = createRecommendedJobResultFixture();
-    expect(result.scenarios[5].metrics.avg_basket_delta_rub.p50).toBeNull();
-    expect(result.reliability.score).toBeNull();
-    renderResultView({ result });
-    expect(screen.getByText("Изменение среднего чека пока недоступно")).toBeInTheDocument();
-    expect(screen.getByText("Числовая шкала пока недоступна")).toBeInTheDocument();
-    expect(screen.queryByText("0/10")).not.toBeInTheDocument();
-  });
-
-  it("still renders a real known zero without treating it as missing", () => {
-    const result = createRecommendedJobResultFixture();
-    result.scenarios[5].budget.allocated_budget_rub = result.scenarios[5].budget.requested_budget_rub;
-    result.scenarios[5].budget.unallocated_budget_rub = 0;
-    renderResultView({ result });
-    expect(screen.getByText("Не распределено").nextElementSibling).toHaveTextContent(/^0/);
-    expect(screen.getByText("Изменение среднего чека пока недоступно")).toBeInTheDocument();
-  });
-
-  it("shows both published recommendation ranks without reordering scenarios", () => {
-    renderResultView();
-    expect(screen.getByText("Место среди устойчивых").nextElementSibling).toHaveTextContent("№ 1");
-    expect(screen.getByText("Место без учета ограничений").nextElementSibling).toHaveTextContent("№ 1");
-  });
-
-  it("explains no-safe recommendation without promoting S1 or S5", () => {
-    renderResultView({ result: createNoSafeJobResultFixture() });
-    expect(
-      screen.getByRole("heading", { name: "Безопасная автоматическая рекомендация не сформирована" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Ни один из них не становится победителем автоматически/)).toBeInTheDocument();
+    expect(screen.getAllByText("Точка отсчета").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Требуется ручная проверка").length).toBeGreaterThan(0);
+    expect(screen.getByText("Исходный план показан как точка отсчета. Он не является рекомендацией системы и требует ручной проверки.")).toBeInTheDocument();
+    expect(screen.queryByText(/перераспределение не подтвердило надежного улучшения/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Рекомендован системой")).not.toBeInTheDocument();
   });
 
-  it("shows best raw only as a non-recommended diagnostic", () => {
-    renderResultView({
-      result: createBestRawJobResultFixture(),
-      activeTab: "scenarios",
-    });
-    expect(
-      screen.getByRole("heading", { name: "Математически сильный, но не рекомендованный вариант" }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("Только для проверки расчета").length).toBeGreaterThan(0);
-    expect(screen.getByText("Не является рекомендацией")).toBeInTheDocument();
-  });
+  it("shows partial S5 allocated and unallocated budget plus both ROAS meanings", () => {
+    renderView();
+    expect(screen.getAllByRole("heading", { name: "Безопасно распределяемая часть" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/173,9.*млн.*₽/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/93,9.*млн.*₽/).length).toBeGreaterThan(0);
 
-  it("uses only the canonical artifact path for a ready report", () => {
-    const result = createReportReadyJobResultFixture();
-    renderResultView({ result, activeTab: "report" });
-    const downloads = screen.getAllByRole("link", { name: "Скачать отчет" });
-    expect(downloads).toHaveLength(2);
-    for (const download of downloads) {
-      expect(download).toHaveAttribute(
-        "href",
-        `http://127.0.0.1:8765${result.report.artifact?.download_path}`,
-      );
-      expect(download).toHaveAttribute("download");
-    }
-    expect(screen.getByRole("heading", { name: "Листы отчета" })).toBeInTheDocument();
-  });
-
-  it("does not expose report artifacts without report.download permission", () => {
-    renderResultView({
-      result: createReportReadyJobResultFixture(),
-      activeTab: "report",
-      overrides: { canDownload: false },
-    });
-    expect(screen.queryByRole("link", { name: "Скачать отчет" })).not.toBeInTheDocument();
-    expect(screen.getByText("Нет доступа к скачиванию")).toBeInTheDocument();
-  });
-
-  it("renders a contract-backed working media-plan artifact when it is ready", () => {
-    const result = createReportReadyJobResultFixture();
-    const workingPlan = {
-      status: "ready" as const,
-      display_text: "Рабочий медиаплан готов.",
-      artifact: {
-        artifact_id: "artifact_1234567890abcdef",
-        display_name: "working_media_plan.xlsx",
-        media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        size_bytes: 32_768,
-        sha256: "c".repeat(64),
-        download_path: "/api/v1/artifacts/artifact_1234567890abcdef/download",
+    renderView({
+      result: {
+        ...buildJobResultViewV2(),
+        recommendation: {
+          ...buildJobResultViewV2().recommendation,
+          decision_status: "no_safe_recommendation",
+          scenario_id: "S05",
+        },
       },
-    };
-    result.media_plan.working_media_plan = structuredClone(workingPlan);
-    result.report.working_media_plan = structuredClone(workingPlan);
-    renderResultView({ result, activeTab: "report" });
-    expect(screen.getByRole("heading", { name: "working_media_plan.xlsx" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Скачать медиаплан" })).toHaveAttribute(
-      "href",
-      "http://127.0.0.1:8765/api/v1/artifacts/artifact_1234567890abcdef/download",
-    );
+    });
+    expect(screen.getAllByText("Распределена безопасная часть").length).toBeGreaterThan(0);
   });
 
-  it.each([
-    [createReportFailedJobResultFixture(), "Не удалось сформировать отчет"],
-    [createReportUnavailableJobResultFixture(), "Отчет недоступен"],
-  ] as const)("does not invent a download for a non-ready report", (result, title) => {
-    renderResultView({ result, activeTab: "report" });
-    expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Скачать отчет" })).not.toBeInTheDocument();
+  it("renders infeasible S6 as a controlled state without fake KPI", () => {
+    renderView({ activeTab: "scenarios" });
+    const heading = screen.getByRole("heading", { name: "Полный план максимального эффекта недоступен" });
+    const card = heading.closest("article");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText(/невозможно распределить весь бюджет/i)).toBeInTheDocument();
+    expect(within(card as HTMLElement).queryByText("Дополнительный оборот · P50")).not.toBeInTheDocument();
+    expect(within(card as HTMLElement).queryByRole("button", { name: /повтор/i })).not.toBeInTheDocument();
   });
 
-  it("changes only the viewed media plan when a scenario radio is selected", () => {
-    const result = createRecommendedJobResultFixture();
-    const recommendationBefore = structuredClone(result.recommendation);
-    const onMediaScenarioChange = vi.fn();
-    renderResultView({
+  it("uses all geographies and channel display names in media-plan filters", () => {
+    const result = buildJobResultViewV2();
+    renderView({
       result,
       activeTab: "media-plan",
-      mediaPlan: createScenarioMediaPlanFixture({ resultView: result, scenarioId: "S06", pageSize: 25 }),
-      overrides: { onMediaScenarioChange },
+      mediaPlan: buildScenarioMediaPlanV2("S01", { page: 1, pageSize: 25 }),
     });
-    fireEvent.click(screen.getByRole("radio", { name: /S1.*Как загружено/ }));
-    expect(onMediaScenarioChange).toHaveBeenCalledWith("S01");
-    expect(result.recommendation).toEqual(recommendationBefore);
-    expect(screen.getByText(/Рекомендация системы, ранги и выводы расчета при этом не меняются/)).toBeInTheDocument();
+    expect(screen.getByText("45 строк · 15 географий")).toBeInTheDocument();
+    expect(screen.getAllByText("Цифровая реклама").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Наружная реклама").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Digital_Performance")).not.toBeInTheDocument();
+    expect(screen.queryByText("OOH_Total")).not.toBeInTheDocument();
+    const geoSelect = screen.getByLabelText("География") as HTMLSelectElement;
+    expect(geoSelect.options).toHaveLength(16);
   });
 
-  it("shows requested total, row delta percent and aggregate quality from the media contract", () => {
-    const result = createRecommendedJobResultFixture();
-    renderResultView({
-      result,
+  it("renders a controlled empty media-plan state without page 1 of 0", () => {
+    renderView({
       activeTab: "media-plan",
-      mediaPlan: createScenarioMediaPlanFixture({ resultView: result, scenarioId: "S06", pageSize: 25 }),
+      mediaControls: { channel: null, geo: "Нет такой географии", page: 1, pageSize: 25 },
+      mediaPlan: buildScenarioMediaPlanV2("S01", { geo: "Нет такой географии", page: 1, pageSize: 25 }),
     });
-    expect(screen.getByText("Запрошенный бюджет").nextElementSibling).toHaveTextContent("12");
-    expect(screen.getByRole("columnheader", { name: "Изменение, %" })).toBeInTheDocument();
-    expect(screen.getAllByText("Строка прошла опубликованные проверки качества.").length).toBeGreaterThan(0);
+    expect(screen.getByText("По выбранным фильтрам строк нет")).toBeInTheDocument();
+    expect(screen.queryByText("Страница 1 из 0")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("keeps report unavailable instead of falling back to v1", () => {
+    renderView({ activeTab: "report" });
+    expect(screen.getByRole("heading", { name: "Excel-отчет пока недоступен" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /скачать отчет/i })).not.toBeInTheDocument();
+  });
+
+  it("forbids diagnostic KPI and raw target identifiers in mounted UI", () => {
+    const { container } = renderView();
+    const text = container.textContent ?? "";
+    for (const forbidden of [
+      "Дополнительные заказы",
+      "Заказы на 100 000 ₽",
+      "Механизм среднего чека",
+      "Часть дополнительного оборота",
+      "orders_per_user",
+      "avg_basket",
+      "... ещё",
+    ]) {
+      expect(text).not.toContain(forbidden);
+    }
   });
 });
