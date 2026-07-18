@@ -284,8 +284,8 @@
   height: var(--bubble-mobile-size);
 }
 .map[data-compact-layout="true"] .label { max-width: 132px; font-size: 0.58rem; }
-.map[data-map-mode="workspace"][data-compact-layout="true"] .label[data-mobile-visible="false"],
-.map[data-map-mode="workspace"][data-compact-layout="true"] .leaderLayer line[data-mobile-visible="false"],
+.map[data-map-mode="historical-model"][data-compact-layout="true"] .label[data-mobile-visible="false"],
+.map[data-map-mode="historical-model"][data-compact-layout="true"] .leaderLayer line[data-mobile-visible="false"],
 .map[data-map-mode="campaign"][data-compact-layout="true"] .labelLayer,
 .map[data-map-mode="campaign"][data-compact-layout="true"] .leaderLayer { display: none; }
 .map[data-compact-layout="true"] .mobileTooltipTray {

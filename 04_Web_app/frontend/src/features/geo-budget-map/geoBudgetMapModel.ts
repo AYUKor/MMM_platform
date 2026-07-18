@@ -1,8 +1,8 @@
+import type { HistoricalModelGeoBudgetV1 } from "../../shared/api/generated/historical-model-geo-budget-v1";
 import type { ValidationResultV2 } from "../../shared/api/generated/validation-result-v2";
-import type { WorkspaceGeoBudgetV1 } from "../../shared/api/generated/workspace-geo-budget-v1";
 import { formatInteger, formatPercent, formatRub } from "../../shared/formatters/metrics";
 
-export type GeoBudgetMapMode = "workspace" | "campaign";
+export type GeoBudgetMapMode = "historical-model" | "campaign";
 
 export interface GeoBudgetMapPoint {
   geoId: string;
@@ -11,7 +11,8 @@ export interface GeoBudgetMapPoint {
   longitude: number;
   budgetRub: number;
   budgetShare: number | null;
-  campaignsN?: number;
+  activeDaysN?: number;
+  activeRowsN?: number;
   channels?: readonly string[];
   hasModelLimitations?: boolean;
   modelLimitationsN?: number;
@@ -39,11 +40,12 @@ interface GeoBudgetMapModelBase {
   maxBudgetRub: number;
 }
 
-export interface WorkspaceGeoBudgetMapModel extends GeoBudgetMapModelBase {
-  mode: "workspace";
+export interface HistoricalModelGeoBudgetMapModel extends GeoBudgetMapModelBase {
+  mode: "historical-model";
+  title: string;
   displayText: string;
-  totalBudgetRub: number;
-  campaignsN: number;
+  periodDisplayText: string;
+  totalBudgetRub: number | null;
   geographiesN: number;
 }
 
@@ -54,7 +56,7 @@ export interface CampaignGeoBudgetMapModel extends GeoBudgetMapModelBase {
   geographiesN: number;
 }
 
-export type GeoBudgetMapModel = WorkspaceGeoBudgetMapModel | CampaignGeoBudgetMapModel;
+export type GeoBudgetMapModel = HistoricalModelGeoBudgetMapModel | CampaignGeoBudgetMapModel;
 
 export interface ProjectedGeoPoint {
   x: number;
@@ -107,7 +109,7 @@ const RADIUS_LIMITS = Object.freeze({
 });
 const BRIGHTNESS_MIN = 0.42;
 const BRIGHTNESS_MAX = 1;
-const WORKSPACE_LABEL_LIMIT = 10;
+const HISTORICAL_LABEL_LIMIT = 10;
 const russianCollator = new Intl.Collator("ru", { sensitivity: "base" });
 
 interface LabelRect {
@@ -282,8 +284,18 @@ function assertPoint(point: GeoBudgetMapPoint): void {
   }
   assertNonNegativeFinite(point.budgetRub, "budgetRub");
   assertShare(point.budgetShare, "budgetShare");
-  if (point.campaignsN !== undefined && (!Number.isSafeInteger(point.campaignsN) || point.campaignsN < 0)) {
-    throw new InvalidGeoBudgetMapDataError("campaignsN must be a non-negative integer.");
+  if (point.activeDaysN !== undefined && (!Number.isSafeInteger(point.activeDaysN) || point.activeDaysN < 0)) {
+    throw new InvalidGeoBudgetMapDataError("activeDaysN must be a non-negative integer.");
+  }
+  if (point.activeRowsN !== undefined && (!Number.isSafeInteger(point.activeRowsN) || point.activeRowsN < 0)) {
+    throw new InvalidGeoBudgetMapDataError("activeRowsN must be a non-negative integer.");
+  }
+  if (
+    point.activeDaysN !== undefined
+    && point.activeRowsN !== undefined
+    && point.activeDaysN > point.activeRowsN
+  ) {
+    throw new InvalidGeoBudgetMapDataError("activeDaysN cannot exceed activeRowsN.");
   }
   if (point.modelLimitationsN !== undefined && (!Number.isSafeInteger(point.modelLimitationsN) || point.modelLimitationsN < 0)) {
     throw new InvalidGeoBudgetMapDataError("modelLimitationsN must be a non-negative integer.");
@@ -291,7 +303,7 @@ function assertPoint(point: GeoBudgetMapPoint): void {
 }
 
 function coverageFromContract(
-  coverage: WorkspaceGeoBudgetV1["coverage"] | ValidationResultV2["map_coverage"],
+  coverage: HistoricalModelGeoBudgetV1["coverage"] | ValidationResultV2["map_coverage"],
 ): GeoBudgetMapCoverage {
   assertNonNegativeFinite(coverage.located_budget_rub, "located_budget_rub");
   assertNonNegativeFinite(coverage.unlocated_budget_rub, "unlocated_budget_rub");
@@ -367,22 +379,24 @@ export function selectLabelIds(
       || russianCollator.compare(left.geoDisplayName, right.geoDisplayName)
       || left.geoId.localeCompare(right.geoId),
     )
-    .slice(0, WORKSPACE_LABEL_LIMIT);
+    .slice(0, HISTORICAL_LABEL_LIMIT);
   return new Set(top.map((point) => point.geoId));
 }
 
 export function formatGeoPointAccessibleLabel(
   mode: GeoBudgetMapMode,
   point: GeoBudgetMapPoint,
+  periodDisplayText?: string,
 ): string {
   assertPoint(point);
   const parts = [
     point.geoDisplayName,
-    `${mode === "workspace" ? "Общий бюджет" : "Бюджет"}: ${formatRub(point.budgetRub)}`,
-    `Доля бюджета: ${formatPercent(point.budgetShare)}`,
+    `${mode === "historical-model" ? "Исторический рекламный бюджет" : "Бюджет"}: ${formatRub(point.budgetRub)}`,
+    `${mode === "historical-model" ? "Доля общего бюджета" : "Доля бюджета"}: ${formatPercent(point.budgetShare)}`,
   ];
-  if (mode === "workspace") {
-    parts.push(`Кампаний: ${formatInteger(point.campaignsN ?? null)}`);
+  if (mode === "historical-model") {
+    parts.push(`Дней с рекламной активностью: ${formatInteger(point.activeDaysN ?? null)}`);
+    parts.push(periodDisplayText?.trim() || "Период данных: Нет данных");
   } else {
     parts.push(`Каналы: ${point.channels?.length ? point.channels.join(", ") : "Нет данных"}`);
     const limitations = point.hasModelLimitations === undefined
@@ -395,7 +409,9 @@ export function formatGeoPointAccessibleLabel(
   return `${parts.join(". ")}.`;
 }
 
-export function adaptWorkspaceGeoBudget(payload: WorkspaceGeoBudgetV1): WorkspaceGeoBudgetMapModel {
+export function adaptHistoricalModelGeoBudget(
+  payload: HistoricalModelGeoBudgetV1,
+): HistoricalModelGeoBudgetMapModel {
   const points: GeoBudgetMapPoint[] = payload.rows.flatMap((row) =>
     row.coordinates_status === "canonical"
       ? [{
@@ -403,18 +419,27 @@ export function adaptWorkspaceGeoBudget(payload: WorkspaceGeoBudgetV1): Workspac
         geoDisplayName: row.geo_display_name,
         latitude: row.latitude,
         longitude: row.longitude,
-        budgetRub: row.total_budget_rub,
+        budgetRub: row.historical_total_budget_rub,
         budgetShare: row.budget_share,
-        campaignsN: row.campaigns_n,
+        activeDaysN: row.active_days_n,
+        activeRowsN: row.active_rows_n,
       }]
       : [],
   );
-  assertNonNegativeFinite(payload.total_budget_rub, "total_budget_rub");
+  if (payload.total_budget_rub !== null) {
+    assertNonNegativeFinite(payload.total_budget_rub, "total_budget_rub");
+  } else if (payload.status !== "unavailable") {
+    throw new InvalidGeoBudgetMapDataError("total_budget_rub is required for an available historical artifact.");
+  }
+  if (!payload.period_display_text.trim()) {
+    throw new InvalidGeoBudgetMapDataError("period_display_text must not be empty.");
+  }
   return {
-    mode: "workspace",
+    mode: "historical-model",
+    title: payload.title,
     displayText: payload.display_text,
+    periodDisplayText: payload.period_display_text,
     totalBudgetRub: payload.total_budget_rub,
-    campaignsN: payload.campaigns_n,
     geographiesN: payload.geographies_n,
     points,
     coverage: coverageFromContract(payload.coverage),

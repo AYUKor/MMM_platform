@@ -128,12 +128,14 @@ function labelStyle(projected: ProjectedMapPoint): CSSProperties {
 const MarkerLayer = memo(function MarkerLayer({
   mode,
   points,
+  periodDisplayText,
   onActivate,
   onFocusActivate,
   onHoverEnd,
 }: {
   mode: GeoBudgetMapMode;
   points: readonly ProjectedMapPoint[];
+  periodDisplayText?: string;
   onActivate: (projected: ProjectedMapPoint, trigger: HTMLButtonElement) => void;
   onFocusActivate: (projected: ProjectedMapPoint, trigger: HTMLButtonElement) => void;
   onHoverEnd: (geoId: string, trigger: HTMLButtonElement) => void;
@@ -150,7 +152,7 @@ const MarkerLayer = memo(function MarkerLayer({
             key={projected.point.geoId}
             type="button"
             style={pointStyle(projected)}
-            aria-label={formatGeoPointAccessibleLabel(mode, projected.point)}
+            aria-label={formatGeoPointAccessibleLabel(mode, projected.point, periodDisplayText)}
             onMouseEnter={(event) => onActivate(projected, event.currentTarget)}
             onMouseLeave={(event) => onHoverEnd(projected.point.geoId, event.currentTarget)}
             onFocus={(event) => onFocusActivate(projected, event.currentTarget)}
@@ -202,10 +204,12 @@ const MarkerLayer = memo(function MarkerLayer({
 function Tooltip({
   mode,
   active,
+  periodDisplayText,
   onClose,
 }: {
   mode: GeoBudgetMapMode;
   active: ActivePoint;
+  periodDisplayText?: string;
   onClose: () => void;
 }) {
   const point = active.projected.point;
@@ -218,6 +222,8 @@ function Tooltip({
     : point.hasModelLimitations
       ? formatInteger(point.modelLimitationsN ?? null)
       : "Нет";
+  const periodValue = periodDisplayText?.replace(/^Период данных:\s*/u, "").trim()
+    || "Нет данных";
   return (
     <aside
       className={styles.tooltip}
@@ -235,18 +241,24 @@ function Tooltip({
       </div>
       <dl>
         <div>
-          <dt>{mode === "workspace" ? "Общий бюджет" : "Бюджет"}</dt>
+          <dt>{mode === "historical-model" ? "Исторический рекламный бюджет" : "Бюджет"}</dt>
           <dd>{formatRub(point.budgetRub)}</dd>
         </div>
         <div>
-          <dt>Доля бюджета</dt>
+          <dt>{mode === "historical-model" ? "Доля общего бюджета" : "Доля бюджета"}</dt>
           <dd>{formatPercent(point.budgetShare)}</dd>
         </div>
-        {mode === "workspace" ? (
-          <div>
-            <dt>Кампаний</dt>
-            <dd>{formatInteger(point.campaignsN ?? null)}</dd>
-          </div>
+        {mode === "historical-model" ? (
+          <>
+            <div>
+              <dt>Дней с рекламной активностью</dt>
+              <dd>{formatInteger(point.activeDaysN ?? null)}</dd>
+            </div>
+            <div>
+              <dt>Период данных</dt>
+              <dd>{periodValue}</dd>
+            </div>
+          </>
         ) : (
           <>
             <div>
@@ -449,19 +461,6 @@ export function GeoBudgetMap({
     );
   }
 
-  const emptyWorkspace = model.mode === "workspace"
-    && model.geographiesN === 0
-    && model.totalBudgetRub === 0;
-  if (emptyWorkspace) {
-    return (
-      <MapState
-        state="empty"
-        title="Пока нет данных для карты"
-        description="После проверки первой кампании здесь появится бюджет по городам."
-      />
-    );
-  }
-
   if (model.coverage.status === "unavailable" || projectedPoints.length === 0) {
     return (
       <div className={styles.unavailableStack}>
@@ -469,7 +468,7 @@ export function GeoBudgetMap({
           state="unavailable"
           title="Карта пока недоступна"
           description={
-            model.mode === "workspace"
+            model.mode === "historical-model"
               ? model.displayText
               : "Сервис не опубликовал координаты для географий этой кампании."
           }
@@ -504,7 +503,7 @@ export function GeoBudgetMap({
         <span><i className={styles.legendSize} aria-hidden="true" />Размер точки — рекламный бюджет</span>
         <span><i className={styles.legendBrightness} aria-hidden="true" />Яркость — относительный бюджет</span>
         <small>
-          {model.mode === "workspace"
+          {model.mode === "historical-model"
             ? mobileLayout
               ? "Подписаны 5 из 10 городов с наибольшим бюджетом"
               : "Подписаны 10 городов с наибольшим бюджетом"
@@ -518,8 +517,8 @@ export function GeoBudgetMap({
         ref={canvasRef}
         role="group"
         aria-label={
-          model.mode === "workspace"
-            ? "Карта суммарного рекламного бюджета по городам"
+          model.mode === "historical-model"
+            ? "Карта исторического рекламного бюджета модели по географиям"
             : "Карта рекламного бюджета текущей кампании"
         }
       >
@@ -531,17 +530,28 @@ export function GeoBudgetMap({
         <MarkerLayer
           mode={model.mode}
           points={projectedPoints}
+          periodDisplayText={model.mode === "historical-model" ? model.periodDisplayText : undefined}
           onActivate={activate}
           onFocusActivate={focusActivate}
           onHoverEnd={hoverEnd}
         />
         {active && !mobileLayout ? (
-          <Tooltip mode={model.mode} active={active} onClose={() => closeTooltip()} />
+          <Tooltip
+            mode={model.mode}
+            active={active}
+            periodDisplayText={model.mode === "historical-model" ? model.periodDisplayText : undefined}
+            onClose={() => closeTooltip()}
+          />
         ) : null}
       </div>
       {active && mobileLayout ? (
         <div className={styles.mobileTooltipTray}>
-          <Tooltip mode={model.mode} active={active} onClose={() => closeTooltip()} />
+          <Tooltip
+            mode={model.mode}
+            active={active}
+            periodDisplayText={model.mode === "historical-model" ? model.periodDisplayText : undefined}
+            onClose={() => closeTooltip()}
+          />
         </div>
       ) : null}
       {model.mode === "campaign" && mobileLayout ? (

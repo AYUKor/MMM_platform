@@ -6,12 +6,14 @@ import {
   BusinessSemanticsUnavailableError,
   getActiveModelPassportV2,
   getGeoCatalog,
+  getHistoricalModelGeoBudget,
   getJobResultViewV2,
   getModelOverviewV2,
   getScenarioMediaPlanV2,
   getValidationViewV2,
   getWorkspaceGeoBudget,
   parseGeoCatalog,
+  parseHistoricalModelGeoBudget,
   parseJobResultViewV2,
   parseScenarioMediaPlanV2,
   parseValidationViewV2,
@@ -59,6 +61,54 @@ function plan(overrides: Record<string, unknown> = {}) {
 function validation(overrides: Record<string, unknown> = {}) { return { contract_name: "validation_result_v2", schema_version: "2.0.0", validation_id: VALIDATION_ID, status: "passed", job_creation_allowed: true, file_validation: { status: "passed", rows_n: 1, campaigns_n: 1, geographies_n: 1, channels_n: 1, requested_budget_rub: 100, blocking_errors_n: 0, warnings_n: 0, checks: [] }, model_limitations: [], map_coverage: { status: "unavailable", located_geographies_n: 0, unlocated_geographies_n: 1, unlocated_geographies: [GEO], located_budget_rub: 0, unlocated_budget_rub: 100, unlocated_budget_share: 1 }, geo_points: [{ ...GEO, input_geo_name: "Москва", canonical_geo_id: null, canonical_geo_display_name: null, normalization_status: "unknown", normalization_rule: "no_registered_alias", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null, budget_rub: 100, budget_share: 1, channels: [CHANNEL], has_model_limitations: false, model_limitations_n: 0 }], ...overrides }; }
 function catalog() { return { contract_name: "geo_catalog_v1", schema_version: "1.0.0", catalog_version: "catalog-v1", coordinates_source: "Synthetic test source", coordinates_source_version_or_date: "2026-07-18", coordinates_license: "CC BY 4.0", status: "unavailable", display_text: "Координаты недоступны.", geographies_n: 1, coverage: { status: "unavailable", located_geographies_n: 0, unlocated_geographies_n: 1, unlocated_geographies: [GEO] }, entries: [{ ...GEO, latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null }] }; }
 function workspace() { return { contract_name: "workspace_geo_budget_v1", schema_version: "1.0.0", catalog_version: "catalog-v1", status: "unavailable", display_text: "Координаты недоступны.", total_budget_rub: 100, campaigns_n: 1, geographies_n: 1, coverage: { status: "unavailable", located_geographies_n: 0, unlocated_geographies_n: 1, unlocated_geographies: [GEO], located_budget_rub: 0, unlocated_budget_rub: 100, unlocated_budget_share: 1 }, rows: [{ ...GEO, latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null, total_budget_rub: 100, campaigns_n: 1, budget_share: 1 }] }; }
+function historicalAvailable(geographiesN = 220) {
+  const total = 8_687_024_294.654741;
+  const rows = Array.from({ length: geographiesN }, (_, index) => ({
+    geo_id: `geo_${(index + 1).toString(16).padStart(16, "0")}`,
+    geo_display_name: `География ${index + 1}`,
+    latitude: 55 + index * .001,
+    longitude: 37 + index * .001,
+    coordinates_status: "canonical",
+    historical_total_budget_rub: index === 0 ? total : 0,
+    budget_share: index === 0 ? 1 : 0,
+    active_days_n: index === 0 ? 517 : 0,
+    active_rows_n: index === 0 ? 1_551 : 0,
+  }));
+  return {
+    contract_name: "historical_model_geo_budget_v1", schema_version: "1.0.0", record_origin: "verified_model_package_artifact", status: "available",
+    title: "Исторический рекламный бюджет в данных модели", display_text: "Исторические расходы доступны для всех географий.", period_display_text: "Период данных: 01.01.2025 — 31.05.2026",
+    package_id: "pkg_1234567890abcdef_1234567890abcdef", model_version: "run/turnover_only", artifact_id: "artifact_0123456789abcdef01234567", artifact_version: "historical_geo_budget_v1", catalog_version: "geo-catalog-v1",
+    period_start: "2025-01-01", period_end: "2026-05-31", spend_columns_version: "historical_spend_columns_v1", total_budget_rub: total, geographies_n: geographiesN,
+    coverage: { status: "available", located_geographies_n: geographiesN, unlocated_geographies_n: 0, unlocated_geographies: [] as Array<{ geo_id: string; geo_display_name: string }>, located_budget_rub: total, unlocated_budget_rub: 0, unlocated_budget_share: 0 },
+    rows, limitations: [{ code: "historical_spend_only", display_text: "Показаны фактические рекламные расходы из данных активной модели." }], updated_at_utc: "2026-07-19T08:00:00+00:00",
+  };
+}
+function historicalPartial() {
+  const value = historicalAvailable(2);
+  value.total_budget_rub = 100;
+  value.rows[0].historical_total_budget_rub = 75;
+  value.rows[0].budget_share = .75;
+  value.rows[1] = { ...value.rows[1], latitude: null, longitude: null, coordinates_status: "unavailable", historical_total_budget_rub: 25, budget_share: .25 } as unknown as typeof value.rows[number];
+  value.status = "partial";
+  value.coverage = { status: "partial", located_geographies_n: 1, unlocated_geographies_n: 1, unlocated_geographies: [{ geo_id: value.rows[1].geo_id, geo_display_name: value.rows[1].geo_display_name }], located_budget_rub: 75, unlocated_budget_rub: 25, unlocated_budget_share: .25 };
+  return value;
+}
+function historicalAllUnlocated() {
+  const value = historicalAvailable(1);
+  value.rows[0] = { ...value.rows[0], latitude: null, longitude: null, coordinates_status: "unavailable" } as unknown as typeof value.rows[number];
+  value.status = "unavailable";
+  value.coverage = { status: "unavailable", located_geographies_n: 0, unlocated_geographies_n: 1, unlocated_geographies: [{ geo_id: value.rows[0].geo_id, geo_display_name: value.rows[0].geo_display_name }], located_budget_rub: 0, unlocated_budget_rub: value.total_budget_rub, unlocated_budget_share: 1 };
+  return value;
+}
+function historicalUnavailable() {
+  return {
+    contract_name: "historical_model_geo_budget_v1", schema_version: "1.0.0", record_origin: "model_package_artifact_unavailable", status: "unavailable",
+    title: "Исторический рекламный бюджет в данных модели", display_text: "Исторические расходы активной модели временно недоступны.", period_display_text: "Период данных временно недоступен.",
+    package_id: "pkg_unavailable_model", model_version: null, artifact_id: null, artifact_version: null, catalog_version: "geo-catalog-v1", period_start: null, period_end: null, spend_columns_version: null, total_budget_rub: null, geographies_n: 0,
+    coverage: { status: "unavailable", located_geographies_n: 0, unlocated_geographies_n: 0, unlocated_geographies: [], located_budget_rub: 0, unlocated_budget_rub: 0, unlocated_budget_share: null },
+    rows: [], limitations: [{ code: "historical_artifact_unavailable", display_text: "Подтвержденный исторический агрегат пока не опубликован." }], updated_at_utc: null,
+  };
+}
 function serving() { return { serving_policy_version: "turnover_serving_v1", target_id: "turnover", core_target: "turnover_per_user", serving_targets_n: 1, active_serving_models_n: 4, research_models_in_package_n: 12, calculation_allowed: true, production_claim_allowed: false }; }
 function evidence() { return { status: "passed", generated_at_utc: "2026-07-18T10:00:00+00:00", reason_code: null, display_text: "Проверка пройдена." }; }
 function policy() { return { segment: "Все", ...CHANNEL, target: "turnover", allowed_use: "primary", forecast_action: "allowed", optimizer_action: "allowed", display_text: "Доступно." }; }
@@ -93,14 +143,54 @@ describe("business semantics v2 parsers", () => {
   it("accepts a passed file that model limitations block", () => { const value = validation({ status: "warning", job_creation_allowed: false }); expect(parseValidationViewV2(value, VALIDATION_ID).job_creation_allowed).toBe(false); });
   it("rejects a channel display name outside the authoritative catalog", () => { const value = validation(); value.geo_points[0].channels[0] = { channel_id: "Digital_Performance", channel_display_name: "Digital_Performance" }; expect(() => parseValidationViewV2(value, VALIDATION_ID)).toThrow(UnsupportedBusinessSemanticsContractError); });
   it("rejects truncated geo strings in validation/catalog/workspace", () => { const validationValue = validation(); validationValue.geo_points[0].geo_display_name = "Москва ... еще 2"; expect(() => parseValidationViewV2(validationValue, VALIDATION_ID)).toThrow(UnsupportedBusinessSemanticsContractError); const catalogValue = catalog(); catalogValue.entries[0].geo_display_name = "Москва ... еще 2"; expect(() => parseGeoCatalog(catalogValue)).toThrow(UnsupportedBusinessSemanticsContractError); const workspaceValue = workspace(); workspaceValue.rows[0].budget_share = .5; expect(() => parseWorkspaceGeoBudget(workspaceValue)).toThrow(UnsupportedBusinessSemanticsContractError); });
+  it("accepts the verified 220-geo historical artifact with exact total, period and activity counters", () => {
+    const parsed = parseHistoricalModelGeoBudget(historicalAvailable());
+    expect(parsed.geographies_n).toBe(220);
+    expect(parsed.total_budget_rub).toBe(8_687_024_294.654741);
+    expect([parsed.period_start, parsed.period_end]).toEqual(["2025-01-01", "2026-05-31"]);
+    expect(parsed.rows[0]).toMatchObject({ active_days_n: 517, active_rows_n: 1_551 });
+  });
+  it("accepts partial historical coverage without losing unlocated budget", () => {
+    const parsed = parseHistoricalModelGeoBudget(historicalPartial());
+    expect(parsed.status).toBe("partial");
+    expect(parsed.coverage).toMatchObject({ unlocated_geographies_n: 1, unlocated_budget_rub: 25, unlocated_budget_share: .25 });
+  });
+  it("accepts verified historical evidence when every coordinate is unavailable", () => {
+    const parsed = parseHistoricalModelGeoBudget(historicalAllUnlocated());
+    expect(parsed).toMatchObject({ record_origin: "verified_model_package_artifact", status: "unavailable", geographies_n: 1 });
+    expect(parsed.coverage).toMatchObject({ located_geographies_n: 0, unlocated_geographies_n: 1, unlocated_budget_share: 1 });
+  });
+  it("accepts the controlled empty state when the package artifact is unavailable", () => {
+    const parsed = parseHistoricalModelGeoBudget(historicalUnavailable());
+    expect(parsed).toMatchObject({ record_origin: "model_package_artifact_unavailable", status: "unavailable", total_budget_rub: null, geographies_n: 0, rows: [] });
+  });
+  it.each([
+    ["adds an extra top-level key", (value: MutableRecord) => { value.campaigns_n = 12; }],
+    ["adds an extra row key", (value: MutableRecord) => { ((value.rows as MutableRecord[])[0]).source_path = "relative.csv"; }],
+    ["breaks total reconciliation", (value: MutableRecord) => { ((value.rows as MutableRecord[])[0]).historical_total_budget_rub = 1; }],
+    ["breaks share reconciliation", (value: MutableRecord) => { ((value.rows as MutableRecord[])[0]).budget_share = .5; }],
+    ["publishes different unlocated evidence", (value: MutableRecord) => { (value.coverage as MutableRecord).unlocated_geographies = [GEO]; }],
+    ["publishes an impossible activity counter", (value: MutableRecord) => { const row = (value.rows as MutableRecord[])[0]; row.active_days_n = 2; row.active_rows_n = 1; }],
+    ["leaks an absolute path", (value: MutableRecord) => { value.display_text = "/Users/private/model"; }],
+  ])("rejects historical payload that %s", (_name, mutate) => {
+    const value = historicalAvailable() as unknown as MutableRecord;
+    mutate(value);
+    expect(() => parseHistoricalModelGeoBudget(value)).toThrow(UnsupportedBusinessSemanticsContractError);
+  });
 });
 
 describe("business semantics v2 getters", () => {
-  it("uses credentialed fetch and the seven canonical paths", async () => {
-    const values = [result(), plan(), validation(), passport(), overview(), catalog(), workspace()]; const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response(values.shift()))); vi.stubGlobal("fetch", fetchMock);
-    const expectedResult = parseJobResultViewV2(result(), JOB_ID); await getJobResultViewV2(JOB_ID, undefined, BASE); await getScenarioMediaPlanV2(JOB_ID, { scenarioId: "S06", page: 1, pageSize: 100 }, expectedResult, undefined, BASE); await getValidationViewV2(VALIDATION_ID, undefined, BASE); await getActiveModelPassportV2(undefined, BASE); await getModelOverviewV2(undefined, BASE); await getGeoCatalog(undefined, BASE); await getWorkspaceGeoBudget(undefined, BASE);
-    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([`${BASE}/api/v1/jobs/${JOB_ID}/result-view-v2`, `${BASE}/api/v1/jobs/${JOB_ID}/media-plan-v2?scenario_id=S06&page=1&page_size=100`, `${BASE}/api/v1/validations/${VALIDATION_ID}/view-v2`, `${BASE}/api/v1/models/active-v2`, `${BASE}/api/v1/model/overview-v2`, `${BASE}/api/v1/meta/geo-catalog`, `${BASE}/api/v1/workspace/geo-budget`]);
+  it("uses credentialed fetch and the eight canonical paths", async () => {
+    const values = [result(), plan(), validation(), passport(), overview(), catalog(), workspace(), historicalAvailable()]; const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(response(values.shift()))); vi.stubGlobal("fetch", fetchMock);
+    const expectedResult = parseJobResultViewV2(result(), JOB_ID); await getJobResultViewV2(JOB_ID, undefined, BASE); await getScenarioMediaPlanV2(JOB_ID, { scenarioId: "S06", page: 1, pageSize: 100 }, expectedResult, undefined, BASE); await getValidationViewV2(VALIDATION_ID, undefined, BASE); await getActiveModelPassportV2(undefined, BASE); await getModelOverviewV2(undefined, BASE); await getGeoCatalog(undefined, BASE); await getWorkspaceGeoBudget(undefined, BASE); await getHistoricalModelGeoBudget(undefined, BASE);
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([`${BASE}/api/v1/jobs/${JOB_ID}/result-view-v2`, `${BASE}/api/v1/jobs/${JOB_ID}/media-plan-v2?scenario_id=S06&page=1&page_size=100`, `${BASE}/api/v1/validations/${VALIDATION_ID}/view-v2`, `${BASE}/api/v1/models/active-v2`, `${BASE}/api/v1/model/overview-v2`, `${BASE}/api/v1/meta/geo-catalog`, `${BASE}/api/v1/workspace/geo-budget`, `${BASE}/api/v1/model/historical-geo-budget`]);
     expect(fetchMock.mock.calls.every(([, init]) => init.credentials === "include")).toBe(true);
+  });
+  it("fails closed without falling back to workspace geo-budget", async () => {
+    const fetchMock = stub({ contract_name: "historical_model_geo_budget_v1" });
+    await expect(getHistoricalModelGeoBudget(undefined, BASE)).rejects.toBeInstanceOf(UnsupportedBusinessSemanticsContractError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/model/historical-geo-budget`);
   });
   it("maps stable server coordinates and does not expose the raw payload", async () => { stub({ error: { code: "RESOURCE_NOT_READY", display_text: "private", retryable: true, user_action: "private" } }, 404); await expect(getJobResultViewV2(JOB_ID, undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsNotReadyError); stub({ error: { code: "NOT_FOUND", display_text: "private", retryable: false, user_action: "private" } }, 404); await expect(getGeoCatalog(undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsNotFoundError); stub({ error: { code: "X", display_text: "private", retryable: true, user_action: "private" } }, 503); await expect(getGeoCatalog(undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsUnavailableError); });
   it("validates query before issuing a request", async () => { await expect(getScenarioMediaPlanV2(JOB_ID, { scenarioId: "S06", page: 0 }, parseJobResultViewV2(result(), JOB_ID), undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsQueryError); });

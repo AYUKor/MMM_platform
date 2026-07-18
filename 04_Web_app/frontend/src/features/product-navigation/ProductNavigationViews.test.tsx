@@ -6,10 +6,9 @@ import {
   createHelpCatalogFixture,
   createWorkspaceHomeFixture,
 } from "../../test/productNavigationFixtures";
-import type { GeoCatalogV1 } from "../../shared/api/generated/geo-catalog-v1";
+import type { HistoricalModelGeoBudgetV1 } from "../../shared/api/generated/historical-model-geo-budget-v1";
 import type { ModelOverviewV2 } from "../../shared/api/generated/model-overview-v2";
 import type { ModelPassportV2 } from "../../shared/api/generated/model-passport-v2";
-import type { WorkspaceGeoBudgetV1 } from "../../shared/api/generated/workspace-geo-budget-v1";
 import { HelpCatalogView } from "./HelpCatalogView";
 import { HistoryView } from "./HistoryView";
 import { HomeView } from "./HomeView";
@@ -20,59 +19,71 @@ function renderInRouter(node: React.ReactNode) {
   return render(<MemoryRouter>{node}</MemoryRouter>);
 }
 
-function createGeoCatalogFixture(): GeoCatalogV1 {
+function createHistoricalGeoBudgetFixture(): HistoricalModelGeoBudgetV1 {
+  const totalBudgetRub = 8_687_024_294.654741;
   return {
-    contract_name: "geo_catalog_v1",
+    contract_name: "historical_model_geo_budget_v1",
     schema_version: "1.0.0",
+    record_origin: "verified_model_package_artifact",
+    status: "available",
+    title: "Исторический рекламный бюджет в данных модели",
+    display_text: "Исторические расходы доступны для всех географий.",
+    period_display_text: "Период данных: 01.01.2025 — 31.05.2026",
+    package_id: "pkg_synthetic_history_2026",
+    model_version: "model-synthetic-v1",
+    artifact_id: "artifact_111111111111111111111111",
+    artifact_version: "historical_geo_budget_v1",
     catalog_version: "catalog-synthetic-v1",
-    coordinates_source: "Synthetic test source",
-    coordinates_source_version_or_date: "2026-07-18",
-    coordinates_license: "CC BY 4.0",
-    status: "unavailable",
-    display_text: "Координаты пока не опубликованы.",
+    period_start: "2025-01-01",
+    period_end: "2026-05-31",
+    spend_columns_version: "spend-columns-synthetic-v1",
+    total_budget_rub: totalBudgetRub,
     geographies_n: 2,
     coverage: {
-      status: "unavailable",
-      located_geographies_n: 0,
-      unlocated_geographies_n: 2,
-      unlocated_geographies: [
-        { geo_id: "geo_1111111111111111", geo_display_name: "Москва" },
-        { geo_id: "geo_2222222222222222", geo_display_name: "Казань" },
-      ],
+      status: "available",
+      located_geographies_n: 2,
+      unlocated_geographies_n: 0,
+      unlocated_geographies: [],
+      located_budget_rub: totalBudgetRub,
+      unlocated_budget_rub: 0,
+      unlocated_budget_share: 0,
     },
-    entries: [
-      { geo_id: "geo_1111111111111111", geo_display_name: "Москва", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null },
-      { geo_id: "geo_2222222222222222", geo_display_name: "Казань", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null },
+    rows: [
+      { geo_id: "geo_1111111111111111", geo_display_name: "Москва", latitude: 55.7558, longitude: 37.6173, coordinates_status: "canonical", historical_total_budget_rub: 5_000_000_000, budget_share: 5_000_000_000 / totalBudgetRub, active_days_n: 300, active_rows_n: 800 },
+      { geo_id: "geo_2222222222222222", geo_display_name: "Казань", latitude: 55.7963, longitude: 49.1088, coordinates_status: "canonical", historical_total_budget_rub: totalBudgetRub - 5_000_000_000, budget_share: (totalBudgetRub - 5_000_000_000) / totalBudgetRub, active_days_n: 240, active_rows_n: 620 },
     ],
+    limitations: [{ code: "historical_spend_only", display_text: "Показаны фактические рекламные расходы из данных активной модели." }],
+    updated_at_utc: "2026-07-19T09:00:00Z",
   };
 }
 
-function createGeoBudgetFixture(): WorkspaceGeoBudgetV1 {
+function createUnavailableHistoricalGeoBudgetFixture(): HistoricalModelGeoBudgetV1 {
   return {
-    contract_name: "workspace_geo_budget_v1",
-    schema_version: "1.0.0",
-    catalog_version: "catalog-synthetic-v1",
+    ...createHistoricalGeoBudgetFixture(),
+    record_origin: "model_package_artifact_unavailable",
     status: "unavailable",
-    display_text: "Сводка готова без координат.",
-    total_budget_rub: 12_000_000,
-    campaigns_n: 2,
-    geographies_n: 2,
+    display_text: "Исторические расходы активной модели временно недоступны.",
+    period_display_text: "Период данных временно недоступен.",
+    model_version: null,
+    artifact_id: null,
+    artifact_version: null,
+    period_start: null,
+    period_end: null,
+    spend_columns_version: null,
+    total_budget_rub: null,
+    geographies_n: 0,
     coverage: {
       status: "unavailable",
       located_geographies_n: 0,
-      unlocated_geographies_n: 2,
-      unlocated_geographies: [
-        { geo_id: "geo_1111111111111111", geo_display_name: "Москва" },
-        { geo_id: "geo_2222222222222222", geo_display_name: "Казань" },
-      ],
+      unlocated_geographies_n: 0,
+      unlocated_geographies: [],
       located_budget_rub: 0,
-      unlocated_budget_rub: 12_000_000,
-      unlocated_budget_share: 1,
+      unlocated_budget_rub: 0,
+      unlocated_budget_share: null,
     },
-    rows: [
-      { geo_id: "geo_1111111111111111", geo_display_name: "Москва", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null, total_budget_rub: 7_000_000, campaigns_n: 2, budget_share: 7 / 12 },
-      { geo_id: "geo_2222222222222222", geo_display_name: "Казань", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null, total_budget_rub: 5_000_000, campaigns_n: 1, budget_share: 5 / 12 },
-    ],
+    rows: [],
+    limitations: [{ code: "historical_artifact_unavailable", display_text: "Подтвержденный исторический агрегат для выбранной модели пока не опубликован." }],
+    updated_at_utc: null,
   };
 }
 
@@ -170,8 +181,7 @@ describe("Phase D product-navigation views", () => {
     renderInRouter(
       <HomeView
         home={home}
-        geoBudget={createGeoBudgetFixture()}
-        geoCatalog={createGeoCatalogFixture()}
+        historicalGeoBudget={createHistoricalGeoBudgetFixture()}
         onRefresh={vi.fn()}
       />,
     );
@@ -193,16 +203,41 @@ describe("Phase D product-navigation views", () => {
     expect(within(succeededRow as HTMLElement).getByText("Готов")).toBeInTheDocument();
     expect(within(failedRow as HTMLElement).getByText("Результат")).toBeInTheDocument();
     expect(within(failedRow as HTMLElement).getAllByText("Не готов")).toHaveLength(2);
-    expect(screen.getByRole("heading", { name: "Бюджет проверенных кампаний по географиям" })).toBeInTheDocument();
-    expect(screen.getByText("Карта пока недоступна")).toBeInTheDocument();
-    expect(screen.getByText("Сводка готова без координат.")).toBeInTheDocument();
-    expect(screen.getByText("Без координат: 2 географий")).toBeInTheDocument();
-    expect(screen.getByText(/Бюджет сохранен:/)).toHaveTextContent("12 млн ₽");
-    expect(screen.queryByText("Карта будет доступна после подключения утвержденного справочника координат."))
-      .not.toBeInTheDocument();
-    expect(screen.getByText("Бюджет в проверенных кампаниях").parentElement as HTMLElement)
-      .toHaveTextContent("12 млн ₽");
+    const historicalSection = screen.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
+    }).closest("section");
+    expect(historicalSection).not.toBeNull();
+    expect(within(historicalSection as HTMLElement).getByText("Общий рекламный бюджет").parentElement as HTMLElement)
+      .toHaveTextContent("8,7 млрд ₽");
+    expect(within(historicalSection as HTMLElement).getByText("Географий").parentElement as HTMLElement).toHaveTextContent("2");
+    expect(within(historicalSection as HTMLElement).getByText("Период данных", { exact: true }).parentElement as HTMLElement)
+      .toHaveTextContent("01.01.2025 — 31.05.2026");
+    expect(within(historicalSection as HTMLElement).getByText("Покрытие карты").parentElement as HTMLElement).toHaveTextContent("2 из 2");
+    expect(within(historicalSection as HTMLElement).queryByText("Кампании", { exact: true })).not.toBeInTheDocument();
     expect(screen.getAllByText("Дополнительный оборот").length).toBeGreaterThan(0);
+  });
+
+  it("keeps an unavailable historical artifact controlled without fabricated zero facts", () => {
+    renderInRouter(
+      <HomeView
+        home={createWorkspaceHomeFixture()}
+        historicalGeoBudget={createUnavailableHistoricalGeoBudgetFixture()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Карта пока недоступна", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Исторические расходы активной модели временно недоступны."))
+      .toBeInTheDocument();
+    const historicalSection = screen.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
+    }).closest("section");
+    expect(historicalSection).not.toBeNull();
+    for (const label of ["Общий рекламный бюджет", "Географий", "Период данных", "Покрытие карты"]) {
+      expect(within(historicalSection as HTMLElement).getByText(label, { exact: true }).parentElement as HTMLElement)
+        .toHaveTextContent("Нет данных");
+    }
+    expect(within(historicalSection as HTMLElement).queryByText("0 ₽", { exact: true })).not.toBeInTheDocument();
   });
 
   it("renders history rows from the projection and sends filters back to the page", () => {

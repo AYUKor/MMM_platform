@@ -429,7 +429,7 @@
 .geoBudgetSummary {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) repeat(2, minmax(0, 0.7fr));
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr) repeat(2, minmax(0, 1fr));
   margin: 0;
   border: 1px solid var(--border-default);
   background: var(--surface-primary);
@@ -817,6 +817,9 @@
   .summaryStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .summaryStrip div:nth-child(2) { border-right: 0; }
   .summaryStrip div:nth-child(-n + 2) { border-bottom: 1px solid var(--border-default); }
+  .geoBudgetSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .geoBudgetSummary div:nth-child(even) { border-right: 0; }
+  .geoBudgetSummary div:nth-child(-n + 2) { border-bottom: 1px solid var(--border-default); }
   .scopeStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scopeStrip div:nth-child(even) { border-right: 0; }
   .scopeStrip div { border-bottom: 1px solid var(--border-default); }

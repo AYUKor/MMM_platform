@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import type { HistoricalModelGeoBudgetV1 } from "../../shared/api/generated/historical-model-geo-budget-v1";
 import type { ValidationResultV2 } from "../../shared/api/generated/validation-result-v2";
-import type { WorkspaceGeoBudgetV1 } from "../../shared/api/generated/workspace-geo-budget-v1";
 import { TEST_GEO_CATALOG } from "../../test/businessSemanticsV2Fixtures";
 import {
   InvalidGeoBudgetMapDataError,
+  adaptHistoricalModelGeoBudget,
   adaptValidationGeoBudget,
-  adaptWorkspaceGeoBudget,
   bubbleBrightness,
   bubbleRadius,
   formatGeoPointAccessibleLabel,
@@ -17,52 +17,63 @@ import {
   type GeoBudgetMapPoint,
 } from "./geoBudgetMapModel";
 
-const workspaceCanonical = {
+const HISTORICAL_TOTAL_BUDGET = 8_687_024_294.654741;
+
+const historicalCanonical = {
   geo_id: "geo_moscow",
   geo_display_name: "Москва",
   latitude: 55.7558,
   longitude: 37.6173,
   coordinates_status: "canonical",
-  region_id: "region_moscow",
-  region_display_name: "Москва",
-  total_budget_rub: 300,
-  campaigns_n: 2,
-  budget_share: 0.75,
+  historical_total_budget_rub: 7_000_000_000,
+  budget_share: 7_000_000_000 / HISTORICAL_TOTAL_BUDGET,
+  active_days_n: 500,
+  active_rows_n: 600,
 } as const;
 
-const workspaceUnavailable = {
+const historicalUnavailable = {
   geo_id: "geo_unknown",
   geo_display_name: "Неизвестный город",
   latitude: null,
   longitude: null,
   coordinates_status: "unavailable",
-  region_id: null,
-  region_display_name: null,
-  total_budget_rub: 100,
-  campaigns_n: 1,
-  budget_share: 0.25,
+  historical_total_budget_rub: HISTORICAL_TOTAL_BUDGET - 7_000_000_000,
+  budget_share: (HISTORICAL_TOTAL_BUDGET - 7_000_000_000) / HISTORICAL_TOTAL_BUDGET,
+  active_days_n: 300,
+  active_rows_n: 400,
 } as const;
 
-function workspacePayload(): WorkspaceGeoBudgetV1 {
+function historicalPayload(): HistoricalModelGeoBudgetV1 {
   return {
-    contract_name: "workspace_geo_budget_v1",
+    contract_name: "historical_model_geo_budget_v1",
     schema_version: "1.0.0",
-    catalog_version: "geo_catalog_v1_test",
+    record_origin: "verified_model_package_artifact",
     status: "partial",
-    display_text: "Часть бюджета не привязана к карте.",
-    total_budget_rub: 400,
-    campaigns_n: 3,
+    title: "Исторический рекламный бюджет в данных модели",
+    display_text: "Часть исторического бюджета не привязана к карте.",
+    period_display_text: "Период данных: 01.01.2025 — 31.05.2026",
+    package_id: "pkg_test_historical_model",
+    model_version: "model_test_v1",
+    artifact_id: "artifact_0123456789abcdef01234567",
+    artifact_version: "historical_geo_budget_v1",
+    catalog_version: "geo_catalog_v1_test",
+    period_start: "2025-01-01",
+    period_end: "2026-05-31",
+    spend_columns_version: "spend_columns_v1",
+    total_budget_rub: HISTORICAL_TOTAL_BUDGET,
     geographies_n: 2,
     coverage: {
       status: "partial",
       located_geographies_n: 1,
       unlocated_geographies_n: 1,
       unlocated_geographies: [{ geo_id: "geo_unknown", geo_display_name: "Неизвестный город" }],
-      located_budget_rub: 300,
-      unlocated_budget_rub: 100,
-      unlocated_budget_share: 0.25,
+      located_budget_rub: 7_000_000_000,
+      unlocated_budget_rub: HISTORICAL_TOTAL_BUDGET - 7_000_000_000,
+      unlocated_budget_share: (HISTORICAL_TOTAL_BUDGET - 7_000_000_000) / HISTORICAL_TOTAL_BUDGET,
     },
-    rows: [workspaceCanonical, workspaceUnavailable],
+    rows: [historicalCanonical, historicalUnavailable],
+    limitations: [],
+    updated_at_utc: "2026-07-19T10:00:00Z",
   };
 }
 
@@ -213,13 +224,13 @@ describe("deterministic map ordering and labels", () => {
     expect(source.map((point) => point.geoId)).toEqual(["large", "small-z", "small-a"]);
   });
 
-  it("selects exactly the workspace top ten with deterministic boundary ties", () => {
+  it("selects exactly the historical top ten with deterministic boundary ties", () => {
     const points = Array.from({ length: 11 }, (_, index) => mapPoint({
       geoId: `geo_${index}`,
       geoDisplayName: index === 9 ? "Анапа" : index === 10 ? "Ярославль" : `Город ${index}`,
       budgetRub: index < 9 ? 100 - index : 10,
     }));
-    const labels = selectLabelIds("workspace", points);
+    const labels = selectLabelIds("historical-model", points);
     expect(labels).toHaveLength(10);
     expect(labels.has("geo_9")).toBe(true);
     expect(labels.has("geo_10")).toBe(false);
@@ -260,31 +271,69 @@ describe("deterministic map ordering and labels", () => {
 });
 
 describe("contract adapters", () => {
-  it("maps only canonical workspace rows and preserves server totals and unlocated coverage", () => {
-    const payload = workspacePayload();
-    payload.total_budget_rub = 999;
-    const model = adaptWorkspaceGeoBudget(payload);
+  it("maps only canonical historical rows and preserves exact server totals, period and coverage", () => {
+    const payload = historicalPayload();
+    const model = adaptHistoricalModelGeoBudget(payload);
 
     expect(model).toMatchObject({
-      mode: "workspace",
-      totalBudgetRub: 999,
-      campaignsN: 3,
+      mode: "historical-model",
+      title: "Исторический рекламный бюджет в данных модели",
+      periodDisplayText: "Период данных: 01.01.2025 — 31.05.2026",
+      totalBudgetRub: HISTORICAL_TOTAL_BUDGET,
       geographiesN: 2,
-      maxBudgetRub: 300,
+      maxBudgetRub: 7_000_000_000,
       coverage: {
         status: "partial",
-        locatedBudgetRub: 300,
-        unlocatedBudgetRub: 100,
-        unlocatedBudgetShare: 0.25,
+        locatedBudgetRub: 7_000_000_000,
+        unlocatedBudgetRub: HISTORICAL_TOTAL_BUDGET - 7_000_000_000,
         unlocatedGeographies: [{ geoId: "geo_unknown", geoDisplayName: "Неизвестный город" }],
       },
     });
     expect(model.points).toEqual([expect.objectContaining({
       geoId: "geo_moscow",
-      budgetRub: 300,
-      campaignsN: 2,
+      budgetRub: 7_000_000_000,
+      activeDaysN: 500,
+      activeRowsN: 600,
     })]);
     expect(model.points.some((point) => point.geoId === "geo_unknown")).toBe(false);
+    expect(model.points[0]).not.toHaveProperty("campaignsN");
+  });
+
+  it("preserves controlled historical artifact unavailability without workspace-derived values", () => {
+    const payload = historicalPayload();
+    payload.record_origin = "model_package_artifact_unavailable";
+    payload.status = "unavailable";
+    payload.display_text = "Исторический артефакт модели пока недоступен.";
+    payload.period_display_text = "Период данных недоступен";
+    payload.model_version = null;
+    payload.artifact_id = null;
+    payload.artifact_version = null;
+    payload.period_start = null;
+    payload.period_end = null;
+    payload.spend_columns_version = null;
+    payload.total_budget_rub = null;
+    payload.geographies_n = 0;
+    payload.coverage = {
+      status: "unavailable",
+      located_geographies_n: 0,
+      unlocated_geographies_n: 0,
+      unlocated_geographies: [],
+      located_budget_rub: 0,
+      unlocated_budget_rub: 0,
+      unlocated_budget_share: null,
+    };
+    payload.rows = [];
+    payload.updated_at_utc = null;
+
+    const model = adaptHistoricalModelGeoBudget(payload);
+    expect(model).toMatchObject({
+      mode: "historical-model",
+      totalBudgetRub: null,
+      geographiesN: 0,
+      points: [],
+      maxBudgetRub: 0,
+      coverage: { status: "unavailable" },
+    });
   });
 
   it("maps campaign display fields without a frontend geo or channel dictionary", () => {
@@ -340,11 +389,18 @@ describe("contract adapters", () => {
 });
 
 describe("accessible point copy", () => {
-  it("formats workspace and campaign tooltip content without raw identifiers", () => {
-    const workspaceLabel = formatGeoPointAccessibleLabel("workspace", mapPoint({ campaignsN: 0 }));
-    expect(workspaceLabel).toContain("Москва");
-    expect(workspaceLabel).toContain("Общий бюджет");
-    expect(workspaceLabel).toContain("Кампаний: 0");
+  it("formats historical and campaign tooltip content without raw identifiers", () => {
+    const historicalLabel = formatGeoPointAccessibleLabel(
+      "historical-model",
+      mapPoint({ activeDaysN: 500, activeRowsN: 600 }),
+      "Период данных: 01.01.2025 — 31.05.2026",
+    );
+    expect(historicalLabel).toContain("Москва");
+    expect(historicalLabel).toContain("Исторический рекламный бюджет");
+    expect(historicalLabel).toContain("Доля общего бюджета");
+    expect(historicalLabel).toContain("Дней с рекламной активностью: 500");
+    expect(historicalLabel).toContain("Период данных: 01.01.2025 — 31.05.2026");
+    expect(historicalLabel).not.toContain("Кампаний");
 
     const campaignLabel = formatGeoPointAccessibleLabel("campaign", mapPoint({
       channels: ["Цифровая реклама", "Радио"],

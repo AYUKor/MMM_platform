@@ -94,13 +94,17 @@ As of 2026-07-19:
   campaign maps, pointer tooltip and Escape dismissal pass. Compact/mobile
   behavior is covered by automated Chromium and reviewed responsive
   screenshots;
-- backend Phase E.1E adds `historical_geo_budget_v1`, a deterministic aggregate
+- backend Phase E.1E is merged in PR #27 and adds `historical_geo_budget_v1`, a deterministic aggregate
   of the registered panel's six approved non-overlapping spend columns. The
   package-bound extension manifest preserves the immutable package identity;
   `GET /api/v1/model/historical-geo-budget` verifies that evidence, joins the
   canonical catalog and reads no full panel. The existing workspace geo-budget
-  contract remains application-history evidence. Frontend Phase E.1F must
-  switch only the Home map to the new historical source;
+  contract remains application-history evidence. Frontend Phase E.1F is
+  implemented for review: only Home switches to the historical source, with no
+  workspace fallback; the validation-backed campaign map is unchanged. Local
+  no-interception acceptance passed on 220/220 canonical geographies for
+  2025-01-01 through 2026-05-31 with zero unlocated budget and a clean browser
+  console;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -116,10 +120,11 @@ As of 2026-07-19:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- PRs through #26 are merged. Backend Phase E.1E starts from
-  `origin/main@73b3c0b6a788c1f200877242e36cb59cb253bece` and does not change
-  React rendering, deployment, posterior response mathematics or
-  optimizer/recommendation behavior;
+- PRs through #27 are merged. Frontend Phase E.1F starts from
+  `origin/main@370ea98024c7931dfd92c8ec4e289c6b0116e3da` and changes only the
+  Home source/client semantics plus targeted tests and evidence; it does not
+  change deployment, posterior response mathematics or optimizer/recommendation
+  behavior;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -603,14 +608,22 @@ Each item is a separate reviewable milestone:
     compact accessible disclosure, honest coverage states and local
     attribution. Full local regression, Chromium, live backend and Safari
     desktop evidence passed before owner merge.
-18. Backend Phase E.1E implemented for review: build the package-bound
+18. Backend Phase E.1E completed and merged in PR #27: build the package-bound
     historical model geo-budget aggregate, publish the browser-safe endpoint,
     preserve workspace history as a different source and hand Home over to
     frontend Phase E.1F. Exact real financial evidence stays in ignored local
     package artifacts under the repository company-data rule. Implementation
-    head `ce1efa1d2f1bc8b0e214d2f556667b9a1c5a9048` is published in Ready PR
-    #27; GitHub Actions run `29663175051` passed backend and frontend-quality.
-19. When company-contour or multi-node scale is approved, replace file-backed
+    head `ce1efa1d2f1bc8b0e214d2f556667b9a1c5a9048` passed GitHub Actions run
+    `29663175051` before the owner merge.
+19. Frontend Phase E.1F implemented for review from merged baseline
+    `370ea98024c7931dfd92c8ec4e289c6b0116e3da`: Home uses only
+    `/api/v1/model/historical-geo-budget`; the workspace endpoint remains a
+    compatible non-Home client method and is never used as fallback. The E.1D
+    SVG, projection, scaling, label layout and campaign map remain unchanged.
+    Generated drift, TypeScript, ESLint, 497 frontend tests, production build,
+    18 targeted Chromium cases, one campaign regression, six review screenshots
+    and one real-package no-interception Home acceptance passed locally.
+20. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 
