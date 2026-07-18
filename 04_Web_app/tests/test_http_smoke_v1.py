@@ -502,12 +502,18 @@ class HttpSmokeV1Test(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertEqual(geo_catalog["contract_name"], "geo_catalog_v1")
+        self.assertEqual(geo_catalog["status"], "available")
+        self.assertEqual(geo_catalog["geographies_n"], 220)
+        self.assertEqual(geo_catalog["coverage"]["located_geographies_n"], 220)
+        self.assertEqual(geo_catalog["coordinates_license"], "CC BY 4.0")
 
         status, geo_budget, _ = self._request(
             "GET", "/api/v1/workspace/geo-budget"
         )
         self.assertEqual(status, 200)
         self.assertEqual(geo_budget["contract_name"], "workspace_geo_budget_v1")
+        self.assertEqual(geo_budget["status"], "unavailable")
+        self.assertEqual(geo_budget["coverage"]["unlocated_budget_rub"], 0.0)
 
         status, profile, _ = self._request("GET", "/api/v1/calculation-profile")
         self.assertEqual(status, 200)
@@ -537,7 +543,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.7.0")
+        self.assertEqual(openapi["info"]["version"], "1.8.0")
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view-v2", openapi["paths"])

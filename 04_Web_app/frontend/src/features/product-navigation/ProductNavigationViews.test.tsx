@@ -25,9 +25,21 @@ function createGeoCatalogFixture(): GeoCatalogV1 {
     contract_name: "geo_catalog_v1",
     schema_version: "1.0.0",
     catalog_version: "catalog-synthetic-v1",
+    coordinates_source: "Synthetic test source",
+    coordinates_source_version_or_date: "2026-07-18",
+    coordinates_license: "CC BY 4.0",
     status: "unavailable",
     display_text: "Координаты пока не опубликованы.",
     geographies_n: 2,
+    coverage: {
+      status: "unavailable",
+      located_geographies_n: 0,
+      unlocated_geographies_n: 2,
+      unlocated_geographies: [
+        { geo_id: "geo_1111111111111111", geo_display_name: "Москва" },
+        { geo_id: "geo_2222222222222222", geo_display_name: "Казань" },
+      ],
+    },
     entries: [
       { geo_id: "geo_1111111111111111", geo_display_name: "Москва", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null },
       { geo_id: "geo_2222222222222222", geo_display_name: "Казань", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null },
@@ -45,9 +57,21 @@ function createGeoBudgetFixture(): WorkspaceGeoBudgetV1 {
     total_budget_rub: 12_000_000,
     campaigns_n: 2,
     geographies_n: 2,
+    coverage: {
+      status: "unavailable",
+      located_geographies_n: 0,
+      unlocated_geographies_n: 2,
+      unlocated_geographies: [
+        { geo_id: "geo_1111111111111111", geo_display_name: "Москва" },
+        { geo_id: "geo_2222222222222222", geo_display_name: "Казань" },
+      ],
+      located_budget_rub: 0,
+      unlocated_budget_rub: 12_000_000,
+      unlocated_budget_share: 1,
+    },
     rows: [
-      { geo_id: "geo_1111111111111111", geo_display_name: "Москва", latitude: null, longitude: null, coordinates_status: "unavailable", total_budget_rub: 7_000_000, campaigns_n: 2, budget_share: 7 / 12 },
-      { geo_id: "geo_2222222222222222", geo_display_name: "Казань", latitude: null, longitude: null, coordinates_status: "unavailable", total_budget_rub: 5_000_000, campaigns_n: 1, budget_share: 5 / 12 },
+      { geo_id: "geo_1111111111111111", geo_display_name: "Москва", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null, total_budget_rub: 7_000_000, campaigns_n: 2, budget_share: 7 / 12 },
+      { geo_id: "geo_2222222222222222", geo_display_name: "Казань", latitude: null, longitude: null, coordinates_status: "unavailable", region_id: null, region_display_name: null, total_budget_rub: 5_000_000, campaigns_n: 1, budget_share: 5 / 12 },
     ],
   };
 }

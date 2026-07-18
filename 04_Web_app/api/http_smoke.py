@@ -1132,20 +1132,23 @@ class HttpSmokeApplication:
         return build_model_overview_v2(self.model_overview(), passport)
 
     def geo_catalog(self) -> dict[str, Any]:
-        """Publish catalog identities for geographies already seen by the app."""
+        """Publish the complete versioned catalog for active serving geographies."""
 
-        geographies = {
-            str(geo)
-            for validation in self.state.list_validations()
-            for campaign in validation.get("campaigns") or []
-            for geo in campaign.get("geographies") or []
-        }
-        return build_geo_catalog(geographies)
+        return build_geo_catalog()
 
     def workspace_geo_budget(self) -> dict[str, Any]:
         """Aggregate validated campaign budgets by canonical geography identity."""
 
-        return build_workspace_geo_budget_v1(self.state.list_validations())
+        validation_ids = {
+            str(record["job"].get("validation_id") or "")
+            for record in self.state.list_jobs()
+            if str(record["job"].get("validation_id") or "")
+        }
+        validations = tuple(
+            self.state.read_validation(validation_id)
+            for validation_id in sorted(validation_ids)
+        )
+        return build_workspace_geo_budget_v1(validations)
 
     def validation_view_v2(self, validation_id: str) -> dict[str, Any]:
         """Separate file validity from grouped turnover-model limitations."""

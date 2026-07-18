@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.7.0",
+    "version": "1.8.0",
     "description": "Versioned HTTP boundary for local pilot authentication, administration, campaign upload, validation, asynchronous calculation jobs, browser-safe progress, results, product navigation, model information, help and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -211,7 +211,7 @@
         "operationId": "getGeoCatalogV1",
         "responses": {
           "200": {
-            "description": "Canonical geography identities and explicitly available coordinates",
+            "description": "Complete versioned static geography catalog with canonical coordinates, source metadata and coverage",
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GeoCatalogV1"}}}
           },
           "503": {"$ref": "#/components/responses/ApiError"}
@@ -334,7 +334,7 @@
         "parameters": [{"$ref": "#/components/parameters/ValidationId"}],
         "responses": {
           "200": {
-            "description": "File validation separated from grouped turnover-model limitations",
+            "description": "File validation, turnover-model limitations, canonical geo normalization and map coverage without geo loss",
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ValidationResultV2"}}}
           },
           "404": {"$ref": "#/components/responses/ApiError"},
@@ -379,7 +379,7 @@
         "operationId": "getWorkspaceGeoBudget",
         "responses": {
           "200": {
-            "description": "Validated campaign budgets by canonical geography identity",
+            "description": "Server-aggregated campaign budgets by canonical geography identity with explicit unlocated budget coverage",
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkspaceGeoBudgetV1"}}}
           },
           "409": {"$ref": "#/components/responses/ApiError"},

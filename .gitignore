@@ -81,6 +81,9 @@ CLAUDE.local.md
 *.feather
 *.arrow
 
+# Reviewed browser-safe reference data is versioned with its backend contract.
+!/04_Web_app/data/geo_catalog/*.csv
+
 # Generated data-tree JSON, working state and DQ/report artifacts
 /00_Data/**/*.json
 !/00_Data/**/*schema*.json

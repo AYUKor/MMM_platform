@@ -47,7 +47,8 @@ Phase E.1B frontend rules:
 - use `channel_display_name` for labels and `channel_id` for query/machine
   identity;
 - keep all structured geographies; never parse `... еще N` presentation text;
-- map state remains unavailable while canonical coordinates are null.
+- use backend `map_coverage` and canonical coordinates; for `partial`, keep
+  every unlocated geography and its budget visible.
 
 The v1 `/media-plan` endpoint remains compatible for the merged historical
 frontend. Phase E.1B uses `/media-plan-v2`, which supplies versioned channel
@@ -61,8 +62,8 @@ Current E.1B contract gaps are explicit:
    so Report remains controlled unavailable instead of reading a v1 artifact;
 2. budget publishes `allocation_share`, but no `unallocated_share`; frontend
    shows exact unallocated RUB and does not compute the complement;
-3. canonical coordinates are unavailable, so no map or campaign-relative
-   scatter plot is rendered;
+3. the coordinate contract is ready, but map rendering/base geometry is the
+   separate Phase E.1D milestone;
 4. daily media-plan rows and channel/date matrix remain unavailable.
 
 `workspace_geo_budget_v1` augments the existing workspace Home projection; it
@@ -214,13 +215,17 @@ endpoints:
 6. **Daily scenario media plans и calendar/matrix by date.** Текущие artifacts
    содержат scenario totals по `geo × channel`, но не immutable S01-S06 daily
    rows. Backend Phase C возвращает controlled unavailable.
-7. **Approved map coordinates.** Versioned coordinate catalog отсутствует;
-   backend не использует внешний geocoder и возвращает controlled unavailable.
+7. **Map base/polygon asset.** E.1C закрыл point coordinates и server-side geo
+   aggregates. Источник и лицензия базовой карты/полигонов остаются отдельным
+   решением Phase E.1D; runtime geocoder запрещен.
 8. **Working media-plan XLSX.** Реального отдельного artifact kind нет. CSV не
    маскируется под XLSX; marketer report XLSX остается доступен.
 
 Закрытый после первоначального Phase 2 анализа gap:
 
+- **Approved point coordinates and alias policy.** Backend Phase E.1C добавил
+  `geo_catalog_v1_2026_07_18`, 220/220 serving coverage, explicit partial
+  states и server-side workspace aggregation.
 - **Standalone Model Passport backend contract.** Product API v1.1 добавил
   `GET /api/v1/models/active`; текущий milestone также завершает frontend
   integration. Свободные package/action/role codes остаются скрытыми, пока

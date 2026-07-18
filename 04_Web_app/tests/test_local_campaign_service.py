@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import os
@@ -29,6 +30,7 @@ from services.local_campaign_service import (  # noqa: E402
     LocalCampaignService,
     LocalCampaignServiceSettings,
 )
+from services.business_semantics_v2 import build_validation_result_v2  # noqa: E402
 
 
 REGISTRY_ROOT = EVIDENCE_ROOT / "03_Outputs" / "01_PyMC_outputs" / "00_Model_registry"
@@ -109,7 +111,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
         )
         self.campaign_csv = (
             "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
-            "Local test,ТС5/Онлайн,МОСКВА,Рег_ТВ,2026-08-01,2026-08-07,1000000\n"
+            "Local test,ТС5/Онлайн,г. Москва,Рег_ТВ,2026-08-01,2026-08-07,1000000\n"
         ).encode("utf-8")
 
     def tearDown(self) -> None:
@@ -227,6 +229,17 @@ class LocalCampaignServiceTest(unittest.TestCase):
             path = self.settings.artifact_root / final[key]["storage_key"]
             self.assertTrue(path.is_file())
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), final[key]["sha256"])
+        normalized_path = (
+            self.settings.artifact_root / final["normalized_plan"]["storage_key"]
+        )
+        with normalized_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            normalized_rows = list(csv.DictReader(handle))
+        self.assertEqual(normalized_rows[0]["input_geo_name"], "г. Москва")
+        self.assertEqual(normalized_rows[0]["geo"], "МОСКВА")
+        self.assertEqual(
+            normalized_rows[0]["canonical_geo_display_name"], "Москва"
+        )
+        self.assertEqual(normalized_rows[0]["geo_normalization_status"], "alias")
 
         with patch.object(
             self.service,
@@ -245,6 +258,56 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertEqual(parsed_job.model_selector.package_id, PACKAGE_ID)
         self.assertEqual(parsed_job.sampling.scenario6_attempt_budget, 64)
         self.assertEqual(len(self.submitted_jobs), 1)
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_unknown_geo_keeps_budget_and_map_evidence_when_model_blocks_job(self) -> None:
+        content = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "Partial map,ТС5/Онлайн,г. Москва,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
+            "Partial map,ТС5/Онлайн,НЕИЗВЕСТНОЕ ГЕО,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
+        ).encode("utf-8")
+        upload, _ = self.service.create_upload(
+            filename="partial-map.csv",
+            content=content,
+            idempotency_key="upload-partial-map-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-partial-map-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "invalid")
+        self.assertFalse(final["job_creation_allowed"])
+        self.assertEqual(
+            final["blocking_errors"][0]["code"], "UNSUPPORTED_MODEL_CELLS"
+        )
+        self.assertEqual(final["totals"]["model_input_budget_rub"], 1_000_000.0)
+        normalized_path = (
+            self.settings.artifact_root / final["normalized_plan"]["storage_key"]
+        )
+        view = build_validation_result_v2(
+            final,
+            normalized_plan_path=normalized_path,
+        )
+        self.assertEqual(view["map_coverage"]["status"], "partial")
+        self.assertEqual(view["map_coverage"]["located_geographies_n"], 1)
+        self.assertEqual(view["map_coverage"]["unlocated_geographies_n"], 1)
+        self.assertEqual(
+            view["map_coverage"]["unlocated_budget_rub"], 500_000.0
+        )
+        self.assertEqual(
+            sum(row["budget_rub"] for row in view["geo_points"]),
+            1_000_000.0,
+        )
+        unknown = next(
+            row
+            for row in view["geo_points"]
+            if row["normalization_status"] == "unknown"
+        )
+        self.assertIsNone(unknown["latitude"])
+        self.assertEqual(unknown["budget_rub"], 500_000.0)
 
 
 if __name__ == "__main__":

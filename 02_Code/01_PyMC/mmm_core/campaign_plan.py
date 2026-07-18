@@ -94,6 +94,131 @@ ALIAS_TO_CANONICAL = {
     for alias in aliases
 }
 
+_GEO_SPACE_RE = re.compile(r"\s+")
+_GEO_HYPHEN_RE = re.compile(r"[‐‑‒–—−]")
+
+
+def normalize_geo_alias_name(value: Any) -> str:
+    """Normalize a geo label lexically without fuzzy matching."""
+
+    normalized = str(value or "").strip().upper().replace("Ё", "Е")
+    normalized = _GEO_HYPHEN_RE.sub("-", normalized)
+    return _GEO_SPACE_RE.sub(" ", normalized)
+
+
+def load_geo_alias_catalog(
+    catalog_path: Path,
+    aliases_path: Path,
+) -> dict[str, dict[str, str]]:
+    """Load an explicit fail-closed alias map used before model validation."""
+
+    catalog_rows = _read_csv(catalog_path)
+    alias_rows = _read_csv(aliases_path)
+    canonical_by_id: dict[str, dict[str, str]] = {}
+    catalog_versions: set[str] = set()
+    for row in catalog_rows:
+        geo_id = str(row.get("geo_id") or "").strip()
+        display_name = _clean_text(row.get("geo_display_name"))
+        normalized_name = normalize_geo_alias_name(row.get("geo_normalized_name"))
+        if not geo_id or not display_name or not normalized_name:
+            raise CampaignPlanError("Geo catalog contains an incomplete canonical row")
+        if geo_id in canonical_by_id:
+            raise CampaignPlanError(f"Geo catalog contains duplicate geo_id: {geo_id}")
+        catalog_version = str(row.get("catalog_version") or "").strip()
+        if not catalog_version:
+            raise CampaignPlanError("Geo catalog version is required")
+        catalog_versions.add(catalog_version)
+        canonical_by_id[geo_id] = {
+            "geo_id": geo_id,
+            "geo_display_name": display_name,
+            "geo_normalized_name": normalized_name,
+            "catalog_version": catalog_version,
+        }
+    if not canonical_by_id:
+        raise CampaignPlanError("Geo catalog is empty")
+    if len(catalog_versions) != 1:
+        raise CampaignPlanError("Geo catalog contains multiple catalog versions")
+
+    aliases: dict[str, dict[str, str]] = {}
+    for row in alias_rows:
+        alias = normalize_geo_alias_name(row.get("alias_normalized_name"))
+        canonical_id = str(row.get("canonical_geo_id") or "").strip()
+        canonical = canonical_by_id.get(canonical_id)
+        if not alias or canonical is None:
+            raise CampaignPlanError("Geo alias references an unknown canonical geography")
+        if alias != normalize_geo_alias_name(row.get("alias")):
+            raise CampaignPlanError("Geo alias normalized name is inconsistent")
+        if str(row.get("catalog_version") or "").strip() != canonical[
+            "catalog_version"
+        ]:
+            raise CampaignPlanError("Geo alias catalog version is inconsistent")
+        existing = aliases.get(alias)
+        if existing is not None and existing["geo_id"] != canonical_id:
+            raise CampaignPlanError(f"Geo alias is ambiguous: {alias}")
+        aliases[alias] = {
+            **canonical,
+            "normalization_rule": str(row.get("normalization_rule") or "registered_alias"),
+        }
+    for canonical in canonical_by_id.values():
+        alias = canonical["geo_normalized_name"]
+        resolved = aliases.get(alias)
+        if resolved is None or resolved["geo_id"] != canonical["geo_id"]:
+            raise CampaignPlanError(
+                f"Canonical geography is absent from alias catalog: {alias}"
+            )
+    return aliases
+
+
+def resolve_geo_alias(
+    value: Any,
+    aliases: dict[str, dict[str, str]] | None,
+) -> dict[str, str]:
+    """Resolve a registered alias; unknown labels remain explicit and unchanged."""
+
+    input_name = _GEO_SPACE_RE.sub(" ", _clean_text(value))
+    normalized = normalize_geo_alias_name(input_name)
+    if not normalized:
+        return {
+            "input_geo_name": "",
+            "geo_model_name": "",
+            "canonical_geo_display_name": "",
+            "normalization_status": "unknown",
+            "normalization_rule": "missing_geo",
+        }
+    if aliases is None:
+        return {
+            "input_geo_name": input_name,
+            "geo_model_name": input_name,
+            "canonical_geo_display_name": input_name,
+            "normalization_status": "not_applied",
+            "normalization_rule": "geo_alias_catalog_not_configured",
+        }
+    resolved = aliases.get(normalized)
+    if resolved is None:
+        return {
+            "input_geo_name": input_name,
+            "geo_model_name": input_name,
+            "canonical_geo_display_name": "",
+            "normalization_status": "unknown",
+            "normalization_rule": "no_registered_alias",
+        }
+    rule = resolved["normalization_rule"]
+    return {
+        "input_geo_name": input_name,
+        "geo_model_name": resolved["geo_normalized_name"],
+        "canonical_geo_display_name": resolved["geo_display_name"],
+        "normalization_status": "canonical" if rule == "canonical_name" else "alias",
+        "normalization_rule": rule,
+    }
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 def _clean_text(value: Any) -> str:
     if value is None:
@@ -927,7 +1052,11 @@ class CampaignPrepareResult:
     summary: dict[str, Any]
 
 
-def normalize_campaign_rows(raw_rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def normalize_campaign_rows(
+    raw_rows: list[dict[str, Any]],
+    *,
+    geo_aliases: dict[str, dict[str, str]] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Normalize business campaign rows to a standard schema."""
     normalized: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
@@ -936,7 +1065,8 @@ def normalize_campaign_rows(raw_rows: list[dict[str, Any]]) -> tuple[list[dict[s
         campaign_name = _clean_text(row.get("campaign_name")) or "unknown_campaign"
         creative_name = _clean_text(row.get("creative_name"))
         segment = _clean_text(row.get("segment"))
-        geo = _clean_text(row.get("geo"))
+        geo_resolution = resolve_geo_alias(row.get("geo"), geo_aliases)
+        geo = geo_resolution["geo_model_name"]
         channel = _clean_text(row.get("channel"))
         budget = _parse_money(row.get("budget_rub"))
         dt = _parse_date(row.get("date"))
@@ -968,7 +1098,7 @@ def normalize_campaign_rows(raw_rows: list[dict[str, Any]]) -> tuple[list[dict[s
             continue
 
         source_format = "daily" if dt is not None else "interval"
-        normalized.append({
+        normalized_row = {
             "source_row_id": idx,
             "campaign_name": campaign_name,
             "creative_name": creative_name,
@@ -980,7 +1110,23 @@ def normalize_campaign_rows(raw_rows: list[dict[str, Any]]) -> tuple[list[dict[s
             "end_date": end.isoformat() if end else "",
             "budget_rub": float(budget or 0.0),
             "source_format": source_format,
-        })
+        }
+        if geo_aliases is not None:
+            normalized_row.update(
+                {
+                    "input_geo_name": geo_resolution["input_geo_name"],
+                    "canonical_geo_display_name": geo_resolution[
+                        "canonical_geo_display_name"
+                    ],
+                    "geo_normalization_status": geo_resolution[
+                        "normalization_status"
+                    ],
+                    "geo_normalization_rule": geo_resolution[
+                        "normalization_rule"
+                    ],
+                }
+            )
+        normalized.append(normalized_row)
     if not normalized:
         raise CampaignPlanError("Campaign brief has no valid rows after normalization. See parse issues.")
     return normalized, issues
@@ -1205,12 +1351,45 @@ def prepare_campaign_from_config(
     else:
         raw_rows = read_campaign_brief(campaign_path, sheet_name=sheet_name)
     raw_budget = _raw_budget_summary(raw_rows)
-    normalized_rows, issues = normalize_campaign_rows(raw_rows)
+    strict_cfg = config.get("validation") or {}
+    geo_aliases: dict[str, dict[str, str]] | None = None
+    geo_catalog_audit: dict[str, Any] | None = None
+    geo_catalog_file = strict_cfg.get("geo_catalog_file")
+    geo_alias_catalog_file = strict_cfg.get("geo_alias_catalog_file")
+    if bool(geo_catalog_file) != bool(geo_alias_catalog_file):
+        raise CampaignPlanError(
+            "Both validation.geo_catalog_file and validation.geo_alias_catalog_file "
+            "must be configured together"
+        )
+    if geo_catalog_file and geo_alias_catalog_file:
+        resolved_geo_catalog_path = resolve_path(
+            geo_catalog_file,
+            base_dir=config_path.parent,
+        )
+        resolved_geo_aliases_path = resolve_path(
+            geo_alias_catalog_file,
+            base_dir=config_path.parent,
+        )
+        geo_aliases = load_geo_alias_catalog(
+            resolved_geo_catalog_path,
+            resolved_geo_aliases_path,
+        )
+        catalog_versions = {
+            row["catalog_version"] for row in geo_aliases.values()
+        }
+        geo_catalog_audit = {
+            "catalog_version": next(iter(catalog_versions)),
+            "catalog_sha256": _sha256_file(resolved_geo_catalog_path),
+            "aliases_sha256": _sha256_file(resolved_geo_aliases_path),
+        }
+    normalized_rows, issues = normalize_campaign_rows(
+        raw_rows,
+        geo_aliases=geo_aliases,
+    )
     daily_rows = build_daily_flighting(normalized_rows)
 
     input_total = sum(float(r["budget_rub"]) for r in normalized_rows)
     daily_total = sum(float(r["budget_rub"]) for r in daily_rows)
-    strict_cfg = config.get("validation") or {}
     fail_on_parse_issues = bool(strict_cfg.get("fail_on_parse_issues", True))
     fail_on_unsupported = bool(strict_cfg.get("fail_on_unsupported", True))
 
@@ -1255,6 +1434,42 @@ def prepare_campaign_from_config(
         "raw_rows_n": len(raw_rows),
         "raw_budget": raw_budget,
         "parse_issues_n": len(issues),
+        "geo_normalization": {
+            "catalog_configured": geo_aliases is not None,
+            "catalog_audit": geo_catalog_audit,
+            "canonical_rows_n": sum(
+                row.get("geo_normalization_status") == "canonical"
+                for row in normalized_rows
+            ),
+            "alias_rows_n": sum(
+                row.get("geo_normalization_status") == "alias"
+                for row in normalized_rows
+            ),
+            "unknown_rows_n": sum(
+                row.get("geo_normalization_status") == "unknown"
+                for row in normalized_rows
+            ),
+            "rows": [
+                {
+                    "source_row_id": row["source_row_id"],
+                    "input_geo_name": row.get("input_geo_name", row["geo"]),
+                    "canonical_geo_display_name": (
+                        row.get("canonical_geo_display_name") or row["geo"]
+                        if row.get("geo_normalization_status")
+                        in {"canonical", "alias"}
+                        else None
+                    ),
+                    "normalization_status": row.get(
+                        "geo_normalization_status", "not_applied"
+                    ),
+                    "normalization_rule": row.get(
+                        "geo_normalization_rule",
+                        "geo_alias_catalog_not_configured",
+                    ),
+                }
+                for row in normalized_rows
+            ],
+        },
         "normalized": _campaign_totals(normalized_rows),
         "daily_flighting": _campaign_totals(daily_rows),
         "budget_reconciliation_abs_diff": round(abs(input_total - daily_total), 6),

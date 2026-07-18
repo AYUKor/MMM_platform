@@ -4,6 +4,9 @@
 
 Accepted as the backend prerequisite for future maps.
 
+Implemented by ADR 0023 and catalog `geo_catalog_v1_2026_07_18`; the original
+null-coordinate interim state is historical.
+
 ## Context
 
 The application needs stable geography identities for validation, result and

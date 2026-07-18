@@ -1,5 +1,7 @@
 /* Generated from ../../contracts/validation_result_v2.schema.json. Do not edit manually. */
 
+export type GeoPoint = CanonicalGeoPoint | UnavailableGeoPoint;
+
 export interface ValidationResultV2 {
   contract_name: "validation_result_v2";
   schema_version: "2.0.0";
@@ -35,18 +37,63 @@ export interface ValidationResultV2 {
     why: string;
     recommended_action: string;
   }[];
-  geo_points: {
-    geo_id: string;
-    geo_display_name: string;
-    latitude: number | null;
-    longitude: number | null;
-    coordinates_status: "canonical" | "unavailable";
-    budget_rub: number;
-    budget_share: number | null;
-    channels: {
-      channel_id: string;
-      channel_display_name: string;
-    }[];
-    has_model_limitations: boolean;
+  map_coverage: BudgetCoverage;
+  geo_points: GeoPoint[];
+}
+export interface BudgetCoverage {
+  status: "available" | "partial" | "unavailable";
+  located_geographies_n: number;
+  unlocated_geographies_n: number;
+  unlocated_geographies: GeoIdentity[];
+  located_budget_rub: number;
+  unlocated_budget_rub: number;
+  unlocated_budget_share: number | null;
+}
+export interface GeoIdentity {
+  geo_id: string;
+  geo_display_name: string;
+}
+export interface CanonicalGeoPoint {
+  geo_id: string;
+  geo_display_name: string;
+  input_geo_name: string;
+  canonical_geo_id: string;
+  canonical_geo_display_name: string;
+  normalization_status: "canonical" | "alias";
+  normalization_rule: string;
+  latitude: number;
+  longitude: number;
+  coordinates_status: "canonical";
+  region_id: string;
+  region_display_name: string;
+  budget_rub: number;
+  budget_share: number | null;
+  channels: {
+    channel_id: string;
+    channel_display_name: string;
   }[];
+  has_model_limitations: boolean;
+  model_limitations_n: number;
+}
+export interface UnavailableGeoPoint {
+  geo_id: string;
+  geo_display_name: string;
+  input_geo_name: string;
+  canonical_geo_id: null;
+  canonical_geo_display_name: null;
+  normalization_status: "unknown" | "ambiguous";
+  normalization_rule: string;
+  latitude: null;
+  longitude: null;
+  coordinates_status: "unavailable";
+  region_id: null;
+  region_display_name: null;
+  budget_rub: number;
+  budget_share: number | null;
+  channels: {
+    channel_id: string;
+    channel_display_name: string;
+  }[];
+  has_model_limitations: boolean;
+  model_limitations_n: number;
 }

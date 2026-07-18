@@ -4,7 +4,7 @@
 
 This handoff defines the frozen integration boundary for the future enterprise application. Current package, run, QA, and blocker facts live only in `04_Web_app/CURRENT_TRUTH.md` and must be verified from its cited evidence before implementation.
 
-As of 2026-07-17:
+As of 2026-07-18:
 
 - the verified serving channel is `preprod`;
 - that pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b` with fingerprint `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`;
@@ -29,7 +29,7 @@ As of 2026-07-17:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
-- Product API v1 with OpenAPI `1.6.0` provides readiness, a verified target-grain model passport,
+- Product API v1 with OpenAPI `1.8.0` provides readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
 - backend Phase D adds four additive browser-safe projections for Home,
@@ -57,9 +57,13 @@ As of 2026-07-17:
 - S1 is a source reference with `keep_uploaded_plan` and manual review, never a
   green automatic recommendation. A recommendation still concerns budget
   allocation only, not campaign launch;
-- structured channel identities and `geo_catalog_v1` are available. Machine
-  geo arrays cannot contain shortened presentation strings; coordinates remain
-  null until a reviewed canonical catalog exists;
+- structured channel identities and `geo_catalog_v1` are available. Version
+  `geo_catalog_v1_2026_07_18` contains reviewed static coordinates for all 220
+  active turnover-serving geographies and 402 explicit alias rows. Machine geo
+  arrays cannot contain shortened presentation strings; unknown or ambiguous
+  inputs keep their rows and budget with null coordinates. Alias resolution now
+  happens before model support validation, with separate input, uppercase model
+  key and browser display evidence;
 - `campaign-plan-example-regions-2026.xlsx` passed the E.1A real acceptance at
   45 rows, 15 geographies, three channels and 267,818,706 RUB. Full approved
   capacity was insufficient: S5 published 173,912,511 RUB as `safe_partial`,
@@ -69,6 +73,15 @@ As of 2026-07-17:
   skips, TypeScript, ESLint, all 392 frontend unit tests and the production
   build. No refit or MCMC was performed; the real turnover-only optimizer
   acceptance was repeated after review fixes;
+- the E.1C map-data acceptance reads that same control Excel through the web
+  parser and confirms 45 rows, 15 geographies, three channels, 267,818,706 RUB,
+  15/15 coordinates, zero unlocated budget and no truncated machine data. The
+  active package coverage guard separately passes 220/220. Workspace map
+  aggregation reads job-backed validations and deduplicates repeated validation
+  references. Full QA passed 155 web/backend tests with 12 skips, 85 MMM core
+  tests with two skips, generated
+  TypeScript drift, typecheck, ESLint, 463 frontend unit tests and production
+  build;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -84,11 +97,11 @@ As of 2026-07-17:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current Backend Phase E.1A branch starts from
-  `origin/main@7d731843d6e79fb73b20ac855fba3643b8def7a7`, which includes merged
-  PRs through #22. E.1A changes the serving target list, S5/S6 allocation
-  constraints, marketer reporting and additive browser contracts; it does not
-  change posterior response mathematics, React or deployment;
+- current Backend Phase E.1C branch starts from
+  `origin/main@a404720fcdcec82825338549044a3a5b614b79dc`, which includes merged
+  PRs through #24. E.1C changes static geo data, map-ready backend projections,
+  contracts and guards; it does not change posterior response mathematics,
+  optimizer/recommendation behavior, React rendering or deployment;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -97,7 +110,7 @@ As of 2026-07-17:
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
-## Phase E.1A Integration Boundary
+## Phase E.1A-E.1C Integration Boundary
 
 New frontend work must prefer these additive endpoints:
 
@@ -109,8 +122,8 @@ New frontend work must prefer these additive endpoints:
 - `GET /api/v1/meta/geo-catalog`;
 - `GET /api/v1/workspace/geo-budget`.
 
-The existing v1 result/model endpoints remain compatible for the merged
-frontend and historical jobs. They must not be used to reconstruct E.1A
+The existing v1 result/model endpoints remain compatible for historical jobs.
+The merged E.1B frontend uses v2 semantics; v1 must not be used to reconstruct E.1A
 business semantics. In particular, frontend code must not derive ROAS,
 risk-budget shares, S5 feasibility, S6 feasibility, recommendation status or
 channel display names from legacy fields.
@@ -120,6 +133,15 @@ aggregates. It publishes `channel_id`, `channel_display_name`, `geo_id` and
 `geo_display_name`; frontend code must not maintain its own channel dictionary
 or join loose optimizer CSV files.
 
+The map source boundary is also server-owned:
+
+- `/meta/geo-catalog` publishes the complete static catalog and attribution;
+- validation `view-v2` publishes campaign geo points, money, channels,
+  limitations, normalization evidence and `map_coverage`;
+- `/workspace/geo-budget` publishes canonical server aggregates and coverage;
+- frontend must not geocode, guess aliases, drop unknown budget or aggregate
+  history into replacement map metrics.
+
 The v2 semantic validator is a backend decision boundary, not only a JSON
 shape check. It fails closed when money does not reconcile, S6 is partial, a
 safe-partial S5 is marked recommended, a high-risk plan is promoted, a geo list
@@ -127,6 +149,8 @@ is shortened, or a diagnostic target leaks into the primary result.
 
 Detailed migration, benchmark and real-campaign evidence are in
 `04_Web_app/docs/integration/BACKEND_PHASE_E1A_BUSINESS_SEMANTICS_V1.md`.
+Geo source, alias and Phase E.1D handoff evidence is in
+`04_Web_app/docs/integration/BACKEND_PHASE_E1C_GEO_CATALOG_V1.md`.
 
 ## Existing Calculation Boundary To Reuse
 
