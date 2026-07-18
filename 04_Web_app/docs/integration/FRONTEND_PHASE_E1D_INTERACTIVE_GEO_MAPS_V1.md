@@ -167,9 +167,9 @@ non-blocking; the measured delta introduces no new runtime library.
 | Fixture/full Playwright | passed: 177 tests across all six visual/product specs |
 | Chromium automated | passed: 177 fixture + 1 live test |
 | Live backend, no interception | passed: real control job and validation, including Excel download |
-| Safari manual smoke | desktop login/Home/map passed; remaining campaign/compact checks pending host unlock |
+| Safari manual smoke | passed on live desktop Home/workspace and campaign maps; pointer tooltip and Escape dismissal verified |
 | Light/dark/mobile screenshots | passed visual review: 20 PNG |
-| Pull Request / final CI / head SHA | `PENDING_E1D_FINAL` |
+| Pull Request / final CI / head SHA | Draft PR #26; final CI and head SHA pending |
 
 Browser evidence and screenshot inventory are recorded in
 `docs/ui-review/phase-e1d-interactive-geo-maps-v1/REVIEW_NOTES.md`.
@@ -188,3 +188,6 @@ Browser evidence and screenshot inventory are recorded in
    remain backend facts.
 4. Zero-budget canonical geographies remain in the detailed list but do not
    create misleading active bubbles.
+5. Safari manual smoke covers the live desktop layout. Compact/mobile layout is
+   covered by automated Chromium and reviewed responsive screenshots rather
+   than Safari device emulation.

@@ -2,8 +2,8 @@
 
 ## Статус evidence
 
-Review status: **20 fixture screenshots reviewed; local regression, Chromium
-and live backend acceptance passed. Safari completion and PR CI are PENDING**.
+Review status: **20 fixture screenshots reviewed; local regression, Chromium,
+live backend acceptance and Safari desktop smoke passed. PR CI is PENDING**.
 
 Baseline:
 `origin/main@3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`
@@ -12,9 +12,9 @@ Baseline:
 Branch:
 `codex/frontend-phase-e1d-interactive-geo-maps-v1`.
 
-Pull Request: `PENDING_E1D_FINAL`.
+Pull Request: **#26** (Draft until final CI is green).
 
-Head SHA: `PENDING_E1D_FINAL`.
+Implementation commit: `3e2efc2`; final evidence head is tracked by PR #26.
 
 Файлы ниже созданы fixture E2E и не являются доказательством live backend
 result. Они проверяют review states на synthetic contract fixtures. Live
@@ -88,7 +88,8 @@ PNG не выдаются за live backend evidence.
 - [x] Final visual inspection всех 20 PNG.
 - [x] Chromium automated acceptance: 177 fixture + 1 live test.
 - [x] Live backend acceptance без interception.
-- [ ] Safari manual smoke: `PENDING_E1D_FINAL`.
+- [x] Safari manual smoke: live desktop Home/workspace and campaign maps,
+      pointer tooltip and Escape dismissal.
 - [ ] Pull Request CI и final head SHA: `PENDING_E1D_FINAL`.
 
 ## Automated quality gates
@@ -103,8 +104,8 @@ PNG не выдаются за live backend evidence.
 | Fixture/full Playwright | passed | 177/177 across all six visual/product specs |
 | Chromium automated | passed | 177 fixture tests plus one live acceptance |
 | Live E.1D acceptance | passed | real backend; no route interception |
-| Safari manual smoke | `PENDING_E1D_FINAL` | must be recorded after manual review |
-| GitHub Pull Request CI | `PENDING_E1D_FINAL` | PR/head not yet frozen in this note |
+| Safari manual smoke | passed | live desktop Home/workspace and campaign maps; pointer tooltip and Escape dismissal |
+| GitHub Pull Request CI | `PENDING_E1D_FINAL` | Draft PR #26; final head not yet frozen in this note |
 
 ## Live backend acceptance
 
@@ -120,18 +121,24 @@ acceptance also downloaded and byte-checked the real ready Excel artifact.
 
 ## Safari manual smoke
 
-Status: **partial; completion waits for host unlock**.
+Status: **passed for the live desktop layout**.
 
-Safari accepted the real local login/session, rendered the Home page from the
-live backend and exposed 15 native marker buttons with exact city, budget,
-share and campaign accessible names. The page showed the backend total
+Safari accepted the real local login/session and rendered the Home workspace
+map from the live backend. It exposed 15 native marker buttons with exact city,
+budget, share and campaign accessible names, showed the backend total
 267.8 million RUB, 15 geographies, the top-10 label policy and both visible
 attribution lines without a crash or raw channel names.
 
-The final Safari record must cover desktop and compact layouts, keyboard and
-pointer tooltip behavior, campaign label toggle/list, partial/unavailable
-states, clipping/overlap and the absence of horizontal overflow. Safari smoke
-supplements but does not replace Chromium automation or live acceptance.
+The same session opened the live control validation review: 45 rows, 15/15
+canonical geographies, three human-readable channels, 267.8 million RUB and 15
+campaign markers/labels. Pointer activation opened the Санкт-Петербург tooltip
+with budget, share, channels and limitation count; Escape dismissed it. No
+Safari-specific rendering or interaction failure was observed.
+
+Compact/mobile, keyboard traversal, partial/unavailable states, clipping,
+overlap and horizontal-overflow boundaries remain covered by Chromium
+automation and the reviewed responsive screenshot matrix. Safari manual smoke
+supplements but does not replace those deterministic gates.
 
 ## Known limitations
 
@@ -147,3 +154,5 @@ supplements but does not replace Chromium automation or live acceptance.
 5. Campaign `map_coverage` has no backend display text, so the unavailable
    sentence is neutral frontend copy while all counts and money remain backend
    facts.
+6. Safari manual smoke covers live desktop behavior; compact/mobile is not a
+   Safari device-emulation claim.

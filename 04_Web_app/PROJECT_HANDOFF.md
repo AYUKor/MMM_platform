@@ -92,9 +92,10 @@ As of 2026-07-18:
   workspace keeps top-5 permanently; compact campaign exposes every name
   through an accessible toggle/list. Generated drift, TypeScript, ESLint,
   483 unit/component tests, the build, 177 fixture-browser tests and one real
-  no-interception live acceptance pass. Safari desktop login/Home/map pass;
-  campaign/compact Safari completion, PR number, final head SHA and final CI
-  remain pending;
+  no-interception live acceptance pass. Safari desktop login/Home/workspace and
+  campaign maps, pointer tooltip and Escape dismissal pass. Draft PR #26 is
+  open; final head SHA and final CI remain pending. Compact/mobile behavior is
+  covered by automated Chromium and reviewed responsive screenshots;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -588,8 +589,8 @@ Each item is a separate reviewable milestone:
     `GeoBudgetMap` with workspace/campaign modes, collision-aware labels,
     compact accessible disclosure, honest coverage states and local
     attribution. Full local regression, Chromium and live backend evidence pass;
-    Safari campaign/compact completion, final PR number/head and GitHub CI remain
-    pending. Do not mark the milestone merged before those records are frozen
+    Safari live desktop smoke is complete and Draft PR #26 is open; final head
+    and GitHub CI remain pending. Do not mark the milestone merged before those records are frozen
     and the owner merges it.
 18. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
