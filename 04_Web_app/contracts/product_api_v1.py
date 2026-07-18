@@ -191,6 +191,12 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
             "ответственному за сервис."
         ),
     },
+    "HISTORICAL_MODEL_GEO_BUDGET_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Исторические расходы активной модели временно недоступны.",
+        "user_action": "Обновите страницу позже или сообщите ответственному за инструмент.",
+    },
     "PRODUCT_NAVIGATION_INCONSISTENT": {
         "http_status": 409,
         "retryable": False,

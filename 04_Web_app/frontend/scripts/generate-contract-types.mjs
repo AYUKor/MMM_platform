@@ -66,6 +66,11 @@ const contracts = [
     output: "workspace-geo-budget-v1.ts",
   },
   {
+    schema: "historical_model_geo_budget_v1.schema.json",
+    typeName: "HistoricalModelGeoBudgetV1",
+    output: "historical-model-geo-budget-v1.ts",
+  },
+  {
     schema: "scenario_media_plan_v1.schema.json",
     typeName: "ScenarioMediaPlanV1",
     output: "scenario-media-plan-v1.ts",

@@ -5,8 +5,11 @@ name: Web app contracts
     paths:
       - "04_Web_app/**"
       - "02_Code/01_PyMC/mmm_core/model_registry.py"
+      - "02_Code/01_PyMC/mmm_core/historical_geo_budget.py"
+      - "02_Code/01_PyMC/configs/historical_geo_budget_spend_columns_v1.json"
       - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
       - "02_Code/01_PyMC/tests/test_model_registry.py"
+      - "02_Code/01_PyMC/tests/test_historical_geo_budget.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
       - "02_Code/03_AC_forecast/ac_forecast.py"
       - ".github/workflows/webapp-contracts.yml"
@@ -16,8 +19,11 @@ name: Web app contracts
     paths:
       - "04_Web_app/**"
       - "02_Code/01_PyMC/mmm_core/model_registry.py"
+      - "02_Code/01_PyMC/mmm_core/historical_geo_budget.py"
+      - "02_Code/01_PyMC/configs/historical_geo_budget_spend_columns_v1.json"
       - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
       - "02_Code/01_PyMC/tests/test_model_registry.py"
+      - "02_Code/01_PyMC/tests/test_historical_geo_budget.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
       - "02_Code/03_AC_forecast/ac_forecast.py"
       - ".github/workflows/webapp-contracts.yml"
@@ -43,6 +49,7 @@ jobs:
           python -m pip install
           "jsonschema>=4.21,<5"
           "pandas==3.0.1"
+          "pyarrow==23.0.1"
           "openpyxl==3.1.5"
           "argon2-cffi==25.1.0"
 
@@ -51,6 +58,9 @@ jobs:
 
       - name: Run model registry serving-mode tests
         run: python -B -m unittest 02_Code/01_PyMC/tests/test_model_registry.py -v
+
+      - name: Run historical geo-budget artifact tests
+        run: python -B -m unittest 02_Code/01_PyMC/tests/test_historical_geo_budget.py -v
 
   frontend-quality:
     runs-on: ubuntu-latest

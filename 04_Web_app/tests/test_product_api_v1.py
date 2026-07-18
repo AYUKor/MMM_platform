@@ -98,6 +98,7 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/meta/geo-catalog", document["paths"])
         self.assertIn("/api/v1/workspace/home", document["paths"])
         self.assertIn("/api/v1/workspace/geo-budget", document["paths"])
+        self.assertIn("/api/v1/model/historical-geo-budget", document["paths"])
         self.assertIn("/api/v1/calculations/history", document["paths"])
         self.assertIn("/api/v1/model/overview", document["paths"])
         self.assertIn("/api/v1/model/overview-v2", document["paths"])
@@ -108,7 +109,7 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/help/catalog", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.8.0")
+        self.assertEqual(document["info"]["version"], "1.9.0")
         for schema_name in (
             "JobResultViewV2",
             "ValidationResultV2",
@@ -116,6 +117,7 @@ class ProductApiContractTest(unittest.TestCase):
             "ModelOverviewV2",
             "GeoCatalogV1",
             "WorkspaceGeoBudgetV1",
+            "HistoricalModelGeoBudgetV1",
             "ScenarioMediaPlanV2",
         ):
             self.assertRegex(

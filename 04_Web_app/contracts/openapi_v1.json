@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "description": "Versioned HTTP boundary for local pilot authentication, administration, campaign upload, validation, asynchronous calculation jobs, browser-safe progress, results, product navigation, model information, help and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -437,6 +437,18 @@
         }
       }
     },
+    "/api/v1/model/historical-geo-budget": {
+      "get": {
+        "operationId": "getHistoricalModelGeoBudget",
+        "responses": {
+          "200": {
+            "description": "Historical media spend from the active model panel, aggregated by canonical geography",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HistoricalModelGeoBudgetV1"}}}
+          },
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
     "/api/v1/help/catalog": {
       "get": {
         "operationId": "getHelpCatalog",
@@ -716,6 +728,7 @@
       "ModelOverviewV2": {"$ref": "/api/v1/contracts/model-overview-v2.json"},
       "GeoCatalogV1": {"$ref": "/api/v1/contracts/geo-catalog-v1.json"},
       "WorkspaceGeoBudgetV1": {"$ref": "/api/v1/contracts/workspace-geo-budget-v1.json"},
+      "HistoricalModelGeoBudgetV1": {"$ref": "/api/v1/contracts/historical-model-geo-budget-v1.json"},
       "ScenarioMediaPlan": {"$ref": "./contracts/scenario-media-plan-v1.json"},
       "ScenarioMediaPlanV2": {"$ref": "/api/v1/contracts/scenario-media-plan-v2.json"},
       "MmmFactCatalog": {"$ref": "./contracts/mmm-fact-catalog-v1.json"},

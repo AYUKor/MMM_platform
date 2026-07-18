@@ -4,7 +4,7 @@
 
 This handoff defines the frozen integration boundary for the future enterprise application. Current package, run, QA, and blocker facts live only in `04_Web_app/CURRENT_TRUTH.md` and must be verified from its cited evidence before implementation.
 
-As of 2026-07-18:
+As of 2026-07-19:
 
 - the verified serving channel is `preprod`;
 - that pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b` with fingerprint `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`;
@@ -29,7 +29,7 @@ As of 2026-07-18:
 - localhost HTTP API, canonical upload, model-aware validation, recoverable
   local runtime, ResultOverview delivery, and hash-checked downloads are
   implemented and have passed a real preprod-package E2E job;
-- Product API v1 with OpenAPI `1.8.0` provides readiness, a verified target-grain model passport,
+- Product API v1 with OpenAPI `1.9.0` provides readiness, a verified target-grain model passport,
   stable HTTP errors, OpenAPI/JSON Schema discovery, paginated history,
   local/research deployment profiles and safe terminal-resource retention;
 - backend Phase D adds four additive browser-safe projections for Home,
@@ -82,9 +82,7 @@ As of 2026-07-18:
   tests with two skips, generated
   TypeScript drift, typecheck, ESLint, 463 frontend unit tests and production
   build;
-- Frontend Phase E.1D is implemented on the unmerged branch
-  `codex/frontend-phase-e1d-interactive-geo-maps-v1` from merged PR #25
-  baseline `3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`. One typed
+- Frontend Phase E.1D is merged in PR #26. One typed
   `GeoBudgetMap` renders workspace and campaign budget points with a local
   static outline, fixed Albers projection, sqrt budget scaling, coverage
   states and accessible tooltips. Desktop labels are collision-aware:
@@ -93,9 +91,16 @@ As of 2026-07-18:
   through an accessible toggle/list. Generated drift, TypeScript, ESLint,
   483 unit/component tests, the build, 177 fixture-browser tests and one real
   no-interception live acceptance pass. Safari desktop login/Home/workspace and
-  campaign maps, pointer tooltip and Escape dismissal pass. Draft PR #26 is
-  open; final head SHA and final CI remain pending. Compact/mobile behavior is
-  covered by automated Chromium and reviewed responsive screenshots;
+  campaign maps, pointer tooltip and Escape dismissal pass. Compact/mobile
+  behavior is covered by automated Chromium and reviewed responsive
+  screenshots;
+- backend Phase E.1E adds `historical_geo_budget_v1`, a deterministic aggregate
+  of the registered panel's six approved non-overlapping spend columns. The
+  package-bound extension manifest preserves the immutable package identity;
+  `GET /api/v1/model/historical-geo-budget` verifies that evidence, joins the
+  canonical catalog and reads no full panel. The existing workspace geo-budget
+  contract remains application-history evidence. Frontend Phase E.1F must
+  switch only the Home map to the new historical source;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -111,12 +116,10 @@ As of 2026-07-18:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- PRs through #25 are merged. Current Frontend Phase E.1D branch starts from
-  `origin/main@3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`. E.1D changes only React
-  map rendering, local static map assets, frontend tests and documentation; it
-  does not change backend, contracts, posterior response mathematics,
-  optimizer/recommendation behavior or deployment. Its PR/head and final CI
-  remain pending;
+- PRs through #26 are merged. Backend Phase E.1E starts from
+  `origin/main@73b3c0b6a788c1f200877242e36cb59cb253bece` and does not change
+  React rendering, deployment, posterior response mathematics or
+  optimizer/recommendation behavior;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -125,7 +128,7 @@ As of 2026-07-18:
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
-## Phase E.1A-E.1D Integration Boundary
+## Phase E.1A-E.1F Integration Boundary
 
 New frontend work must prefer these additive endpoints:
 
@@ -135,7 +138,8 @@ New frontend work must prefer these additive endpoints:
 - `GET /api/v1/models/active-v2`;
 - `GET /api/v1/model/overview-v2`;
 - `GET /api/v1/meta/geo-catalog`;
-- `GET /api/v1/workspace/geo-budget`.
+- `GET /api/v1/workspace/geo-budget`;
+- `GET /api/v1/model/historical-geo-budget`.
 
 The existing v1 result/model endpoints remain compatible for historical jobs.
 The merged E.1B frontend uses v2 semantics; v1 must not be used to reconstruct E.1A
@@ -154,8 +158,16 @@ The map source boundary is also server-owned:
 - validation `view-v2` publishes campaign geo points, money, channels,
   limitations, normalization evidence and `map_coverage`;
 - `/workspace/geo-budget` publishes canonical server aggregates and coverage;
+- `/model/historical-geo-budget` publishes package-bound historical model
+  spend for Home without reading the source panel;
 - frontend must not geocode, guess aliases, drop unknown budget or aggregate
   history into replacement map metrics.
+
+The workspace and historical contracts are not interchangeable. Workspace
+means campaigns processed by the application. Historical model geo budget
+means the six approved media-spend columns in the panel registered to the
+selected package. Frontend Phase E.1F switches only Home to the historical
+contract and keeps the campaign map on validation `view-v2`.
 
 The E.1D renderer preserves that ownership boundary:
 
@@ -186,6 +198,9 @@ Geo source, alias and Phase E.1D handoff evidence is in
 Frontend renderer, projection, source/license and review-state evidence is in
 `04_Web_app/docs/integration/FRONTEND_PHASE_E1D_INTERACTIVE_GEO_MAPS_V1.md` and
 `04_Web_app/docs/ui-review/phase-e1d-interactive-geo-maps-v1/REVIEW_NOTES.md`.
+Historical artifact, endpoint and frontend source-switch evidence is in
+`04_Web_app/docs/integration/BACKEND_PHASE_E1E_HISTORICAL_MODEL_GEO_BUDGET_V1.md`
+and `04_Web_app/docs/frontend/FRONTEND_PHASE_E1F_HISTORICAL_HOME_MAP_HANDOFF_V1.md`.
 
 ## Existing Calculation Boundary To Reuse
 
@@ -583,16 +598,17 @@ Each item is a separate reviewable milestone:
     error responses.
     The browser login/admin screens, corporate SSO, MFA, password recovery and
     multi-node session storage remain outside this backend milestone.
-17. Frontend Phase E.1D source implementation is present on
-    `codex/frontend-phase-e1d-interactive-geo-maps-v1` from baseline
-    `3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`: integrate one fixed-projection
+17. Frontend Phase E.1D is completed and merged in PR #26: one fixed-projection
     `GeoBudgetMap` with workspace/campaign modes, collision-aware labels,
     compact accessible disclosure, honest coverage states and local
-    attribution. Full local regression, Chromium and live backend evidence pass;
-    Safari live desktop smoke is complete and Draft PR #26 is open; final head
-    and GitHub CI remain pending. Do not mark the milestone merged before those records are frozen
-    and the owner merges it.
-18. When company-contour or multi-node scale is approved, replace file-backed
+    attribution. Full local regression, Chromium, live backend and Safari
+    desktop evidence passed before owner merge.
+18. Backend Phase E.1E implemented for review: build the package-bound
+    historical model geo-budget aggregate, publish the browser-safe endpoint,
+    preserve workspace history as a different source and hand Home over to
+    frontend Phase E.1F. Exact real financial evidence stays in ignored local
+    package artifacts under the repository company-data rule.
+19. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 

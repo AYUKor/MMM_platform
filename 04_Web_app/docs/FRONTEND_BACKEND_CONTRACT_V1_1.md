@@ -1,4 +1,4 @@
-# Frontend Handoff: Backend Product API v1.7
+# Frontend Handoff: Backend Product API v1.9
 
 ## What Is Stable
 
@@ -21,8 +21,10 @@ Stable result contracts:
 - `JobResultView v2`, `ScenarioMediaPlan v2`, `ValidationResult v2`,
   `ModelPassport v2` and `ModelOverview v2`: turnover-only E.1A product
   semantics;
-- `GeoCatalog v1` and `WorkspaceGeoBudget v1`: map-ready identities and
-  explicit coordinate availability without guessed points.
+- `GeoCatalog v1`, `WorkspaceGeoBudget v1` and
+  `HistoricalModelGeoBudget v1`: map-ready identities, separate workspace and
+  model-history budget meanings, and explicit coordinate availability without
+  guessed points.
 
 ## Authentication Boundary
 
@@ -51,7 +53,8 @@ backend validates both Origin and Host.
 | `GET /api/v1/models/active-v2` | Show turnover-only serving policy and four active serving fits. |
 | `GET /api/v1/model/overview-v2` | Show the turnover-only product model summary. |
 | `GET /api/v1/meta/geo-catalog` | Resolve canonical geo identities and coordinate availability. |
-| `GET /api/v1/workspace/geo-budget` | Load reconciled budget by geo for a future map/list view. |
+| `GET /api/v1/workspace/geo-budget` | Load processed-application campaign budget by geo for workspace/history views. |
+| `GET /api/v1/model/historical-geo-budget` | Load historical approved media spend from the selected model data for the Home map. |
 | `GET /api/v1/meta/errors` | Map stable error codes to user actions. |
 | `GET /api/v1/meta/mmm-facts` | Load reviewed optional MMM facts without live generation. |
 | `GET /api/v1/openapi.json` | Machine-readable route specification. |
@@ -74,6 +77,7 @@ backend validates both Origin and Host.
 | `GET /api/v1/contracts/model-overview-v2.json` | Turnover-only model overview schema. |
 | `GET /api/v1/contracts/geo-catalog-v1.json` | Canonical geo catalog schema. |
 | `GET /api/v1/contracts/workspace-geo-budget-v1.json` | Workspace geo-budget schema. |
+| `GET /api/v1/contracts/historical-model-geo-budget-v1.json` | Historical model geo-budget schema. |
 
 ## Administration
 

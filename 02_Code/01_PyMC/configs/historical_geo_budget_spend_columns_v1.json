@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "spend_columns_version": "historical_geo_budget_spend_columns_v1",
+  "date_column": "date",
+  "geo_column": "geo_label",
+  "spend_columns": [
+    "spend_Digital_Performance",
+    "spend_OOH_Total",
+    "spend_Indoor",
+    "spend_Радио",
+    "spend_Нац_ТВ",
+    "spend_Рег_ТВ"
+  ],
+  "forbidden_overlaps": [
+    {
+      "aggregate_column": "spend_OOH_Total",
+      "component_columns": [
+        "spend_OOH",
+        "spend_ООН_РТБ"
+      ]
+    }
+  ],
+  "null_policy": "fail_closed",
+  "negative_policy": "fail_closed",
+  "infinite_policy": "fail_closed"
+}
