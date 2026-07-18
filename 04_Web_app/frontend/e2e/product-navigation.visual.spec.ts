@@ -5,7 +5,6 @@ import type {
   CalculationHistoryV1,
   HistoryItem,
 } from "../src/shared/api/generated/calculation-history-v1";
-import type { WorkspaceGeoBudgetV1 } from "../src/shared/api/generated/workspace-geo-budget-v1";
 import {
   createCalculationHistoryFixture,
   createHelpCatalogFixture,
@@ -13,20 +12,20 @@ import {
 } from "../src/test/productNavigationFixtures";
 import { installAuthenticatedAdminSession } from "./support/auth";
 import {
-  createGeoCatalogFixture,
+  createHistoricalModelGeoBudgetFixture,
   createModelOverviewV2Fixture,
   createModelPassportV2Fixture,
-  createWorkspaceGeoBudgetFixture,
+  createPartialHistoricalModelGeoBudgetFixture,
+  createUnavailableHistoricalModelGeoBudgetFixture,
 } from "./support/business-semantics-fixtures";
 
 const GEO_REVIEW_DIRECTORY = fileURLToPath(
-  new URL("../../docs/ui-review/phase-e1d-interactive-geo-maps-v1/", import.meta.url),
+  new URL("../../docs/ui-review/phase-e1f-historical-home-map-v1/", import.meta.url),
 );
 
 const ALLOWED_PATHS = new Set([
   "/api/v1/workspace/home",
-  "/api/v1/workspace/geo-budget",
-  "/api/v1/meta/geo-catalog",
+  "/api/v1/model/historical-geo-budget",
   "/api/v1/calculations/history",
   "/api/v1/models/active-v2",
   "/api/v1/model/overview-v2",
@@ -48,14 +47,12 @@ const FORBIDDEN_COPY = [
 
 interface NavigationOptions {
   home?: unknown;
-  geoBudget?: unknown;
-  geoCatalog?: unknown;
+  historicalGeoBudget?: unknown;
   passport?: unknown;
   model?: unknown;
   help?: unknown;
   status?: number;
-  geoBudgetStatus?: number;
-  geoCatalogStatus?: number;
+  historicalGeoBudgetStatus?: number;
   delayMs?: number;
   geoDelayMs?: number;
 }
@@ -84,94 +81,6 @@ function errorPayload(displayText = "Сведения временно недо�
       retryable: true,
       user_action: "Повторите запрос позже.",
     },
-  };
-}
-
-function unavailableWorkspaceRow(
-  row: WorkspaceGeoBudgetV1["rows"][number],
-): WorkspaceGeoBudgetV1["rows"][number] {
-  return {
-    geo_id: row.geo_id,
-    geo_display_name: row.geo_display_name,
-    latitude: null,
-    longitude: null,
-    coordinates_status: "unavailable",
-    region_id: null,
-    region_display_name: null,
-    total_budget_rub: row.total_budget_rub,
-    campaigns_n: row.campaigns_n,
-    budget_share: row.budget_share,
-  };
-}
-
-function createPartialWorkspaceGeoBudgetFixture(): WorkspaceGeoBudgetV1 {
-  const source = createWorkspaceGeoBudgetFixture();
-  const unlocatedSource = source.rows.at(-1);
-  if (!unlocatedSource) throw new Error("Workspace fixture requires at least one geo row.");
-  const unlocatedBudget = unlocatedSource.total_budget_rub;
-  return {
-    ...source,
-    status: "partial",
-    display_text: "Бюджет размещен на карте частично.",
-    coverage: {
-      status: "partial",
-      located_geographies_n: source.rows.length - 1,
-      unlocated_geographies_n: 1,
-      unlocated_geographies: [{
-        geo_id: unlocatedSource.geo_id,
-        geo_display_name: unlocatedSource.geo_display_name,
-      }],
-      located_budget_rub: source.total_budget_rub - unlocatedBudget,
-      unlocated_budget_rub: unlocatedBudget,
-      unlocated_budget_share: unlocatedBudget / source.total_budget_rub,
-    },
-    rows: source.rows.map((row, index) => (
-      index === source.rows.length - 1 ? unavailableWorkspaceRow(row) : row
-    )),
-  };
-}
-
-function createUnavailableWorkspaceGeoBudgetFixture(): WorkspaceGeoBudgetV1 {
-  const source = createWorkspaceGeoBudgetFixture();
-  return {
-    ...source,
-    status: "unavailable",
-    display_text: "Координаты для сводки пока недоступны.",
-    coverage: {
-      status: "unavailable",
-      located_geographies_n: 0,
-      unlocated_geographies_n: source.rows.length,
-      unlocated_geographies: source.rows.map((row) => ({
-        geo_id: row.geo_id,
-        geo_display_name: row.geo_display_name,
-      })),
-      located_budget_rub: 0,
-      unlocated_budget_rub: source.total_budget_rub,
-      unlocated_budget_share: 1,
-    },
-    rows: source.rows.map(unavailableWorkspaceRow),
-  };
-}
-
-function createEmptyWorkspaceGeoBudgetFixture(): WorkspaceGeoBudgetV1 {
-  const source = createWorkspaceGeoBudgetFixture();
-  return {
-    ...source,
-    status: "unavailable",
-    display_text: "Проверенных кампаний пока нет.",
-    total_budget_rub: 0,
-    campaigns_n: 0,
-    geographies_n: 0,
-    coverage: {
-      status: "unavailable",
-      located_geographies_n: 0,
-      unlocated_geographies_n: 0,
-      unlocated_geographies: [],
-      located_budget_rub: 0,
-      unlocated_budget_rub: 0,
-      unlocated_budget_share: null,
-    },
-    rows: [],
   };
 }
 
@@ -256,28 +165,23 @@ async function installNavigationRoutes(
       return;
     }
     guard.allowed.push(`${url.pathname}${url.search}`);
-    const status = url.pathname === "/api/v1/workspace/geo-budget"
-      ? (options.geoBudgetStatus ?? options.status ?? 200)
-      : url.pathname === "/api/v1/meta/geo-catalog"
-        ? (options.geoCatalogStatus ?? options.status ?? 200)
-        : (options.status ?? 200);
+    const status = url.pathname === "/api/v1/model/historical-geo-budget"
+      ? (options.historicalGeoBudgetStatus ?? options.status ?? 200)
+      : (options.status ?? 200);
     const payload = status === 200
       ? url.pathname === "/api/v1/workspace/home"
         ? (options.home ?? createWorkspaceHomeFixture())
-        : url.pathname === "/api/v1/workspace/geo-budget"
-          ? (options.geoBudget ?? createWorkspaceGeoBudgetFixture())
-          : url.pathname === "/api/v1/meta/geo-catalog"
-            ? (options.geoCatalog ?? createGeoCatalogFixture())
-            : url.pathname === "/api/v1/calculations/history"
-              ? historyResponse(url)
-              : url.pathname === "/api/v1/models/active-v2"
-                ? (options.passport ?? createModelPassportV2Fixture())
-                : url.pathname === "/api/v1/model/overview-v2"
-                  ? (options.model ?? createModelOverviewV2Fixture())
-                  : (options.help ?? createHelpCatalogFixture())
+        : url.pathname === "/api/v1/model/historical-geo-budget"
+          ? (options.historicalGeoBudget ?? createHistoricalModelGeoBudgetFixture())
+          : url.pathname === "/api/v1/calculations/history"
+            ? historyResponse(url)
+            : url.pathname === "/api/v1/models/active-v2"
+              ? (options.passport ?? createModelPassportV2Fixture())
+              : url.pathname === "/api/v1/model/overview-v2"
+                ? (options.model ?? createModelOverviewV2Fixture())
+                : (options.help ?? createHelpCatalogFixture())
       : errorPayload();
-    const delayMs = ["/api/v1/workspace/geo-budget", "/api/v1/meta/geo-catalog"]
-      .includes(url.pathname)
+    const delayMs = url.pathname === "/api/v1/model/historical-geo-budget"
       ? (options.geoDelayMs ?? options.delayMs ?? 0)
       : (options.delayMs ?? 0);
     await fulfill(route, payload, status, delayMs);
@@ -303,10 +207,10 @@ async function expectMapLabelsInsideCanvasWithoutOverlap(page: Page) {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   }));
   const canvas = page.getByRole("group", {
-    name: "Карта суммарного рекламного бюджета по городам",
+    name: "Карта исторического рекламного бюджета модели по географиям",
   });
   const canvasBox = await canvas.boundingBox();
-  expect(canvasBox, "workspace map canvas must have a layout box").not.toBeNull();
+  expect(canvasBox, "historical map canvas must have a layout box").not.toBeNull();
   if (!canvasBox) return;
 
   const labels = canvas.locator("[data-map-label]");
@@ -315,7 +219,7 @@ async function expectMapLabelsInsideCanvasWithoutOverlap(page: Page) {
     const label = labels.nth(index);
     if (!await label.isVisible()) continue;
     const box = await label.boundingBox();
-    expect(box, `visible workspace label ${index} must have a layout box`).not.toBeNull();
+    expect(box, `visible historical label ${index} must have a layout box`).not.toBeNull();
     if (!box) continue;
     const geoId = await label.getAttribute("data-map-label") ?? `label-${index}`;
     expect(box.x, `${geoId} left edge`).toBeGreaterThanOrEqual(canvasBox.x - 1);
@@ -327,7 +231,7 @@ async function expectMapLabelsInsideCanvasWithoutOverlap(page: Page) {
     boxes.push({ geoId, ...box });
   }
 
-  expect(boxes.length, "workspace map must keep readable permanent labels").toBeGreaterThan(0);
+  expect(boxes.length, "historical map must keep readable permanent labels").toBeGreaterThan(0);
   for (let leftIndex = 0; leftIndex < boxes.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < boxes.length; rightIndex += 1) {
       const left = boxes[leftIndex];
@@ -338,7 +242,7 @@ async function expectMapLabelsInsideCanvasWithoutOverlap(page: Page) {
         - Math.max(left.y, right.y);
       expect(
         overlapX > 1 && overlapY > 1,
-        `workspace labels ${left.geoId} and ${right.geoId} overlap`,
+        `historical labels ${left.geoId} and ${right.geoId} overlap`,
       ).toBe(false);
     }
   }
@@ -351,9 +255,11 @@ async function setTheme(page: Page, theme: "dark" | "light") {
   }, theme);
 }
 
-async function captureWorkspaceGeoReview(page: Page, filename: string) {
+async function captureHistoricalGeoReview(page: Page, filename: string) {
   const section = page.locator("section").filter({
-    has: page.getByRole("heading", { name: "Бюджет проверенных кампаний по географиям" }),
+    has: page.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
+    }),
   });
   await expect(section).toBeVisible();
   await expect(page.getByText("Демонстрационные данные", { exact: true })).toBeVisible();
@@ -372,32 +278,41 @@ async function captureWorkspaceGeoReview(page: Page, filename: string) {
   });
 }
 
-test("Home renders the backend geo-budget projection without frontend aggregation", async ({ page }) => {
+test("Home renders the historical model budget without frontend aggregation or fallback", async ({ page }) => {
   const guard = await installNavigationRoutes(page);
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
     name: "Планируйте бюджет и проверяйте результат в одном месте",
   })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Бюджет проверенных кампаний по географиям" }))
+  await expect(page.getByRole("heading", {
+    name: "Исторический рекламный бюджет в данных модели",
+  }))
     .toBeVisible();
-  await expect(page.getByText("Бюджет в проверенных кампаниях").locator(".."))
-    .toContainText("267,8 млн ₽");
-  await expect(page.getByText("Кампании", { exact: true }).locator("..")).toContainText("1");
-  await expect(page.getByText("Географии", { exact: true }).locator("..")).toContainText("15");
+  const historicalSection = page.locator("section").filter({
+    has: page.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
+    }),
+  });
+  await expect(historicalSection.getByText("Общий рекламный бюджет").locator(".."))
+    .toContainText("8,7 млрд ₽");
+  await expect(historicalSection.getByText("Географий", { exact: true }).locator(".."))
+    .toContainText("220");
+  await expect(historicalSection).toContainText("Период данных: 01.01.2025 — 31.05.2026");
+  await expect(historicalSection).not.toContainText("Кампании");
 
   const map = page.getByRole("group", {
-    name: "Карта суммарного рекламного бюджета по городам",
+    name: "Карта исторического рекламного бюджета модели по географиям",
   });
   await expect(map).toBeVisible();
   const markers = map.locator("[data-map-marker]");
   const labels = map.locator("[data-map-label]");
-  await expect(markers).toHaveCount(15);
+  await expect(markers).toHaveCount(220);
   await expect(labels).toHaveCount(10);
 
-  const payload = createWorkspaceGeoBudgetFixture();
+  const payload = createHistoricalModelGeoBudgetFixture();
   const expectedTopTen = [...payload.rows]
-    .sort((left, right) => right.total_budget_rub - left.total_budget_rub)
+    .sort((left, right) => right.historical_total_budget_rub - left.historical_total_budget_rub)
     .slice(0, 10)
     .map((row) => row.geo_id)
     .sort();
@@ -407,7 +322,7 @@ test("Home renders the backend geo-budget projection without frontend aggregatio
   expect(actualLabels).toEqual(expectedTopTen);
   await expect(markers.last()).toHaveAttribute(
     "data-budget-rub",
-    String(Math.max(...payload.rows.map((row) => row.total_budget_rub))),
+    String(Math.max(...payload.rows.map((row) => row.historical_total_budget_rub))),
   );
   await expect(page.getByText("Координаты городов: GeoNames, CC BY 4.0.")).toBeVisible();
   await expect(page.getByText("Контур карты: Natural Earth, public domain.")).toBeVisible();
@@ -415,24 +330,31 @@ test("Home renders the backend geo-budget projection without frontend aggregatio
   await expect(page.getByText("Карта пока недоступна", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Дополнительный оборот", { exact: true }).first()).toBeVisible();
   expect(guard.allowed.some((call) => call.startsWith("/api/v1/workspace/home"))).toBe(true);
-  expect(guard.allowed.some((call) => call.startsWith("/api/v1/workspace/geo-budget"))).toBe(true);
-  expect(guard.allowed.some((call) => call.startsWith("/api/v1/meta/geo-catalog"))).toBe(true);
+  expect(guard.allowed.filter((call) => call === "/api/v1/model/historical-geo-budget"))
+    .toHaveLength(1);
+  expect(guard.allowed.some((call) => call.startsWith("/api/v1/workspace/geo-budget"))).toBe(false);
+  expect(guard.allowed.some((call) => call.startsWith("/api/v1/meta/geo-catalog"))).toBe(false);
   await expectNoForbiddenCopy(page);
 });
 
-test("workspace map tooltip supports mouse and keyboard with Escape restore", async ({ page }) => {
+test("historical map tooltip supports mouse and keyboard with Escape restore", async ({ page }) => {
   await installNavigationRoutes(page);
   await page.goto("/");
 
-  const source = createWorkspaceGeoBudgetFixture().rows[0];
+  const source = createHistoricalModelGeoBudgetFixture().rows[0];
   const marker = page.locator(`[data-map-marker="${source.geo_id}"]`);
   await marker.hover();
   let tooltip = page.getByRole("tooltip");
   await expect(tooltip).toBeVisible();
   await expect(tooltip).toContainText(source.geo_display_name);
-  await expect(tooltip).toContainText("Общий бюджет");
-  await expect(tooltip).toContainText("25 млн ₽");
-  await expect(tooltip).toContainText("Кампаний");
+  await expect(tooltip).toContainText("Исторический рекламный бюджет");
+  await expect(tooltip).toContainText("1,5 млрд ₽");
+  await expect(tooltip).toContainText("Доля общего бюджета");
+  await expect(tooltip).toContainText("17,3 %");
+  await expect(tooltip).toContainText("Дней с рекламной активностью");
+  await expect(tooltip).toContainText("480");
+  await expect(tooltip).toContainText("01.01.2025 — 31.05.2026");
+  await expect(tooltip).not.toContainText("Кампаний");
 
   await page.mouse.move(0, 0);
   await expect(tooltip).toHaveCount(0);
@@ -444,21 +366,21 @@ test("workspace map tooltip supports mouse and keyboard with Escape restore", as
   await expect(marker).toBeFocused();
 });
 
-test("workspace map preserves partial, unavailable and empty coverage semantics", async ({ page }) => {
-  const partial = createPartialWorkspaceGeoBudgetFixture();
-  await installNavigationRoutes(page, { geoBudget: partial });
+test("historical map preserves partial and controlled unavailable semantics", async ({ page }) => {
+  const partial = createPartialHistoricalModelGeoBudgetFixture();
+  await installNavigationRoutes(page, { historicalGeoBudget: partial });
   await page.goto("/");
 
   const map = page.getByRole("group", {
-    name: "Карта суммарного рекламного бюджета по городам",
+    name: "Карта исторического рекламного бюджета модели по географиям",
   });
   await expect(map).toBeVisible();
-  await expect(map.locator("[data-map-marker]")).toHaveCount(14);
+  await expect(map.locator("[data-map-marker]")).toHaveCount(219);
   await expect(page.getByText("Частичное покрытие", { exact: true })).toBeVisible();
   await expect(page.getByText("Не удалось разместить географий: 1", { exact: true })).toBeVisible();
   const coverageNotice = page.getByText("Частичное покрытие", { exact: true })
     .locator("..").locator("..");
-  await expect(coverageNotice).toContainText("Неразмещенный бюджет: 8,8 млн ₽");
+  await expect(coverageNotice).toContainText("Неразмещенный бюджет:");
   await page.getByText("Показать географии", { exact: true }).click();
   await expect(page.getByText(partial.coverage.unlocated_geographies[0].geo_display_name, {
     exact: true,
@@ -466,25 +388,25 @@ test("workspace map preserves partial, unavailable and empty coverage semantics"
 
   await page.unroute("**/api/v1/**");
   await installAuthenticatedAdminSession(page);
-  const unavailable = createUnavailableWorkspaceGeoBudgetFixture();
-  await installNavigationRoutes(page, { geoBudget: unavailable });
+  const unavailable = createUnavailableHistoricalModelGeoBudgetFixture();
+  await installNavigationRoutes(page, { historicalGeoBudget: unavailable });
   await page.goto("/");
   await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
-  const unlocatedSummary = page.getByText("Без координат: 15 географий", { exact: true })
-    .locator("..");
-  await expect(unlocatedSummary).toContainText("Бюджет сохранен: 267,8 млн ₽");
-  await expect(page.getByRole("group", {
-    name: "Карта суммарного рекламного бюджета по городам",
-  })).toHaveCount(0);
-
-  await page.unroute("**/api/v1/**");
-  await installAuthenticatedAdminSession(page);
-  await installNavigationRoutes(page, { geoBudget: createEmptyWorkspaceGeoBudgetFixture() });
-  await page.goto("/");
-  await expect(page.getByText("Пока нет данных для карты", { exact: true })).toBeVisible();
-  await expect(page.getByText("После проверки первой кампании здесь появится бюджет по городам.", {
+  await expect(page.getByText("Исторические расходы активной модели временно недоступны.", {
     exact: true,
   })).toBeVisible();
+  const unavailableSection = page.locator("section").filter({
+    has: page.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
+    }),
+  });
+  await expect(unavailableSection.getByText("Общий рекламный бюджет").locator(".."))
+    .toContainText("Нет данных");
+  await expect(unavailableSection.getByText("Географий", { exact: true }).locator(".."))
+    .toContainText("Нет данных");
+  await expect(page.getByRole("group", {
+    name: "Карта исторического рекламного бюджета модели по географиям",
+  })).toHaveCount(0);
 });
 
 test("History keeps backend search semantics and URL filters", async ({ page }) => {
@@ -545,13 +467,16 @@ test("Help filters legacy target claims in articles", async ({ page }) => {
 
 test("unsupported geo and model contracts fail closed", async ({ page }) => {
   await installNavigationRoutes(page, {
-    geoBudget: { ...createWorkspaceGeoBudgetFixture(), schema_version: "2.0.0" },
+    historicalGeoBudget: {
+      ...createHistoricalModelGeoBudgetFixture(),
+      schema_version: "2.0.0",
+    },
   });
   await page.goto("/");
   await expect(page.getByText("Формат данных карты не поддерживается", { exact: true }))
     .toBeVisible();
   await expect(page.getByText(/непроверенные координаты или бюджеты/)).toBeVisible();
-  await expect(page.getByText("Бюджет в проверенных кампаниях")).toHaveCount(0);
+  await expect(page.getByText("Общий рекламный бюджет")).toHaveCount(0);
   await expect(page.getByRole("heading", {
     name: "Планируйте бюджет и проверяйте результат в одном месте",
   })).toBeVisible();
@@ -566,9 +491,9 @@ test("unsupported geo and model contracts fail closed", async ({ page }) => {
 });
 
 test("loading and HTTP failure states remain controlled", async ({ page }) => {
-  await installNavigationRoutes(page, { delayMs: 600 });
+  await installNavigationRoutes(page, { geoDelayMs: 600 });
   const navigation = page.goto("/");
-  await expect(page.getByRole("status").filter({ hasText: "Загрузка рабочего пространства" }))
+  await expect(page.getByRole("status").filter({ hasText: "Загружаем карту бюджета" }))
     .toBeVisible();
   await navigation;
   await expect(page.getByRole("heading", { name: "Что происходит сейчас" })).toBeVisible();
@@ -581,7 +506,7 @@ test("loading and HTTP failure states remain controlled", async ({ page }) => {
 });
 
 test("a geo endpoint network error does not replace the Home page", async ({ page }) => {
-  await installNavigationRoutes(page, { geoBudgetStatus: 503 });
+  const guard = await installNavigationRoutes(page, { historicalGeoBudgetStatus: 503 });
   await page.goto("/");
 
   await expect(page.getByRole("heading", {
@@ -593,7 +518,10 @@ test("a geo endpoint network error does not replace the Home page", async ({ pag
     { exact: true },
   )).toBeVisible();
   await expect(page.getByRole("button", { name: "Повторить" })).toBeVisible();
-  await expect(page.getByText("Бюджет в проверенных кампаниях")).toHaveCount(0);
+  await expect(page.getByText("Общий рекламный бюджет")).toHaveCount(0);
+  expect(guard.allowed.filter((call) => call === "/api/v1/model/historical-geo-budget"))
+    .toHaveLength(1);
+  expect(guard.allowed.some((call) => call.startsWith("/api/v1/workspace/geo-budget"))).toBe(false);
 });
 
 for (const viewport of [
@@ -613,70 +541,68 @@ for (const viewport of [
   });
 }
 
-for (const theme of ["dark", "light"] as const) {
-  test(`Home workspace map and tooltip review ${theme}`, async ({ page }) => {
+for (const theme of ["light", "dark"] as const) {
+  test(`@review-e1f Home historical map and tooltip ${theme}`, async ({ page }) => {
     await page.setViewportSize({ width: 1_440, height: 900 });
     await setTheme(page, theme);
     await installNavigationRoutes(page);
     await page.goto("/");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const map = page.getByRole("group", {
-      name: "Карта суммарного рекламного бюджета по городам",
+      name: "Карта исторического рекламного бюджета модели по географиям",
     });
-    await expect(map.locator("[data-map-marker]")).toHaveCount(15);
+    await expect(map.locator("[data-map-marker]")).toHaveCount(220);
     await expect(map.locator("[data-map-label]")).toHaveCount(10);
     await expectNoOverflow(page);
     await expectNoForbiddenCopy(page);
-    await captureWorkspaceGeoReview(page, `home-workspace-map-top-10-${theme}.png`);
+    await captureHistoricalGeoReview(page, `home-historical-${theme}.png`);
 
     await map.locator("[data-map-marker]").last().focus();
     await expect(page.getByRole("tooltip")).toBeVisible();
-    await captureWorkspaceGeoReview(page, `home-workspace-map-tooltip-${theme}.png`);
-  });
-
-  test(`Home workspace partial coverage review ${theme}`, async ({ page }) => {
-    await page.setViewportSize({ width: 1_440, height: 900 });
-    await setTheme(page, theme);
-    await installNavigationRoutes(page, { geoBudget: createPartialWorkspaceGeoBudgetFixture() });
-    await page.goto("/");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByText("Частичное покрытие", { exact: true })).toBeVisible();
-    await expectNoOverflow(page);
-    await captureWorkspaceGeoReview(page, `home-workspace-map-partial-${theme}.png`);
-  });
-
-  test(`Home workspace unavailable coverage review ${theme}`, async ({ page }) => {
-    await page.setViewportSize({ width: 1_440, height: 900 });
-    await setTheme(page, theme);
-    await installNavigationRoutes(page, {
-      geoBudget: createUnavailableWorkspaceGeoBudgetFixture(),
-    });
-    await page.goto("/");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
-    await expectNoOverflow(page);
-    await captureWorkspaceGeoReview(page, `home-workspace-map-unavailable-${theme}.png`);
-  });
-
-  test(`Home workspace mobile map review ${theme}`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await setTheme(page, theme);
-    await installNavigationRoutes(page);
-    await page.goto("/");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByRole("group", {
-      name: "Карта суммарного рекламного бюджета по городам",
-    })).toBeVisible();
-    await expectNoOverflow(page);
-    await captureWorkspaceGeoReview(page, `home-workspace-map-mobile-${theme}.png`);
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toContainText("Исторический рекламный бюджет");
+    await expect(tooltip).toContainText("Дней с рекламной активностью");
+    await expect(tooltip).toContainText("Период данных");
+    await expect(tooltip).not.toContainText("Кампаний");
+    await captureHistoricalGeoReview(page, `home-historical-tooltip-${theme}.png`);
   });
 }
+
+test("@review-e1f Home historical unavailable light", async ({ page }) => {
+  await page.setViewportSize({ width: 1_440, height: 900 });
+  await setTheme(page, "light");
+  await installNavigationRoutes(page, {
+    historicalGeoBudget: createUnavailableHistoricalModelGeoBudgetFixture(),
+  });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
+  await expect(page.getByText("Исторические расходы активной модели временно недоступны.", {
+    exact: true,
+  })).toBeVisible();
+  await expectNoOverflow(page);
+  await captureHistoricalGeoReview(page, "home-historical-unavailable-light.png");
+});
+
+test("@review-e1f Home historical mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setTheme(page, "light");
+  await installNavigationRoutes(page);
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const map = page.getByRole("group", {
+    name: "Карта исторического рекламного бюджета модели по географиям",
+  });
+  await expect(map).toBeVisible();
+  await expect(map.locator('[data-map-label][data-mobile-visible="true"]')).toHaveCount(5);
+  await expectNoOverflow(page);
+  await captureHistoricalGeoReview(page, "home-historical-mobile.png");
+});
 
 test("the product-navigation allowlist contains only approved projections", () => {
   expect([...ALLOWED_PATHS]).toEqual([
     "/api/v1/workspace/home",
-    "/api/v1/workspace/geo-budget",
-    "/api/v1/meta/geo-catalog",
+    "/api/v1/model/historical-geo-budget",
     "/api/v1/calculations/history",
     "/api/v1/models/active-v2",
     "/api/v1/model/overview-v2",

@@ -26,6 +26,12 @@ fixed local projection and versioned outline asset. The browser still does not
 geocode, match aliases, aggregate jobs, recompute shares or infer model
 coverage. Asset and renderer decisions are recorded in ADR 0024.
 
+Post-merge E.1F update, 2026-07-19: Backend Phase E.1E publishes the
+package-bound `historical_model_geo_budget_v1`. Home now uses only
+`GET /api/v1/model/historical-geo-budget`; it does not call or fall back to the
+workspace geo-budget projection. The campaign map, fixed projection, local
+outline, scaling and label layout remain unchanged.
+
 New frontend work must prefer:
 
 | Product view | Endpoint | Contract |
@@ -37,6 +43,7 @@ New frontend work must prefer:
 | Model summary | `GET /api/v1/model/overview-v2` | `model_overview_v2` |
 | Geo identity/coordinate availability | `GET /api/v1/meta/geo-catalog` | `geo_catalog_v1` |
 | Workspace geo budget | `GET /api/v1/workspace/geo-budget` | `workspace_geo_budget_v1` |
+| Historical model geo budget for Home | `GET /api/v1/model/historical-geo-budget` | `historical_model_geo_budget_v1` |
 
 Phase E.1B frontend rules:
 
@@ -69,6 +76,18 @@ Phase E.1D map rules:
   shared by both modes; no response-relative fitting or runtime map provider;
 - partial/unavailable coverage preserves every unlocated geography and the
   published budget/share instead of silently dropping it.
+
+Phase E.1F Home source rules:
+
+- Home points, total, period, active-day evidence, shares and coverage come
+  only from `historical_model_geo_budget_v1`;
+- top labels use published `historical_total_budget_rub`; frontend does not
+  reconstruct historical spend from workspace calculations;
+- Home does not show campaign count and does not use
+  `workspace_geo_budget_v1` as fallback;
+- missing package-bound evidence is a controlled unavailable state;
+- `workspace_geo_budget_v1` remains a supported client contract for future
+  product-history views, but no longer drives Home.
 
 The v1 `/media-plan` endpoint remains compatible for the merged historical
 frontend. Phase E.1B uses `/media-plan-v2`, which supplies versioned channel

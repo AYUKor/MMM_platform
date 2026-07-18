@@ -1,12 +1,11 @@
 import { Link } from "react-router-dom";
-import type { GeoCatalogV1 } from "../../shared/api/generated/geo-catalog-v1";
-import type { WorkspaceGeoBudgetV1 } from "../../shared/api/generated/workspace-geo-budget-v1";
+import type { HistoricalModelGeoBudgetV1 } from "../../shared/api/generated/historical-model-geo-budget-v1";
 import type { WorkspaceHomeV1 } from "../../shared/api/generated/workspace-home-v1";
 import {
   GeoBudgetMap,
   type GeoBudgetMapRequestState,
 } from "../geo-budget-map/GeoBudgetMap";
-import { adaptWorkspaceGeoBudget } from "../geo-budget-map/geoBudgetMapModel";
+import { adaptHistoricalModelGeoBudget } from "../geo-budget-map/geoBudgetMapModel";
 import { formatDate, formatInteger, formatRub } from "../../shared/formatters/metrics";
 import { containsLegacyTargetClaim } from "../../shared/presentation/turnover-only";
 import { RefreshNotice } from "./ProductNavigationPageState";
@@ -14,8 +13,7 @@ import styles from "./product-navigation.module.css";
 
 interface HomeViewProps {
   home: WorkspaceHomeV1;
-  geoBudget: WorkspaceGeoBudgetV1 | null;
-  geoCatalog: GeoCatalogV1 | null;
+  historicalGeoBudget: HistoricalModelGeoBudgetV1 | null;
   geoRequestState?: GeoBudgetMapRequestState;
   refreshMessage?: string | null;
   onRefresh: () => void;
@@ -46,8 +44,7 @@ function statusClass(status: string): string {
 
 export function HomeView({
   home,
-  geoBudget,
-  geoCatalog,
+  historicalGeoBudget,
   geoRequestState = "ready",
   refreshMessage = null,
   onRefresh,
@@ -58,7 +55,11 @@ export function HomeView({
     && !containsLegacyTargetClaim(home.model.display_name)
     ? home.model.display_name
     : "Модель дополнительного оборота";
-  const geoBudgetModel = geoBudget ? adaptWorkspaceGeoBudget(geoBudget) : null;
+  const geoBudgetModel = historicalGeoBudget
+    ? adaptHistoricalModelGeoBudget(historicalGeoBudget)
+    : null;
+  const hasHistoricalArtifact = historicalGeoBudget?.record_origin
+    === "verified_model_package_artifact";
   return (
     <div className={styles.page}>
       <header className={styles.homeHero}>
@@ -113,15 +114,43 @@ export function HomeView({
         <div className={styles.sectionHeading}>
           <div>
             <span className={styles.eyebrow}>География бюджета</span>
-            <h2 id="geo-budget-title">Бюджет проверенных кампаний по географиям</h2>
+            <h2 id="geo-budget-title">Исторический рекламный бюджет в данных модели</h2>
           </div>
-          <span>Сводка формируется сервисом</span>
+          <span>
+            {historicalGeoBudget?.period_display_text
+              ?? (geoRequestState === "loading"
+                ? "Период данных загружается"
+                : "Период данных недоступен")}
+          </span>
         </div>
-        {geoBudget ? (
+        {historicalGeoBudget ? (
           <dl className={styles.geoBudgetSummary}>
-            <div><dt>Бюджет в проверенных кампаниях</dt><dd>{formatRub(geoBudget.total_budget_rub)}</dd></div>
-            <div><dt>Кампании</dt><dd>{formatInteger(geoBudget.campaigns_n)}</dd></div>
-            <div><dt>Географии</dt><dd>{formatInteger(geoBudget.geographies_n)}</dd></div>
+            <div>
+              <dt>Общий рекламный бюджет</dt>
+              <dd>{formatRub(hasHistoricalArtifact ? historicalGeoBudget.total_budget_rub : null)}</dd>
+            </div>
+            <div>
+              <dt>Географий</dt>
+              <dd>{formatInteger(hasHistoricalArtifact ? historicalGeoBudget.geographies_n : null)}</dd>
+            </div>
+            <div>
+              <dt>Период данных</dt>
+              <dd>
+                {hasHistoricalArtifact
+                  ? historicalGeoBudget.period_display_text
+                    .replace(/^Период данных:\s*/u, "")
+                    .trim()
+                  : "Нет данных"}
+              </dd>
+            </div>
+            <div>
+              <dt>Покрытие карты</dt>
+              <dd>
+                {hasHistoricalArtifact
+                  ? `${formatInteger(historicalGeoBudget.coverage.located_geographies_n)} из ${formatInteger(historicalGeoBudget.geographies_n)}`
+                  : "Нет данных"}
+              </dd>
+            </div>
           </dl>
         ) : null}
         <GeoBudgetMap
@@ -129,11 +158,6 @@ export function HomeView({
           requestState={geoRequestState}
           onRetry={onRefresh}
         />
-        {geoCatalog && geoBudget && geoCatalog.catalog_version !== geoBudget.catalog_version ? (
-          <p className={styles.geoContractNote} role="alert">
-            Версии справочника координат и сводки не совпадают. Карта скрыта до обновления данных.
-          </p>
-        ) : null}
       </section>
 
       <div className={styles.homeGrid}>

@@ -1,11 +1,11 @@
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import type { HistoricalModelGeoBudgetV1 } from "../src/shared/api/generated/historical-model-geo-budget-v1";
 import type { JobResultViewV2 } from "../src/shared/api/generated/job-result-view-v2";
 import type { ModelOverviewV2 } from "../src/shared/api/generated/model-overview-v2";
 import type { ModelPassportV2 } from "../src/shared/api/generated/model-passport-v2";
 import type { ScenarioMediaPlanV2 } from "../src/shared/api/generated/scenario-media-plan-v2";
 import type { ValidationResultV2 } from "../src/shared/api/generated/validation-result-v2";
-import type { WorkspaceGeoBudgetV1 } from "../src/shared/api/generated/workspace-geo-budget-v1";
 import { formatInteger, formatPercent, formatRub } from "../src/shared/formatters/metrics";
 
 interface LiveReportArtifact {
@@ -27,12 +27,23 @@ interface LiveReportEnvelope {
   };
 }
 
-const LIVE_ENABLED = process.env.PHASE_E1D_LIVE === "true"
+const E1F_LIVE_ENABLED = process.env.PHASE_E1F_LIVE === "true";
+const LEGACY_LIVE_ENABLED = process.env.PHASE_E1D_LIVE === "true"
   || process.env.PHASE_E1B_LIVE === "true";
-const EMAIL = process.env.PHASE_E1D_LIVE_EMAIL ?? process.env.PHASE_E1B_LIVE_EMAIL ?? "";
-const PASSWORD = process.env.PHASE_E1D_LIVE_PASSWORD ?? process.env.PHASE_E1B_LIVE_PASSWORD ?? "";
-const JOB_ID = process.env.PHASE_E1D_LIVE_JOB_ID ?? process.env.PHASE_E1B_LIVE_JOB_ID ?? "";
-const VALIDATION_ID = process.env.PHASE_E1D_LIVE_VALIDATION_ID
+const EMAIL = process.env.PHASE_E1F_LIVE_EMAIL
+  ?? process.env.PHASE_E1D_LIVE_EMAIL
+  ?? process.env.PHASE_E1B_LIVE_EMAIL
+  ?? "";
+const PASSWORD = process.env.PHASE_E1F_LIVE_PASSWORD
+  ?? process.env.PHASE_E1D_LIVE_PASSWORD
+  ?? process.env.PHASE_E1B_LIVE_PASSWORD
+  ?? "";
+const JOB_ID = process.env.PHASE_E1F_LIVE_JOB_ID
+  ?? process.env.PHASE_E1D_LIVE_JOB_ID
+  ?? process.env.PHASE_E1B_LIVE_JOB_ID
+  ?? "";
+const VALIDATION_ID = process.env.PHASE_E1F_LIVE_VALIDATION_ID
+  ?? process.env.PHASE_E1D_LIVE_VALIDATION_ID
   ?? process.env.PHASE_E1B_LIVE_VALIDATION_ID
   ?? "";
 
@@ -86,9 +97,92 @@ async function expectUnlocatedBudgetPreserved(
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
+test.describe("Phase E.1F historical Home live acceptance", () => {
+  test.skip(
+    !E1F_LIVE_ENABLED,
+    "Set PHASE_E1F_LIVE=true and provide PHASE_E1F_LIVE_EMAIL/PASSWORD.",
+  );
+
+  test("uses the real historical model artifact without workspace fallback", async ({ page }) => {
+    test.setTimeout(60_000);
+    expect(EMAIL).not.toBe("");
+    expect(PASSWORD).not.toBe("");
+
+    await page.goto("/login");
+    if (new URL(page.url()).pathname === "/login") {
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Пароль").fill(PASSWORD);
+      await page.getByRole("button", { name: "Войти" }).click();
+      await expect(page).not.toHaveURL(/\/login/);
+    }
+
+    const consoleIssues: string[] = [];
+    const requestedPaths: string[] = [];
+    page.on("console", (message) => {
+      if (["warning", "error"].includes(message.type())) {
+        consoleIssues.push(`${message.type()}: ${message.text()}`);
+      }
+    });
+    page.on("pageerror", (error) => consoleIssues.push(`pageerror: ${error.message}`));
+    page.on("request", (request) => requestedPaths.push(new URL(request.url()).pathname));
+    const responsePromise = page.waitForResponse((response) => (
+      pathname(response) === "/api/v1/model/historical-geo-budget"
+      && response.status() === 200
+    ));
+
+    await page.goto("/");
+    const payload = await (await responsePromise).json() as HistoricalModelGeoBudgetV1;
+    expect(requestedPaths.filter((path) => path === "/api/v1/model/historical-geo-budget"))
+      .toHaveLength(1);
+    expect(requestedPaths).not.toContain("/api/v1/workspace/geo-budget");
+    expect(payload.record_origin).toBe("verified_model_package_artifact");
+    expect(payload.status).toBe("available");
+    expect(payload.period_start).toBe("2025-01-01");
+    expect(payload.period_end).toBe("2026-05-31");
+    expect(payload.total_budget_rub).toBeCloseTo(8_687_024_294.654741, 5);
+    expect(payload.geographies_n).toBe(220);
+    expect(payload.rows).toHaveLength(220);
+    expect(payload.coverage).toMatchObject({
+      status: "available",
+      located_geographies_n: 220,
+      unlocated_geographies_n: 0,
+      unlocated_budget_rub: 0,
+    });
+    expect([...payload.rows]
+      .sort((left, right) => right.historical_total_budget_rub - left.historical_total_budget_rub)
+      .slice(0, 3)
+      .map((row) => row.geo_display_name)).toEqual([
+      "Москва",
+      "Санкт-Петербург",
+      "Московская область",
+    ]);
+
+    const section = page.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
+    }).locator("xpath=ancestor::section[1]");
+    await expect(section).toBeVisible();
+    const map = section.locator('[data-map-mode="historical-model"]');
+    await expect(map.locator("[data-map-marker]")).toHaveCount(220);
+    await expect(map.locator("[data-map-label]")).toHaveCount(10);
+    await expect(section.getByText("Кампании", { exact: true })).toHaveCount(0);
+    const moscow = payload.rows.find((row) => row.geo_display_name === "Москва");
+    expect(moscow).toBeDefined();
+    await map.locator(`[data-map-marker="${moscow?.geo_id}"]`).focus();
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toContainText("Исторический рекламный бюджет");
+    await expect(tooltip).toContainText("Дней с рекламной активностью");
+    await expect(tooltip).toContainText(
+      payload.period_display_text.replace(/^Период данных:\s*/u, ""),
+    );
+    await expect(tooltip).not.toContainText("Кампаний");
+    await expectTurnoverOnlyPage(page);
+    expect(consoleIssues).toEqual([]);
+  });
+});
+
 test.describe("Phase E.1D live backend acceptance", () => {
   test.skip(
-    !LIVE_ENABLED,
+    !LEGACY_LIVE_ENABLED,
     "Set PHASE_E1D_LIVE=true and provide credentials, job and validation IDs. "
       + "PHASE_E1B_LIVE variables remain supported as aliases.",
   );
@@ -370,123 +464,110 @@ test.describe("Phase E.1D live backend acceptance", () => {
     await expect(page.getByRole("heading", { name: "Дополнительный оборот" })).toBeVisible();
     await expectTurnoverOnlyPage(page);
 
+    const homeGeoRequests: string[] = [];
+    const recordHomeGeoRequest = (request: { url(): string }) => {
+      const requestPath = new URL(request.url()).pathname;
+      if ([
+        "/api/v1/model/historical-geo-budget",
+        "/api/v1/workspace/geo-budget",
+        "/api/v1/meta/geo-catalog",
+      ].includes(requestPath)) homeGeoRequests.push(requestPath);
+    };
+    page.on("request", recordHomeGeoRequest);
     const geoBudgetResponse = page.waitForResponse((response) => (
-      pathname(response) === "/api/v1/workspace/geo-budget" && response.status() === 200
-    ));
-    const geoCatalogResponse = page.waitForResponse((response) => (
-      pathname(response) === "/api/v1/meta/geo-catalog" && response.status() === 200
+      pathname(response) === "/api/v1/model/historical-geo-budget" && response.status() === 200
     ));
     await page.goto("/");
-    const geoBudget = await (await geoBudgetResponse).json() as WorkspaceGeoBudgetV1;
-    await geoCatalogResponse;
-    expect(geoBudget.geographies_n).toBeGreaterThanOrEqual(0);
-    const workspaceGeoSection = page.getByRole("heading", {
-      name: "Бюджет проверенных кампаний по географиям",
+    const geoBudget = await (await geoBudgetResponse).json() as HistoricalModelGeoBudgetV1;
+    page.off("request", recordHomeGeoRequest);
+    expect(homeGeoRequests.filter((path) => path === "/api/v1/model/historical-geo-budget"))
+      .toHaveLength(1);
+    expect(homeGeoRequests).not.toContain("/api/v1/workspace/geo-budget");
+    expect(homeGeoRequests).not.toContain("/api/v1/meta/geo-catalog");
+    expect(geoBudget.record_origin).toBe("verified_model_package_artifact");
+    expect(geoBudget.status).toBe("available");
+    expect(geoBudget.total_budget_rub).toBeCloseTo(8_687_024_294.654741, 5);
+    expect(geoBudget.period_start).toBe("2025-01-01");
+    expect(geoBudget.period_end).toBe("2026-05-31");
+    expect(geoBudget.geographies_n).toBe(220);
+    expect(geoBudget.rows).toHaveLength(220);
+    expect(geoBudget.coverage.located_geographies_n).toBe(220);
+    expect(geoBudget.coverage.unlocated_geographies_n).toBe(0);
+    expect(geoBudget.coverage.unlocated_budget_rub).toBe(0);
+    expect([...geoBudget.rows]
+      .sort((left, right) => right.historical_total_budget_rub - left.historical_total_budget_rub)
+      .slice(0, 3)
+      .map((row) => row.geo_display_name)).toEqual([
+      "Москва",
+      "Санкт-Петербург",
+      "Московская область",
+    ]);
+
+    const historicalGeoSection = page.getByRole("heading", {
+      name: "Исторический рекламный бюджет в данных модели",
     }).locator("xpath=ancestor::section[1]");
-    await expect(workspaceGeoSection).toBeVisible();
+    await expect(historicalGeoSection).toBeVisible();
     await expectDefinitionValue(
-      workspaceGeoSection,
-      "Бюджет в проверенных кампаниях",
+      historicalGeoSection,
+      "Общий рекламный бюджет",
       formatRub(geoBudget.total_budget_rub),
     );
     await expectDefinitionValue(
-      workspaceGeoSection,
-      "Кампании",
-      formatInteger(geoBudget.campaigns_n),
-    );
-    await expectDefinitionValue(
-      workspaceGeoSection,
-      "Географии",
+      historicalGeoSection,
+      "Географий",
       formatInteger(geoBudget.geographies_n),
     );
-
-    const canonicalWorkspaceRows = geoBudget.rows.filter((row) => (
-      row.coordinates_status === "canonical"
-    ));
-    expect(geoBudget.rows).toHaveLength(geoBudget.geographies_n);
-    expect(geoBudget.status).toBe(geoBudget.coverage.status);
-    expect(canonicalWorkspaceRows).toHaveLength(geoBudget.coverage.located_geographies_n);
-    expect(geoBudget.rows.length - canonicalWorkspaceRows.length).toBe(
-      geoBudget.coverage.unlocated_geographies_n,
+    await expectDefinitionValue(
+      historicalGeoSection,
+      "Период данных",
+      "01.01.2025 — 31.05.2026",
     );
-    const expectedWorkspaceMarkers = canonicalWorkspaceRows.filter((row) => (
-      row.total_budget_rub > 0
-    ));
+    await expectDefinitionValue(
+      historicalGeoSection,
+      "Покрытие карты",
+      "220 из 220",
+    );
+    await expect(historicalGeoSection.getByText("Кампании", { exact: true })).toHaveCount(0);
 
-    if (geoBudget.coverage.status === "available") {
-      expect(geoBudget.coverage.unlocated_geographies_n).toBe(0);
-      expect(geoBudget.coverage.unlocated_budget_rub).toBe(0);
-      const workspaceMap = workspaceGeoSection.locator('[data-map-mode="workspace"]');
-      await expect(workspaceMap).toBeVisible();
-      await expect(workspaceMap).toHaveAttribute("data-coverage-status", "available");
-      await expect(workspaceMap).toContainText("Координаты городов: GeoNames, CC BY 4.0.");
-      await expect(workspaceMap).toContainText("Контур карты: Natural Earth, public domain.");
-      await expect(workspaceMap.locator("[data-map-marker]")).toHaveCount(
-        expectedWorkspaceMarkers.length,
-      );
+    const historicalMap = historicalGeoSection.locator('[data-map-mode="historical-model"]');
+    await expect(historicalMap).toBeVisible();
+    await expect(historicalMap).toHaveAttribute("data-coverage-status", "available");
+    await expect(historicalMap).toContainText("Координаты городов: GeoNames, CC BY 4.0.");
+    await expect(historicalMap).toContainText("Контур карты: Natural Earth, public domain.");
+    await expect(historicalMap.locator("[data-map-marker]")).toHaveCount(220);
+    await expect(historicalMap.locator("[data-map-label]")).toHaveCount(10);
 
-      const workspaceMarkerIds = await workspaceMap.locator("[data-map-marker]")
-        .evaluateAll((markers) => markers.map((marker) => marker.getAttribute("data-map-marker")));
-      expect([...workspaceMarkerIds].sort()).toEqual(
-        expectedWorkspaceMarkers.map((row) => row.geo_id).sort(),
-      );
+    const expectedTopTenIds = [...geoBudget.rows]
+      .sort((left, right) => (
+        right.historical_total_budget_rub - left.historical_total_budget_rub
+        || new Intl.Collator("ru", { sensitivity: "base" }).compare(
+          left.geo_display_name,
+          right.geo_display_name,
+        )
+        || left.geo_id.localeCompare(right.geo_id)
+      ))
+      .slice(0, 10)
+      .map((row) => row.geo_id)
+      .sort();
+    const labelIds = await historicalMap.locator("[data-map-label]")
+      .evaluateAll((labels) => labels.map((label) => label.getAttribute("data-map-label")).sort());
+    expect(labelIds).toEqual(expectedTopTenIds);
 
-      const expectedTopTenIds = [...canonicalWorkspaceRows]
-        .sort((left, right) => (
-          right.total_budget_rub - left.total_budget_rub
-          || new Intl.Collator("ru", { sensitivity: "base" }).compare(
-            left.geo_display_name,
-            right.geo_display_name,
-          )
-          || left.geo_id.localeCompare(right.geo_id)
-        ))
-        .slice(0, 10)
-        .filter((row) => row.total_budget_rub > 0)
-        .map((row) => row.geo_id)
-        .sort();
-      const workspaceLabelIds = await workspaceMap.locator("[data-map-label]")
-        .evaluateAll((labels) => (
-          labels.map((label) => label.getAttribute("data-map-label")).sort()
-        ));
-      expect(workspaceLabelIds).toEqual(expectedTopTenIds);
-
-      if (expectedWorkspaceMarkers.length > 0) {
-        const largestWorkspaceBudget = Math.max(
-          ...expectedWorkspaceMarkers.map((row) => row.total_budget_rub),
-        );
-        await expect(workspaceMap.locator("[data-map-marker]").last()).toHaveAttribute(
-          "data-budget-rub",
-          String(largestWorkspaceBudget),
-        );
-      }
-    } else if (geoBudget.geographies_n === 0 && geoBudget.total_budget_rub === 0) {
-      await expect(workspaceGeoSection.getByText("Пока нет данных для карты", { exact: true }))
-        .toBeVisible();
-    } else if (geoBudget.coverage.status === "partial") {
-      expect(canonicalWorkspaceRows.length).toBeGreaterThan(0);
-      const workspaceMap = workspaceGeoSection.locator('[data-map-mode="workspace"]');
-      await expect(workspaceMap).toBeVisible();
-      await expect(workspaceMap).toHaveAttribute("data-coverage-status", "partial");
-      await expect(workspaceMap.locator("[data-map-marker]")).toHaveCount(
-        expectedWorkspaceMarkers.length,
-      );
-      await expect(workspaceMap).toContainText(
-        `Неразмещенный бюджет: ${formatRub(geoBudget.coverage.unlocated_budget_rub)}`,
-      );
-      await expect(workspaceMap).toContainText(
-        `доля: ${formatPercent(geoBudget.coverage.unlocated_budget_share)}`,
-      );
-    } else {
-      expect(canonicalWorkspaceRows).toHaveLength(0);
-      await expect(workspaceGeoSection.getByText("Карта пока недоступна", { exact: true }))
-        .toBeVisible();
-      await expectUnlocatedBudgetPreserved(
-        workspaceGeoSection,
-        geoBudget.coverage.unlocated_geographies_n,
-        geoBudget.coverage.unlocated_budget_rub,
-        geoBudget.coverage.unlocated_budget_share,
-      );
-    }
+    const largestRow = [...geoBudget.rows]
+      .sort((left, right) => right.historical_total_budget_rub - left.historical_total_budget_rub)[0];
+    const largestMarker = historicalMap.locator(`[data-map-marker="${largestRow.geo_id}"]`);
+    await largestMarker.focus();
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText(largestRow.geo_display_name);
+    await expect(tooltip).toContainText("Исторический рекламный бюджет");
+    await expect(tooltip).toContainText(formatRub(largestRow.historical_total_budget_rub));
+    await expect(tooltip).toContainText("Дней с рекламной активностью");
+    await expect(tooltip).toContainText(formatInteger(largestRow.active_days_n));
+    await expect(tooltip).toContainText(
+      geoBudget.period_display_text.replace(/^Период данных:\s*/u, ""),
+    );
+    await expect(tooltip).not.toContainText("Кампаний");
     await expectTurnoverOnlyPage(page);
 
     expect(consoleIssues).toEqual([]);

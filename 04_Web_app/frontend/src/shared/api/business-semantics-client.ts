@@ -1,4 +1,5 @@
 import type { GeoCatalogV1 } from "./generated/geo-catalog-v1";
+import type { HistoricalModelGeoBudgetV1 } from "./generated/historical-model-geo-budget-v1";
 import type { JobResultViewV2 } from "./generated/job-result-view-v2";
 import type { ModelOverviewV2 } from "./generated/model-overview-v2";
 import type { ModelPassportV2 } from "./generated/model-passport-v2";
@@ -14,6 +15,9 @@ const SCENARIOS = ["S01", "S02", "S03", "S04", "S05", "S06"] as const;
 const GEO_ID = /^geo_[0-9a-f]{16}$/;
 const OPAQUE_ID = /^[a-z][a-z0-9_]*_[0-9a-f]{12,64}$/;
 const PACKAGE_ID = /^pkg_[0-9a-f]{16}_[0-9a-f]{16}$/;
+const HISTORICAL_PACKAGE_ID = /^pkg_[A-Za-z0-9._-]{8,128}$/;
+const HISTORICAL_ARTIFACT_ID = /^artifact_[0-9a-f]{24}$/;
+const HISTORICAL_LIMITATION_CODE = /^[a-z][a-z0-9_]{2,63}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const ABSOLUTE_PATH = /^(?:\/|[A-Za-z]:[\\/]|file:\/\/)/i;
 const TRUNCATED_GEOS = /\.\.\.\s*ещ[её]\s+\d+/i;
@@ -44,6 +48,10 @@ const PASSPORT_KEYS = ["contract_name", "schema_version", "record_origin", "serv
 const OVERVIEW_KEYS = ["contract_name", "schema_version", "serving", "summary", "channel_policies", "limitations"] as const;
 const CATALOG_KEYS = ["contract_name", "schema_version", "catalog_version", "coordinates_source", "coordinates_source_version_or_date", "coordinates_license", "status", "display_text", "geographies_n", "coverage", "entries"] as const;
 const WORKSPACE_KEYS = ["contract_name", "schema_version", "catalog_version", "status", "display_text", "total_budget_rub", "campaigns_n", "geographies_n", "coverage", "rows"] as const;
+const HISTORICAL_KEYS = ["contract_name", "schema_version", "record_origin", "status", "title", "display_text", "period_display_text", "package_id", "model_version", "artifact_id", "artifact_version", "catalog_version", "period_start", "period_end", "spend_columns_version", "total_budget_rub", "geographies_n", "coverage", "rows", "limitations", "updated_at_utc"] as const;
+const HISTORICAL_ROW_KEYS = ["geo_id", "geo_display_name", "latitude", "longitude", "coordinates_status", "historical_total_budget_rub", "budget_share", "active_days_n", "active_rows_n"] as const;
+const HISTORICAL_COVERAGE_KEYS = ["status", "located_geographies_n", "unlocated_geographies_n", "unlocated_geographies", "located_budget_rub", "unlocated_budget_rub", "unlocated_budget_share"] as const;
+const HISTORICAL_TITLE = "Исторический рекламный бюджет в данных модели";
 const ERROR_KEYS = ["error"] as const;
 const ERROR_DETAIL_KEYS = ["code", "display_text", "retryable", "user_action"] as const;
 
@@ -93,10 +101,22 @@ function positiveIntegerOrNull(value: unknown): boolean { return value === null 
 function enumValue<T extends readonly string[]>(value: unknown, values: T): value is T[number] { return typeof value === "string" && values.includes(value as T[number]); }
 function isoDate(value: unknown): value is string { if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false; const [year, month, day] = value.split("-").map(Number); const date = new Date(Date.UTC(year, month - 1, day)); return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day; }
 function isoDateTime(value: unknown): value is string { return typeof value === "string" && Number.isFinite(Date.parse(value)) && /^\d{4}-\d{2}-\d{2}T/.test(value); }
+function zonedIsoDateTime(value: unknown): value is string { return isoDateTime(value) && /(?:Z|[+-]\d{2}:\d{2})$/u.test(value); }
 function moneyNear(left: number, right: number): boolean { return Math.abs(left - right) <= MONEY_TOLERANCE_RUB; }
 function shareNear(left: number, right: number): boolean { return Math.abs(left - right) <= SHARE_TOLERANCE; }
 function uniqueStrings(value: unknown, nonempty = true): value is string[] { return Array.isArray(value) && value.every((item) => typeof item === "string" && (!nonempty || item.trim().length > 0)) && new Set(value).size === value.length; }
 function uniqueBy<T>(values: readonly T[], key: (value: T) => string): boolean { return new Set(values.map(key)).size === values.length; }
+
+function hasUnsafeHistoricalValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasUnsafeHistoricalValue);
+  if (record(value)) {
+    return Object.entries(value).some(([key, nested]) =>
+      ["campaigns_n", "campaign_count", "campaign_id"].includes(key.toLocaleLowerCase("en-US"))
+      || hasUnsafeHistoricalValue(nested),
+    );
+  }
+  return typeof value === "string" && ABSOLUTE_PATH.test(value);
+}
 
 function hasUnsafeString(value: unknown, key = ""): boolean {
   if (typeof value === "string") return TRUNCATED_GEOS.test(value) || INTERNAL_S5_VARIANT.test(value) || (ABSOLUTE_PATH.test(value) && !(key === "endpoint" && /^\/api\/v1\/jobs\/[a-z][a-z0-9_]*_[0-9a-f]{12,64}\/media-plan-v2$/u.test(value))) || (/(display_text|title|name|description|what|why|recommended_action|decision_scope_text|limiting_constraints)$/u.test(key) && FORBIDDEN_PRESENTATION.test(value));
@@ -288,6 +308,121 @@ export function parseGeoCatalog(value: unknown): GeoCatalogV1 { if (!record(valu
 export function parseWorkspaceGeoBudget(value: unknown): WorkspaceGeoBudgetV1 { if (!record(value) || !exact(value, WORKSPACE_KEYS) || value.contract_name !== "workspace_geo_budget_v1" || value.schema_version !== "1.0.0" || !text(value.catalog_version) || !enumValue(value.status, ["available", "partial", "unavailable"] as const) || !text(value.display_text) || !nonNegative(value.total_budget_rub) || !nonNegativeInteger(value.campaigns_n) || !nonNegativeInteger(value.geographies_n) || !Array.isArray(value.rows) || value.rows.length !== value.geographies_n || !value.rows.every(workspaceGeo) || !uniqueBy(value.rows, (item) => (item as JsonRecord).geo_id as string) || !uniqueBy(value.rows, (item) => (item as JsonRecord).geo_display_name as string) || !mapCoverage(value.coverage, value.rows as JsonRecord[], "total_budget_rub") || (value.coverage as JsonRecord).status !== value.status || hasUnsafeString(value)) throw new UnsupportedBusinessSemanticsContractError(); const total = (value.rows as JsonRecord[]).reduce((sum, row) => sum + (row.total_budget_rub as number), 0); if (!moneyNear(total, value.total_budget_rub as number)) throw new UnsupportedBusinessSemanticsContractError(); if ((value.total_budget_rub as number) === 0 ? !(value.rows as JsonRecord[]).every((row) => row.budget_share === null) : !(value.rows as JsonRecord[]).every((row) => number(row.budget_share) && shareNear(row.budget_share as number, (row.total_budget_rub as number) / (value.total_budget_rub as number)))) throw new UnsupportedBusinessSemanticsContractError(); return value as unknown as WorkspaceGeoBudgetV1; }
 function workspaceGeo(value: unknown): boolean { return record(value) && exact(value, ["geo_id", "geo_display_name", "latitude", "longitude", "coordinates_status", "region_id", "region_display_name", "total_budget_rub", "campaigns_n", "budget_share"]) && geo({ geo_id: value.geo_id, geo_display_name: value.geo_display_name, latitude: value.latitude, longitude: value.longitude, coordinates_status: value.coordinates_status, region_id: value.region_id, region_display_name: value.region_display_name }, true) && nonNegative(value.total_budget_rub) && nonNegativeInteger(value.campaigns_n) && (value.budget_share === null || (number(value.budget_share) && value.budget_share >= -SHARE_TOLERANCE && value.budget_share <= 1 + SHARE_TOLERANCE)); }
 
+function historicalGeo(value: unknown): value is JsonRecord {
+  if (!record(value) || !exact(value, HISTORICAL_ROW_KEYS)
+    || !geo({ geo_id: value.geo_id, geo_display_name: value.geo_display_name })
+    || !enumValue(value.coordinates_status, ["canonical", "unavailable"] as const)
+    || !nonNegative(value.historical_total_budget_rub)
+    || !number(value.budget_share) || value.budget_share < 0 || value.budget_share > 1
+    || !nonNegativeInteger(value.active_days_n) || !nonNegativeInteger(value.active_rows_n)
+    || value.active_days_n > value.active_rows_n) return false;
+  if (value.coordinates_status === "unavailable") return value.latitude === null && value.longitude === null;
+  return number(value.latitude) && value.latitude >= -90 && value.latitude <= 90
+    && number(value.longitude) && value.longitude >= -180 && value.longitude <= 180;
+}
+
+function historicalLimitation(value: unknown): value is JsonRecord {
+  return record(value) && exact(value, ["code", "display_text"])
+    && typeof value.code === "string" && HISTORICAL_LIMITATION_CODE.test(value.code)
+    && text(value.display_text);
+}
+
+function historicalCoverage(value: unknown, rows: JsonRecord[], totalBudget: number, status: unknown): boolean {
+  if (!record(value) || !exact(value, HISTORICAL_COVERAGE_KEYS)
+    || !enumValue(value.status, ["available", "partial", "unavailable"] as const)
+    || value.status !== status
+    || !nonNegativeInteger(value.located_geographies_n)
+    || !nonNegativeInteger(value.unlocated_geographies_n)
+    || !Array.isArray(value.unlocated_geographies)
+    || !value.unlocated_geographies.every((item) => geo(item))
+    || !nonNegative(value.located_budget_rub)
+    || !nonNegative(value.unlocated_budget_rub)
+    || !(value.unlocated_budget_share === null
+      || (number(value.unlocated_budget_share) && value.unlocated_budget_share >= 0 && value.unlocated_budget_share <= 1))) return false;
+
+  const located = rows.filter((row) => row.coordinates_status === "canonical");
+  const unlocated = rows.filter((row) => row.coordinates_status === "unavailable");
+  const expectedStatus = located.length === rows.length ? "available" : located.length > 0 ? "partial" : "unavailable";
+  if (value.status !== expectedStatus
+    || value.located_geographies_n !== located.length
+    || value.unlocated_geographies_n !== unlocated.length) return false;
+
+  const publishedUnlocated = value.unlocated_geographies
+    .map((item) => `${(item as JsonRecord).geo_id}\u0000${(item as JsonRecord).geo_display_name}`)
+    .sort();
+  const expectedUnlocated = unlocated
+    .map((item) => `${item.geo_id}\u0000${item.geo_display_name}`)
+    .sort();
+  if (publishedUnlocated.length !== expectedUnlocated.length
+    || publishedUnlocated.some((item, index) => item !== expectedUnlocated[index])) return false;
+
+  const locatedBudget = located.reduce((sum, row) => sum + (row.historical_total_budget_rub as number), 0);
+  const unlocatedBudget = unlocated.reduce((sum, row) => sum + (row.historical_total_budget_rub as number), 0);
+  const tolerance = Math.max(0.01, totalBudget * 1e-12);
+  if (Math.abs((value.located_budget_rub as number) - locatedBudget) > tolerance
+    || Math.abs((value.unlocated_budget_rub as number) - unlocatedBudget) > tolerance) return false;
+  if (totalBudget === 0) return value.unlocated_budget_share === null;
+  return number(value.unlocated_budget_share)
+    && Math.abs(value.unlocated_budget_share - unlocatedBudget / totalBudget) <= SHARE_TOLERANCE;
+}
+
+export function parseHistoricalModelGeoBudget(value: unknown): HistoricalModelGeoBudgetV1 {
+  if (!record(value) || !exact(value, HISTORICAL_KEYS)
+    || value.contract_name !== "historical_model_geo_budget_v1"
+    || value.schema_version !== "1.0.0"
+    || !enumValue(value.record_origin, ["verified_model_package_artifact", "model_package_artifact_unavailable"] as const)
+    || !enumValue(value.status, ["available", "partial", "unavailable"] as const)
+    || value.title !== HISTORICAL_TITLE
+    || !text(value.display_text) || !text(value.period_display_text)
+    || typeof value.package_id !== "string" || !HISTORICAL_PACKAGE_ID.test(value.package_id)
+    || !(value.model_version === null || text(value.model_version))
+    || !text(value.catalog_version)
+    || !nonNegativeInteger(value.geographies_n)
+    || !record(value.coverage)
+    || !Array.isArray(value.rows)
+    || !Array.isArray(value.limitations) || !value.limitations.every(historicalLimitation)
+    || !uniqueBy(value.limitations, (item) => (item as JsonRecord).code as string)
+    || hasUnsafeHistoricalValue(value)) throw new UnsupportedBusinessSemanticsContractError();
+
+  if (value.record_origin === "model_package_artifact_unavailable") {
+    if (value.status !== "unavailable" || value.rows.length !== 0 || value.geographies_n !== 0
+      || value.artifact_id !== null || value.artifact_version !== null
+      || value.period_start !== null || value.period_end !== null
+      || value.spend_columns_version !== null || value.total_budget_rub !== null
+      || value.updated_at_utc !== null
+      || !exact(value.coverage, HISTORICAL_COVERAGE_KEYS)
+      || value.coverage.status !== "unavailable"
+      || value.coverage.located_geographies_n !== 0
+      || value.coverage.unlocated_geographies_n !== 0
+      || !Array.isArray(value.coverage.unlocated_geographies) || value.coverage.unlocated_geographies.length !== 0
+      || value.coverage.located_budget_rub !== 0
+      || value.coverage.unlocated_budget_rub !== 0
+      || value.coverage.unlocated_budget_share !== null) throw new UnsupportedBusinessSemanticsContractError();
+    return value as unknown as HistoricalModelGeoBudgetV1;
+  }
+
+  if (typeof value.artifact_id !== "string" || !HISTORICAL_ARTIFACT_ID.test(value.artifact_id)
+    || !text(value.artifact_version)
+    || !isoDate(value.period_start) || !isoDate(value.period_end) || value.period_start > value.period_end
+    || !text(value.spend_columns_version)
+    || !nonNegative(value.total_budget_rub)
+    || value.geographies_n < 1 || value.rows.length !== value.geographies_n
+    || !value.rows.every(historicalGeo)
+    || !uniqueBy(value.rows, (item) => (item as JsonRecord).geo_id as string)
+    || !zonedIsoDateTime(value.updated_at_utc)) throw new UnsupportedBusinessSemanticsContractError();
+
+  const rows = value.rows as JsonRecord[];
+  const totalBudget = value.total_budget_rub as number;
+  const rowBudget = rows.reduce((sum, row) => sum + (row.historical_total_budget_rub as number), 0);
+  const rowShare = rows.reduce((sum, row) => sum + (row.budget_share as number), 0);
+  const tolerance = Math.max(0.01, totalBudget * 1e-12);
+  const expectedShare = totalBudget > 0 ? 1 : 0;
+  if (Math.abs(rowBudget - totalBudget) > tolerance
+    || Math.abs(rowShare - expectedShare) > SHARE_TOLERANCE
+    || !historicalCoverage(value.coverage, rows, totalBudget, value.status)) throw new UnsupportedBusinessSemanticsContractError();
+  return value as unknown as HistoricalModelGeoBudgetV1;
+}
+
 function errorCode(value: unknown): string | null { return record(value) && exact(value, ERROR_KEYS) && record(value.error) && exact(value.error, ERROR_DETAIL_KEYS) && text(value.error.code) && text(value.error.display_text) && typeof value.error.retryable === "boolean" && text(value.error.user_action) ? value.error.code : null; }
 function queryString(query: ScenarioMediaPlanV2Query): string { const page = query.page ?? 1; const pageSize = query.pageSize ?? 100; if (!SCENARIOS.includes(query.scenarioId) || !positivePage(page) || !positivePage(pageSize) || (query.channel !== undefined && query.channel !== null && !text(query.channel)) || (query.geo !== undefined && query.geo !== null && !text(query.geo))) throw new BusinessSemanticsQueryError(); const params = new URLSearchParams({ scenario_id: query.scenarioId, page: String(page), page_size: String(pageSize) }); if (query.channel) params.set("channel", query.channel); if (query.geo) params.set("geo", query.geo); return params.toString(); }
 function positivePage(value: unknown): value is number { return integer(value) && value >= 1; }
@@ -301,3 +436,4 @@ export function getActiveModelPassportV2(signal?: AbortSignal, baseUrl = appEnv.
 export function getModelOverviewV2(signal?: AbortSignal, baseUrl = appEnv.apiBaseUrl): Promise<ModelOverviewV2> { return get("/api/v1/model/overview-v2", parseModelOverviewV2, signal, baseUrl); }
 export function getGeoCatalog(signal?: AbortSignal, baseUrl = appEnv.apiBaseUrl): Promise<GeoCatalogV1> { return get("/api/v1/meta/geo-catalog", parseGeoCatalog, signal, baseUrl); }
 export function getWorkspaceGeoBudget(signal?: AbortSignal, baseUrl = appEnv.apiBaseUrl): Promise<WorkspaceGeoBudgetV1> { return get("/api/v1/workspace/geo-budget", parseWorkspaceGeoBudget, signal, baseUrl); }
+export function getHistoricalModelGeoBudget(signal?: AbortSignal, baseUrl = appEnv.apiBaseUrl): Promise<HistoricalModelGeoBudgetV1> { return get("/api/v1/model/historical-geo-budget", parseHistoricalModelGeoBudget, signal, baseUrl); }
