@@ -3,10 +3,9 @@
 ## Статус
 
 Phase E.1B реализована в отдельной frontend-ветке. Typed migration, unit,
-fixture regression, Chromium automation, live backend acceptance и
-light/dark/mobile visual review выполнены. Safari manual smoke остается
-единственным pending gate, пока macOS заблокирована; до его завершения PR
-остается Draft.
+fixture regression, Chromium automation, live backend acceptance,
+light/dark/mobile visual review и Safari manual smoke выполнены. Все
+обязательные frontend gates пройдены.
 
 Baseline:
 `origin/main@f5944c5b25296a2cd58e27b4c8469c572fe93e20`
@@ -231,7 +230,7 @@ screenshots они по-прежнему допустимы только с badg
 | Fixture/full Playwright regression | passed: 149 tests; 2 opt-in live suites skipped |
 | Chromium automated acceptance | passed |
 | Live backend acceptance without interception | passed: 1 test |
-| Safari manual smoke | pending: macOS locked |
+| Safari manual smoke | passed: login, Home, Result, Validation и Model |
 | Light/dark/mobile visual review | passed: 24 PNG |
 | Result contrast | light 5.981:1; dark 8.002:1 |
 | Validation contrast | light 5.981:1; dark 8.002:1 |

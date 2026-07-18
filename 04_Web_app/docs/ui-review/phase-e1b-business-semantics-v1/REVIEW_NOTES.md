@@ -2,8 +2,8 @@
 
 ## Статус evidence
 
-Review status: **automated, live backend and visual evidence passed; Safari
-manual smoke pending because macOS is locked**.
+Review status: **automated, live backend, visual evidence and Safari manual
+smoke passed**.
 
 Baseline:
 `origin/main@f5944c5b25296a2cd58e27b4c8469c572fe93e20`
@@ -95,7 +95,7 @@ horizontal overflow проверено Playwright на 375×812, 812×375 и 144
 | Live E.1B acceptance | passed | 1 test, no route interception |
 | Screenshot dimensions/overflow | passed | 24 PNG; 375×812, 812×375, 1440×900 checks |
 | Contrast light/dark | passed | result 5.981/8.002; validation 5.981/8.002 |
-| Safari manual smoke | pending | macOS locked |
+| Safari manual smoke | passed | live backend, Safari 1024×768 |
 
 ## Live backend acceptance
 
@@ -119,8 +119,23 @@ Control job `job_a8d96e52fc792197be1f` и validation
 - отсутствие raw channel IDs и diagnostic target cards;
 - clean browser console, отсутствие auth leakage и document overflow.
 
-Safari manual smoke остается отдельным последним gate и не заменяется
-Chromium automation или fixture screenshots.
+## Safari manual smoke
+
+Status: **passed on the live local backend**.
+
+В Safari при окне 1024×768 вручную подтверждены:
+
+- login и session bootstrap с переходом на Главную;
+- Home с live geo-budget, 15 географиями и unavailable-state карты;
+- Result Overview и turnover-only KPI;
+- сценарии S1, partial S5 и infeasible S6 без fake KPI;
+- media-plan с 3 display-name каналами и 15 structured geographies;
+- Validation с отдельными блоками `Проверка файла` и `Ограничения модели`;
+- Model с 1 serving target, 4 serving-моделями и 12 research fits;
+- отсутствие overlap, raw channel IDs и legacy orders/average-basket metrics.
+
+Safari smoke дополняет, но не заменяет Chromium automation, fixture regression
+и отдельный live acceptance без route interception.
 
 ## Known limitations и contract gaps
 
