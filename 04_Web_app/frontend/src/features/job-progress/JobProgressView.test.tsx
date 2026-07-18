@@ -329,6 +329,23 @@ describe("JobProgressView", () => {
     expect(screen.queryByText("forecast")).not.toBeInTheDocument();
   });
 
+  it.each([
+    "Модель оценивает количество заказов и дополнительный оборот.",
+    "Средний чек помогает разложить эффект.",
+    "Модель использует три целевых показателя.",
+  ])("hides a legacy multi-target MMM fact: %s", (text) => {
+    renderView(view("running"), {
+      fact: {
+        fact_id: "fact_legacy_target",
+        category: "forecast",
+        text,
+        source_label: "Методическая памятка",
+      },
+    });
+    expect(screen.queryByRole("heading", { name: "MMM за минуту" })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(text);
+  });
+
   it("does not render raw implementation terms", () => {
     renderView(view("running"));
     const text = document.body.textContent ?? "";

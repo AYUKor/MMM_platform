@@ -1,23 +1,13 @@
-import type { JobResultViewV1, ScenarioId } from "../../shared/api/generated/job-result-view-v1";
-import type { ScenarioMediaPlanV1 } from "../../shared/api/generated/scenario-media-plan-v1";
-import {
-  MediaPlanQueryUnsupportedError,
-  MediaPlanUnavailableError,
-  JobResultNotReadyError,
-  UnsupportedScenarioMediaPlanContractError,
-} from "../../shared/api/job-result-client";
+import type { JobResultViewV2 } from "../../shared/api/generated/job-result-view-v2";
+import type {
+  ScenarioId,
+  ScenarioMediaPlanV2,
+} from "../../shared/api/generated/scenario-media-plan-v2";
 import { formatInteger, formatPercent, formatRub, formatSignedRub } from "../../shared/formatters/metrics";
 import { Button } from "../../shared/ui/Button";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
-import {
-  qualityLabel,
-  qualityTone,
-  formatDeltaPercent,
-  scenarioAnchorLabel,
-  scenarioDisplayName,
-  scenarioNumber,
-} from "./jobResultFormatting";
-import { BudgetComparisonChart, UnavailableBlock } from "./ResultVisuals";
+import { UnavailableBlock } from "./ResultVisuals";
+import { scenarioDisplayName } from "./jobResultFormatting";
 import styles from "./job-result.module.css";
 
 export interface MediaPlanControls {
@@ -27,65 +17,44 @@ export interface MediaPlanControls {
   pageSize: number;
 }
 
-function MediaPlanErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  const unsupportedQuery = error instanceof MediaPlanQueryUnsupportedError;
-  const unsupportedContract = error instanceof UnsupportedScenarioMediaPlanContractError;
-  const unavailable = error instanceof MediaPlanUnavailableError;
-  const notReady = error instanceof JobResultNotReadyError;
-  return (
-    <section className={styles.inlineState} role="alert">
-      <span className={styles.eyebrow}>Медиаплан</span>
-      <h3>
-        {unsupportedQuery
-          ? "Такие параметры пока не поддерживаются"
-          : unsupportedContract
-            ? "Формат медиаплана не поддерживается"
-            : notReady
-              ? "Медиаплан еще не готов"
-            : unavailable
-              ? "Медиаплан временно недоступен"
-              : "Не удалось получить медиаплан"}
-      </h3>
-      <p>
-        {unsupportedQuery
-          ? "Сбросьте фильтры или выберите другой рассчитанный сценарий."
-          : unsupportedContract
-            ? "Данные не прошли безопасную проверку и поэтому не показаны."
-            : notReady
-              ? "Расчет или публикация результата еще продолжаются. Повторите запрос позже."
-            : "Проверьте соединение и повторите запрос."}
-      </p>
-      <Button onClick={onRetry}>{unsupportedQuery ? "Сбросить фильтры" : "Повторить"}</Button>
-    </section>
-  );
+function errorMessage(error: unknown): string {
+  return error instanceof Error && error.message.trim()
+    ? error.message
+    : "Не удалось получить медиаплан.";
 }
 
-function Pagination({
-  plan,
-  onPageChange,
+function AggregateList({
+  title,
+  rows,
 }: {
-  plan: ScenarioMediaPlanV1;
-  onPageChange: (page: number) => void;
+  title: string;
+  rows: Array<{
+    id: string;
+    label: string;
+    source: number;
+    selected: number;
+    delta: number;
+    deltaPct: number | null;
+    status: string;
+  }>;
 }) {
-  if (plan.pagination.total_pages <= 1) return null;
   return (
-    <nav className={styles.pagination} aria-label="Страницы медиаплана">
-      <Button
-        disabled={plan.pagination.page <= 1}
-        onClick={() => onPageChange(plan.pagination.page - 1)}
-      >
-        Назад
-      </Button>
-      <span>
-        Страница {formatInteger(plan.pagination.page)} из {formatInteger(plan.pagination.total_pages)}
-      </span>
-      <Button
-        disabled={plan.pagination.page >= plan.pagination.total_pages}
-        onClick={() => onPageChange(plan.pagination.page + 1)}
-      >
-        Далее
-      </Button>
-    </nav>
+    <section className={styles.mediaAggregate} aria-label={title}>
+      <div className={styles.sectionHeading}><h3>{title}</h3><span>{formatInteger(rows.length)} позиций</span></div>
+      <div className={styles.aggregateList}>
+        {rows.map((row) => (
+          <article key={row.id}>
+            <strong>{row.label}</strong>
+            <dl>
+              <div><dt>Исходный</dt><dd>{formatRub(row.source)}</dd></div>
+              <div><dt>Выбранный</dt><dd>{formatRub(row.selected)}</dd></div>
+              <div><dt>Изменение</dt><dd>{formatSignedRub(row.delta)} · {formatPercent(row.deltaPct === null ? null : row.deltaPct / 100)}</dd></div>
+            </dl>
+            <span>{row.status}</span>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -101,264 +70,182 @@ export function MediaPlanTab({
   onPageChange,
   onRetry,
 }: {
-  result: JobResultViewV1;
-  plan: ScenarioMediaPlanV1 | undefined;
+  result: JobResultViewV2;
+  plan: ScenarioMediaPlanV2 | undefined;
   selectedScenarioId: ScenarioId | null;
   controls: MediaPlanControls;
   loading: boolean;
   error: unknown;
   onScenarioChange: (scenarioId: ScenarioId) => void;
-  onControlsChange: (next: MediaPlanControls) => void;
+  onControlsChange: (controls: MediaPlanControls) => void;
   onPageChange: (page: number) => void;
   onRetry: () => void;
 }) {
-  const selectedScenario = selectedScenarioId === null
-    ? null
-    : result.scenarios.find((scenario) => scenario.scenario_id === selectedScenarioId) ?? null;
-  const isCanonicalRecommendation =
-    result.recommendation.status === "recommended" &&
-    result.recommendation.scenario_id === plan?.scenario.scenario_id;
-  const selectedBudgetLabel = isCanonicalRecommendation ? "Рекомендуется" : "Просматриваемый сценарий";
-  const channels = plan?.aggregates.by_channel.map((row) => row.channel) ?? [];
-  const geographies = plan?.aggregates.by_geo.map((row) => row.geo) ?? [];
+  const completedScenarios = result.scenarios.filter((scenario) => scenario.status === "completed");
+  const infeasibleS6 = result.scenarios.find((scenario) => scenario.scenario_id === "S06" && scenario.status === "infeasible");
 
   return (
     <div className={styles.tabStack}>
-      <section className={styles.mediaPlanIntro} aria-labelledby="media-plan-title">
+      <section className={styles.mediaPlanIntro}>
         <div>
-          <span className={styles.eyebrow}>Рассчитанные варианты</span>
-          <h2 id="media-plan-title">
-            {isCanonicalRecommendation
-              ? "Медиаплан было → рекомендуется"
-              : "Исходный план → просматриваемый сценарий"}
-          </h2>
-          <p>
-            Переключатель меняет только просмотр уже рассчитанного плана. Рекомендация системы,
-            ранги и выводы расчета при этом не меняются.
-          </p>
+          <span className={styles.eyebrow}>Просмотр рассчитанного плана</span>
+          <h2>Исходный план → просматриваемый сценарий</h2>
+          <p>Переключатель меняет только просмотр уже рассчитанного медиаплана и не влияет на рекомендацию.</p>
         </div>
-        {selectedScenario ? (
-          <div className={styles.viewOnlyNotice}>
-            <span>Сейчас открыт</span>
-            <strong>S{scenarioNumber(selectedScenario.scenario_id)} · {scenarioDisplayName(selectedScenario)}</strong>
-            {scenarioAnchorLabel(selectedScenario.scenario_id) ? (
-              <StatusBadge tone="neutral">{scenarioAnchorLabel(selectedScenario.scenario_id)}</StatusBadge>
-            ) : null}
-          </div>
-        ) : null}
+        <label className={styles.scenarioSelect}>
+          <span>Сценарий</span>
+          <select
+            value={selectedScenarioId ?? ""}
+            onChange={(event) => onScenarioChange(event.target.value as ScenarioId)}
+            disabled={completedScenarios.length === 0}
+          >
+            {completedScenarios.map((scenario) => (
+              <option key={scenario.scenario_id} value={scenario.scenario_id}>
+                S{Number(scenario.scenario_id.slice(1))} · {scenarioDisplayName(scenario)}
+              </option>
+            ))}
+          </select>
+        </label>
       </section>
 
-      <fieldset className={styles.scenarioPicker}>
-        <legend>Сценарий для просмотра</legend>
-        {result.media_plan.scenario_options.map((option) => {
-          const scenario = result.scenarios.find((item) => item.scenario_id === option.scenario_id);
-          const available = option.status === "completed";
-          return (
-            <label key={option.scenario_id} className={selectedScenarioId === option.scenario_id ? styles.scenarioChoiceActive : styles.scenarioChoice}>
-              <input
-                type="radio"
-                name="media-plan-scenario"
-                value={option.scenario_id}
-                checked={selectedScenarioId === option.scenario_id}
-                disabled={!available}
-                onChange={() => onScenarioChange(option.scenario_id)}
-              />
-              <span>S{scenarioNumber(option.scenario_id)}</span>
-              <strong>{scenario ? scenarioDisplayName(scenario) : option.title}</strong>
-              <small>{available ? "Рассчитан" : option.status === "failed" ? "Расчет завершился с ошибкой" : "Нет данных"}</small>
-            </label>
-          );
-        })}
-      </fieldset>
-
-      {selectedScenarioId === null ? (
-        <UnavailableBlock
-          title="Медиаплан недоступен"
-          description="Нет ни одного завершенного сценария, который можно безопасно показать."
-        />
+      {infeasibleS6 ? (
+        <section className={styles.mediaUnavailableNotice} role="status">
+          <StatusBadge tone="neutral">S6 недоступен</StatusBadge>
+          <div><strong>Полный план максимального эффекта недоступен</strong><span>Пустая таблица не подменяет отсутствующий рассчитанный план.</span></div>
+        </section>
       ) : null}
 
-      {selectedScenarioId !== null && loading && !plan ? (
-        <div className={styles.inlineLoading} aria-live="polite" aria-busy="true">
-          <span aria-hidden="true" />
-          <p>Получаем рассчитанный медиаплан…</p>
-        </div>
-      ) : null}
+      <section className={styles.mediaFilters} aria-label="Фильтры медиаплана">
+        <label>
+          <span>Канал</span>
+          <select
+            value={controls.channel ?? ""}
+            onChange={(event) => onControlsChange({ ...controls, channel: event.target.value || null, page: 1 })}
+          >
+            <option value="">Все каналы</option>
+            {result.campaign.channels.map((channel) => (
+              <option key={channel.channel_id} value={channel.channel_id}>{channel.channel_display_name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>География</span>
+          <select
+            value={controls.geo ?? ""}
+            onChange={(event) => onControlsChange({ ...controls, geo: event.target.value || null, page: 1 })}
+          >
+            <option value="">Все географии</option>
+            {result.campaign.geographies.map((geo) => (
+              <option key={geo.geo_id} value={geo.geo_display_name}>{geo.geo_display_name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Строк на странице</span>
+          <select
+            value={controls.pageSize}
+            onChange={(event) => onControlsChange({ ...controls, pageSize: Number(event.target.value), page: 1 })}
+          >
+            {[10, 25, 50, 100].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+      </section>
 
-      {selectedScenarioId !== null && error && !plan ? (
-        <MediaPlanErrorState error={error} onRetry={onRetry} />
+      {loading && !plan ? (
+        <section className={styles.inlineLoading} aria-live="polite" aria-busy="true"><span /><p>Получаем медиаплан…</p></section>
+      ) : null}
+      {error && !plan ? (
+        <section className={styles.mediaError} role="alert"><h3>Медиаплан недоступен</h3><p>{errorMessage(error)}</p><Button onClick={onRetry}>Повторить</Button></section>
       ) : null}
 
       {plan ? (
         <>
-          {error ? (
+          {loading || error ? (
             <div className={styles.refreshNotice} role="status">
-              <span>Не удалось обновить медиаплан. Последние полученные данные сохранены.</span>
-              <Button onClick={onRetry}>Повторить</Button>
+              <span>{error ? "Не удалось обновить медиаплан. Последний безопасный снимок сохранен." : "Обновляем медиаплан…"}</span>
+              {error ? <Button onClick={onRetry}>Повторить</Button> : null}
             </div>
           ) : null}
-
-          <section className={styles.mediaSummary} aria-label="Итоги медиаплана">
-            <dl>
-              <div><dt>Запрошенный бюджет</dt><dd>{formatRub(plan.totals.requested_budget_rub)}</dd></div>
-              <div><dt>Исходный бюджет</dt><dd>{formatRub(plan.totals.source_budget_rub)}</dd></div>
-              <div><dt>Выбранный план</dt><dd>{formatRub(plan.totals.selected_budget_rub)}</dd></div>
-              <div><dt>Изменение</dt><dd>{formatSignedRub(plan.totals.delta_rub)}</dd></div>
-              <div className={plan.totals.unallocated_budget_rub > 0 ? styles.budgetWarning : ""}>
-                <dt>Не распределено</dt><dd>{formatRub(plan.totals.unallocated_budget_rub)}</dd>
-              </div>
-            </dl>
-            <div>
-              <StatusBadge tone={qualityTone(plan.scenario.quality_status)}>
-                {qualityLabel(plan.scenario.quality_status)}
+          <section className={styles.mediaSummary} aria-labelledby="media-summary-title">
+            <div className={styles.sectionHeading}>
+              <div><span className={styles.eyebrow}>Сверка бюджета</span><h2 id="media-summary-title">План согласован с результатом</h2></div>
+              <StatusBadge tone={plan.totals.unallocated_budget_rub > 0 ? "warning" : "accent"}>
+                {plan.totals.unallocated_budget_rub > 0 ? "Частичное распределение" : "Весь бюджет распределен"}
               </StatusBadge>
-              {isCanonicalRecommendation ? (
-                <StatusBadge tone="accent">Рекомендованный вариант</StatusBadge>
-              ) : (
-                <StatusBadge tone="neutral">Только просмотр</StatusBadge>
-              )}
             </div>
+            <dl className={styles.budgetSummary}>
+              <div><dt>Запрошено</dt><dd>{formatRub(plan.totals.requested_budget_rub)}</dd></div>
+              <div><dt>Исходный план</dt><dd>{formatRub(plan.totals.source_budget_rub)}</dd></div>
+              <div><dt>Распределено</dt><dd>{formatRub(plan.totals.selected_budget_rub)}</dd></div>
+              <div className={plan.totals.unallocated_budget_rub > 0 ? styles.budgetWarning : ""}><dt>Не распределено</dt><dd>{formatRub(plan.totals.unallocated_budget_rub)}</dd></div>
+            </dl>
           </section>
 
-          <section className={styles.budgetChartsSection} aria-labelledby="media-budget-changes-title">
-            <div className={styles.sectionHeading}>
-              <div>
-                <span className={styles.eyebrow}>Было → {selectedBudgetLabel.toLowerCase()}</span>
-                <h3 id="media-budget-changes-title">Изменение бюджета по каналам и географиям</h3>
-              </div>
-              <span>Сравнение исходного и выбранного плана</span>
-            </div>
-            <div className={styles.budgetChartsGrid}>
-              <BudgetComparisonChart
-                title="По каналам"
-                rows={[...plan.aggregates.by_channel]}
-                dimension="channel"
-              />
-              <BudgetComparisonChart
-                title="По географиям"
-                rows={[...plan.aggregates.by_geo]}
-                dimension="geo"
-                limit={10}
-              />
-            </div>
-            <div className={styles.geoChannelSummary}>
-              <strong>География × канал</strong>
-              <span>{formatInteger(plan.aggregates.by_geo_channel.length)} рассчитанных связок</span>
-              <p>{plan.aggregates.geo_channel_matrix.display_text}</p>
-            </div>
-          </section>
-
-          <section className={styles.mediaFilters} aria-labelledby="media-filter-title">
-            <div>
-              <span className={styles.eyebrow}>Детализация</span>
-              <h3 id="media-filter-title">Фильтры таблицы</h3>
-            </div>
-            <label>
-              <span>Канал</span>
-              <select
-                value={controls.channel ?? ""}
-                onChange={(event) => onControlsChange({ ...controls, channel: event.target.value || null, page: 1 })}
-              >
-                <option value="">Все каналы</option>
-                {channels.map((channel) => <option key={channel} value={channel}>{channel}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>География</span>
-              <select
-                value={controls.geo ?? ""}
-                onChange={(event) => onControlsChange({ ...controls, geo: event.target.value || null, page: 1 })}
-              >
-                <option value="">Все географии</option>
-                {geographies.map((geo) => <option key={geo} value={geo}>{geo}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Строк на странице</span>
-              <select
-                value={controls.pageSize}
-                onChange={(event) => onControlsChange({ ...controls, pageSize: Number(event.target.value), page: 1 })}
-              >
-                {[10, 25, 50, 100].map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-            </label>
-            <Button onClick={() => onControlsChange({ channel: null, geo: null, page: 1, pageSize: controls.pageSize })}>
-              Сбросить
-            </Button>
-          </section>
-
-          <section className={styles.mediaTableSection} aria-labelledby="media-table-title">
-            <div className={styles.sectionHeading}>
-              <div>
-                <span className={styles.eyebrow}>География × канал</span>
-                <h3 id="media-table-title">Строки рассчитанного плана</h3>
-              </div>
-              <span>{formatInteger(plan.pagination.total_rows)} строк</span>
-            </div>
-            {plan.rows.length === 0 ? (
-              <div className={styles.tableEmpty} role="status">
-                <strong>По выбранным фильтрам строк нет</strong>
-                <span>Это корректный пустой результат. Сбросьте фильтры, чтобы увидеть весь план.</span>
-              </div>
-            ) : (
-              <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="Таблица медиаплана, прокручивается по горизонтали">
-                <table className={styles.mediaTable}>
-                  <thead>
-                    <tr>
-                      <th>Сегмент</th>
-                      <th>География</th>
-                      <th>Канал</th>
-                      <th className={styles.numericCell}>Было</th>
-                      <th className={styles.numericCell}>{selectedBudgetLabel}</th>
-                      <th className={styles.numericCell}>Изменение, ₽</th>
-                      <th className={styles.numericCell}>Изменение, %</th>
-                      <th className={styles.numericCell}>Доля выбранного</th>
-                      <th>Статус</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {plan.rows.map((row) => (
-                      <tr key={`${row.segment}:${row.geo}:${row.channel}`}>
-                        <td>{row.segment}</td>
-                        <td>{row.geo}</td>
-                        <td>{row.channel}</td>
-                        <td className={styles.numericCell}>{formatRub(row.source_budget_rub)}</td>
-                        <td className={styles.numericCell}>{formatRub(row.selected_budget_rub)}</td>
-                        <td className={`${styles.numericCell} ${row.delta_rub >= 0 ? styles.positiveDelta : styles.negativeDelta}`}>
-                          {formatSignedRub(row.delta_rub)}
-                        </td>
-                        <td className={`${styles.numericCell} ${row.delta_pct === null ? "" : row.delta_pct < 0 ? styles.negativeDelta : styles.positiveDelta}`}>
-                          {formatDeltaPercent(row.delta_pct)}
-                        </td>
-                        <td className={styles.numericCell}>{formatPercent(row.selected_budget_share)}</td>
-                        <td><StatusBadge tone={qualityTone(row.quality_status)}>{qualityLabel(row.quality_status)}</StatusBadge></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination plan={plan} onPageChange={onPageChange} />
-          </section>
-
-          <section className={styles.filteredSummary} aria-label="Итоги выбранных фильтров">
-            <strong>В выбранном срезе</strong>
-            <span>Было {formatRub(plan.filtered_totals.source_budget_rub)}</span>
-            <span>{selectedBudgetLabel} {formatRub(plan.filtered_totals.selected_budget_rub)}</span>
-            <span>Изменение {formatSignedRub(plan.filtered_totals.delta_rub)}</span>
-          </section>
-
-          <div className={styles.unavailableGrid}>
-            <UnavailableBlock title="Карта" description={plan.map.display_text} />
-            <UnavailableBlock title="Календарь активности" description={plan.aggregates.channel_date_matrix.display_text} />
-            <UnavailableBlock title="План по дням" description={plan.aggregates.by_date.display_text} />
-            <UnavailableBlock title="Рабочий Excel-медиаплан" description={plan.working_media_plan.display_text} />
+          <div className={styles.mediaAggregateGrid}>
+            <AggregateList
+              title="Бюджет по каналам"
+              rows={plan.aggregates.by_channel.map((row) => ({
+                id: row.channel_id,
+                label: row.channel_display_name,
+                source: row.source_budget_rub,
+                selected: row.selected_budget_rub,
+                delta: row.delta_rub,
+                deltaPct: row.delta_pct,
+                status: row.quality_display_text,
+              }))}
+            />
+            <AggregateList
+              title="Бюджет по географиям"
+              rows={plan.aggregates.by_geo.map((row) => ({
+                id: row.geo_id,
+                label: row.geo_display_name,
+                source: row.source_budget_rub,
+                selected: row.selected_budget_rub,
+                delta: row.delta_rub,
+                deltaPct: row.delta_pct,
+                status: row.quality_display_text,
+              }))}
+            />
           </div>
 
-          <section className={styles.limitations} aria-labelledby="media-limitations-title">
-            <h3 id="media-limitations-title">Ограничения представления</h3>
-            <ul>{plan.limitations.map((limitation) => <li key={limitation.code}>{limitation.display_text}</li>)}</ul>
+          {plan.pagination.total_rows === 0 ? (
+            <section className={styles.mediaUnavailableNotice} role="status">
+              <StatusBadge tone="neutral">Нет данных</StatusBadge>
+              <div><strong>По выбранным фильтрам строк нет</strong><span>Измените канал или географию, чтобы увидеть рассчитанный медиаплан.</span></div>
+            </section>
+          ) : (
+          <section className={styles.mediaTableSection} aria-labelledby="media-table-title">
+            <div className={styles.sectionHeading}>
+              <div><span className={styles.eyebrow}>География × канал</span><h2 id="media-table-title">Детальный медиаплан</h2></div>
+              <span>{formatInteger(plan.pagination.total_rows)} строк · {formatInteger(result.campaign.geographies_n)} географий</span>
+            </div>
+            <div className={styles.tableScroll} tabIndex={0} aria-label="Таблица медиаплана">
+              <table>
+                <thead><tr><th scope="col">Сегмент</th><th scope="col">География</th><th scope="col">Канал</th><th scope="col">Исходный бюджет</th><th scope="col">Просматриваемый бюджет</th><th scope="col">Изменение</th><th scope="col">Надежность</th></tr></thead>
+                <tbody>
+                  {plan.rows.map((row, index) => (
+                    <tr key={`${row.geo_id}-${row.channel_id}-${index}`}>
+                      <td>{row.segment}</td>
+                      <th scope="row">{row.geo_display_name}</th>
+                      <td>{row.channel_display_name}</td>
+                      <td>{formatRub(row.source_budget_rub)}</td>
+                      <td>{formatRub(row.selected_budget_rub)}</td>
+                      <td>{formatSignedRub(row.delta_rub)}</td>
+                      <td>{row.quality_display_text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={styles.pagination}>
+              <Button disabled={plan.pagination.page <= 1} onClick={() => onPageChange(plan.pagination.page - 1)}>Назад</Button>
+              <span>Страница {formatInteger(plan.pagination.page)} из {formatInteger(plan.pagination.total_pages)}</span>
+              <Button disabled={plan.pagination.page >= plan.pagination.total_pages} onClick={() => onPageChange(plan.pagination.page + 1)}>Далее</Button>
+            </div>
           </section>
+          )}
+
+          <UnavailableBlock title="Карта географий" description="Карта будет доступна после подключения утвержденного справочника координат." />
         </>
       ) : null}
     </div>

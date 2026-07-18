@@ -12,10 +12,12 @@ Standalone Model Passport закрыт на backend-стороне. Текущи
 milestone подключает route `/model` через typed client и fail-closed runtime
 validation, не читая registry, `CURRENT_TRUTH.md` или локальные model files.
 
-Post-merge E.1A update, 2026-07-17: backend now publishes additive turnover-only
-contracts. The existing v1 sections below remain historical documentation for
-the merged frontend; they are not the target semantics for the next result
-milestone.
+Post-merge E.1A update, 2026-07-17: backend publishes additive turnover-only
+contracts. Frontend Phase E.1B migrates product presentation to these
+projections from baseline
+`f5944c5b25296a2cd58e27b4c8469c572fe93e20`. The existing v1 sections below
+remain historical documentation only and must not be used to reconstruct
+current result semantics.
 
 New frontend work must prefer:
 
@@ -29,7 +31,7 @@ New frontend work must prefer:
 | Geo identity/coordinate availability | `GET /api/v1/meta/geo-catalog` | `geo_catalog_v1` |
 | Workspace geo budget | `GET /api/v1/workspace/geo-budget` | `workspace_geo_budget_v1` |
 
-E.1A rules for the future frontend migration:
+Phase E.1B frontend rules:
 
 - primary result target is turnover only; do not render orders or average
   basket from legacy v1 fields;
@@ -48,9 +50,31 @@ E.1A rules for the future frontend migration:
 - map state remains unavailable while canonical coordinates are null.
 
 The v1 `/media-plan` endpoint remains compatible for the merged historical
-frontend. New work uses `/media-plan-v2`, which already supplies versioned
-channel and geography identities; frontend constants and loose CSV joins
-remain prohibited.
+frontend. Phase E.1B uses `/media-plan-v2`, which supplies versioned channel
+and geography identities; frontend constants and loose CSV joins remain
+prohibited. Malformed or unavailable v2 responses never fall back silently to
+v1 result, validation, model or media-plan payloads.
+
+Current E.1B contract gaps are explicit:
+
+1. `job_result_view_v2` contains no report artifact metadata or download path,
+   so Report remains controlled unavailable instead of reading a v1 artifact;
+2. budget publishes `allocation_share`, but no `unallocated_share`; frontend
+   shows exact unallocated RUB and does not compute the complement;
+3. canonical coordinates are unavailable, so no map or campaign-relative
+   scatter plot is rendered;
+4. daily media-plan rows and channel/date matrix remain unavailable.
+
+`workspace_geo_budget_v1` augments the existing workspace Home projection; it
+does not replace `workspace_home_v1`. The browser consumes server totals and
+does not aggregate jobs/history into a new geo decision metric.
+
+Implementation and QA evidence are tracked in
+`integration/FRONTEND_PHASE_E1B_BUSINESS_SEMANTICS_V1.md` and
+`ui-review/phase-e1b-business-semantics-v1/REVIEW_NOTES.md`. Until those checks
+are executed, their verification status remains `pending`.
+
+The numbered sections below describe the historical v1 boundary.
 
 ## 1. Источники истины и граница frontend
 

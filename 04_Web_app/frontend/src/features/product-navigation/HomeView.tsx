@@ -1,11 +1,18 @@
 import { Link } from "react-router-dom";
+import type { GeoCatalogV1 } from "../../shared/api/generated/geo-catalog-v1";
+import type { WorkspaceGeoBudgetV1 } from "../../shared/api/generated/workspace-geo-budget-v1";
 import type { WorkspaceHomeV1 } from "../../shared/api/generated/workspace-home-v1";
 import { formatDate, formatInteger, formatRub } from "../../shared/formatters/metrics";
+import { containsLegacyTargetClaim } from "../../shared/presentation/turnover-only";
 import { RefreshNotice } from "./ProductNavigationPageState";
 import styles from "./product-navigation.module.css";
 
 interface HomeViewProps {
   home: WorkspaceHomeV1;
+  geoBudget: WorkspaceGeoBudgetV1 | null;
+  geoCatalog: GeoCatalogV1 | null;
+  geoLoading?: boolean;
+  geoUnavailable?: boolean;
   refreshMessage?: string | null;
   onRefresh: () => void;
 }
@@ -33,9 +40,21 @@ function statusClass(status: string): string {
   return styles.statusNeutral;
 }
 
-export function HomeView({ home, refreshMessage = null, onRefresh }: HomeViewProps) {
+export function HomeView({
+  home,
+  geoBudget,
+  geoCatalog,
+  geoLoading = false,
+  geoUnavailable = false,
+  refreshMessage = null,
+  onRefresh,
+}: HomeViewProps) {
   const newCalculation = home.quick_actions.find((item) => item.action_id === "new_calculation");
   const history = home.quick_actions.find((item) => item.action_id === "calculation_history");
+  const modelDisplayName = home.model.display_name
+    && !containsLegacyTargetClaim(home.model.display_name)
+    ? home.model.display_name
+    : "Модель дополнительного оборота";
   return (
     <div className={styles.page}>
       <header className={styles.homeHero}>
@@ -86,6 +105,37 @@ export function HomeView({ home, refreshMessage = null, onRefresh }: HomeViewPro
         </dl>
       </section>
 
+      <section className={styles.geoBudgetSection} aria-labelledby="geo-budget-title">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.eyebrow}>География бюджета</span>
+            <h2 id="geo-budget-title">Бюджет проверенных кампаний по географиям</h2>
+          </div>
+          <span>Сводка формируется сервисом</span>
+        </div>
+        {geoBudget ? (
+          <dl className={styles.geoBudgetSummary}>
+            <div><dt>Бюджет в проверенных кампаниях</dt><dd>{formatRub(geoBudget.total_budget_rub)}</dd></div>
+            <div><dt>Кампании</dt><dd>{formatInteger(geoBudget.campaigns_n)}</dd></div>
+            <div><dt>Географии</dt><dd>{formatInteger(geoBudget.geographies_n)}</dd></div>
+          </dl>
+        ) : null}
+        <div className={styles.geoUnavailable} role="status" aria-live="polite">
+          <div className={styles.geoUnavailableMark} aria-hidden="true"><span /><span /></div>
+          <div>
+            <strong>Карта пока недоступна</strong>
+            <p>Карта будет доступна после подключения утвержденного справочника координат.</p>
+            <small>
+              {geoLoading
+                ? "Проверяем готовность справочника."
+                : geoUnavailable
+                  ? "Не удалось получить сведения о готовности карты."
+                  : geoCatalog?.display_text ?? geoBudget?.display_text ?? "Координаты пока не опубликованы."}
+            </small>
+          </div>
+        </div>
+      </section>
+
       <div className={styles.homeGrid}>
         <section className={styles.listSection} aria-labelledby="active-calculations-title">
           <div className={styles.sectionHeading}>
@@ -130,19 +180,19 @@ export function HomeView({ home, refreshMessage = null, onRefresh }: HomeViewPro
           </div>
           {home.model.status.code === "available" ? (
             <>
-              <h2 id="home-model-title">{home.model.display_name ?? "Модель"}</h2>
-              <p>{home.model.description}</p>
+              <h2 id="home-model-title">{modelDisplayName}</h2>
+              <p>Рекомендации рассчитываются только по дополнительному обороту.</p>
               <dl className={styles.modelFacts}>
-                <div><dt>Версия</dt><dd>{home.model.version ?? "Нет данных"}</dd></div>
+                <div><dt>Основной показатель</dt><dd>Дополнительный оборот</dd></div>
                 <div><dt>Период обучения</dt><dd>{periodLabel(home.model.training_period)}</dd></div>
                 <div><dt>Географий</dt><dd>{formatInteger(home.model.supported_scope?.geographies_n ?? null)}</dd></div>
-                <div><dt>Опубликована</dt><dd>{formatDateTime(home.model.published_at_utc)}</dd></div>
+                <div><dt>Режим</dt><dd>Research / preprod</dd></div>
               </dl>
             </>
           ) : (
             <>
               <h2 id="home-model-title">Сведения об активной модели пока недоступны</h2>
-              <p>{home.model.description}</p>
+              <p>Сведения о serving-модели дополнительного оборота пока не опубликованы.</p>
             </>
           )}
           <Link className={styles.textLink} to={home.model.details_path}>Подробнее о модели</Link>

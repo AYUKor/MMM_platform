@@ -9,19 +9,15 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type {
-  CampaignPreview,
   CampaignUpload,
-  ValidationIssue,
   ValidationResult,
 } from "../entities/lifecycle/types";
+import type { ValidationResultV2 } from "../shared/api/generated/validation-result-v2";
 import {
   NEW_CALCULATION_FILE_ACCEPT,
   NEW_CALCULATION_SCENARIOS,
   SCENARIO_RECOMMENDATION_RULES,
-  buildScenarioInvariantSnapshot,
   checkCampaignFilePolicy,
-  getValidationTopStatus,
-  groupIssueAffectedEntities,
   guardSingleCampaign,
   resolveNewCalculationStep,
   uploadCanProceedToValidation,
@@ -35,6 +31,7 @@ import {
   getCalculationProfile,
   type CalculationProfile,
 } from "../shared/api/new-calculation-client";
+import { getValidationViewV2 } from "../shared/api/business-semantics-client";
 import {
   createIdempotencyKey,
   createJob,
@@ -44,7 +41,7 @@ import {
   requestValidation,
   uploadCampaign,
 } from "../shared/api/lifecycle-client";
-import { CampaignPreviewVisuals, ValidationChecks } from "../features/new-calculation/NewCalculationPreview";
+import { BusinessValidationReview } from "../features/new-calculation/NewCalculationPreview";
 import { formatDate, formatInteger, formatRub } from "../shared/formatters/metrics";
 import { Button } from "../shared/ui/Button";
 import { StatusBadge } from "../shared/ui/StatusBadge";
@@ -57,7 +54,6 @@ type RemoteActivity =
   | "starting-validation"
   | "loading-validation"
   | "creating-job";
-type ValidationTone = "ready" | "warning" | "blocked";
 
 interface RemoteActivityState {
   code: RemoteActivity;
@@ -110,13 +106,6 @@ function safeMarketerText(value: string, fallback: string): string {
   return message;
 }
 
-function optionalSafeMarketerText(value: string | undefined): string | null {
-  if (!value) return null;
-  const message = value.trim();
-  if (!message || forbiddenUserText.test(message)) return null;
-  return message;
-}
-
 function isAbortError(caught: unknown): boolean {
   return typeof caught === "object" && caught !== null && "name" in caught
     && caught.name === "AbortError";
@@ -136,17 +125,6 @@ function flowContext(
 
 function browserLocationKey(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
-}
-
-function getValidationTone(validation: ValidationResult): ValidationTone {
-  const status = getValidationTopStatus(validation);
-  if (status.code === "ready") return "ready";
-  if (status.code === "warning") return "warning";
-  return "blocked";
-}
-
-function sourceFileName(upload: CampaignUpload | null): string {
-  return upload?.original_file.display_name ?? "Нет данных";
 }
 
 function Stepper({ current }: { current: number }) {
@@ -202,29 +180,6 @@ function LoadingPanel({ message }: { message: string }) {
         <p>Страница обновится автоматически.</p>
       </div>
     </section>
-  );
-}
-
-function AffectedContext({ issue, campaigns }: { issue: ValidationIssue; campaigns: CampaignPreview[] }) {
-  const groups = groupIssueAffectedEntities(issue, campaigns);
-  const values = [
-    ...groups.campaigns.map((value) => `Кампания: ${value}`),
-    ...groups.segments.map((value) => `Сегмент: ${value}`),
-    ...groups.geographies.map((value) => `Гео: ${value}`),
-    ...groups.channels.map((value) => `Канал: ${value}`),
-    ...groups.geoChannelPairs.map((value) => `Связка гео × канал: ${value}`),
-    ...groups.targets.map((value) => `Показатель: ${value}`),
-  ];
-
-  if (values.length === 0) {
-    return <span className={styles.contextChip}>Кампания целиком</span>;
-  }
-  return (
-    <>
-      {values.map((value) => (
-        <span className={styles.contextChip} key={value}>{value}</span>
-      ))}
-    </>
   );
 }
 
@@ -384,115 +339,24 @@ function UploadResultStep({
   );
 }
 
-function CampaignSummary({ campaign, upload }: { campaign: CampaignPreview; upload: CampaignUpload | null }) {
-  return (
-    <section className={styles.campaignSummary} aria-labelledby="campaign-summary-title">
-      <div className={styles.summaryHeading}>
-        <div>
-          <span className={styles.eyebrow}>Кампания</span>
-          <h2 id="campaign-summary-title">{campaign.campaign_name}</h2>
-        </div>
-        <strong className={styles.summaryBudget}>{formatRub(campaign.uploaded_budget_rub)}</strong>
-      </div>
-      <dl className={styles.summaryGrid}>
-        <div><dt>Сегмент</dt><dd>{campaign.segments.join(", ") || "Нет данных"}</dd></div>
-        <div><dt>Период</dt><dd>{formatDate(campaign.start_date)} — {formatDate(campaign.end_date)}</dd></div>
-        <div><dt>Активных дней</dt><dd>{campaign.active_days}</dd></div>
-        <div><dt>Каналы</dt><dd>{campaign.channels.join(", ") || "Нет данных"}</dd></div>
-        <div><dt>Географии</dt><dd>{campaign.geographies.join(", ") || "Нет данных"}</dd></div>
-        <div><dt>Строк в файле</dt><dd>{campaign.source_rows_n}</dd></div>
-        <div className={styles.summaryWide}><dt>Исходный файл</dt><dd>{sourceFileName(upload)}</dd></div>
-      </dl>
-    </section>
-  );
-}
-
-function ValidationIssues({ validation }: { validation: ValidationResult }) {
-  const issues = [...validation.blocking_errors, ...validation.warnings];
-  if (issues.length === 0) {
-    return (
-      <section className={styles.noIssues} aria-label="Замечания">
-        <span aria-hidden="true">✓</span>
-        <div><h2>Замечаний не получено</h2><p>По текущему результату можно перейти к сценариям.</p></div>
-      </section>
-    );
-  }
-  return (
-    <section className={styles.issuesSection} aria-labelledby="issues-title">
-      <div className={styles.sectionHeading}>
-        <div><span className={styles.eyebrow}>Результат проверки</span><h2 id="issues-title">Замечания к кампании</h2></div>
-        <span className={styles.issueCount}>{issues.length}</span>
-      </div>
-      <div className={styles.issueGrid}>
-        {issues.map((issue, index) => {
-          const what = optionalSafeMarketerText(issue.what)
-            ?? safeMarketerText(issue.display_text, "Получено замечание к кампании.");
-          const why = optionalSafeMarketerText(issue.why);
-          const recommendedAction = optionalSafeMarketerText(issue.recommended_action);
-          return (
-            <article className={styles.issueCard} key={`${issue.code}-${index}`}>
-            <div className={styles.issueTopline}>
-              <StatusBadge tone={issue.severity === "blocking" ? "danger" : "warning"}>
-                {issue.severity === "blocking" ? "Нужно исправить" : "Замечание"}
-              </StatusBadge>
-              <span>{issue.severity === "blocking" ? "Блокирует расчет" : "Не блокирует расчет"}</span>
-            </div>
-            <h3>Что обнаружено</h3>
-            <p className={styles.issueText}>{what}</p>
-            <div className={styles.contextList}><AffectedContext issue={issue} campaigns={validation.campaigns} /></div>
-            {why || recommendedAction ? (
-              <dl className={styles.issueDetails}>
-                {why ? <div><dt>Почему это важно</dt><dd>{why}</dd></div> : null}
-                {recommendedAction ? <div><dt>Что можно сделать</dt><dd>{recommendedAction}</dd></div> : null}
-              </dl>
-            ) : null}
-          </article>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 function ValidationStep({
   validation,
-  upload,
+  view,
   onReset,
   onScenarios,
 }: {
   validation: ValidationResult;
-  upload: CampaignUpload | null;
+  view: ValidationResultV2;
   onReset: () => void;
   onScenarios: () => void;
 }) {
-  const tone = getValidationTone(validation);
-  const topStatus = getValidationTopStatus(validation);
-  const campaign = validation.campaigns.length === 1 ? validation.campaigns[0] : null;
   return (
     <div className={styles.validationPage}>
-      <section className={`${styles.validationStatus} ${styles[`validationStatus_${tone}`]}`}>
-        <div>
-          <div className={styles.statusMeta}>
-            <span className={styles.eyebrow}>Шаг 2 из 4</span>
-            {validation.record_origin === "synthetic_fixture" ? (
-              <StatusBadge tone="warning">Демонстрационные данные</StatusBadge>
-            ) : null}
-          </div>
-          <h2>{topStatus.label}</h2>
-          <p>{topStatus.description}</p>
-        </div>
-        <span className={styles.statusSymbol} aria-hidden="true">{tone === "ready" ? "✓" : "!"}</span>
-      </section>
-
-      {campaign ? <CampaignSummary campaign={campaign} upload={upload} /> : (
-        <section className={styles.blockedNotice} role="alert">
-          <h2>Нельзя продолжить с этим файлом</h2>
-          <p>В результате проверки должна быть ровно одна кампания.</p>
-        </section>
-      )}
-
-      <ValidationChecks checks={validation.preview?.checks} />
-      <ValidationIssues validation={validation} />
+      <div className={styles.statusMeta}>
+        <span className={styles.eyebrow}>Шаг 2 из 4</span>
+        {validation.record_origin === "synthetic_fixture" ? <StatusBadge tone="warning">Демонстрационные данные</StatusBadge> : null}
+      </div>
+      <BusinessValidationReview validation={view} />
 
       <section className={styles.s5Explanation}>
         <span className={styles.shieldMark} aria-hidden="true">S5</span>
@@ -502,13 +366,11 @@ function ValidationStep({
         </div>
       </section>
 
-      <CampaignPreviewVisuals preview={validation.preview} />
-
       <div className={styles.footerActions}>
-        <Button type="button" onClick={onReset}>{tone === "blocked" ? "Загрузить исправленный файл" : "Загрузить другой файл"}</Button>
-        {tone !== "blocked" ? (
+        <Button type="button" onClick={onReset}>{view.file_validation.status === "failed" ? "Загрузить исправленный файл" : "Загрузить другой файл"}</Button>
+        {view.job_creation_allowed ? (
           <Button variant="primary" type="button" onClick={onScenarios}>
-            {tone === "warning" ? "Продолжить с замечаниями" : "Продолжить к сценариям"}
+            {view.model_limitations.length > 0 ? "Продолжить с ограничениями" : "Продолжить к сценариям"}
           </Button>
         ) : null}
       </div>
@@ -518,19 +380,38 @@ function ValidationStep({
 
 function ScenariosStep({
   validation,
+  view,
   calculationProfile,
   onBack,
   onStart,
   busy,
 }: {
   validation: ValidationResult;
+  view: ValidationResultV2;
   calculationProfile: CalculationProfileViewState;
   onBack: () => void;
   onStart: () => void;
   busy: boolean;
 }) {
+  if (validation.campaigns.length !== 1) {
+    return (
+      <section className={styles.errorPanel} role="alert">
+        <h2>Сценарии пока недоступны</h2>
+        <p>Для расчета должна быть подтверждена ровно одна кампания.</p>
+        <Button type="button" onClick={onBack}>Вернуться к проверке</Button>
+      </section>
+    );
+  }
   const campaign = validation.campaigns[0];
-  const invariant = buildScenarioInvariantSnapshot(campaign);
+  const channels = [...new Set(view.geo_points.flatMap((geo) => geo.channels.map((channel) => channel.channel_display_name)))];
+  const invariant = {
+    totalBudgetRub: view.file_validation.requested_budget_rub,
+    startDate: campaign.start_date,
+    endDate: campaign.end_date,
+    channels,
+    geographies: view.geo_points.map((geo) => geo.geo_display_name),
+    existingCellsRule: "Новые каналы, гео и связки гео × канал не добавляются.",
+  };
   return (
     <div className={styles.scenariosPage}>
       <section className={styles.scenarioIntro}>
@@ -619,6 +500,7 @@ export function NewCalculationPage() {
   const [dragging, setDragging] = useState(false);
   const [upload, setUpload] = useState<CampaignUpload | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [validationView, setValidationView] = useState<ValidationResultV2 | null>(null);
   const [activityState, setActivityState] = useState<RemoteActivityState>({
     code: "idle",
     location: null,
@@ -637,8 +519,8 @@ export function NewCalculationPage() {
   const routeValidation = validationId && validation?.validation_id === validationId
     ? validation
     : null;
-  const validationSourceUpload = routeValidation && upload?.upload_id === routeValidation.upload_id
-    ? upload
+  const routeValidationView = validationId && validationView?.validation_id === validationId
+    ? validationView
     : null;
   const activity = activityState.location && activityState.location !== browserLocationKey()
     ? "idle"
@@ -708,6 +590,9 @@ export function NewCalculationPage() {
         if (controller.signal.aborted) return;
         setErrorState((current) => current?.context === requestContext ? null : current);
         setValidation(record);
+        const businessView = await getValidationViewV2(validationId, controller.signal);
+        if (controller.signal.aborted) return;
+        setValidationView(businessView);
         try {
           const sourceUpload = await getUpload(record.upload_id, controller.signal);
           if (!controller.signal.aborted) setUpload(sourceUpload);
@@ -715,7 +600,7 @@ export function NewCalculationPage() {
           if (!isAbortError(caught) && !controller.signal.aborted) setUpload(null);
         }
         if (controller.signal.aborted) return;
-        if (flowStep === "scenarios" && getValidationTone(record) === "blocked") {
+        if (flowStep === "scenarios" && !businessView.job_creation_allowed) {
           navigate(`/calculations/new?validationId=${encodeURIComponent(record.validation_id)}&step=review`, { replace: true });
           return;
         }
@@ -761,6 +646,7 @@ export function NewCalculationPage() {
     setFileError(null);
     setUpload(null);
     setValidation(null);
+    setValidationView(null);
     setErrorState(null);
     setActivityState({ code: "idle", location: null });
     if (inputRef.current) inputRef.current.value = "";
@@ -778,6 +664,7 @@ export function NewCalculationPage() {
     setErrorState(null);
     setUpload(null);
     setValidation(null);
+    setValidationView(null);
     setFileError(nextError);
     setFile(nextError ? null : candidate);
     if (nextError && inputRef.current) inputRef.current.value = "";
@@ -854,6 +741,7 @@ export function NewCalculationPage() {
       );
       if (!actionMayUpdateCurrentRoute(actionLocation)) return;
       setValidation(started);
+      setValidationView(null);
       navigate(`/calculations/new?validationId=${encodeURIComponent(started.validation_id)}&step=review`);
     } catch (caught) {
       if (!actionMayUpdateCurrentRoute(actionLocation)) return;
@@ -867,7 +755,7 @@ export function NewCalculationPage() {
   };
 
   const startJob = async () => {
-    if (!routeValidation || getValidationTone(routeValidation) === "blocked" || flowStep !== "scenarios") return;
+    if (!routeValidation || !routeValidationView?.job_creation_allowed || flowStep !== "scenarios") return;
     const actionContext = currentContext;
     const actionLocation = browserLocationKey();
     setActivityState({ code: "creating-job", location: actionLocation });
@@ -899,6 +787,7 @@ export function NewCalculationPage() {
   const loadingValidation =
     (flowStep === "review" || flowStep === "scenarios") && !error && (
       !routeValidation
+      || !routeValidationView
       || routeValidation.status.code === "running"
       || activity === "starting-validation"
       || activity === "loading-validation"
@@ -959,18 +848,19 @@ export function NewCalculationPage() {
       ) : null}
 
       {loadingValidation ? <LoadingPanel message="Проверяем кампанию" /> : null}
-      {flowStep === "review" && !hasLoadError && routeValidation && routeValidation.status.code !== "running" && activity !== "loading-validation" ? (
+      {flowStep === "review" && !hasLoadError && routeValidation && routeValidationView && routeValidation.status.code !== "running" && activity !== "loading-validation" ? (
         <ValidationStep
           validation={routeValidation}
-          upload={validationSourceUpload}
+          view={routeValidationView}
           onReset={() => resetToUpload(false)}
           onScenarios={() => navigate(`/calculations/new?validationId=${encodeURIComponent(routeValidation.validation_id)}&step=scenarios`)}
         />
       ) : null}
 
-      {flowStep === "scenarios" && !hasLoadError && routeValidation && getValidationTone(routeValidation) !== "blocked" && activity !== "loading-validation" ? (
+      {flowStep === "scenarios" && !hasLoadError && routeValidation && routeValidationView?.job_creation_allowed && activity !== "loading-validation" ? (
         <ScenariosStep
           validation={routeValidation}
+          view={routeValidationView}
           calculationProfile={activeCalculationProfile}
           onBack={() => navigate(`/calculations/new?validationId=${encodeURIComponent(routeValidation.validation_id)}&step=review`)}
           onStart={startJob}

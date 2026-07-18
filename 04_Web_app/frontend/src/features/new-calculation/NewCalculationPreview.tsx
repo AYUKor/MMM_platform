@@ -7,6 +7,7 @@ import type {
   ValidationPreview,
   ValidationPreviewCheck,
 } from "../../entities/lifecycle/types";
+import type { ValidationResultV2 } from "../../shared/api/generated/validation-result-v2";
 import { formatDate, formatRub } from "../../shared/formatters/metrics";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import styles from "./new-calculation-preview.module.css";
@@ -343,5 +344,171 @@ export function CampaignPreviewVisuals({ preview }: { preview: ValidationPreview
         />
       </div>
     </section>
+  );
+}
+
+function validationTone(status: ValidationResultV2["file_validation"]["status"]): StatusTone {
+  if (status === "passed") return "accent";
+  if (status === "warning") return "warning";
+  if (status === "failed") return "danger";
+  return "neutral";
+}
+
+function validationStatusLabel(status: ValidationResultV2["file_validation"]["status"]): string {
+  if (status === "passed") return "Пройдено";
+  if (status === "warning") return "Нужна проверка";
+  if (status === "failed") return "Нужно исправить";
+  return "Нет данных";
+}
+
+function limitationTone(
+  severity: ValidationResultV2["model_limitations"][number]["severity"],
+): StatusTone {
+  if (severity === "blocking") return "danger";
+  if (severity === "manual_review" || severity === "warning") return "warning";
+  return "neutral";
+}
+
+function limitationTypeLabel(
+  limitation: ValidationResultV2["model_limitations"][number],
+): string {
+  if (limitation.blocks_calculation || limitation.severity === "blocking") return "За пределами доступного расчета";
+  if (limitation.allowed_use === "unsupported") return "Канал вне области применения";
+  if (limitation.allowed_use === "diagnostic") return "Только диагностическое использование";
+  if (limitation.allowed_use === "unavailable") return "Оценка недоступна";
+  if (limitation.allowed_use === "caution" || limitation.severity === "manual_review") return "Требуется осторожная интерпретация";
+  return "Допустимое применение модели";
+}
+
+export function BusinessValidationReview({ validation }: { validation: ValidationResultV2 }) {
+  const ready = validation.job_creation_allowed && validation.file_validation.status !== "failed";
+  const fileFailed = validation.file_validation.status === "failed";
+  const unavailable = validation.file_validation.status === "unavailable" || validation.status === "unavailable";
+  const lead = ready
+    ? {
+      title: "Кампания готова к расчету",
+      description: "Файл прочитан. Ограничения модели будут учтены при расчете.",
+      badge: "Можно продолжить",
+      tone: "accent" as const,
+    }
+    : fileFailed
+      ? {
+        title: "Файл нужно исправить",
+        description: "Исправьте ошибки файла и запустите проверку повторно.",
+        badge: "Расчет недоступен",
+        tone: "danger" as const,
+      }
+      : unavailable
+        ? {
+          title: "Результат проверки пока недоступен",
+          description: "Сервис не опубликовал достаточные сведения. Повторите проверку позже.",
+          badge: "Нет данных",
+          tone: "neutral" as const,
+        }
+        : {
+          title: "Расчет ограничен возможностями модели",
+          description: "Файл прочитан, но ограничения модели пока не позволяют запустить расчет.",
+          badge: "Нужна ручная проверка",
+          tone: "warning" as const,
+        };
+  const leadClass = ready
+    ? styles.validationLeadReady
+    : lead.tone === "danger"
+      ? styles.validationLeadBlocked
+      : lead.tone === "warning"
+        ? styles.validationLeadWarning
+        : styles.validationLeadNeutral;
+  return (
+    <div className={styles.businessValidation}>
+      <section className={`${styles.validationLead} ${leadClass}`}>
+        <div>
+          <span className={styles.eyebrow}>Результат проверки</span>
+          <h2>{lead.title}</h2>
+          <p>{lead.description}</p>
+        </div>
+        <StatusBadge tone={lead.tone}>{lead.badge}</StatusBadge>
+      </section>
+
+      <section className={styles.fileValidationSection} aria-labelledby="file-validation-title">
+        <div className={styles.sectionHeading}>
+          <div><span className={styles.eyebrow}>Входные данные</span><h2 id="file-validation-title">Проверка файла</h2></div>
+          <StatusBadge tone={validationTone(validation.file_validation.status)}>
+            {validationStatusLabel(validation.file_validation.status)}
+          </StatusBadge>
+        </div>
+        <dl className={styles.validationFacts}>
+          <div><dt>Строк</dt><dd>{validation.file_validation.rows_n}</dd></div>
+          <div><dt>Кампаний</dt><dd>{validation.file_validation.campaigns_n}</dd></div>
+          <div><dt>Географий</dt><dd>{validation.file_validation.geographies_n}</dd></div>
+          <div><dt>Каналов</dt><dd>{validation.file_validation.channels_n}</dd></div>
+          <div><dt>Запрошенный бюджет</dt><dd>{formatRub(validation.file_validation.requested_budget_rub)}</dd></div>
+          <div><dt>Создание расчета</dt><dd>{validation.job_creation_allowed ? "Разрешено" : "Недоступно"}</dd></div>
+        </dl>
+        {validation.file_validation.checks.length > 0 ? (
+          <div className={styles.compactChecks}>
+            {validation.file_validation.checks.map((check) => (
+              <article key={check.code}>
+                <StatusBadge tone={validationTone(check.status)}>{validationStatusLabel(check.status)}</StatusBadge>
+                <p>{check.display_text}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className={styles.inlineEmpty}><StatusBadge tone="neutral">Нет данных</StatusBadge><p>Детализация проверки файла недоступна.</p></div>
+        )}
+      </section>
+
+      <section className={styles.modelLimitationsSection} aria-labelledby="model-limitations-title">
+        <div className={styles.sectionHeading}>
+          <div><span className={styles.eyebrow}>Границы применения</span><h2 id="model-limitations-title">Ограничения модели</h2></div>
+          <span className={styles.rowCount}>{validation.model_limitations.length}</span>
+        </div>
+        {validation.model_limitations.length === 0 ? (
+          <div className={styles.inlineEmpty}><StatusBadge tone="accent">Нет ограничений</StatusBadge><p>Дополнительные ограничения для этой кампании не опубликованы.</p></div>
+        ) : (
+          <div className={styles.limitationList}>
+            {validation.model_limitations.map((limitation, index) => (
+              <article key={`${limitation.channel_id}-${limitation.limitation_type}-${index}`}>
+                <header>
+                  <div><span>Оборот · {limitation.channel_display_name}</span><h3>{limitation.what}</h3></div>
+                  <StatusBadge tone={limitationTone(limitation.severity)}>
+                    {limitation.blocks_calculation ? "Блокирует расчет" : "Будет учтено"}
+                  </StatusBadge>
+                </header>
+                <dl>
+                  <div><dt>Тип ограничения</dt><dd>{limitationTypeLabel(limitation)}</dd></div>
+                  <div><dt>Затронуто географий</dt><dd>{limitation.affected_geos_n}</dd></div>
+                  <div><dt>Почему это важно</dt><dd>{limitation.why}</dd></div>
+                  <div><dt>Что можно сделать</dt><dd>{limitation.recommended_action}</dd></div>
+                </dl>
+                <details>
+                  <summary>Показать географии ({limitation.affected_geos_n})</summary>
+                  <ul>{limitation.affected_geos.map((geo) => <li key={geo}>{geo}</li>)}</ul>
+                </details>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className={styles.geoReadinessSection} aria-labelledby="validation-geos-title">
+        <div className={styles.sectionHeading}>
+          <div><span className={styles.eyebrow}>Географии кампании</span><h2 id="validation-geos-title">{validation.geo_points.length} географий сохранены</h2></div>
+        </div>
+        <div className={styles.geoList}>
+          {validation.geo_points.map((geo) => (
+            <article key={geo.geo_id}>
+              <strong>{geo.geo_display_name}</strong>
+              <span>{formatRub(geo.budget_rub)}</span>
+              <small>{geo.channels.map((channel) => channel.channel_display_name).join(", ")}</small>
+            </article>
+          ))}
+        </div>
+        <div className={styles.mapUnavailable} role="status">
+          <strong>Карта пока недоступна</strong>
+          <span>Карта будет доступна после подключения утвержденного справочника координат.</span>
+        </div>
+      </section>
+    </div>
   );
 }

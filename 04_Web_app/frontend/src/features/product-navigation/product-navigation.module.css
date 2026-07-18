@@ -276,6 +276,7 @@
 .listSection,
 .warningSection,
 .quickActions,
+.geoBudgetSection,
 .scopeSection,
 .capabilitySection,
 .requirementsSection,
@@ -422,6 +423,73 @@
 .modelFacts div { display: grid; grid-template-columns: 1fr 1.2fr; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-default); }
 .modelFacts dt { color: var(--text-secondary); font-size: 0.72rem; }
 .modelFacts dd { margin: 0; text-align: right; font-size: 0.78rem; overflow-wrap: anywhere; }
+
+.geoBudgetSection { min-width: 0; display: grid; gap: var(--space-4); }
+
+.geoBudgetSummary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) repeat(2, minmax(0, 0.7fr));
+  margin: 0;
+  border: 1px solid var(--border-default);
+  background: var(--surface-primary);
+}
+
+.geoBudgetSummary div {
+  min-width: 0;
+  padding: var(--space-4);
+  border-right: 1px solid var(--border-default);
+}
+
+.geoBudgetSummary div:last-child { border-right: 0; }
+.geoBudgetSummary dt { color: var(--text-secondary); font-size: 0.72rem; }
+.geoBudgetSummary dd {
+  margin: 0.45rem 0 0;
+  font-size: clamp(1.25rem, 2.5vw, 2rem);
+  font-weight: 840;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.geoUnavailable {
+  min-width: 0;
+  min-height: 220px;
+  display: grid;
+  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-6);
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-primary) 88%, transparent);
+}
+
+.geoUnavailableMark {
+  position: relative;
+  min-height: 140px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 48% 52% 44% 56% / 55% 43% 57% 45%;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 15px,
+    color-mix(in srgb, var(--border-default) 55%, transparent) 15px 16px
+  );
+}
+
+.geoUnavailableMark span {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--text-secondary);
+  border-radius: 50%;
+}
+
+.geoUnavailableMark span:first-child { inset: 32% auto auto 38%; }
+.geoUnavailableMark span:last-child { inset: 61% auto auto 66%; }
+.geoUnavailable strong { font-size: clamp(1.25rem, 2.4vw, 1.8rem); }
+.geoUnavailable p { max-width: 62ch; margin: 0.55rem 0; color: var(--text-secondary); line-height: 1.55; }
+.geoUnavailable small { color: var(--text-secondary); line-height: 1.45; }
 
 .warningList li {
   min-width: 0;
@@ -578,6 +646,32 @@
 .modelHeroFacts dd { margin: 0; text-align: right; font-weight: 730; overflow-wrap: anywhere; }
 .unavailableHero { grid-template-columns: 1fr; border-color: var(--border-strong); box-shadow: none; }
 
+.modelStateGrid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border-default);
+  background: var(--surface-primary);
+}
+
+.modelStateGrid > div {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-height: 170px;
+  padding: var(--space-4);
+  border-right: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.modelStateGrid > div:nth-child(3n) { border-right: 0; }
+.modelStateGrid > div:nth-last-child(-n + 3) { border-bottom: 0; }
+.modelStateGrid dt { color: var(--text-secondary); font-size: 0.72rem; }
+.modelStateGrid dd { margin: 0; font-weight: 780; line-height: 1.35; overflow-wrap: anywhere; }
+.modelStateGrid small { color: var(--text-secondary); font-size: 0.72rem; line-height: 1.5; overflow-wrap: anywhere; }
+
 .scopeStrip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .scopeStrip small { display: block; margin-top: 0.65rem; color: var(--text-secondary); font-size: 0.68rem; line-height: 1.4; overflow-wrap: anywhere; }
 .usageStrip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -611,6 +705,29 @@
 .artifactList span { display: block; margin-top: 0.35rem; color: var(--text-secondary); font-size: 0.75rem; line-height: 1.45; }
 .limitationsList { grid-template-columns: 1fr; }
 .limitationsList li { grid-template-columns: auto minmax(0, 1fr); }
+
+.policyList {
+  min-width: 0;
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.policyList li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.policyList li:last-child { border-bottom: 0; }
+.policyList strong { display: block; overflow-wrap: anywhere; }
+.policyList li > div > span { display: block; margin-top: 0.2rem; color: var(--text-secondary); font-size: 0.72rem; }
+.policyList p { max-width: 72ch; margin: 0.4rem 0 0; color: var(--text-secondary); line-height: 1.5; }
 
 .modelColumns { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); align-items: start; }
 .requirementsList li { padding: 1rem 0; border-bottom: 1px solid var(--border-default); }
@@ -736,6 +853,11 @@
   .scopeStrip div { border-bottom: 1px solid var(--border-default); }
   .scopeStrip div:last-child { border-bottom: 0; }
   .modelHero { grid-template-columns: 1fr; }
+  .modelStateGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modelStateGrid > div:nth-child(3n) { border-right: 1px solid var(--border-default); }
+  .modelStateGrid > div:nth-child(even) { border-right: 0; }
+  .modelStateGrid > div:nth-last-child(-n + 3) { border-bottom: 1px solid var(--border-default); }
+  .modelStateGrid > div:nth-last-child(-n + 2) { border-bottom: 0; }
   .helpLayout { grid-template-columns: 1fr; }
   .helpNavigation { position: static; }
   .helpNavigation nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -775,6 +897,8 @@
   .versionList li { grid-template-columns: 42px minmax(0, 1fr); }
   .capabilityList .statusTag,
   .versionList .statusTag { grid-column: 2; }
+  .policyList li { grid-template-columns: 40px minmax(0, 1fr); }
+  .policyList .statusTag { grid-column: 2; }
   .helpNavigation nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .helpResultList { grid-template-columns: 1fr; }
   .loadingStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -813,6 +937,20 @@
   .modelFacts div { grid-template-columns: 1fr; }
   .modelHeroFacts dd,
   .modelFacts dd { text-align: left; }
+  .geoBudgetSummary,
+  .modelStateGrid { grid-template-columns: 1fr; }
+  .geoBudgetSummary div,
+  .modelStateGrid > div {
+    min-height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .geoBudgetSummary div:last-child,
+  .modelStateGrid > div:last-child { border-bottom: 0; }
+  .modelStateGrid > div:nth-last-child(-n + 2) { border-bottom: 1px solid var(--border-default); }
+  .modelStateGrid > div:last-child { border-bottom: 0; }
+  .geoUnavailable { grid-template-columns: 1fr; }
+  .geoUnavailableMark { min-height: 110px; }
   .helpNavigation nav { grid-template-columns: 1fr; }
   .articleBody h2 { font-size: 2.35rem; }
   .refreshNotice { align-items: flex-start; flex-direction: column; }

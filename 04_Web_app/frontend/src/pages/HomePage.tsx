@@ -5,10 +5,14 @@ import {
   ProductNavigationPageState,
 } from "../features/product-navigation/ProductNavigationPageState";
 import { navigationErrorCopy } from "../features/product-navigation/productNavigationModel";
+import {
+  getGeoCatalog,
+  getWorkspaceGeoBudget,
+} from "../shared/api/business-semantics-client";
 import { getWorkspaceHome } from "../shared/api/product-navigation-client";
 
 export function HomePage() {
-  const query = useQuery({
+  const homeQuery = useQuery({
     queryKey: ["workspace-home-v1"],
     queryFn: ({ signal }) => getWorkspaceHome(signal),
     retry: false,
@@ -17,22 +21,49 @@ export function HomePage() {
     refetchInterval: (state) => state.state.data?.active_calculations.length ? 5_000 : false,
     refetchIntervalInBackground: false,
   });
+  const geoBudgetQuery = useQuery({
+    queryKey: ["workspace-geo-budget-v1"],
+    queryFn: ({ signal }) => getWorkspaceGeoBudget(signal),
+    retry: false,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const geoCatalogQuery = useQuery({
+    queryKey: ["geo-catalog-v1"],
+    queryFn: ({ signal }) => getGeoCatalog(signal),
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
 
-  if (query.isPending && !query.data) {
+  const refresh = () => {
+    void Promise.all([
+      homeQuery.refetch(),
+      geoBudgetQuery.refetch(),
+      geoCatalogQuery.refetch(),
+    ]);
+  };
+
+  if (homeQuery.isPending && !homeQuery.data) {
     return <ProductNavigationLoading label="Загрузка рабочего пространства" />;
   }
-  if (!query.data) {
-    return <ProductNavigationPageState error={query.error} onRetry={() => { void query.refetch(); }} />;
+  if (!homeQuery.data) {
+    return <ProductNavigationPageState error={homeQuery.error} onRetry={refresh} />;
   }
 
-  const refreshMessage = query.error
-    ? `${navigationErrorCopy(query.error).description} Последний проверенный снимок сохранен.`
+  const refreshMessage = homeQuery.error
+    ? `${navigationErrorCopy(homeQuery.error).description} Последний проверенный снимок сохранен.`
     : null;
+
   return (
     <HomeView
-      home={query.data}
+      home={homeQuery.data}
+      geoBudget={geoBudgetQuery.data ?? null}
+      geoCatalog={geoCatalogQuery.data ?? null}
+      geoLoading={geoBudgetQuery.isPending || geoCatalogQuery.isPending}
+      geoUnavailable={Boolean(geoBudgetQuery.error || geoCatalogQuery.error)}
       refreshMessage={refreshMessage}
-      onRefresh={() => { void query.refetch(); }}
+      onRefresh={refresh}
     />
   );
 }

@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { ValidationPreview } from "../../entities/lifecycle/types";
-import { CampaignPreviewVisuals, ValidationChecks } from "./NewCalculationPreview";
+import { buildValidationResultV2 } from "../../test/businessSemanticsV2Fixtures";
+import { BusinessValidationReview, CampaignPreviewVisuals, ValidationChecks } from "./NewCalculationPreview";
 
 const preview: ValidationPreview = {
   budget_by_channel: [
@@ -110,5 +111,49 @@ describe("new calculation preview", () => {
     rerender(<CampaignPreviewVisuals preview={undefined} />);
     expect(screen.getAllByText("Нет данных")).toHaveLength(4);
     expect(screen.getByText("Данные для карты пока недоступны.")).toBeInTheDocument();
+  });
+
+  it("separates calm file validation from grouped model limitations", () => {
+    const validation = buildValidationResultV2();
+    const { container } = render(<BusinessValidationReview validation={validation} />);
+
+    expect(screen.getByRole("heading", { name: "Кампания готова к расчету" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Проверка файла" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ограничения модели" })).toBeInTheDocument();
+    expect(screen.getAllByText("15", { selector: "dd" })).toHaveLength(2);
+    expect(screen.getByText("Показать географии (15)")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "15 географий сохранены" })).toBeInTheDocument();
+    expect(screen.getByText("Карта будет доступна после подключения утвержденного справочника координат.")).toBeInTheDocument();
+    expect(container.querySelectorAll("details")).toHaveLength(1);
+    expect(container.querySelectorAll("[class*='contextChip']")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Digital_Performance");
+    expect(container.textContent).not.toContain("orders_per_user");
+    expect(container.textContent).not.toContain("avg_basket");
+  });
+
+  it("distinguishes file errors from model-blocked and unavailable states", () => {
+    const modelBlocked = buildValidationResultV2();
+    modelBlocked.job_creation_allowed = false;
+    modelBlocked.status = "warning";
+    modelBlocked.model_limitations[0].severity = "blocking";
+    modelBlocked.model_limitations[0].blocks_calculation = true;
+    const { rerender } = render(<BusinessValidationReview validation={modelBlocked} />);
+    expect(screen.getByRole("heading", { name: "Расчет ограничен возможностями модели" })).toBeInTheDocument();
+    expect(screen.getByText("За пределами доступного расчета")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Файл нужно исправить" })).not.toBeInTheDocument();
+
+    const failedFile = buildValidationResultV2();
+    failedFile.job_creation_allowed = false;
+    failedFile.status = "failed";
+    failedFile.file_validation.status = "failed";
+    rerender(<BusinessValidationReview validation={failedFile} />);
+    expect(screen.getByRole("heading", { name: "Файл нужно исправить" })).toBeInTheDocument();
+
+    const unavailable = buildValidationResultV2();
+    unavailable.job_creation_allowed = false;
+    unavailable.status = "unavailable";
+    unavailable.file_validation.status = "unavailable";
+    rerender(<BusinessValidationReview validation={unavailable} />);
+    expect(screen.getByRole("heading", { name: "Результат проверки пока недоступен" })).toBeInTheDocument();
   });
 });

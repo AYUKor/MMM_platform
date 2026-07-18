@@ -323,8 +323,6 @@ export interface SafeIssueAffectedGroups {
 
 const TARGET_LABELS: Readonly<Record<string, string>> = {
   turnover_per_user: "Оборот на пользователя",
-  orders_per_user: "Заказы на пользователя",
-  avg_basket: "Средний чек",
 };
 
 function uniqueText(values: readonly string[]): string[] {

@@ -4,6 +4,7 @@ import type { JobProgressViewV1 } from "../../shared/api/generated/job-progress-
 import { formatDate, formatRub } from "../../shared/formatters/metrics";
 import { Button } from "../../shared/ui/Button";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
+import { containsLegacyTargetClaim } from "../../shared/presentation/turnover-only";
 import {
   currentStage,
   currentStatusCopy,
@@ -235,6 +236,9 @@ export function JobProgressView({
   const showIndeterminate = isInProgress && (
     view.job_status.code !== "running" || stage.progress === null
   );
+  const visibleFact = fact && !containsLegacyTargetClaim(`${fact.text} ${fact.source_label}`)
+    ? fact
+    : null;
 
   const closeDialog = useCallback(() => {
     setCancelDialogOpen(false);
@@ -389,12 +393,12 @@ export function JobProgressView({
         <aside className={styles.contextColumn} aria-label="Дополнительные сведения о расчете">
           <Scenario6Panel view={view} />
           <ReportPanel view={view} />
-          {fact ? (
+          {visibleFact ? (
             <section className={`${styles.contextPanel} ${styles.factPanel}`} aria-labelledby="mmm-fact-title">
               <span className={styles.eyebrow}>Коротко о методе</span>
               <h2 id="mmm-fact-title">MMM за минуту</h2>
-              <p>{fact.text}</p>
-              <small>Источник: {fact.source_label}</small>
+              <p>{visibleFact.text}</p>
+              <small>Источник: {visibleFact.source_label}</small>
             </section>
           ) : null}
           {isInProgress ? (
