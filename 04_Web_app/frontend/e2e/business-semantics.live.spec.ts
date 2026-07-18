@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type { JobResultViewV2 } from "../src/shared/api/generated/job-result-view-v2";
 import type { ModelOverviewV2 } from "../src/shared/api/generated/model-overview-v2";
@@ -6,6 +6,7 @@ import type { ModelPassportV2 } from "../src/shared/api/generated/model-passport
 import type { ScenarioMediaPlanV2 } from "../src/shared/api/generated/scenario-media-plan-v2";
 import type { ValidationResultV2 } from "../src/shared/api/generated/validation-result-v2";
 import type { WorkspaceGeoBudgetV1 } from "../src/shared/api/generated/workspace-geo-budget-v1";
+import { formatInteger, formatPercent, formatRub } from "../src/shared/formatters/metrics";
 
 interface LiveReportArtifact {
   artifact_id: string;
@@ -26,11 +27,14 @@ interface LiveReportEnvelope {
   };
 }
 
-const LIVE_ENABLED = process.env.PHASE_E1B_LIVE === "true";
-const EMAIL = process.env.PHASE_E1B_LIVE_EMAIL ?? "";
-const PASSWORD = process.env.PHASE_E1B_LIVE_PASSWORD ?? "";
-const JOB_ID = process.env.PHASE_E1B_LIVE_JOB_ID ?? "";
-const VALIDATION_ID = process.env.PHASE_E1B_LIVE_VALIDATION_ID ?? "";
+const LIVE_ENABLED = process.env.PHASE_E1D_LIVE === "true"
+  || process.env.PHASE_E1B_LIVE === "true";
+const EMAIL = process.env.PHASE_E1D_LIVE_EMAIL ?? process.env.PHASE_E1B_LIVE_EMAIL ?? "";
+const PASSWORD = process.env.PHASE_E1D_LIVE_PASSWORD ?? process.env.PHASE_E1B_LIVE_PASSWORD ?? "";
+const JOB_ID = process.env.PHASE_E1D_LIVE_JOB_ID ?? process.env.PHASE_E1B_LIVE_JOB_ID ?? "";
+const VALIDATION_ID = process.env.PHASE_E1D_LIVE_VALIDATION_ID
+  ?? process.env.PHASE_E1B_LIVE_VALIDATION_ID
+  ?? "";
 
 const CONTROL_REQUESTED_BUDGET = 267_818_706;
 const CONTROL_S5_ALLOCATED_BUDGET = 173_912_510.63;
@@ -57,12 +61,36 @@ async function expectTurnoverOnlyPage(page: Page) {
   for (const forbidden of FORBIDDEN_COPY) expect(text).not.toContain(forbidden);
 }
 
+async function expectDefinitionValue(
+  scope: Locator,
+  term: string,
+  expectedValue: string,
+) {
+  const definition = scope.locator("dt").filter({ hasText: term }).first();
+  await expect(definition).toHaveText(term);
+  await expect(definition.locator("xpath=following-sibling::dd[1]")).toHaveText(expectedValue);
+}
+
+async function expectUnlocatedBudgetPreserved(
+  scope: Locator,
+  unlocatedGeographiesN: number,
+  unlocatedBudgetRub: number,
+  unlocatedBudgetShare: number | null,
+) {
+  await expect(scope).toContainText(
+    `Без координат: ${formatInteger(unlocatedGeographiesN)} географий`,
+  );
+  await expect(scope).toContainText(`Бюджет сохранен: ${formatRub(unlocatedBudgetRub)}`);
+  await expect(scope).toContainText(`доля: ${formatPercent(unlocatedBudgetShare)}`);
+}
+
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
-test.describe("Phase E.1B live backend acceptance", () => {
+test.describe("Phase E.1D live backend acceptance", () => {
   test.skip(
     !LIVE_ENABLED,
-    "Set PHASE_E1B_LIVE=true and provide credentials, job and validation IDs.",
+    "Set PHASE_E1D_LIVE=true and provide credentials, job and validation IDs. "
+      + "PHASE_E1B_LIVE variables remain supported as aliases.",
   );
 
   test("uses real turnover-only projections without route interception", async ({ page }) => {
@@ -222,6 +250,106 @@ test.describe("Phase E.1B live backend acceptance", () => {
     expect(validation.file_validation.requested_budget_rub).toBe(CONTROL_REQUESTED_BUDGET);
     await expect(page.getByRole("heading", { name: "Проверка файла" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ограничения модели" })).toBeVisible();
+    const validationSection = page.getByRole("heading", { name: "Проверка файла" })
+      .locator("xpath=ancestor::section[1]");
+    await expectDefinitionValue(
+      validationSection,
+      "Запрошенный бюджет",
+      formatRub(validation.file_validation.requested_budget_rub),
+    );
+
+    expect(validation.geo_points).toHaveLength(15);
+    const canonicalValidationPoints = validation.geo_points.filter((point) => (
+      point.coordinates_status === "canonical"
+    ));
+    const validationMapCoverage = validation.map_coverage;
+    expect(canonicalValidationPoints).toHaveLength(validationMapCoverage.located_geographies_n);
+    expect(validation.geo_points.length - canonicalValidationPoints.length).toBe(
+      validationMapCoverage.unlocated_geographies_n,
+    );
+    const validationGeoSection = page.getByRole("heading", {
+      name: `${validation.geo_points.length} географий сохранены`,
+    }).locator("xpath=ancestor::section[1]");
+
+    if (validationMapCoverage.status === "available") {
+      expect(canonicalValidationPoints).toHaveLength(15);
+      expect(validationMapCoverage.located_geographies_n).toBe(15);
+      expect(validationMapCoverage.unlocated_geographies_n).toBe(0);
+      expect(validationMapCoverage.located_budget_rub).toBe(CONTROL_REQUESTED_BUDGET);
+      expect(validationMapCoverage.unlocated_budget_rub).toBe(0);
+
+      const campaignMap = validationGeoSection.locator('[data-map-mode="campaign"]');
+      await expect(campaignMap).toBeVisible();
+      await expect(campaignMap.locator("[data-map-marker]")).toHaveCount(15);
+      await expect(campaignMap.locator("[data-map-label]")).toHaveCount(15);
+      await expect(campaignMap).toContainText("Координаты городов: GeoNames, CC BY 4.0.");
+      await expect(campaignMap).toContainText("Контур карты: Natural Earth, public domain.");
+      const markerIds = await campaignMap.locator("[data-map-marker]").evaluateAll((markers) => (
+        markers.map((marker) => marker.getAttribute("data-map-marker")).sort()
+      ));
+      const labelIds = await campaignMap.locator("[data-map-label]").evaluateAll((labels) => (
+        labels.map((label) => label.getAttribute("data-map-label")).sort()
+      ));
+      const canonicalIds = canonicalValidationPoints.map((point) => point.geo_id).sort();
+      expect(markerIds).toEqual(canonicalIds);
+      expect(labelIds).toEqual(canonicalIds);
+
+      const humanChannelNames = [...new Set(canonicalValidationPoints.flatMap((point) => (
+        point.channels.map((channel) => channel.channel_display_name)
+      )))];
+      const rawChannelNames = [...new Set(canonicalValidationPoints.flatMap((point) => (
+        point.channels
+          .filter((channel) => channel.channel_id !== channel.channel_display_name)
+          .map((channel) => channel.channel_id)
+      )))];
+      const validationText = await validationGeoSection.innerText();
+      for (const channelName of humanChannelNames) expect(validationText).toContain(channelName);
+      for (const rawChannelName of rawChannelNames) expect(validationText).not.toContain(rawChannelName);
+
+      const firstCampaignMarker = campaignMap.locator("[data-map-marker]").first();
+      const firstCampaignGeoId = await firstCampaignMarker.getAttribute("data-map-marker");
+      const firstCampaignPoint = canonicalValidationPoints.find((point) => (
+        point.geo_id === firstCampaignGeoId
+      ));
+      expect(firstCampaignPoint).toBeDefined();
+      await firstCampaignMarker.focus();
+      const campaignTooltip = campaignMap.locator("[data-map-tooltip]");
+      await expect(campaignTooltip).toBeVisible();
+      await expect(campaignTooltip).toHaveAttribute("data-map-tooltip", firstCampaignGeoId!);
+      await expect(campaignTooltip).toContainText(formatRub(firstCampaignPoint!.budget_rub));
+      for (const channel of firstCampaignPoint!.channels) {
+        await expect(campaignTooltip).toContainText(channel.channel_display_name);
+      }
+      await page.keyboard.press("Escape");
+      await expect(campaignTooltip).toHaveCount(0);
+    } else if (validationMapCoverage.status === "partial") {
+      expect(canonicalValidationPoints.length).toBeGreaterThan(0);
+      const campaignMap = validationGeoSection.locator('[data-map-mode="campaign"]');
+      await expect(campaignMap).toBeVisible();
+      await expect(campaignMap).toHaveAttribute("data-coverage-status", "partial");
+      await expect(campaignMap.locator("[data-map-marker]")).toHaveCount(
+        canonicalValidationPoints.filter((point) => point.budget_rub > 0).length,
+      );
+      await expect(campaignMap.locator("[data-map-label]")).toHaveCount(
+        canonicalValidationPoints.filter((point) => point.budget_rub > 0).length,
+      );
+      await expect(campaignMap).toContainText(
+        `Неразмещенный бюджет: ${formatRub(validationMapCoverage.unlocated_budget_rub)}`,
+      );
+      await expect(campaignMap).toContainText(
+        `доля: ${formatPercent(validationMapCoverage.unlocated_budget_share)}`,
+      );
+    } else {
+      expect(canonicalValidationPoints).toHaveLength(0);
+      await expect(validationGeoSection.getByText("Карта пока недоступна", { exact: true }))
+        .toBeVisible();
+      await expectUnlocatedBudgetPreserved(
+        validationGeoSection,
+        validationMapCoverage.unlocated_geographies_n,
+        validationMapCoverage.unlocated_budget_rub,
+        validationMapCoverage.unlocated_budget_share,
+      );
+    }
     await expectTurnoverOnlyPage(page);
 
     const passportResponse = page.waitForResponse((response) => (
@@ -252,9 +380,113 @@ test.describe("Phase E.1B live backend acceptance", () => {
     const geoBudget = await (await geoBudgetResponse).json() as WorkspaceGeoBudgetV1;
     await geoCatalogResponse;
     expect(geoBudget.geographies_n).toBeGreaterThanOrEqual(0);
-    await expect(page.getByRole("heading", { name: "Бюджет проверенных кампаний по географиям" }))
-      .toBeVisible();
-    await expect(page.getByText("Карта пока недоступна", { exact: true })).toBeVisible();
+    const workspaceGeoSection = page.getByRole("heading", {
+      name: "Бюджет проверенных кампаний по географиям",
+    }).locator("xpath=ancestor::section[1]");
+    await expect(workspaceGeoSection).toBeVisible();
+    await expectDefinitionValue(
+      workspaceGeoSection,
+      "Бюджет в проверенных кампаниях",
+      formatRub(geoBudget.total_budget_rub),
+    );
+    await expectDefinitionValue(
+      workspaceGeoSection,
+      "Кампании",
+      formatInteger(geoBudget.campaigns_n),
+    );
+    await expectDefinitionValue(
+      workspaceGeoSection,
+      "Географии",
+      formatInteger(geoBudget.geographies_n),
+    );
+
+    const canonicalWorkspaceRows = geoBudget.rows.filter((row) => (
+      row.coordinates_status === "canonical"
+    ));
+    expect(geoBudget.rows).toHaveLength(geoBudget.geographies_n);
+    expect(geoBudget.status).toBe(geoBudget.coverage.status);
+    expect(canonicalWorkspaceRows).toHaveLength(geoBudget.coverage.located_geographies_n);
+    expect(geoBudget.rows.length - canonicalWorkspaceRows.length).toBe(
+      geoBudget.coverage.unlocated_geographies_n,
+    );
+    const expectedWorkspaceMarkers = canonicalWorkspaceRows.filter((row) => (
+      row.total_budget_rub > 0
+    ));
+
+    if (geoBudget.coverage.status === "available") {
+      expect(geoBudget.coverage.unlocated_geographies_n).toBe(0);
+      expect(geoBudget.coverage.unlocated_budget_rub).toBe(0);
+      const workspaceMap = workspaceGeoSection.locator('[data-map-mode="workspace"]');
+      await expect(workspaceMap).toBeVisible();
+      await expect(workspaceMap).toHaveAttribute("data-coverage-status", "available");
+      await expect(workspaceMap).toContainText("Координаты городов: GeoNames, CC BY 4.0.");
+      await expect(workspaceMap).toContainText("Контур карты: Natural Earth, public domain.");
+      await expect(workspaceMap.locator("[data-map-marker]")).toHaveCount(
+        expectedWorkspaceMarkers.length,
+      );
+
+      const workspaceMarkerIds = await workspaceMap.locator("[data-map-marker]")
+        .evaluateAll((markers) => markers.map((marker) => marker.getAttribute("data-map-marker")));
+      expect([...workspaceMarkerIds].sort()).toEqual(
+        expectedWorkspaceMarkers.map((row) => row.geo_id).sort(),
+      );
+
+      const expectedTopTenIds = [...canonicalWorkspaceRows]
+        .sort((left, right) => (
+          right.total_budget_rub - left.total_budget_rub
+          || new Intl.Collator("ru", { sensitivity: "base" }).compare(
+            left.geo_display_name,
+            right.geo_display_name,
+          )
+          || left.geo_id.localeCompare(right.geo_id)
+        ))
+        .slice(0, 10)
+        .filter((row) => row.total_budget_rub > 0)
+        .map((row) => row.geo_id)
+        .sort();
+      const workspaceLabelIds = await workspaceMap.locator("[data-map-label]")
+        .evaluateAll((labels) => (
+          labels.map((label) => label.getAttribute("data-map-label")).sort()
+        ));
+      expect(workspaceLabelIds).toEqual(expectedTopTenIds);
+
+      if (expectedWorkspaceMarkers.length > 0) {
+        const largestWorkspaceBudget = Math.max(
+          ...expectedWorkspaceMarkers.map((row) => row.total_budget_rub),
+        );
+        await expect(workspaceMap.locator("[data-map-marker]").last()).toHaveAttribute(
+          "data-budget-rub",
+          String(largestWorkspaceBudget),
+        );
+      }
+    } else if (geoBudget.geographies_n === 0 && geoBudget.total_budget_rub === 0) {
+      await expect(workspaceGeoSection.getByText("Пока нет данных для карты", { exact: true }))
+        .toBeVisible();
+    } else if (geoBudget.coverage.status === "partial") {
+      expect(canonicalWorkspaceRows.length).toBeGreaterThan(0);
+      const workspaceMap = workspaceGeoSection.locator('[data-map-mode="workspace"]');
+      await expect(workspaceMap).toBeVisible();
+      await expect(workspaceMap).toHaveAttribute("data-coverage-status", "partial");
+      await expect(workspaceMap.locator("[data-map-marker]")).toHaveCount(
+        expectedWorkspaceMarkers.length,
+      );
+      await expect(workspaceMap).toContainText(
+        `Неразмещенный бюджет: ${formatRub(geoBudget.coverage.unlocated_budget_rub)}`,
+      );
+      await expect(workspaceMap).toContainText(
+        `доля: ${formatPercent(geoBudget.coverage.unlocated_budget_share)}`,
+      );
+    } else {
+      expect(canonicalWorkspaceRows).toHaveLength(0);
+      await expect(workspaceGeoSection.getByText("Карта пока недоступна", { exact: true }))
+        .toBeVisible();
+      await expectUnlocatedBudgetPreserved(
+        workspaceGeoSection,
+        geoBudget.coverage.unlocated_geographies_n,
+        geoBudget.coverage.unlocated_budget_rub,
+        geoBudget.coverage.unlocated_budget_share,
+      );
+    }
     await expectTurnoverOnlyPage(page);
 
     expect(consoleIssues).toEqual([]);

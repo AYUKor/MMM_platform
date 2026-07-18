@@ -2,6 +2,11 @@ import { Link } from "react-router-dom";
 import type { GeoCatalogV1 } from "../../shared/api/generated/geo-catalog-v1";
 import type { WorkspaceGeoBudgetV1 } from "../../shared/api/generated/workspace-geo-budget-v1";
 import type { WorkspaceHomeV1 } from "../../shared/api/generated/workspace-home-v1";
+import {
+  GeoBudgetMap,
+  type GeoBudgetMapRequestState,
+} from "../geo-budget-map/GeoBudgetMap";
+import { adaptWorkspaceGeoBudget } from "../geo-budget-map/geoBudgetMapModel";
 import { formatDate, formatInteger, formatRub } from "../../shared/formatters/metrics";
 import { containsLegacyTargetClaim } from "../../shared/presentation/turnover-only";
 import { RefreshNotice } from "./ProductNavigationPageState";
@@ -11,8 +16,7 @@ interface HomeViewProps {
   home: WorkspaceHomeV1;
   geoBudget: WorkspaceGeoBudgetV1 | null;
   geoCatalog: GeoCatalogV1 | null;
-  geoLoading?: boolean;
-  geoUnavailable?: boolean;
+  geoRequestState?: GeoBudgetMapRequestState;
   refreshMessage?: string | null;
   onRefresh: () => void;
 }
@@ -44,8 +48,7 @@ export function HomeView({
   home,
   geoBudget,
   geoCatalog,
-  geoLoading = false,
-  geoUnavailable = false,
+  geoRequestState = "ready",
   refreshMessage = null,
   onRefresh,
 }: HomeViewProps) {
@@ -55,6 +58,7 @@ export function HomeView({
     && !containsLegacyTargetClaim(home.model.display_name)
     ? home.model.display_name
     : "Модель дополнительного оборота";
+  const geoBudgetModel = geoBudget ? adaptWorkspaceGeoBudget(geoBudget) : null;
   return (
     <div className={styles.page}>
       <header className={styles.homeHero}>
@@ -120,20 +124,16 @@ export function HomeView({
             <div><dt>Географии</dt><dd>{formatInteger(geoBudget.geographies_n)}</dd></div>
           </dl>
         ) : null}
-        <div className={styles.geoUnavailable} role="status" aria-live="polite">
-          <div className={styles.geoUnavailableMark} aria-hidden="true"><span /><span /></div>
-          <div>
-            <strong>Карта пока недоступна</strong>
-            <p>Карта будет доступна после подключения утвержденного справочника координат.</p>
-            <small>
-              {geoLoading
-                ? "Проверяем готовность справочника."
-                : geoUnavailable
-                  ? "Не удалось получить сведения о готовности карты."
-                  : geoCatalog?.display_text ?? geoBudget?.display_text ?? "Координаты пока не опубликованы."}
-            </small>
-          </div>
-        </div>
+        <GeoBudgetMap
+          model={geoBudgetModel}
+          requestState={geoRequestState}
+          onRetry={onRefresh}
+        />
+        {geoCatalog && geoBudget && geoCatalog.catalog_version !== geoBudget.catalog_version ? (
+          <p className={styles.geoContractNote} role="alert">
+            Версии справочника координат и сводки не совпадают. Карта скрыта до обновления данных.
+          </p>
+        ) : null}
       </section>
 
       <div className={styles.homeGrid}>

@@ -10,6 +10,8 @@ import type {
 import type { ValidationResultV2 } from "../../shared/api/generated/validation-result-v2";
 import { formatDate, formatRub } from "../../shared/formatters/metrics";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
+import { GeoBudgetMap } from "../geo-budget-map/GeoBudgetMap";
+import { adaptValidationGeoBudget } from "../geo-budget-map/geoBudgetMapModel";
 import styles from "./new-calculation-preview.module.css";
 
 type StatusTone = "neutral" | "accent" | "warning" | "danger";
@@ -418,6 +420,7 @@ export function BusinessValidationReview({ validation }: { validation: Validatio
       : lead.tone === "warning"
         ? styles.validationLeadWarning
         : styles.validationLeadNeutral;
+  const geoBudgetModel = adaptValidationGeoBudget(validation);
   return (
     <div className={styles.businessValidation}>
       <section className={`${styles.validationLead} ${leadClass}`}>
@@ -495,6 +498,11 @@ export function BusinessValidationReview({ validation }: { validation: Validatio
         <div className={styles.sectionHeading}>
           <div><span className={styles.eyebrow}>Географии кампании</span><h2 id="validation-geos-title">{validation.geo_points.length} географий сохранены</h2></div>
         </div>
+        <GeoBudgetMap model={geoBudgetModel} />
+        <div className={styles.geoListHeading}>
+          <h3>Полный список географий</h3>
+          <span>Карта не заменяет данные проверки</span>
+        </div>
         <div className={styles.geoList}>
           {validation.geo_points.map((geo) => (
             <article key={geo.geo_id}>
@@ -503,10 +511,6 @@ export function BusinessValidationReview({ validation }: { validation: Validatio
               <small>{geo.channels.map((channel) => channel.channel_display_name).join(", ")}</small>
             </article>
           ))}
-        </div>
-        <div className={styles.mapUnavailable} role="status">
-          <strong>Карта пока недоступна</strong>
-          <span>Карта будет доступна после подключения утвержденного справочника координат.</span>
         </div>
       </section>
     </div>

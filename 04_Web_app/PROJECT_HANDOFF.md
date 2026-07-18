@@ -82,6 +82,19 @@ As of 2026-07-18:
   tests with two skips, generated
   TypeScript drift, typecheck, ESLint, 463 frontend unit tests and production
   build;
+- Frontend Phase E.1D is implemented on the unmerged branch
+  `codex/frontend-phase-e1d-interactive-geo-maps-v1` from merged PR #25
+  baseline `3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`. One typed
+  `GeoBudgetMap` renders workspace and campaign budget points with a local
+  static outline, fixed Albers projection, sqrt budget scaling, coverage
+  states and accessible tooltips. Desktop labels are collision-aware:
+  workspace keeps backend-budget top-10 and campaign keeps all. Compact
+  workspace keeps top-5 permanently; compact campaign exposes every name
+  through an accessible toggle/list. Generated drift, TypeScript, ESLint,
+  483 unit/component tests, the build, 177 fixture-browser tests and one real
+  no-interception live acceptance pass. Safari desktop login/Home/map pass;
+  campaign/compact Safari completion, PR number, final head SHA and final CI
+  remain pending;
 - Research Pilot Deployment v1 now packages the registered serving inventory
   without the training panel, renders Nginx/systemd configuration, supervises
   loopback execution, checks readiness/disk, and provides idle-only verified
@@ -97,11 +110,12 @@ As of 2026-07-18:
 - the standalone Model Passport page consumes `GET /api/v1/models/active`
   through a typed, fail-closed client and keeps research/preprod and
   allocation-only boundaries explicit;
-- current Backend Phase E.1C branch starts from
-  `origin/main@a404720fcdcec82825338549044a3a5b614b79dc`, which includes merged
-  PRs through #24. E.1C changes static geo data, map-ready backend projections,
-  contracts and guards; it does not change posterior response mathematics,
-  optimizer/recommendation behavior, React rendering or deployment;
+- PRs through #25 are merged. Current Frontend Phase E.1D branch starts from
+  `origin/main@3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`. E.1D changes only React
+  map rendering, local static map assets, frontend tests and documentation; it
+  does not change backend, contracts, posterior response mathematics,
+  optimizer/recommendation behavior or deployment. Its PR/head and final CI
+  remain pending;
 - the owner-approved near-term scope is a research pilot with allocation-only
   decisions; deployment source is ready, while the actual VM, domain, TLS and
   live remote acceptance are not provisioned yet;
@@ -110,7 +124,7 @@ As of 2026-07-18:
 
 The former `pkg_5795ed2581eaa9af_9aacd3beb350725b` claim is historical and must not be presented as the current preprod package.
 
-## Phase E.1A-E.1C Integration Boundary
+## Phase E.1A-E.1D Integration Boundary
 
 New frontend work must prefer these additive endpoints:
 
@@ -142,6 +156,23 @@ The map source boundary is also server-owned:
 - frontend must not geocode, guess aliases, drop unknown budget or aggregate
   history into replacement map metrics.
 
+The E.1D renderer preserves that ownership boundary:
+
+- one typed adapter per mode selects only `coordinates_status=canonical` for
+  plotting; unlocated rows, money and share remain visible in coverage states;
+- a repository-local Natural Earth outline is projected offline/runtime-local;
+  no Google, Yandex or OSM API is called;
+- one fixed Albers Equal Area projection is shared by all campaigns and does
+  not fit itself to the current point min/max;
+- bubble radius and brightness use sqrt scaling over backend budgets; marker
+  paint order places large bubbles over small ones;
+- desktop workspace labels use backend-budget top-10, while desktop campaign
+  labels all located geographies through collision-aware placement and leader
+  lines;
+- compact workspace keeps top-5 labels; compact campaign keeps all marker
+  buttons and exposes every name through an `aria-expanded` toggle/list rather
+  than forcing 15 overlapping permanent labels onto a narrow map.
+
 The v2 semantic validator is a backend decision boundary, not only a JSON
 shape check. It fails closed when money does not reconcile, S6 is partial, a
 safe-partial S5 is marked recommended, a high-risk plan is promoted, a geo list
@@ -151,6 +182,9 @@ Detailed migration, benchmark and real-campaign evidence are in
 `04_Web_app/docs/integration/BACKEND_PHASE_E1A_BUSINESS_SEMANTICS_V1.md`.
 Geo source, alias and Phase E.1D handoff evidence is in
 `04_Web_app/docs/integration/BACKEND_PHASE_E1C_GEO_CATALOG_V1.md`.
+Frontend renderer, projection, source/license and review-state evidence is in
+`04_Web_app/docs/integration/FRONTEND_PHASE_E1D_INTERACTIVE_GEO_MAPS_V1.md` and
+`04_Web_app/docs/ui-review/phase-e1d-interactive-geo-maps-v1/REVIEW_NOTES.md`.
 
 ## Existing Calculation Boundary To Reuse
 
@@ -548,7 +582,16 @@ Each item is a separate reviewable milestone:
     error responses.
     The browser login/admin screens, corporate SSO, MFA, password recovery and
     multi-node session storage remain outside this backend milestone.
-17. When company-contour or multi-node scale is approved, replace file-backed
+17. Frontend Phase E.1D source implementation is present on
+    `codex/frontend-phase-e1d-interactive-geo-maps-v1` from baseline
+    `3ab8de98f9e73fb6d5c4dc8060261165a99d50c3`: integrate one fixed-projection
+    `GeoBudgetMap` with workspace/campaign modes, collision-aware labels,
+    compact accessible disclosure, honest coverage states and local
+    attribution. Full local regression, Chromium and live backend evidence pass;
+    Safari campaign/compact completion, final PR number/head and GitHub CI remain
+    pending. Do not mark the milestone merged before those records are frozen
+    and the owner merges it.
+18. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
 

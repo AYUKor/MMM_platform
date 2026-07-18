@@ -19,6 +19,13 @@ projections from baseline
 remain historical documentation only and must not be used to reconstruct
 current result semantics.
 
+Post-merge E.1D update, 2026-07-18: Backend Phase E.1C closed the canonical
+point-coordinate and workspace-aggregation gaps. Frontend Phase E.1D consumes
+only `validation_result_v2.geo_points` and `workspace_geo_budget_v1`, using one
+fixed local projection and versioned outline asset. The browser still does not
+geocode, match aliases, aggregate jobs, recompute shares or infer model
+coverage. Asset and renderer decisions are recorded in ADR 0024.
+
 New frontend work must prefer:
 
 | Product view | Endpoint | Contract |
@@ -50,6 +57,19 @@ Phase E.1B frontend rules:
 - use backend `map_coverage` and canonical coordinates; for `partial`, keep
   every unlocated geography and its budget visible.
 
+Phase E.1D map rules:
+
+- Home points, totals, campaign counts and shares come only from
+  `workspace_geo_budget_v1`; only canonical rows are plotted and the top ten
+  labels are selected by published `total_budget_rub`;
+- campaign points, channels and limitations come only from
+  `validation_result_v2.geo_points`; every located geography is labeled and
+  the complete non-map list remains visible;
+- one fixed Albers Equal Area projection and local Natural Earth outline are
+  shared by both modes; no response-relative fitting or runtime map provider;
+- partial/unavailable coverage preserves every unlocated geography and the
+  published budget/share instead of silently dropping it.
+
 The v1 `/media-plan` endpoint remains compatible for the merged historical
 frontend. Phase E.1B uses `/media-plan-v2`, which supplies versioned channel
 and geography identities; frontend constants and loose CSV joins remain
@@ -62,8 +82,8 @@ Current E.1B contract gaps are explicit:
    so Report remains controlled unavailable instead of reading a v1 artifact;
 2. budget publishes `allocation_share`, but no `unallocated_share`; frontend
    shows exact unallocated RUB and does not compute the complement;
-3. the coordinate contract is ready, but map rendering/base geometry is the
-   separate Phase E.1D milestone;
+3. map rendering/base geometry is closed by Phase E.1D with a versioned local
+   Natural Earth outline, fixed projection and no runtime map provider;
 4. daily media-plan rows and channel/date matrix remain unavailable.
 
 `workspace_geo_budget_v1` augments the existing workspace Home projection; it
@@ -215,9 +235,10 @@ endpoints:
 6. **Daily scenario media plans и calendar/matrix by date.** Текущие artifacts
    содержат scenario totals по `geo × channel`, но не immutable S01-S06 daily
    rows. Backend Phase C возвращает controlled unavailable.
-7. **Map base/polygon asset.** E.1C закрыл point coordinates и server-side geo
-   aggregates. Источник и лицензия базовой карты/полигонов остаются отдельным
-   решением Phase E.1D; runtime geocoder запрещен.
+7. **Map base/polygon asset — закрыт в Phase E.1D.** Локальный versioned SVG
+   создан из Natural Earth Admin 0 Countries 1:50m v5.1.1 (public domain),
+   использует фиксированную Albers Equal Area projection и не делает runtime
+   network requests. Runtime geocoder остается запрещен.
 8. **Working media-plan XLSX.** Реального отдельного artifact kind нет. CSV не
    маскируется под XLSX; marketer report XLSX остается доступен.
 

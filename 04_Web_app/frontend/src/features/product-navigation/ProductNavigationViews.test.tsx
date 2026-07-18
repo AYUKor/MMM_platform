@@ -194,8 +194,12 @@ describe("Phase D product-navigation views", () => {
     expect(within(failedRow as HTMLElement).getByText("Результат")).toBeInTheDocument();
     expect(within(failedRow as HTMLElement).getAllByText("Не готов")).toHaveLength(2);
     expect(screen.getByRole("heading", { name: "Бюджет проверенных кампаний по географиям" })).toBeInTheDocument();
-    expect(screen.getByText("Карта будет доступна после подключения утвержденного справочника координат."))
-      .toBeInTheDocument();
+    expect(screen.getByText("Карта пока недоступна")).toBeInTheDocument();
+    expect(screen.getByText("Сводка готова без координат.")).toBeInTheDocument();
+    expect(screen.getByText("Без координат: 2 географий")).toBeInTheDocument();
+    expect(screen.getByText(/Бюджет сохранен:/)).toHaveTextContent("12 млн ₽");
+    expect(screen.queryByText("Карта будет доступна после подключения утвержденного справочника координат."))
+      .not.toBeInTheDocument();
     expect(screen.getByText("Бюджет в проверенных кампаниях").parentElement as HTMLElement)
       .toHaveTextContent("12 млн ₽");
     expect(screen.getAllByText("Дополнительный оборот").length).toBeGreaterThan(0);

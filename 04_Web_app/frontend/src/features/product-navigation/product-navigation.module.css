@@ -451,45 +451,14 @@
   overflow-wrap: anywhere;
 }
 
-.geoUnavailable {
-  min-width: 0;
-  min-height: 220px;
-  display: grid;
-  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-6);
-  padding: clamp(1.25rem, 3vw, 2.25rem);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--surface-primary) 88%, transparent);
+.geoContractNote {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface-primary));
+  color: var(--text-secondary);
+  font-size: 0.78rem;
 }
-
-.geoUnavailableMark {
-  position: relative;
-  min-height: 140px;
-  overflow: hidden;
-  border: 1px solid var(--border-default);
-  border-radius: 48% 52% 44% 56% / 55% 43% 57% 45%;
-  background: repeating-linear-gradient(
-    135deg,
-    transparent 0 15px,
-    color-mix(in srgb, var(--border-default) 55%, transparent) 15px 16px
-  );
-}
-
-.geoUnavailableMark span {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--text-secondary);
-  border-radius: 50%;
-}
-
-.geoUnavailableMark span:first-child { inset: 32% auto auto 38%; }
-.geoUnavailableMark span:last-child { inset: 61% auto auto 66%; }
-.geoUnavailable strong { font-size: clamp(1.25rem, 2.4vw, 1.8rem); }
-.geoUnavailable p { max-width: 62ch; margin: 0.55rem 0; color: var(--text-secondary); line-height: 1.55; }
-.geoUnavailable small { color: var(--text-secondary); line-height: 1.45; }
 
 .warningList li {
   min-width: 0;
@@ -949,8 +918,6 @@
   .modelStateGrid > div:last-child { border-bottom: 0; }
   .modelStateGrid > div:nth-last-child(-n + 2) { border-bottom: 1px solid var(--border-default); }
   .modelStateGrid > div:last-child { border-bottom: 0; }
-  .geoUnavailable { grid-template-columns: 1fr; }
-  .geoUnavailableMark { min-height: 110px; }
   .helpNavigation nav { grid-template-columns: 1fr; }
   .articleBody h2 { font-size: 2.35rem; }
   .refreshNotice { align-items: flex-start; flex-direction: column; }
