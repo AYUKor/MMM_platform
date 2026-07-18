@@ -25,7 +25,12 @@ for entry in (WEB_APP_DIR, PYMC_CODE_DIR):
         sys.path.insert(0, str(entry))
 
 from api.http_smoke import HttpSmokeApplication, HttpSmokeSettings, serve  # noqa: E402
+from mmm_core.model_package_reader import ModelPackage  # noqa: E402
 from mmm_core.model_registry import resolve_channel  # noqa: E402
+from services.geo_catalog import (  # noqa: E402
+    active_turnover_serving_geographies,
+    assert_active_serving_geo_coverage,
+)
 from services.product_api_service import (  # noqa: E402
     RuntimeRetentionManager,
     build_model_passport,
@@ -260,6 +265,21 @@ def preflight(
             "Registry channel/package mismatch: "
             f"expected={settings.expected_package_id}, actual={actual_package_id}"
         )
+    registration = resolved.get("registration") or {}
+    raw_run_dir = Path(str(registration.get("run_dir") or "")).expanduser()
+    run_dir = (
+        raw_run_dir
+        if raw_run_dir.is_absolute()
+        else settings.project_root / raw_run_dir
+    ).resolve()
+    package = ModelPackage.from_run_dir(
+        run_dir,
+        require_posterior_ready=True,
+        validate_hash=False,
+    )
+    geo_catalog_coverage = assert_active_serving_geo_coverage(
+        active_turnover_serving_geographies(package.support_rows)
+    )
     model_passport = build_model_passport(
         resolved,
         project_root=settings.project_root,
@@ -281,6 +301,7 @@ def preflight(
         "model_verification_mode": settings.model_verification_mode,
         "source_panel_status": resolved["verified"].get("source_panel_status"),
         "inventory_files_n": resolved["verified"]["inventory_files_n"],
+        "geo_catalog_coverage": geo_catalog_coverage,
         "git_commit": git_commit,
         "python_version": sys.version.split()[0],
         "auth_mode": settings.auth_mode,

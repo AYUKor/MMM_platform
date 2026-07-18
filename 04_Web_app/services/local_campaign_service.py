@@ -65,6 +65,7 @@ from mmm_core.io import load_config  # noqa: E402
 from mmm_core.model_package import sha256_file  # noqa: E402
 from mmm_core.model_package_reader import ModelPackage  # noqa: E402
 from mmm_core.model_registry import resolve_model_reference  # noqa: E402
+from services.geo_catalog import ALIASES_PATH, CATALOG_PATH  # noqa: E402
 
 
 PARSER_NAME = "canonical_campaign_plan_parser"
@@ -546,7 +547,15 @@ class LocalCampaignService:
                 "validated_output_dir": str((intermediate_dir / "validated").resolve()),
                 "flighting_output_dir": str((intermediate_dir / "flighting").resolve()),
             },
-            "validation": {"fail_on_parse_issues": True, "fail_on_unsupported": True},
+            "validation": {
+                "fail_on_parse_issues": True,
+                # Keep the preparation artifacts so the browser can show every
+                # unsupported/unknown geography and its budget. Job creation is
+                # still blocked explicitly below.
+                "fail_on_unsupported": False,
+                "geo_catalog_file": str(CATALOG_PATH.resolve()),
+                "geo_alias_catalog_file": str(ALIASES_PATH.resolve()),
+            },
             "future_controls": {
                 "strategy": "historical_analog_period",
                 "analog_year": 2025,
@@ -607,6 +616,21 @@ class LocalCampaignService:
                 resolution,
                 package,
             )
+            if int(prep.summary["validation"].get("unsupported_rows_n") or 0) > 0:
+                issue = self._validation_failure_issue(validation.validation_id)
+                invalid = replace(
+                    valid,
+                    status=LifecycleStatus(
+                        "invalid", "План нельзя отправить в расчет"
+                    ),
+                    finished_at_utc=_utc_now(),
+                    blocking_errors=(issue,),
+                    preview=self._failed_model_support_preview(valid.preview),
+                    job_creation_allowed=False,
+                )
+                invalid.validate()
+                self.state.write_validation(invalid)
+                return
             policies = self._policy_selection(package)
             self.state.write_validation_inputs(
                 validation.validation_id,
@@ -640,6 +664,27 @@ class LocalCampaignService:
             )
             invalid.validate()
             self.state.write_validation(invalid)
+
+    @staticmethod
+    def _failed_model_support_preview(
+        preview: ValidationPreview | None,
+    ) -> ValidationPreview | None:
+        if preview is None:
+            return None
+        checks = tuple(
+            replace(
+                check,
+                status="failed",
+                display_text=(
+                    "Для части строк нет разрешенной модельной оценки. "
+                    "Исправьте отмеченные географии или каналы."
+                ),
+            )
+            if check.code == "MODEL_SUPPORT"
+            else check
+            for check in preview.checks
+        )
+        return replace(preview, checks=checks)
 
     @staticmethod
     def _campaign_count_block(

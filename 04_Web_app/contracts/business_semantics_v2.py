@@ -144,6 +144,12 @@ def _non_negative(value: Any, field: str, *, nullable: bool = False) -> float | 
     return parsed
 
 
+def _non_negative_integer(value: Any, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise BusinessSemanticsContractError(f"{field} must be a non-negative integer")
+    return value
+
+
 def _required_text(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise BusinessSemanticsContractError(f"{field} is required")
@@ -442,6 +448,50 @@ def validate_validation_result_v2(payload: Mapping[str, Any]) -> Mapping[str, An
         geo_ids.add(geo_id)
         geo_names.add(geo_name)
         _coordinates(row, field)
+        normalization_status = row.get("normalization_status")
+        if normalization_status not in {
+            "canonical",
+            "alias",
+            "unknown",
+            "ambiguous",
+        }:
+            raise BusinessSemanticsContractError(
+                f"{field}.normalization_status is invalid"
+            )
+        _required_text(row.get("input_geo_name"), f"{field}.input_geo_name")
+        _required_text(
+            row.get("normalization_rule"), f"{field}.normalization_rule"
+        )
+        canonical_id = row.get("canonical_geo_id")
+        canonical_name = row.get("canonical_geo_display_name")
+        if normalization_status in {"canonical", "alias"}:
+            if canonical_id != geo_id or canonical_name != geo_name:
+                raise BusinessSemanticsContractError(
+                    f"{field} canonical identity does not reconcile"
+                )
+            if row.get("coordinates_status") != "canonical":
+                raise BusinessSemanticsContractError(
+                    f"{field} resolved canonical geography requires coordinates"
+                )
+        else:
+            if canonical_id is not None or canonical_name is not None:
+                raise BusinessSemanticsContractError(
+                    f"{field} unresolved geography cannot claim a canonical identity"
+                )
+            if row.get("coordinates_status") != "unavailable":
+                raise BusinessSemanticsContractError(
+                    f"{field} unresolved geography cannot publish coordinates"
+                )
+        limitations_n = _non_negative_integer(
+            row.get("model_limitations_n"),
+            f"{field}.model_limitations_n",
+        )
+        if limitations_n < 0 or bool(row.get("has_model_limitations")) != (
+            limitations_n > 0
+        ):
+            raise BusinessSemanticsContractError(
+                f"{field} model limitation count does not reconcile"
+            )
         for channel_index, channel in enumerate(row.get("channels") or []):
             _channel(channel, f"{field}.channels[{channel_index}]")
         budget = float(_non_negative(row.get("budget_rub"), f"{field}.budget_rub"))
@@ -456,6 +506,19 @@ def validate_validation_result_v2(payload: Mapping[str, Any]) -> Mapping[str, An
         total += budget
     if abs(total - requested) > RISK_TOLERANCE_RUB:
         raise BusinessSemanticsContractError("Validation geo budgets do not reconcile")
+    coverage_status = _coverage(
+        payload.get("map_coverage") or {},
+        geo_points,
+        "map_coverage",
+        budget_field="budget_rub",
+    )
+    if coverage_status == "available" and any(
+        row.get("normalization_status") not in {"canonical", "alias"}
+        for row in geo_points
+    ):
+        raise BusinessSemanticsContractError(
+            "Available map coverage cannot contain unresolved geographies"
+        )
     _reject_unsafe(payload)
     return payload
 
@@ -501,11 +564,122 @@ def _coordinates(row: Mapping[str, Any], field: str) -> None:
     if latitude is None:
         if status != "unavailable":
             raise BusinessSemanticsContractError(f"{field} missing coordinates must be unavailable")
+        if row.get("region_id") is not None or row.get("region_display_name") is not None:
+            raise BusinessSemanticsContractError(
+                f"{field} unavailable coordinates cannot claim a canonical region"
+            )
     else:
         if not -90 <= float(latitude) <= 90 or not -180 <= float(longitude) <= 180:
             raise BusinessSemanticsContractError(f"{field} coordinates are out of range")
         if status != "canonical":
             raise BusinessSemanticsContractError(f"{field} coordinates must be canonical")
+        _required_text(row.get("region_id"), f"{field}.region_id")
+        _required_text(
+            row.get("region_display_name"), f"{field}.region_display_name"
+        )
+
+
+def _coverage(
+    value: Mapping[str, Any],
+    rows: list[Mapping[str, Any]],
+    field: str,
+    *,
+    budget_field: str | None = None,
+) -> str:
+    """Reconcile map coverage with the rows and, when present, their money."""
+
+    located = [row for row in rows if row.get("coordinates_status") == "canonical"]
+    unlocated = [row for row in rows if row.get("coordinates_status") == "unavailable"]
+    expected_status = (
+        "available"
+        if rows and len(located) == len(rows)
+        else "partial"
+        if located
+        else "unavailable"
+    )
+    if value.get("status") != expected_status:
+        raise BusinessSemanticsContractError(f"{field}.status is inconsistent")
+    if _non_negative_integer(
+        value.get("located_geographies_n"), f"{field}.located_geographies_n"
+    ) != len(located):
+        raise BusinessSemanticsContractError(
+            f"{field}.located_geographies_n does not reconcile"
+        )
+    if _non_negative_integer(
+        value.get("unlocated_geographies_n"), f"{field}.unlocated_geographies_n"
+    ) != len(unlocated):
+        raise BusinessSemanticsContractError(
+            f"{field}.unlocated_geographies_n does not reconcile"
+        )
+    expected_unlocated = {
+        (
+            _required_text(row.get("geo_id"), f"{field}.rows.geo_id"),
+            _required_text(
+                row.get("geo_display_name"), f"{field}.rows.geo_display_name"
+            ),
+        )
+        for row in unlocated
+    }
+    actual_unlocated_rows = value.get("unlocated_geographies") or []
+    actual_unlocated = {
+        (
+            _required_text(row.get("geo_id"), f"{field}.unlocated_geographies.geo_id"),
+            _required_text(
+                row.get("geo_display_name"),
+                f"{field}.unlocated_geographies.geo_display_name",
+            ),
+        )
+        for row in actual_unlocated_rows
+    }
+    if len(actual_unlocated) != len(actual_unlocated_rows):
+        raise BusinessSemanticsContractError(
+            f"{field}.unlocated_geographies contains duplicates"
+        )
+    if actual_unlocated != expected_unlocated:
+        raise BusinessSemanticsContractError(
+            f"{field}.unlocated_geographies does not reconcile"
+        )
+    if budget_field is not None:
+        located_budget = sum(
+            float(_non_negative(row.get(budget_field), f"{field}.rows.{budget_field}"))
+            for row in located
+        )
+        unlocated_budget = sum(
+            float(_non_negative(row.get(budget_field), f"{field}.rows.{budget_field}"))
+            for row in unlocated
+        )
+        published_located = float(
+            _non_negative(value.get("located_budget_rub"), f"{field}.located_budget_rub")
+        )
+        published_unlocated = float(
+            _non_negative(
+                value.get("unlocated_budget_rub"), f"{field}.unlocated_budget_rub"
+            )
+        )
+        if (
+            abs(published_located - located_budget) > RISK_TOLERANCE_RUB
+            or abs(published_unlocated - unlocated_budget) > RISK_TOLERANCE_RUB
+        ):
+            raise BusinessSemanticsContractError(
+                f"{field} located/unlocated budgets do not reconcile"
+            )
+        total = located_budget + unlocated_budget
+        share = _finite(
+            value.get("unlocated_budget_share"),
+            f"{field}.unlocated_budget_share",
+            nullable=True,
+        )
+        expected_share = unlocated_budget / total if total > 0 else None
+        if expected_share is None:
+            if share is not None:
+                raise BusinessSemanticsContractError(
+                    f"{field}.unlocated_budget_share must be null"
+                )
+        elif share is None or abs(float(share) - expected_share) > SHARE_TOLERANCE:
+            raise BusinessSemanticsContractError(
+                f"{field}.unlocated_budget_share does not reconcile"
+            )
+    return expected_status
 
 
 def validate_geo_catalog_v1(payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -524,6 +698,17 @@ def validate_geo_catalog_v1(payload: Mapping[str, Any]) -> Mapping[str, Any]:
         _coordinates(entry, f"entries[{index}]")
     if int(payload.get("geographies_n") or 0) != len(entries):
         raise BusinessSemanticsContractError("Geo catalog count does not reconcile")
+    for field in (
+        "catalog_version",
+        "coordinates_source",
+        "coordinates_source_version_or_date",
+    ):
+        _required_text(payload.get(field), field)
+    if payload.get("coordinates_license") != "CC BY 4.0":
+        raise BusinessSemanticsContractError("Geo catalog license is invalid")
+    coverage_status = _coverage(payload.get("coverage") or {}, entries, "coverage")
+    if payload.get("status") != coverage_status:
+        raise BusinessSemanticsContractError("Geo catalog status is inconsistent")
     _reject_unsafe(payload)
     return payload
 
@@ -536,14 +721,40 @@ def validate_workspace_geo_budget_v1(payload: Mapping[str, Any]) -> Mapping[str,
     row_total = sum(float(_non_negative(row.get("total_budget_rub"), "rows.total_budget_rub")) for row in rows)
     if abs(total - row_total) > RISK_TOLERANCE_RUB:
         raise BusinessSemanticsContractError("Workspace geo budgets do not reconcile")
+    geo_ids: set[str] = set()
+    geo_names: set[str] = set()
     for index, row in enumerate(rows):
+        geo_id = _required_text(row.get("geo_id"), f"rows[{index}].geo_id")
+        geo_name = _required_text(
+            row.get("geo_display_name"), f"rows[{index}].geo_display_name"
+        )
+        if geo_id in geo_ids or geo_name in geo_names:
+            raise BusinessSemanticsContractError(
+                "Workspace geo budget contains duplicate geographies"
+            )
+        geo_ids.add(geo_id)
+        geo_names.add(geo_name)
         _coordinates(row, f"rows[{index}]")
+        _non_negative_integer(row.get("campaigns_n"), f"rows[{index}].campaigns_n")
         share = _finite(row.get("budget_share"), f"rows[{index}].budget_share", nullable=True)
         expected = float(row["total_budget_rub"]) / total if total > 0 else None
         if expected is None and share is not None:
             raise BusinessSemanticsContractError("Workspace zero-total shares must be null")
         if expected is not None and (share is None or abs(float(share) - expected) > SHARE_TOLERANCE):
             raise BusinessSemanticsContractError("Workspace geo share does not reconcile")
+    if _non_negative_integer(payload.get("geographies_n"), "geographies_n") != len(rows):
+        raise BusinessSemanticsContractError(
+            "Workspace geography count does not reconcile"
+        )
+    _non_negative_integer(payload.get("campaigns_n"), "campaigns_n")
+    coverage_status = _coverage(
+        payload.get("coverage") or {},
+        rows,
+        "coverage",
+        budget_field="total_budget_rub",
+    )
+    if payload.get("status") != coverage_status:
+        raise BusinessSemanticsContractError("Workspace coverage status is inconsistent")
     _reject_unsafe(payload)
     return payload
 

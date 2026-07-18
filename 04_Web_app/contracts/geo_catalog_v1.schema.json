@@ -4,29 +4,110 @@
   "title": "GeoCatalogV1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract_name", "schema_version", "catalog_version", "status", "display_text", "geographies_n", "entries"],
+  "required": [
+    "contract_name",
+    "schema_version",
+    "catalog_version",
+    "coordinates_source",
+    "coordinates_source_version_or_date",
+    "coordinates_license",
+    "status",
+    "display_text",
+    "geographies_n",
+    "coverage",
+    "entries"
+  ],
   "properties": {
     "contract_name": {"const": "geo_catalog_v1"},
     "schema_version": {"const": "1.0.0"},
-    "catalog_version": {"type": "string"},
+    "catalog_version": {"type": "string", "minLength": 1},
+    "coordinates_source": {"type": "string", "minLength": 1},
+    "coordinates_source_version_or_date": {"type": "string", "minLength": 1},
+    "coordinates_license": {"const": "CC BY 4.0"},
     "status": {"enum": ["available", "partial", "unavailable"]},
     "display_text": {"type": "string", "minLength": 1},
     "geographies_n": {"type": "integer", "minimum": 0},
+    "coverage": {"$ref": "#/$defs/coverage"},
     "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
   },
   "$defs": {
-    "entry": {
+    "geoIdentity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["geo_id", "geo_display_name", "latitude", "longitude", "coordinates_status", "region_id", "region_display_name"],
+      "required": ["geo_id", "geo_display_name"],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "located_geographies_n",
+        "unlocated_geographies_n",
+        "unlocated_geographies"
+      ],
+      "properties": {
+        "status": {"enum": ["available", "partial", "unavailable"]},
+        "located_geographies_n": {"type": "integer", "minimum": 0},
+        "unlocated_geographies_n": {"type": "integer", "minimum": 0},
+        "unlocated_geographies": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/geoIdentity"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "entry": {
+      "oneOf": [
+        {"$ref": "#/$defs/canonicalEntry"},
+        {"$ref": "#/$defs/unavailableEntry"}
+      ]
+    },
+    "canonicalEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "geo_id",
+        "geo_display_name",
+        "latitude",
+        "longitude",
+        "coordinates_status",
+        "region_id",
+        "region_display_name"
+      ],
       "properties": {
         "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
         "geo_display_name": {"type": "string", "minLength": 1},
-        "latitude": {"type": ["number", "null"]},
-        "longitude": {"type": ["number", "null"]},
-        "coordinates_status": {"enum": ["canonical", "unavailable"]},
-        "region_id": {"type": ["string", "null"]},
-        "region_display_name": {"type": ["string", "null"]}
+        "latitude": {"type": "number", "minimum": -90, "maximum": 90},
+        "longitude": {"type": "number", "minimum": -180, "maximum": 180},
+        "coordinates_status": {"const": "canonical"},
+        "region_id": {"type": "string", "minLength": 1},
+        "region_display_name": {"type": "string", "minLength": 1}
+      }
+    },
+    "unavailableEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "geo_id",
+        "geo_display_name",
+        "latitude",
+        "longitude",
+        "coordinates_status",
+        "region_id",
+        "region_display_name"
+      ],
+      "properties": {
+        "geo_id": {"type": "string", "pattern": "^geo_[0-9a-f]{16}$"},
+        "geo_display_name": {"type": "string", "minLength": 1},
+        "latitude": {"type": "null"},
+        "longitude": {"type": "null"},
+        "coordinates_status": {"const": "unavailable"},
+        "region_id": {"type": "null"},
+        "region_display_name": {"type": "null"}
       }
     }
   }

@@ -472,20 +472,46 @@ class BusinessSemanticsV2Test(unittest.TestCase):
         with self.assertRaises(Exception):
             _schema_valid(load_validation_result_v2_schema(), invalid_coordinate)
 
+        invalid_state = copy.deepcopy(payload)
+        invalid_state["geo_points"][0].update(
+            {
+                "canonical_geo_id": invalid_state["geo_points"][0]["geo_id"],
+                "canonical_geo_display_name": invalid_state["geo_points"][0][
+                    "geo_display_name"
+                ],
+                "normalization_status": "canonical",
+            }
+        )
+        with self.assertRaises(BusinessSemanticsContractError):
+            validate_validation_result_v2(invalid_state)
+        with self.assertRaises(Exception):
+            _schema_valid(load_validation_result_v2_schema(), invalid_state)
+
     def test_geo_catalog_never_guesses_coordinates(self) -> None:
         unavailable = build_geo_catalog(GEOS)
         _schema_valid(load_geo_catalog_v1_schema(), unavailable)
         self.assertEqual(unavailable["status"], "unavailable")
         self.assertTrue(all(row["latitude"] is None for row in unavailable["entries"]))
 
-        partial = build_geo_catalog(
-            GEOS,
-            canonical_coordinates={GEOS[0]: {"latitude": 55.75, "longitude": 37.62}},
-        )
+        partial = build_geo_catalog(["МОСКВА", GEOS[0]])
+        _schema_valid(load_geo_catalog_v1_schema(), partial)
         self.assertEqual(partial["status"], "partial")
-        self.assertEqual(partial["entries"][0]["coordinates_status"], "canonical")
-        with self.assertRaisesRegex(ValueError, "unknown geographies"):
-            build_geo_catalog(GEOS, canonical_coordinates={"ДРУГОЕ ГЕО": {"latitude": 1, "longitude": 2}})
+        known = next(
+            row for row in partial["entries"] if row["coordinates_status"] == "canonical"
+        )
+        unknown = next(
+            row
+            for row in partial["entries"]
+            if row["coordinates_status"] == "unavailable"
+        )
+        self.assertEqual(known["geo_display_name"], "Москва")
+        self.assertIsNone(unknown["latitude"])
+        self.assertEqual(partial["coverage"]["unlocated_geographies_n"], 1)
+
+        invalid_state = copy.deepcopy(unavailable)
+        invalid_state["entries"][0]["coordinates_status"] = "canonical"
+        with self.assertRaises(Exception):
+            _schema_valid(load_geo_catalog_v1_schema(), invalid_state)
 
     def test_workspace_geo_budget_reconciles_without_map_coordinates(self) -> None:
         payload = build_workspace_geo_budget_v1([_validation_payload()])
@@ -493,6 +519,13 @@ class BusinessSemanticsV2Test(unittest.TestCase):
         self.assertEqual(payload["geographies_n"], 15)
         self.assertAlmostEqual(payload["total_budget_rub"], REQUESTED_BUDGET)
         self.assertEqual(payload["status"], "unavailable")
+        self.assertAlmostEqual(
+            payload["coverage"]["unlocated_budget_rub"], REQUESTED_BUDGET
+        )
+        invalid_state = copy.deepcopy(payload)
+        invalid_state["rows"][0]["coordinates_status"] = "canonical"
+        with self.assertRaises(Exception):
+            _schema_valid(load_workspace_geo_budget_v1_schema(), invalid_state)
 
     def test_model_contracts_publish_one_target_and_four_active_models(self) -> None:
         passport_v1 = json.loads(

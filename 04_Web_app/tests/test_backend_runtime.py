@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -100,12 +101,25 @@ class BackendRuntimeTest(unittest.TestCase):
                 "backend_runtime.build_model_passport",
                 autospec=True,
                 return_value=passport,
+            ), patch(
+                "backend_runtime.ModelPackage.from_run_dir",
+                autospec=True,
+                return_value=SimpleNamespace(
+                    support_rows=[
+                        {
+                            "scope": "geo",
+                            "target": "turnover_per_user",
+                            "geo_label": "МОСКВА",
+                        }
+                    ]
+                ),
             ):
                 result = preflight(settings, config_sha256=_config_sha256(config))
             self.assertEqual(result["status"], "ready")
             self.assertEqual(result["package_id"], PACKAGE_ID)
             self.assertEqual(result["inventory_files_n"], 55)
             self.assertEqual(result["model_passport"]["contract_name"], "model_passport_v1")
+            self.assertEqual(result["geo_catalog_coverage"]["status"], "available")
 
     def test_preflight_rejects_channel_package_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

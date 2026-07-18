@@ -7,7 +7,6 @@ module never calls forecast or optimizer mathematics and never geocodes.
 from __future__ import annotations
 
 import csv
-import hashlib
 import math
 import re
 import sys
@@ -57,9 +56,15 @@ from services.job_result_view import (  # noqa: E402
     _scenario_candidates,
     _validate_sources,
 )
-
-
-GEO_CATALOG_VERSION = "geo_catalog_v1_unlocated_2026_07"
+from services.geo_catalog import (  # noqa: E402
+    COORDINATES_SOURCE,
+    COORDINATES_SOURCE_DATE,
+    GEO_CATALOG_VERSION,
+    CanonicalGeoCatalog,
+    coverage_summary,
+    load_canonical_geo_catalog,
+    stable_geo_id,
+)
 
 
 def _issue_cells(issue: Mapping[str, Any], target: str) -> list[Mapping[str, Any]]:
@@ -99,26 +104,30 @@ def _contains_diagnostic_metric(value: Any) -> bool:
 
 
 def geo_id(geo_display_name: str) -> str:
-    canonical = str(geo_display_name or "").strip().upper().replace("Ё", "Е")
-    if not canonical:
-        raise ValueError("Geo display name is required")
-    return "geo_" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    return stable_geo_id(geo_display_name)
 
 
-def build_scenario_media_plan_v2(payload_v1: Mapping[str, Any]) -> dict[str, Any]:
+def build_scenario_media_plan_v2(
+    payload_v1: Mapping[str, Any],
+    *,
+    catalog: CanonicalGeoCatalog | None = None,
+) -> dict[str, Any]:
     """Project a validated v1 plan into browser-safe channel/geo identities."""
+
+    selected_catalog = catalog or load_canonical_geo_catalog()
 
     def plan_row(row: Mapping[str, Any]) -> dict[str, Any]:
         channel = channel_identity(row.get("channel"))
         geo_name = str(row.get("geo") or "").strip()
+        resolution = selected_catalog.resolve(geo_name)
         return {
             **{
                 key: value
                 for key, value in row.items()
                 if key not in {"channel", "geo"}
             },
-            "geo_id": geo_id(geo_name),
-            "geo_display_name": geo_name,
+            "geo_id": resolution.geo_id,
+            "geo_display_name": resolution.geo_display_name,
             **channel,
         }
 
@@ -130,10 +139,11 @@ def build_scenario_media_plan_v2(payload_v1: Mapping[str, Any]) -> dict[str, Any
 
     def geo_row(row: Mapping[str, Any]) -> dict[str, Any]:
         geo_name = str(row.get("geo") or "").strip()
+        resolution = selected_catalog.resolve(geo_name)
         return {
             **{key: value for key, value in row.items() if key != "geo"},
-            "geo_id": geo_id(geo_name),
-            "geo_display_name": geo_name,
+            "geo_id": resolution.geo_id,
+            "geo_display_name": resolution.geo_display_name,
         }
 
     def geo_channel_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -174,41 +184,29 @@ def build_scenario_media_plan_v2(payload_v1: Mapping[str, Any]) -> dict[str, Any
 
 
 def build_geo_catalog(
-    geographies: Iterable[str],
+    geographies: Iterable[str] | None = None,
     *,
-    canonical_coordinates: Mapping[str, Mapping[str, Any]] | None = None,
+    catalog: CanonicalGeoCatalog | None = None,
 ) -> dict[str, Any]:
-    """Build a deterministic catalog without runtime geocoding or guessed points."""
+    """Publish the full or requested static catalog without runtime geocoding."""
 
-    names = sorted({str(value).strip() for value in geographies if str(value).strip()})
-    coordinates = dict(canonical_coordinates or {})
-    unknown = set(coordinates) - set(names)
-    if unknown:
-        raise ValueError(f"Coordinate catalog contains unknown geographies: {sorted(unknown)}")
-    entries: list[dict[str, Any]] = []
-    for name in names:
-        source = coordinates.get(name) or {}
-        latitude = source.get("latitude")
-        longitude = source.get("longitude")
-        if (latitude is None) != (longitude is None):
-            raise ValueError(f"Canonical coordinate pair is incomplete for {name}")
-        entries.append(
-            {
-                "geo_id": geo_id(name),
-                "geo_display_name": name,
-                "latitude": float(latitude) if latitude is not None else None,
-                "longitude": float(longitude) if longitude is not None else None,
-                "coordinates_status": "canonical" if latitude is not None else "unavailable",
-                "region_id": source.get("region_id"),
-                "region_display_name": source.get("region_display_name"),
-            }
-        )
-    located = sum(entry["coordinates_status"] == "canonical" for entry in entries)
-    status = "available" if entries and located == len(entries) else "partial" if located else "unavailable"
+    selected = catalog or load_canonical_geo_catalog()
+    requested = (
+        [row["geo_normalized_name"] for row in selected.entries]
+        if geographies is None
+        else list(geographies)
+    )
+    resolutions = selected.resolve_many(requested)
+    entries = [row.browser_entry() for row in resolutions]
+    coverage = coverage_summary(resolutions)
+    status = coverage["status"]
     payload = {
         "contract_name": GEO_CATALOG_CONTRACT,
         "schema_version": "1.0.0",
         "catalog_version": GEO_CATALOG_VERSION,
+        "coordinates_source": COORDINATES_SOURCE,
+        "coordinates_source_version_or_date": COORDINATES_SOURCE_DATE,
+        "coordinates_license": "CC BY 4.0",
         "status": status,
         "display_text": (
             "Для всех географий доступны утвержденные координаты."
@@ -218,6 +216,7 @@ def build_geo_catalog(
             else "Утвержденные координаты пока недоступны; карта не строится."
         ),
         "geographies_n": len(entries),
+        "coverage": coverage,
         "entries": entries,
     }
     validate_geo_catalog_v1(payload)
@@ -235,7 +234,7 @@ def build_validation_result_v2(
     validation: Mapping[str, Any],
     *,
     normalized_plan_path: Path | None = None,
-    canonical_coordinates: Mapping[str, Mapping[str, Any]] | None = None,
+    catalog: CanonicalGeoCatalog | None = None,
 ) -> dict[str, Any]:
     campaigns = list(validation.get("campaigns") or [])
     totals = validation.get("totals") or {}
@@ -271,7 +270,7 @@ def build_validation_result_v2(
     else:
         file_status = "unavailable"
 
-    geographies = sorted(
+    source_geographies = sorted(
         {
             str(geo)
             for campaign in campaigns
@@ -285,28 +284,33 @@ def build_validation_result_v2(
             for channel in campaign.get("channels") or []
         }
     )
+    selected_catalog = catalog or load_canonical_geo_catalog()
+    resolutions = selected_catalog.resolve_many(source_geographies)
     normalized_rows = _read_normalized_rows(normalized_plan_path)
-    channels_by_geo: dict[str, set[str]] = defaultdict(set)
+    channels_by_geo_id: dict[str, set[str]] = defaultdict(set)
+    input_names_by_geo_id: dict[str, set[str]] = defaultdict(set)
     for row in normalized_rows:
         geo = str(row.get("geo") or "").strip()
         channel = str(row.get("channel") or "").strip()
         if geo and channel:
-            channels_by_geo[geo].add(channel)
+            resolved_geo_id = selected_catalog.resolve(geo).geo_id
+            channels_by_geo_id[resolved_geo_id].add(channel)
+            input_names_by_geo_id[resolved_geo_id].add(
+                str(row.get("input_geo_name") or geo).strip()
+            )
     if not normalized_rows:
-        for geo in geographies:
-            channels_by_geo[geo].update(channels)
+        for resolution in resolutions:
+            channels_by_geo_id[resolution.geo_id].update(channels)
 
-    catalog = build_geo_catalog(
-        geographies,
-        canonical_coordinates=canonical_coordinates,
-    )
-    catalog_by_name = {entry["geo_display_name"]: entry for entry in catalog["entries"]}
-    budget_by_geo = {
-        str(row.get("geo") or ""): float(row.get("total_budget_rub") or 0.0)
-        for row in preview.get("budget_by_geo") or []
-    }
+    budget_by_geo_id: dict[str, float] = defaultdict(float)
+    for row in preview.get("budget_by_geo") or []:
+        geo = str(row.get("geo") or "").strip()
+        if geo:
+            budget_by_geo_id[selected_catalog.resolve(geo).geo_id] += float(
+                row.get("total_budget_rub") or 0.0
+            )
     requested_budget = float(
-        totals.get("model_input_budget_rub") or sum(budget_by_geo.values())
+        totals.get("model_input_budget_rub") or sum(budget_by_geo_id.values())
     )
 
     grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -323,6 +327,7 @@ def build_validation_result_v2(
                     **identity,
                     "limitation_type": str(issue.get("code") or "MODEL_LIMITATION").lower(),
                     "affected_geos": set(),
+                    "affected_geo_ids": set(),
                     "severity": (
                         "blocking"
                         if severity_code == "blocking"
@@ -364,11 +369,17 @@ def build_validation_result_v2(
                     ),
                 },
             )
-            group["affected_geos"].add(str(cell.get("geo") or ""))
+            affected_resolution = selected_catalog.resolve(cell.get("geo"))
+            group["affected_geos"].add(affected_resolution.geo_display_name)
+            group["affected_geo_ids"].add(affected_resolution.geo_id)
     model_limitations: list[dict[str, Any]] = []
+    limitation_counts_by_geo_id: dict[str, int] = defaultdict(int)
     for key in sorted(grouped):
         group = grouped[key]
         affected = sorted(value for value in group.pop("affected_geos") if value)
+        affected_geo_ids = set(group.pop("affected_geo_ids"))
+        for affected_geo_id in affected_geo_ids:
+            limitation_counts_by_geo_id[affected_geo_id] += 1
         model_limitations.append(
             {
                 **group,
@@ -377,28 +388,35 @@ def build_validation_result_v2(
             }
         )
 
-    limitation_geos = {
-        geo
-        for limitation in model_limitations
-        for geo in limitation["affected_geos"]
-    }
     geo_points = []
-    for geo in geographies:
-        entry = catalog_by_name[geo]
-        budget = float(budget_by_geo.get(geo, 0.0))
+    for resolution in resolutions:
+        budget = float(budget_by_geo_id.get(resolution.geo_id, 0.0))
+        limitations_n = limitation_counts_by_geo_id.get(resolution.geo_id, 0)
+        input_names = sorted(
+            value for value in input_names_by_geo_id[resolution.geo_id] if value
+        )
+        evidence_resolution = selected_catalog.resolve(
+            input_names[0] if input_names else resolution.input_geo_name
+        )
         geo_points.append(
             {
-                "geo_id": entry["geo_id"],
-                "geo_display_name": geo,
-                "latitude": entry["latitude"],
-                "longitude": entry["longitude"],
-                "coordinates_status": entry["coordinates_status"],
+                **resolution.browser_entry(),
+                **evidence_resolution.normalization_evidence(),
                 "budget_rub": budget,
                 "budget_share": budget / requested_budget if requested_budget > 0 else None,
-                "channels": [channel_identity(channel) for channel in sorted(channels_by_geo[geo])],
-                "has_model_limitations": geo in limitation_geos,
+                "channels": [
+                    channel_identity(channel)
+                    for channel in sorted(channels_by_geo_id[resolution.geo_id])
+                ],
+                "has_model_limitations": limitations_n > 0,
+                "model_limitations_n": limitations_n,
             }
         )
+
+    map_coverage = coverage_summary(
+        resolutions,
+        budget_by_geo_id=budget_by_geo_id,
+    )
 
     file_checks = [
         {
@@ -426,7 +444,7 @@ def build_validation_result_v2(
             "status": file_status,
             "rows_n": int(totals.get("source_rows_n") or 0),
             "campaigns_n": len(campaigns),
-            "geographies_n": len(geographies),
+            "geographies_n": len(resolutions),
             "channels_n": len(channels),
             "requested_budget_rub": requested_budget,
             "blocking_errors_n": len(file_blocking),
@@ -434,6 +452,7 @@ def build_validation_result_v2(
             "checks": file_checks,
         },
         "model_limitations": model_limitations,
+        "map_coverage": map_coverage,
         "geo_points": geo_points,
     }
     validate_validation_result_v2(payload)
@@ -740,7 +759,7 @@ def build_job_result_view_v2(
     result: Mapping[str, Any],
     overview: Mapping[str, Any],
     artifact_resolver: Any,
-    canonical_coordinates: Mapping[str, Mapping[str, Any]] | None = None,
+    geo_catalog: CanonicalGeoCatalog | None = None,
 ) -> dict[str, Any]:
     campaign_source = _validate_sources(job_id, job, result, overview)
     campaign_name = str(campaign_source["passport"]["campaign_name"])
@@ -771,7 +790,7 @@ def build_job_result_view_v2(
         )
     catalog = build_geo_catalog(
         passport_geographies,
-        canonical_coordinates=canonical_coordinates,
+        catalog=geo_catalog,
     )
     s6_infeasible_constraints = _scenario6_limiting_constraints(
         evidence, campaign_name
@@ -1019,46 +1038,96 @@ def build_job_result_view_v2(
 def build_workspace_geo_budget_v1(
     validations: Iterable[Mapping[str, Any]],
     *,
-    canonical_coordinates: Mapping[str, Mapping[str, Any]] | None = None,
+    catalog: CanonicalGeoCatalog | None = None,
 ) -> dict[str, Any]:
-    budgets: dict[str, float] = defaultdict(float)
-    campaigns_by_geo: dict[str, set[str]] = defaultdict(set)
-    for validation in validations:
+    selected_catalog = catalog or load_canonical_geo_catalog()
+    budgets_by_geo_id: dict[str, float] = defaultdict(float)
+    campaigns_by_geo_id: dict[str, set[str]] = defaultdict(set)
+    resolutions_by_geo_id: dict[str, Any] = {}
+    seen_validation_ids: set[str] = set()
+    for validation_index, validation in enumerate(validations):
+        validation_id = str(validation.get("validation_id") or "").strip()
+        validation_record_id = validation_id or f"validation_record_{validation_index:08d}"
+        if validation_record_id in seen_validation_ids:
+            continue
+        seen_validation_ids.add(validation_record_id)
         if not validation.get("job_creation_allowed"):
             continue
         preview = validation.get("preview") or {}
-        campaign_ids = [str(row.get("campaign_id") or "") for row in validation.get("campaigns") or []]
+        campaign_ids_by_geo_id: dict[str, set[str]] = defaultdict(set)
+        all_campaign_ids: set[str] = set()
+        for campaign in validation.get("campaigns") or []:
+            campaign_id = str(campaign.get("campaign_id") or "").strip()
+            if not campaign_id:
+                continue
+            workspace_campaign_id = f"{validation_record_id}:{campaign_id}"
+            all_campaign_ids.add(workspace_campaign_id)
+            for source_geo in campaign.get("geographies") or []:
+                resolution = selected_catalog.resolve(source_geo)
+                resolutions_by_geo_id.setdefault(resolution.geo_id, resolution)
+                campaign_ids_by_geo_id[resolution.geo_id].add(
+                    workspace_campaign_id
+                )
         for row in preview.get("budget_by_geo") or []:
             geo = str(row.get("geo") or "").strip()
             if not geo:
                 continue
-            budgets[geo] += float(row.get("total_budget_rub") or 0.0)
-            campaigns_by_geo[geo].update(campaign_ids)
-    catalog = build_geo_catalog(budgets, canonical_coordinates=canonical_coordinates)
-    by_name = {entry["geo_display_name"]: entry for entry in catalog["entries"]}
-    total = sum(budgets.values())
+            resolution = selected_catalog.resolve(geo)
+            resolutions_by_geo_id.setdefault(resolution.geo_id, resolution)
+            budgets_by_geo_id[resolution.geo_id] += float(
+                row.get("total_budget_rub") or 0.0
+            )
+            matching_campaigns = campaign_ids_by_geo_id.get(resolution.geo_id)
+            campaigns_by_geo_id[resolution.geo_id].update(
+                matching_campaigns if matching_campaigns else all_campaign_ids
+            )
+    total = sum(budgets_by_geo_id.values())
+    resolutions = tuple(
+        sorted(
+            (
+                resolutions_by_geo_id[geo_id]
+                for geo_id in budgets_by_geo_id
+            ),
+            key=lambda row: row.geo_display_name,
+        )
+    )
     rows = [
         {
-            "geo_id": by_name[geo]["geo_id"],
-            "geo_display_name": geo,
-            "latitude": by_name[geo]["latitude"],
-            "longitude": by_name[geo]["longitude"],
-            "coordinates_status": by_name[geo]["coordinates_status"],
-            "total_budget_rub": budget,
-            "campaigns_n": len(campaigns_by_geo[geo]),
-            "budget_share": budget / total if total > 0 else None,
+            **resolution.browser_entry(),
+            "total_budget_rub": budgets_by_geo_id[resolution.geo_id],
+            "campaigns_n": len(campaigns_by_geo_id[resolution.geo_id]),
+            "budget_share": (
+                budgets_by_geo_id[resolution.geo_id] / total if total > 0 else None
+            ),
         }
-        for geo, budget in sorted(budgets.items())
+        for resolution in resolutions
     ]
+    coverage = coverage_summary(
+        resolutions,
+        budget_by_geo_id=budgets_by_geo_id,
+    )
     payload = {
         "contract_name": WORKSPACE_GEO_BUDGET_CONTRACT,
         "schema_version": "1.0.0",
-        "catalog_version": catalog["catalog_version"],
-        "status": catalog["status"],
-        "display_text": catalog["display_text"],
+        "catalog_version": GEO_CATALOG_VERSION,
+        "status": coverage["status"],
+        "display_text": (
+            "Для всех географий доступны утвержденные координаты."
+            if coverage["status"] == "available"
+            else "Для части географий утвержденные координаты пока недоступны."
+            if coverage["status"] == "partial"
+            else "Утвержденные координаты пока недоступны; карта не строится."
+        ),
         "total_budget_rub": total,
-        "campaigns_n": len({value for values in campaigns_by_geo.values() for value in values}),
+        "campaigns_n": len(
+            {
+                value
+                for values in campaigns_by_geo_id.values()
+                for value in values
+            }
+        ),
         "geographies_n": len(rows),
+        "coverage": coverage,
         "rows": rows,
     }
     validate_workspace_geo_budget_v1(payload)

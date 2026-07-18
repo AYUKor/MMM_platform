@@ -22,8 +22,10 @@ the 12-fit research package, and v2 result/model/validation/media-plan
 contracts remove orders and average-basket metrics from primary product
 decisions. S5 now publishes a full conservative plan when feasible or an
 explicit partial plan; S6 publishes a full plan or explicit infeasibility.
-React remains on the compatible v1 contracts until a separate frontend
-migration.
+The merged Phase E.1B frontend consumes those v2 semantics. Backend Phase E.1C
+adds a versioned 220-geography static coordinate/alias catalog, server-side
+canonical geo aggregation and explicit partial/unavailable map coverage. Map
+rendering remains a separate frontend milestone.
 Panel-free model transfer, reverse-proxy/systemd rendering, health, retention
 and backup/restore are implemented. There is still no provisioned hosted
 VM/domain/TLS secret, durable company queue, PostgreSQL runtime, approved
@@ -39,8 +41,8 @@ Backend Phase C adds additive `GET /api/v1/jobs/{job_id}/result-view` and
 S01-S06 metrics, source-backed ranks, backend budget aggregates, hash-checked
 report metadata and paginated `geo x channel` scenario plans. The new
 projections explicitly keep reliability score, average-basket delta, daily
-scenario plans, map coordinates and working-plan XLSX unavailable until real
-versioned evidence exists.
+scenario plans and working-plan XLSX unavailable until real versioned evidence
+exists. Phase E.1C now supplies the separate reviewed coordinate evidence.
 
 ## Product Purpose
 
@@ -60,7 +62,7 @@ deployment can replace runtime adapters without changing MMM calculation logic
 or browser contracts.
 
 The backend has an asynchronous HTTP boundary for immutable jobs, progress
-polling, verified results and artifact downloads. Product API OpenAPI v1.7 additionally
+polling, verified results and artifact downloads. Product API OpenAPI v1.8 additionally
 publishes readiness, exact model policy, stable HTTP errors, OpenAPI, schemas
 and paginated history. Phase B adds a fixed nine-stage `progress-view`, real
 Scenario 6 counters where available, a separate report status and a reviewed
@@ -141,6 +143,14 @@ A support warning must not be translated into a blanket statement that advertisi
   allocated budget.
 - Machine-readable geo arrays remain complete and map coordinates are never
   guessed.
+- Active turnover-serving geographies must be a subset of the versioned static
+  geo catalog; unknown campaign geographies retain their rows and budget with
+  null coordinates and explicit partial coverage.
+- Registered geo aliases are canonicalized before model support validation;
+  package model keys and browser display labels remain separate, auditable
+  fields.
+- Workspace geo aggregates are built from saved job-backed validations and
+  deduplicate repeated validation references before summing budget.
 - Scenario 6 distinguishes `best_raw`, `best_safe` and `no_safe_candidate`.
 - The UI never hides warnings, but translates them into business language.
 - Production activation remains fail-closed when mandatory model gates are not passed.
