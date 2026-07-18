@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { JobResultViewV2 } from "../../shared/api/generated/job-result-view-v2";
 import type { ScenarioId, ScenarioMediaPlanV2 } from "../../shared/api/generated/scenario-media-plan-v2";
+import type { JobReportArtifacts } from "../../shared/api/report-artifacts-client";
 import { formatInteger, formatRub } from "../../shared/formatters/metrics";
 import { Button } from "../../shared/ui/Button";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
@@ -21,12 +22,17 @@ export interface JobResultViewProps {
   mediaControls: MediaPlanControls;
   mediaLoading: boolean;
   mediaError: unknown;
+  reportArtifacts?: JobReportArtifacts;
+  reportLoading: boolean;
+  reportError: unknown;
+  canDownload: boolean;
   refreshNotice: string | null;
   onTabChange: (tab: ResultTabId) => void;
   onMediaScenarioChange: (scenarioId: ScenarioId) => void;
   onMediaControlsChange: (controls: MediaPlanControls) => void;
   onMediaPageChange: (page: number) => void;
   onMediaRetry: () => void;
+  onReportRetry: () => void;
   onRefresh: () => void;
 }
 
@@ -38,12 +44,17 @@ export function JobResultView({
   mediaControls,
   mediaLoading,
   mediaError,
+  reportArtifacts,
+  reportLoading,
+  reportError,
+  canDownload,
   refreshNotice,
   onTabChange,
   onMediaScenarioChange,
   onMediaControlsChange,
   onMediaPageChange,
   onMediaRetry,
+  onReportRetry,
   onRefresh,
 }: JobResultViewProps) {
   return (
@@ -107,7 +118,16 @@ export function JobResultView({
             onRetry={onMediaRetry}
           />
         ) : null}
-        {activeTab === "report" ? <ReportTab /> : null}
+        {activeTab === "report" ? (
+          <ReportTab
+            artifacts={reportArtifacts}
+            loading={reportLoading}
+            error={reportError}
+            canDownload={canDownload}
+            limitations={result.limitations}
+            onRetry={onReportRetry}
+          />
+        ) : null}
       </section>
     </div>
   );

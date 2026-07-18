@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import type { JobReportArtifacts } from "../../shared/api/report-artifacts-client";
 import {
   buildJobResultViewV2,
   buildScenarioMediaPlanV2,
@@ -16,17 +17,48 @@ function renderView(overrides: Partial<JobResultViewProps> = {}) {
     mediaControls: { channel: null, geo: null, page: 1, pageSize: 25 },
     mediaLoading: false,
     mediaError: null,
+    reportArtifacts: undefined,
+    reportLoading: false,
+    reportError: null,
     refreshNotice: null,
+    canDownload: true,
     onTabChange: vi.fn(),
     onMediaScenarioChange: vi.fn(),
     onMediaControlsChange: vi.fn(),
     onMediaPageChange: vi.fn(),
     onMediaRetry: vi.fn(),
+    onReportRetry: vi.fn(),
     onRefresh: vi.fn(),
     ...overrides,
   };
   const rendered = render(<MemoryRouter><JobResultView {...props} /></MemoryRouter>);
   return { props, ...rendered };
+}
+
+function buildReportArtifacts(
+  overrides: Partial<JobReportArtifacts> = {},
+): JobReportArtifacts {
+  return {
+    status: "ready",
+    displayText: "Excel-отчет готов.",
+    generatedAtUtc: "2026-07-18T12:00:00Z",
+    artifact: {
+      artifactId: "artifact_1234567890abcdef",
+      displayName: "mmm_campaign_result.xlsx",
+      sizeBytes: 65_536,
+      downloadPath: "/api/v1/artifacts/artifact_1234567890abcdef/download",
+    },
+    sheets: [
+      { sheetName: "Итоги", title: "Итоги", description: "Основные результаты расчета." },
+      { sheetName: "Медиаплан", title: "Медиаплан", description: null },
+    ],
+    workingMediaPlan: {
+      status: "unavailable",
+      displayText: "Отдельный рабочий медиаплан пока не опубликован.",
+      artifact: null,
+    },
+    ...overrides,
+  };
 }
 
 describe("JobResultView turnover-only", () => {
@@ -96,10 +128,69 @@ describe("JobResultView turnover-only", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("keeps report unavailable instead of falling back to v1", () => {
-    renderView({ activeTab: "report" });
-    expect(screen.getByRole("heading", { name: "Excel-отчет пока недоступен" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /скачать отчет/i })).not.toBeInTheDocument();
+  it("renders a ready report, its size and backend-published sheets", () => {
+    renderView({ activeTab: "report", reportArtifacts: buildReportArtifacts() });
+    expect(screen.getByRole("heading", { name: "Отчет готов" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "mmm_campaign_result.xlsx" })).toBeInTheDocument();
+    expect(screen.getByText(/64 КБ/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Листы отчета" })).toBeInTheDocument();
+    expect(screen.getByText("Основные результаты расчета.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Скачать отчет" })).toHaveAttribute(
+      "href",
+      "http://127.0.0.1:8765/api/v1/artifacts/artifact_1234567890abcdef/download",
+    );
+  });
+
+  it.each([
+    ["unavailable", "Отчет недоступен", "Отчет пока не опубликован."],
+    ["failed", "Не удалось сформировать отчет", "Формирование отчета завершилось ошибкой."],
+  ] as const)("renders a controlled %s report state", (status, heading, displayText) => {
+    renderView({
+      activeTab: "report",
+      reportArtifacts: buildReportArtifacts({
+        status,
+        displayText,
+        generatedAtUtc: null,
+        artifact: null,
+        sheets: [],
+      }),
+    });
+    expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    expect(screen.getByText(displayText)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Скачать отчет" })).not.toBeInTheDocument();
+  });
+
+  it("does not expose artifact links without report.download permission", () => {
+    renderView({
+      activeTab: "report",
+      reportArtifacts: buildReportArtifacts(),
+      canDownload: false,
+    });
+    expect(screen.queryByRole("link", { name: "Скачать отчет" })).not.toBeInTheDocument();
+    expect(screen.getByText("Нет доступа к скачиванию")).toBeInTheDocument();
+  });
+
+  it("renders a working media-plan download only when its artifact is ready", () => {
+    renderView({
+      activeTab: "report",
+      reportArtifacts: buildReportArtifacts({
+        workingMediaPlan: {
+          status: "ready",
+          displayText: "Рабочий медиаплан готов.",
+          artifact: {
+            artifactId: "artifact_fedcba0987654321",
+            displayName: "working_media_plan.xlsx",
+            sizeBytes: 32_768,
+            downloadPath: "/api/v1/artifacts/artifact_fedcba0987654321/download",
+          },
+        },
+      }),
+    });
+    expect(screen.getByRole("heading", { name: "working_media_plan.xlsx" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Скачать медиаплан" })).toHaveAttribute(
+      "href",
+      "http://127.0.0.1:8765/api/v1/artifacts/artifact_fedcba0987654321/download",
+    );
   });
 
   it("forbids diagnostic KPI and raw target identifiers in mounted UI", () => {

@@ -17,7 +17,8 @@ backend result. Live acceptance проведена отдельно, без rout
 
 ## Review boundary
 
-Product migration использует семь projections:
+Product migration использует семь business projections и один изолированный
+artifact transport:
 
 - `GET /api/v1/jobs/{job_id}/result-view-v2`;
 - `GET /api/v1/jobs/{job_id}/media-plan-v2`;
@@ -26,10 +27,13 @@ Product migration использует семь projections:
 - `GET /api/v1/model/overview-v2`;
 - `GET /api/v1/meta/geo-catalog`;
 - `GET /api/v1/workspace/geo-budget`.
+- `GET /api/v1/jobs/{job_id}/result-view` — только validated `report` subtree.
 
-V1 fallback, client-side ROAS/recommendation/allocation computation, raw
-channel IDs и guessed map coordinates запрещены. Existing upload/job lifecycle
-и workspace home projection не становятся источником v2 business semantics.
+V1 business fallback, client-side ROAS/recommendation/allocation computation,
+raw channel IDs и guessed map coordinates запрещены. Artifact-only parser не
+возвращает campaign, KPI, budgets, ROAS, scenarios, recommendation или
+reliability из v1. Existing upload/job lifecycle и workspace home projection
+не становятся источником v2 business semantics.
 
 ## Screenshot inventory
 
@@ -47,11 +51,12 @@ Review directory:
 | S6 feasible | `result-s6-feasible-light.png` | `result-s6-feasible-dark.png` | passed |
 | Unsupported v2 contract | `result-unsupported-light.png` | `result-unsupported-dark.png` | passed |
 | S5 media plan | `result-media-s5-light.png` | `result-media-s5-dark.png` | passed |
+| Ready Excel report | `result-report-ready-light.png` | `result-report-ready-dark.png` | passed |
 | Turnover-only model | `model-light.png` | `model-dark.png` | passed |
 | Home geo-budget unavailable map | `home-geo-budget-light.png` | `home-geo-budget-dark.png` | passed |
 | Mobile S5, 390×844 | `result-mobile-s5-light.png` | `result-mobile-s5-dark.png` | passed |
 
-Всего: 24 PNG. Отдельный overflow screenshot не создавался: отсутствие
+Всего: 26 PNG. Отдельный overflow screenshot не создавался: отсутствие
 horizontal overflow проверено Playwright на 375×812, 812×375 и 1440×900.
 Каждый synthetic screenshot содержит badge `Демонстрационные данные`.
 
@@ -74,8 +79,9 @@ horizontal overflow проверено Playwright на 375×812, 812×375 и 144
 - [x] Model views показывают один target, 4 serving models и 12 research fits.
 - [x] Home не рассчитывает geo totals из jobs/history.
 - [x] Карта находится в honest unavailable state.
-- [x] Report находится в controlled unavailable state, пока v2 не публикует
-      artifact metadata.
+- [x] Report status, sheets и final/working download используют только узкую
+      artifact projection; v2 остается источником всех business semantics.
+- [x] Без `report.download` ссылки не рендерятся; unsafe path fail closed.
 - [x] Status не кодируется только цветом; focus и accordions доступны с
       клавиатуры.
 - [x] Desktop/mobile documents не имеют horizontal overflow.
@@ -87,13 +93,13 @@ horizontal overflow проверено Playwright на 375×812, 812×375 и 144
 | Generated contract drift | passed | generated files unchanged |
 | TypeScript | passed | `tsc -b --pretty false` |
 | ESLint | passed | `eslint . --max-warnings=0` |
-| Unit tests | passed | 39 files, 412 tests |
-| Production build | passed | 151 modules; non-blocking bundle-size warning |
-| Fixture Playwright | passed | 149 tests; 2 opt-in live suites skipped |
+| Unit tests | passed | 40 files, 463 tests |
+| Production build | passed | 152 modules; non-blocking bundle-size warning |
+| Fixture Playwright | passed | 157 tests; 1 unrelated opt-in live suite skipped |
 | Full frontend regression | passed | Phase A–E and E.1B fixture suites |
 | Chromium automated | passed | installed Chrome Chromium channel |
-| Live E.1B acceptance | passed | 1 test, no route interception |
-| Screenshot dimensions/overflow | passed | 24 PNG; 375×812, 812×375, 1440×900 checks |
+| Live E.1B acceptance | passed | 1 test, no route interception; real XLSX download verified |
+| Screenshot dimensions/overflow | passed | 26 PNG; 375×812, 812×375, 1440×900 checks |
 | Contrast light/dark | passed | result 5.981/8.002; validation 5.981/8.002 |
 | Safari manual smoke | passed | live backend, Safari 1024×768 |
 
@@ -114,6 +120,10 @@ Control job `job_a8d96e52fc792197be1f` и validation
 - S6 `infeasible` без KPI и media-plan request;
 - S1 `keep_uploaded_plan + manual_review_required`;
 - S5 media-plan: 45 строк, 15 географий, 3 канала, `is_selected=false`;
+- final Excel report: `ready`, 16 416 bytes, 3 sheets; browser download и
+  повторный authenticated GET подтвердили XLSX MIME, attachment header,
+  metadata size и ZIP signature `PK`;
+- working media-plan XLSX: честный `unavailable`, без CSV-подмены;
 - model: 1 serving target, 4 serving models, 12 research fits;
 - Home geo-budget и честный unavailable state карты;
 - отсутствие raw channel IDs и diagnostic target cards;
@@ -140,7 +150,8 @@ Safari smoke дополняет, но не заменяет Chromium automation,
 ## Known limitations и contract gaps
 
 1. `job_result_view_v2` не содержит report artifact metadata/download path;
-   Report показывает controlled unavailable state без v1 fallback.
+   report transport изолирован в narrow v1 artifact projection без semantic
+   fallback. Текущий backend не публикует отдельный working media-plan XLSX.
 2. Contract публикует `allocation_share`, но не отдельную
    `unallocated_share`; frontend не вычисляет `1 - allocation_share`.
 3. Approved coordinates отсутствуют; Phase E.1B не реализует карту.

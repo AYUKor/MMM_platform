@@ -34,6 +34,7 @@ permissions come only from `session.user.permissions[]`.
 |---|---|
 | Result and scenarios | `GET /api/v1/jobs/{job_id}/result-view-v2` |
 | Scenario media plan | `GET /api/v1/jobs/{job_id}/media-plan-v2` |
+| Report artifacts only | `GET /api/v1/jobs/{job_id}/result-view` |
 | Validation presentation | `GET /api/v1/validations/{validation_id}/view-v2` |
 | Active Model Passport | `GET /api/v1/models/active-v2` |
 | Model overview | `GET /api/v1/model/overview-v2` |
@@ -58,8 +59,10 @@ IDs remain query identities. All structured geographies stay available in
 filters.
 
 Approved coordinates are currently unavailable, so the UI does not draw a
-pseudo-map. `job_result_view_v2` also has no report artifact metadata; the
-Report tab remains controlled unavailable instead of calling legacy v1.
+pseudo-map. `job_result_view_v2` remains the only source of KPI, ROAS, budget,
+scenario, recommendation and reliability semantics. A separate fail-closed
+client reads only the `report` artifact envelope from `job_result_view_v1`;
+legacy campaign and scenario fields are neither returned nor rendered.
 
 Detailed boundary and current verification status:
 

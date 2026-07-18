@@ -9,6 +9,7 @@ import {
   CONTROL_REQUESTED_BUDGET,
   TEST_JOB_ID,
 } from "../src/test/businessSemanticsV2Fixtures";
+import { createAuthenticatedSessionFixture } from "../src/test/authAdminFixtures";
 import { installAuthenticatedAdminSession } from "./support/auth";
 import { measureContentContrast, type ContrastTarget } from "./support/contrast";
 
@@ -44,8 +45,10 @@ const RESULT_CONTRAST_TARGETS = [
 
 interface RouteGuard {
   resultCalls: string[];
+  reportCalls: string[];
   mediaCalls: string[];
   mediaSelections: Array<{ scenarioId: ScenarioId; isSelected: boolean }>;
+  artifactCalls: string[];
   forbiddenCalls: string[];
 }
 
@@ -71,6 +74,57 @@ function errorPayload(code: string, displayText = "Контролируемое 
   };
 }
 
+function buildReportArtifactsPayload(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const result = buildJobResultViewV2();
+  return {
+    contract_name: "job_result_view_v1",
+    schema_version: "1.0.0",
+    job_id: TEST_JOB_ID,
+    result_id: result.result_id,
+    campaign: {
+      campaign_name: "КОНФЛИКТУЮЩАЯ КАМПАНИЯ ИЗ V1",
+      total_budget_rub: 1,
+    },
+    scenarios: [{ scenario_id: "S01", metrics: { incremental_turnover_rub: { p50: 999_999_999_999 } } }],
+    report: {
+      status: "ready",
+      display_text: "Excel-отчет готов.",
+      generated_at_utc: "2026-07-18T12:00:00Z",
+      artifact: {
+        artifact_id: "artifact_1234567890abcdef",
+        display_name: "mmm_campaign_result.xlsx",
+        media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size_bytes: 65_536,
+        sha256: "a".repeat(64),
+        download_path: "/api/v1/artifacts/artifact_1234567890abcdef/download",
+      },
+      sheets: [
+        { sheet_name: "Итоги", title: "Итоги", description: "Основные результаты расчета." },
+        { sheet_name: "Медиаплан", title: "Медиаплан", description: null },
+      ],
+      working_media_plan: {
+        status: "unavailable",
+        display_text: "Отдельный рабочий медиаплан пока не опубликован.",
+        artifact: null,
+      },
+      ...overrides,
+    },
+  };
+}
+
+async function installViewerSession(page: Page): Promise<void> {
+  await page.unroute("**/api/v1/auth/session");
+  await page.route("**/api/v1/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(createAuthenticatedSessionFixture("viewer")),
+    });
+  });
+}
+
 async function installResultRoutes(
   page: Page,
   options: {
@@ -78,13 +132,18 @@ async function installResultRoutes(
     resultPayload?: unknown;
     resultDelayMs?: number;
     mediaStatus?: number;
+    reportPayload?: unknown;
+    artifactStatus?: number;
   } = {},
 ): Promise<RouteGuard> {
   const result = buildJobResultViewV2();
+  const reportPayload = options.reportPayload ?? buildReportArtifactsPayload();
   const guard: RouteGuard = {
     resultCalls: [],
+    reportCalls: [],
     mediaCalls: [],
     mediaSelections: [],
+    artifactCalls: [],
     forbiddenCalls: [],
   };
   routeGuards.set(page, guard);
@@ -124,6 +183,46 @@ async function installResultRoutes(
         : errorPayload(status === 404 ? "RESOURCE_NOT_READY" : "RESULT_VIEW_UNAVAILABLE")),
     });
   });
+
+  await page.route("**/api/v1/jobs/*/result-view", async (route: Route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const expected = `/api/v1/jobs/${TEST_JOB_ID}/result-view`;
+    if (request.method() !== "GET" || url.pathname !== expected || url.search) {
+      guard.forbiddenCalls.push(`${request.method()} ${url.pathname}${url.search}`);
+      await route.fulfill({ status: 599, body: "blocked malformed report artifact request" });
+      return;
+    }
+    guard.reportCalls.push(url.toString());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(reportPayload),
+    });
+  });
+
+  const artifactHandler = async (route: Route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (
+      request.method() !== "GET"
+      || !/^\/api\/v1\/artifacts\/artifact_[0-9a-f]{12,64}\/download$/.test(url.pathname)
+      || url.search
+    ) {
+      guard.forbiddenCalls.push(`${request.method()} ${url.pathname}${url.search}`);
+      await route.fulfill({ status: 599, body: "blocked malformed artifact download" });
+      return;
+    }
+    guard.artifactCalls.push(url.pathname);
+    await route.fulfill({
+      status: options.artifactStatus ?? 200,
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      headers: { "Content-Disposition": "attachment; filename=report.xlsx" },
+      body: "PK synthetic xlsx review artifact",
+    });
+  };
+  await page.route("**/api/v1/artifacts/*/download", artifactHandler);
+  await page.context().route("**/api/v1/artifacts/*/download", artifactHandler);
 
   await page.route("**/api/v1/jobs/*/media-plan-v2*", async (route: Route) => {
     const request = route.request();
@@ -365,9 +464,10 @@ test.describe("Phase E.1B result semantics", () => {
     await expectNoForbiddenCopy(page);
   });
 
-  test("four tabs restore through URL and report is honestly unavailable", async ({ page }) => {
-    await installResultRoutes(page);
+  test("four tabs restore through URL and the report metadata is loaded only on demand", async ({ page }) => {
+    const guard = await installResultRoutes(page);
     await openResult(page);
+    expect(guard.reportCalls).toHaveLength(0);
 
     for (const [name, query, heading] of [
       ["Обзор", "overview", "Оборот и ROAS"],
@@ -379,7 +479,114 @@ test.describe("Phase E.1B result semantics", () => {
       await expect(page).toHaveURL(new RegExp(`tab=${query}`));
       await expect(page.getByRole("heading", { name: heading, exact: true }).first()).toBeVisible();
     }
-    await expect(page.getByRole("heading", { name: "Excel-отчет пока недоступен" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Отчет готов" })).toBeVisible();
+    expect(guard.reportCalls).toHaveLength(1);
+  });
+
+  test("downloads the ready final Excel report through its canonical artifact path", async ({ page }) => {
+    await installResultRoutes(page);
+    await openResult(page, "?tab=report");
+
+    await expect(page.getByRole("heading", { name: "mmm_campaign_result.xlsx" })).toBeVisible();
+    const link = page.getByRole("link", { name: "Скачать отчет" });
+    await expect(link).toHaveAttribute(
+      "href",
+      /\/api\/v1\/artifacts\/artifact_1234567890abcdef\/download$/,
+    );
+    const downloadEvent = page.waitForEvent("download");
+    await link.click();
+    const download = await downloadEvent;
+    expect(await download.failure()).toBeNull();
+    expect(new URL(download.url()).pathname).toBe(
+      "/api/v1/artifacts/artifact_1234567890abcdef/download",
+    );
+    // Chromium does not pass an anchor download navigation through Playwright
+    // route interception. The download event URL is the browser-level source
+    // of truth here; the live acceptance below verifies the returned XLSX body.
+    await expect(page.getByRole("heading", { name: "Демонстрационная кампания" })).toBeVisible();
+    await expect(page.getByText("267,8 млн ₽", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("КОНФЛИКТУЮЩАЯ КАМПАНИЯ ИЗ V1", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("999 999 999 999", { exact: true })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Обзор" }).click();
+    await expect(page.getByText("345 млн ₽", { exact: true }).first()).toBeVisible();
+  });
+
+  for (const [status, title, displayText] of [
+    ["unavailable", "Отчет недоступен", "Отчет пока не опубликован."],
+    ["failed", "Не удалось сформировать отчет", "Формирование отчета завершилось ошибкой."],
+  ] as const) {
+    test(`renders a controlled report ${status} state`, async ({ page }) => {
+      await installResultRoutes(page, {
+        reportPayload: buildReportArtifactsPayload({
+          status,
+          display_text: displayText,
+          generated_at_utc: null,
+          artifact: null,
+          sheets: [],
+        }),
+      });
+      await openResult(page, "?tab=report");
+      await expect(page.getByRole("heading", { name: title })).toBeVisible();
+      await expect(page.getByText(displayText, { exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Скачать отчет" })).toHaveCount(0);
+    });
+  }
+
+  test("fails closed for an invalid report download path without hiding v2 result", async ({ page }) => {
+    await installResultRoutes(page, {
+      reportPayload: buildReportArtifactsPayload({
+        artifact: {
+          artifact_id: "artifact_1234567890abcdef",
+          display_name: "mmm_campaign_result.xlsx",
+          media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          size_bytes: 65_536,
+          sha256: "a".repeat(64),
+          download_path: "file:///Users/example/report.xlsx",
+        },
+      }),
+    });
+    await openResult(page, "?tab=report");
+    await expect(page.getByRole("heading", { name: "Формат сведений об отчете не поддерживается" }))
+      .toBeVisible();
+    await expect(page.getByRole("link", { name: "Скачать отчет" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Демонстрационная кампания" })).toBeVisible();
+  });
+
+  test("does not expose report links without report.download permission", async ({ page }) => {
+    await installViewerSession(page);
+    await installResultRoutes(page);
+    await openResult(page, "?tab=report");
+    await expect(page.getByRole("heading", { name: "mmm_campaign_result.xlsx" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Скачать отчет" })).toHaveCount(0);
+    await expect(page.getByText("Нет доступа к скачиванию", { exact: true })).toBeVisible();
+  });
+
+  test("downloads a backend-published working media-plan artifact", async ({ page }) => {
+    await installResultRoutes(page, {
+      reportPayload: buildReportArtifactsPayload({
+        working_media_plan: {
+          status: "ready",
+          display_text: "Рабочий медиаплан готов.",
+          artifact: {
+            artifact_id: "artifact_fedcba0987654321",
+            display_name: "working_media_plan.xlsx",
+            media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            size_bytes: 32_768,
+            sha256: "b".repeat(64),
+            download_path: "/api/v1/artifacts/artifact_fedcba0987654321/download",
+          },
+        },
+      }),
+    });
+    await openResult(page, "?tab=report");
+    await expect(page.getByRole("heading", { name: "working_media_plan.xlsx" })).toBeVisible();
+    const downloadEvent = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Скачать медиаплан" }).click();
+    const download = await downloadEvent;
+    expect(await download.failure()).toBeNull();
+    expect(new URL(download.url()).pathname).toBe(
+      "/api/v1/artifacts/artifact_fedcba0987654321/download",
+    );
   });
 
   test("fails closed for an unsupported result contract", async ({ page }) => {
@@ -466,6 +673,7 @@ test.describe("Phase E.1B result review screenshots", () => {
       { stem: "result-s6-infeasible", search: "?tab=scenarios", heading: "Полный план максимального эффекта недоступен", resultPayload: undefined },
       { stem: "result-s6-feasible", search: "?tab=scenarios", heading: "План максимального эффекта", resultPayload: buildFeasibleS6Result() },
       { stem: "result-media-s5", search: "?tab=media-plan&scenario=S05", heading: "План согласован с результатом", resultPayload: undefined },
+      { stem: "result-report-ready", search: "?tab=report", heading: "Отчет готов", resultPayload: undefined },
     ] as const) {
       test(`${screenshotCase.stem}-${theme}`, async ({ page }) => {
         await page.setViewportSize({ width: 1_440, height: 900 });

@@ -1,10 +1,30 @@
 import { expect, test, type Page, type Response } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import type { JobResultViewV2 } from "../src/shared/api/generated/job-result-view-v2";
 import type { ModelOverviewV2 } from "../src/shared/api/generated/model-overview-v2";
 import type { ModelPassportV2 } from "../src/shared/api/generated/model-passport-v2";
 import type { ScenarioMediaPlanV2 } from "../src/shared/api/generated/scenario-media-plan-v2";
 import type { ValidationResultV2 } from "../src/shared/api/generated/validation-result-v2";
 import type { WorkspaceGeoBudgetV1 } from "../src/shared/api/generated/workspace-geo-budget-v1";
+
+interface LiveReportArtifact {
+  artifact_id: string;
+  display_name: string;
+  size_bytes: number;
+  download_path: string;
+}
+
+interface LiveReportEnvelope {
+  job_id: string;
+  result_id: string;
+  report: {
+    status: string;
+    artifact: LiveReportArtifact | null;
+    working_media_plan: {
+      status: string;
+    };
+  };
+}
 
 const LIVE_ENABLED = process.env.PHASE_E1B_LIVE === "true";
 const EMAIL = process.env.PHASE_E1B_LIVE_EMAIL ?? "";
@@ -36,6 +56,8 @@ async function expectTurnoverOnlyPage(page: Page) {
   const text = await page.locator("body").innerText();
   for (const forbidden of FORBIDDEN_COPY) expect(text).not.toContain(forbidden);
 }
+
+test.use({ trace: "off", screenshot: "off", video: "off" });
 
 test.describe("Phase E.1B live backend acceptance", () => {
   test.skip(
@@ -132,6 +154,58 @@ test.describe("Phase E.1B live backend acceptance", () => {
     expect(mediaPlan.totals.selected_budget_rub).toBeCloseTo(CONTROL_S5_ALLOCATED_BUDGET, 2);
     expect(mediaPlan.totals.unallocated_budget_rub).toBeCloseTo(CONTROL_S5_UNALLOCATED_BUDGET, 2);
     await expect(page.getByRole("heading", { name: "План согласован с результатом" })).toBeVisible();
+    await expectTurnoverOnlyPage(page);
+
+    const reportMetadataResponse = page.waitForResponse((response) => (
+      response.request().method() === "GET"
+      && pathname(response) === `/api/v1/jobs/${JOB_ID}/result-view`
+      && response.status() === 200
+    ));
+    await page.getByRole("tab", { name: "Отчет" }).click();
+    const reportEnvelope = await (await reportMetadataResponse).json() as LiveReportEnvelope;
+    expect(reportEnvelope.job_id).toBe(JOB_ID);
+    expect(reportEnvelope.result_id).toBe(result.result_id);
+    expect(reportEnvelope.report.status).toBe("ready");
+    expect(reportEnvelope.report.artifact).not.toBeNull();
+    const reportArtifact = reportEnvelope.report.artifact!;
+    await expect(page.getByRole("heading", { name: reportArtifact.display_name })).toBeVisible();
+
+    const downloadEvent = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Скачать отчет" }).click();
+    const download = await downloadEvent;
+    expect(await download.failure()).toBeNull();
+    const suggestedFilename = download.suggestedFilename();
+    expect(suggestedFilename).toMatch(/\.xlsx$/i);
+    expect(suggestedFilename).not.toContain("/");
+    expect(suggestedFilename).not.toContain("\\");
+    expect([...suggestedFilename].some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    })).toBe(false);
+    const actualDownloadUrl = download.url();
+    expect(new URL(actualDownloadUrl).pathname).toBe(reportArtifact.download_path);
+    const downloadedPath = await download.path();
+    expect(downloadedPath).not.toBeNull();
+    const downloadedBytes = await readFile(downloadedPath!);
+    expect(downloadedBytes.byteLength).toBe(reportArtifact.size_bytes);
+    expect([...downloadedBytes.subarray(0, 2)]).toEqual([0x50, 0x4b]);
+
+    const verifiedDownload = await page.request.get(actualDownloadUrl);
+    expect(verifiedDownload.status()).toBe(200);
+    expect(verifiedDownload.headers()["content-type"]).toContain(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    expect(verifiedDownload.headers()["content-disposition"]).toContain("attachment");
+    const verifiedBytes = await verifiedDownload.body();
+    expect(verifiedBytes.byteLength).toBe(reportArtifact.size_bytes);
+    expect([...verifiedBytes.subarray(0, 2)]).toEqual([0x50, 0x4b]);
+
+    if (reportEnvelope.report.working_media_plan.status === "ready") {
+      await expect(page.getByRole("link", { name: "Скачать медиаплан" })).toBeVisible();
+    } else {
+      await expect(page.getByRole("heading", { name: "Рабочий Excel-медиаплан" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Скачать медиаплан" })).toHaveCount(0);
+    }
     await expectTurnoverOnlyPage(page);
 
     const validationPath = `/api/v1/validations/${VALIDATION_ID}/view-v2`;

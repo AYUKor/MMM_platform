@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "../features/auth/AuthProvider";
 import { JobResultView } from "../features/job-result/JobResultView";
 import type { MediaPlanControls } from "../features/job-result/MediaPlanTab";
 import {
@@ -13,6 +14,7 @@ import {
   getJobResultViewV2,
   getScenarioMediaPlanV2,
 } from "../shared/api/business-semantics-client";
+import { getJobReportArtifacts } from "../shared/api/report-artifacts-client";
 import { Button } from "../shared/ui/Button";
 import styles from "../features/job-result/job-result.module.css";
 
@@ -119,6 +121,7 @@ function ResultLoadingState() {
 }
 
 export function ResultOverviewPage() {
+  const auth = useAuth();
   const { id = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = resultTabFromSearch(searchParams.get("tab"));
@@ -164,6 +167,17 @@ export function ResultOverviewPage() {
     staleTime: 0,
   });
 
+  const reportQuery = useQuery({
+    queryKey: ["job-report-artifacts", id, resultQuery.data?.result_id],
+    queryFn: ({ signal }) => {
+      if (!resultQuery.data) throw new Error("Результат для проверки отчета недоступен.");
+      return getJobReportArtifacts(id, resultQuery.data.result_id, signal);
+    },
+    enabled: Boolean(id) && Boolean(resultQuery.data) && activeTab === "report",
+    retry: false,
+    staleTime: 0,
+  });
+
   if (!id) return <ResultPageState copy={pageStateCopy({ status: 404 })} jobId={id} onRetry={() => undefined} />;
   if (resultQuery.isPending && !resultQuery.data) return <ResultLoadingState />;
   if (!resultQuery.data) return <ResultPageState copy={pageStateCopy(resultQuery.error)} jobId={id} onRetry={() => { void resultQuery.refetch(); }} />;
@@ -187,6 +201,10 @@ export function ResultOverviewPage() {
       mediaControls={mediaControls}
       mediaLoading={mediaQuery.isPending || mediaQuery.isFetching}
       mediaError={mediaQuery.error}
+      reportArtifacts={reportQuery.data}
+      reportLoading={reportQuery.isPending || reportQuery.isFetching}
+      reportError={reportQuery.error}
+      canDownload={auth.can("report.download")}
       refreshNotice={refreshNotice}
       onTabChange={changeTab}
       onMediaScenarioChange={(scenarioId) => {
@@ -199,6 +217,7 @@ export function ResultOverviewPage() {
         if (errorStatus(mediaQuery.error) === 422) setMediaControls(DEFAULT_MEDIA_CONTROLS);
         else void mediaQuery.refetch();
       }}
+      onReportRetry={() => { void reportQuery.refetch(); }}
       onRefresh={() => { void resultQuery.refetch(); }}
     />
   );
