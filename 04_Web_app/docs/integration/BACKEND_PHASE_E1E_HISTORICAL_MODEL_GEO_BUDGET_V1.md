@@ -218,4 +218,7 @@ Local final-code results:
 - frontend unit/component tests: 483/483 passed;
 - production build: passed with the pre-existing large-chunk advisory.
 
-GitHub CI evidence is frozen in `CURRENT_TRUTH.md` after the PR head is green.
+Implementation head `ce1efa1d2f1bc8b0e214d2f556667b9a1c5a9048` is published
+in Ready PR #27. GitHub Actions run `29663175051` passed `decision-result-v1`
+in 50 seconds and `frontend-quality` in 1 minute 16 seconds. The agent did not
+merge the PR.

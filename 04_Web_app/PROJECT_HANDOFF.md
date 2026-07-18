@@ -607,7 +607,9 @@ Each item is a separate reviewable milestone:
     historical model geo-budget aggregate, publish the browser-safe endpoint,
     preserve workspace history as a different source and hand Home over to
     frontend Phase E.1F. Exact real financial evidence stays in ignored local
-    package artifacts under the repository company-data rule.
+    package artifacts under the repository company-data rule. Implementation
+    head `ce1efa1d2f1bc8b0e214d2f556667b9a1c5a9048` is published in Ready PR
+    #27; GitHub Actions run `29663175051` passed backend and frontend-quality.
 19. When company-contour or multi-node scale is approved, replace file-backed
     state/artifacts with PostgreSQL, durable queue and object storage while
     preserving the frozen contracts.
