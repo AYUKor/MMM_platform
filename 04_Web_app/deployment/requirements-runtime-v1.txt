@@ -1,5 +1,6 @@
 # Python 3.11+ serving runtime only. PyMC/JAX are not required because the
 # server scores immutable posterior NetCDF artifacts and never refits a model.
+# argon2-cffi is required by the local pilot authentication preflight.
 numpy==2.4.3
 pandas==3.0.1
 xarray==2026.4.0
@@ -7,3 +8,4 @@ h5netcdf==1.8.1
 h5py==3.16.0
 openpyxl==3.1.5
 xlrd==2.0.2
+argon2-cffi==25.1.0

@@ -105,18 +105,36 @@ The empty output folder receives:
    and venv readable/executable by that user, own `/var/lib/x5-mmm` as
    `x5mmm:x5mmm` mode `0700`, and keep `/var/backups/x5-mmm` root-owned mode
    `0700`.
-2. Checkout the approved Git commit into `/opt/x5-mmm/app`.
+2. Checkout the approved Git commit into `/opt/x5-mmm/app`. On servers
+   without internet or GitHub access, transfer a `git archive` tarball of
+   the approved commit instead and unpack it into `/opt/x5-mmm/app`.
 3. Create `/opt/x5-mmm/venv` with Python 3.11+ and install
-   `requirements-runtime-v1.txt`.
+   `requirements-runtime-v1.txt`. On offline servers, download the wheel set
+   in advance on a connected machine
+   (`pip download -r requirements-runtime-v1.txt --platform manylinux_x86_64
+   --python-version <target> --only-binary=:all:`) and install with
+   `pip install --no-index --find-links <wheel-dir> -r
+   requirements-runtime-v1.txt`.
 4. Use Node 22, run `npm ci` and the production frontend build with the
    generated frontend environment. The resulting `dist` is served by Nginx.
+   On offline servers, build `dist` on a connected machine and transfer the
+   built directory; Node is not required on the server.
 5. Give `x5mmm` write access to the ignored `03_Outputs` root, then run
    `install-model` as `x5mmm`. Existing files are never silently replaced;
    an identical reinstall is idempotent.
 6. Create `/etc/x5-mmm` as `root:x5mmm` mode `0750`; install the rendered
    backend config as `root:x5mmm` mode `0640`. Create the htpasswd file
-   separately and obtain the TLS certificate.
-7. Install the generated Nginx and systemd files, run `daemon-reload`, then
+   separately and obtain the TLS certificate. A private internal CA is an
+   acceptable TLS source in a closed network contour: keep the CA private
+   key off the server, issue a server certificate whose SAN covers the
+   chosen domain, and distribute only the CA root certificate to users.
+7. Create `/etc/x5-mmm/backend.env` as `root:x5mmm` mode `0640` with the
+   environment-only secrets the backend requires (at minimum
+   `MMM_AUTH_SESSION_SECRET`, a random value of 32+ characters). The
+   rendered backend unit loads this file through
+   `EnvironmentFile=-/etc/x5-mmm/backend.env`; never place secrets in the
+   unit file itself.
+8. Install the generated Nginx and systemd files, run `daemon-reload`, then
    enable the backend and timers.
 
 Before public access, execute:

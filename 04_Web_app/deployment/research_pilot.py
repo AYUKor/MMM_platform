@@ -583,7 +583,7 @@ def render_deployment(
             "artifact_root": str(data_root / "artifacts"),
             "registry_root": str(project_root / "03_Outputs/01_PyMC_outputs/00_Model_registry"),
             "optimizer_policy_path": str(
-                project_root / "02_Code/02_Budget_optimizer/optimizer_decision_policy_v2.yaml"
+                project_root / "02_Code/02_Budget_optimizer/optimizer_decision_policy_v3.yaml"
             ),
             "business_policy_path": str(
                 project_root / "02_Code/02_Budget_optimizer/business_threshold_policy_v1.yaml"
@@ -617,6 +617,7 @@ User={service_user}
 Group={service_user}
 WorkingDirectory={project_root}
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/x5-mmm/backend.env
 ExecStartPre={backend_command} --check-only
 ExecStart={backend_command}
 Restart=on-failure
