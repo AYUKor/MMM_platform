@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -195,6 +196,29 @@ class BackendRuntimeTest(unittest.TestCase):
             )
             self.assertTrue(effective["auth"]["cookie_secure"])
             self.assertNotIn(TEST_AUTH_SECRET, json.dumps(effective, ensure_ascii=False))
+
+    def test_worker_python_executable_preserves_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "real_python"
+            target.write_text("#!/bin/sh\n", encoding="utf-8")
+            venv_bin = root / "venv" / "bin"
+            venv_bin.mkdir(parents=True)
+            link_path = venv_bin / "python"
+            link_path.symlink_to(target)
+            config = self._config(root)
+            config["worker"]["python_executable"] = str(link_path)
+            settings, _, _ = self._build(config)
+            self.assertEqual(settings.python_executable, link_path)
+            self.assertNotEqual(settings.python_executable, target)
+
+            default_config = self._config(root)
+            default_config["worker"]["python_executable"] = ""
+            default_settings, _, _ = self._build(default_config)
+            self.assertEqual(
+                default_settings.python_executable,
+                Path(os.path.abspath(sys.executable)),
+            )
 
     def test_single_instance_lock_blocks_second_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
