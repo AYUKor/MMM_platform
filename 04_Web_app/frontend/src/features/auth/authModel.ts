@@ -55,6 +55,45 @@ export function loginErrorCopy(error: unknown): AuthErrorCopy {
   };
 }
 
+export function registrationErrorCopy(error: unknown): AuthErrorCopy {
+  if (isUnsupportedContract(error)) {
+    return {
+      title: "Версия регистрации не поддерживается",
+      description: "Сервис вернул неподдерживаемый формат сессии. Обновите приложение или обратитесь к администратору.",
+    };
+  }
+  const status = statusOf(error);
+  if (status === 422) {
+    return {
+      title: "Проверьте данные регистрации",
+      description: displayTextOf(error) ?? "Email, пароль или имя заполнены некорректно.",
+    };
+  }
+  if (status === 409) {
+    return {
+      title: "Не удалось создать учетную запись",
+      description: displayTextOf(error) ??
+        "Возможно, такой адрес уже зарегистрирован — попробуйте войти в систему.",
+    };
+  }
+  if (status === 429) {
+    return {
+      title: "Слишком много попыток",
+      description: displayTextOf(error) ?? "Регистрация временно ограничена. Подождите и повторите попытку.",
+    };
+  }
+  if (status === 403) {
+    return {
+      title: "Регистрация отклонена",
+      description: "Не удалось подтвердить безопасный запрос. Обновите страницу и повторите попытку.",
+    };
+  }
+  return {
+    title: "Сервис регистрации недоступен",
+    description: displayTextOf(error) ?? "Не удалось связаться с сервисом. Повторите попытку позже.",
+  };
+}
+
 export function bootstrapErrorCopy(error: unknown): AuthErrorCopy {
   return isUnsupportedContract(error)
     ? {

@@ -100,6 +100,17 @@
 .loginForm input:focus { border-color: var(--accent-strong); }
 .loginForm > button { width: 100%; margin-top: var(--space-2); }
 .loginForm > small { color: var(--text-secondary); font-size: 0.72rem; line-height: 1.45; }
+.modeSwitch {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.modeSwitch:disabled { color: var(--text-secondary); cursor: default; }
 
 .notice,
 .loginError {

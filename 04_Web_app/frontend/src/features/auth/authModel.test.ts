@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AuthAdminError } from "../../shared/api/auth-admin-client";
-import { bootstrapErrorCopy, loginErrorCopy } from "./authModel";
+import { bootstrapErrorCopy, loginErrorCopy, registrationErrorCopy } from "./authModel";
 
 function unsupportedContractError() {
   return new AuthAdminError("Сервис вернул неподдерживаемый формат данных.", {
@@ -41,6 +41,47 @@ describe("loginErrorCopy", () => {
       title: "Слишком много попыток",
       description: "Повторите попытку через несколько минут.",
     });
+  });
+});
+
+describe("registrationErrorCopy", () => {
+  it("shows the server validation message for 422", () => {
+    expect(registrationErrorCopy({
+      status: 422,
+      displayText: "Пароль должен содержать от 12 до 256 символов.",
+    })).toEqual({
+      title: "Проверьте данные регистрации",
+      description: "Пароль должен содержать от 12 до 256 символов.",
+    });
+    expect(registrationErrorCopy({ status: 422 })).toEqual({
+      title: "Проверьте данные регистрации",
+      description: "Email, пароль или имя заполнены некорректно.",
+    });
+  });
+
+  it("keeps the duplicate-email 409 non-confirming", () => {
+    expect(registrationErrorCopy({
+      status: 409,
+      displayText: "Не удалось создать учетную запись. Возможно, такой адрес уже зарегистрирован — попробуйте войти в систему.",
+    })).toEqual({
+      title: "Не удалось создать учетную запись",
+      description: "Не удалось создать учетную запись. Возможно, такой адрес уже зарегистрирован — попробуйте войти в систему.",
+    });
+    expect(registrationErrorCopy({ status: 409 })).toEqual({
+      title: "Не удалось создать учетную запись",
+      description: "Возможно, такой адрес уже зарегистрирован — попробуйте войти в систему.",
+    });
+  });
+
+  it("shows controlled rate-limit and fallback copy", () => {
+    expect(registrationErrorCopy({ status: 429 })).toEqual({
+      title: "Слишком много попыток",
+      description: "Регистрация временно ограничена. Подождите и повторите попытку.",
+    });
+    expect(registrationErrorCopy(new Error("network")).title)
+      .toBe("Сервис регистрации недоступен");
+    expect(registrationErrorCopy(unsupportedContractError()).title)
+      .toBe("Версия регистрации не поддерживается");
   });
 });
 

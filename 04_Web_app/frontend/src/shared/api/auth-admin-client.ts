@@ -3,6 +3,7 @@ import type { AdminRoleCatalogV1 } from "./generated/admin-role-catalog-v1";
 import type { AdminSystemStatusV1 } from "./generated/admin-system-status-v1";
 import type { AdminUserDetailV1 } from "./generated/admin-user-detail-v1";
 import type { AdminUserListV1 } from "./generated/admin-user-list-v1";
+import type { AuthRegistrationV1 } from "./generated/auth-registration-v1";
 import type {
   CreateLocalPilotUser,
   UpdateLocalPilotUser,
@@ -13,6 +14,7 @@ import { credentialedFetch } from "./credentialed-fetch";
 
 const AUTH_LOGIN_PATH = "/api/v1/auth/login";
 const AUTH_LOGOUT_PATH = "/api/v1/auth/logout";
+const AUTH_REGISTER_PATH = "/api/v1/auth/register";
 const AUTH_SESSION_PATH = "/api/v1/auth/session";
 const ADMIN_USERS_PATH = "/api/v1/admin/users";
 const ADMIN_ROLES_PATH = "/api/v1/admin/roles";
@@ -62,6 +64,7 @@ const AUDIT_EVENT_TYPES = [
   "user_updated",
   "user_enabled",
   "user_disabled",
+  "user_self_registered",
   "role_changed",
   "admin_viewed_system_status",
   "admin_viewed_audit_log",
@@ -193,6 +196,8 @@ export interface LoginCredentials {
   email: string;
   password: string;
 }
+
+export type RegistrationCredentials = AuthRegistrationV1;
 
 export interface AdminUsersQuery {
   page?: number;
@@ -824,6 +829,24 @@ function assertLoginCredentials(credentials: LoginCredentials): void {
   }
 }
 
+function assertRegistrationCredentials(credentials: RegistrationCredentials): void {
+  if (!isRecord(credentials) ||
+    Object.keys(credentials).some((key) => key !== "email" && key !== "password" && key !== "display_name") ||
+    !isEmail(credentials.email) ||
+    typeof credentials.password !== "string" || credentials.password.length < 12 ||
+    credentials.password.length > 256 ||
+    !/[A-Za-zА-Яа-яЁё]/.test(credentials.password) || !/\d/.test(credentials.password) ||
+    (credentials.display_name !== undefined &&
+      !isSafeText(credentials.display_name, 2, 120))) {
+    throw new AuthAdminError("Данные регистрации заполнены некорректно.", {
+      status: 422,
+      code: "AUTH_REGISTRATION_INVALID",
+      retryable: true,
+      userAction: "Проверьте email, пароль и имя.",
+    });
+  }
+}
+
 function assertCreateUser(input: CreateLocalPilotUser): void {
   if (!isRecord(input) || !hasExactKeys(input, ["email", "display_name", "password", "role_id"]) ||
     !isEmail(input.email) || !isSafeText(input.display_name, 2, 120) ||
@@ -901,6 +924,24 @@ export async function logoutSession(
     false,
   );
   if (session.authenticated) throw unsupportedContract("auth_session_v1", 200);
+  return session;
+}
+
+export async function registerWithCredentials(
+  credentials: RegistrationCredentials,
+  signal?: AbortSignal,
+  baseUrl = appEnv.apiBaseUrl,
+): Promise<AuthSessionV1> {
+  assertRegistrationCredentials(credentials);
+  const session = await requestContract(
+    AUTH_REGISTER_PATH,
+    parseAuthSession,
+    postRequest(credentials, signal),
+    baseUrl,
+    false,
+    false,
+  );
+  if (!session.authenticated) throw unsupportedContract("auth_session_v1", 201);
   return session;
 }
 

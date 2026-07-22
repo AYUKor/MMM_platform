@@ -14,6 +14,7 @@ import {
   getAuthSession,
   loginWithCredentials,
   logoutSession,
+  registerWithCredentials,
 } from "../../shared/api/auth-admin-client";
 import {
   AUTH_FORBIDDEN_EVENT,
@@ -31,6 +32,7 @@ interface AuthContextValue {
   notice: string | null;
   refreshSession: () => Promise<AuthSessionV1 | null>;
   login: (email: string, password: string) => Promise<AuthSessionV1>;
+  register: (email: string, password: string, displayName?: string) => Promise<AuthSessionV1>;
   logout: () => Promise<void>;
   can: (permission: AppPermission) => boolean;
   canAny: (permissions: readonly AppPermission[]) => boolean;
@@ -152,6 +154,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return next;
   }, [applySession, queryClient]);
 
+  const register = useCallback(async (email: string, password: string, displayName?: string) => {
+    await registerWithCredentials(
+      displayName
+        ? { email, password, display_name: displayName }
+        : { email, password },
+    );
+    const next = await getAuthSession();
+    if (!next.authenticated) throw new Error("Authenticated session was not established");
+    queryClient.clear();
+    applySession(next);
+    setNotice(null);
+    return next;
+  }, [applySession, queryClient]);
+
   const logout = useCallback(async () => {
     try {
       await logoutSession();
@@ -173,11 +189,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     notice,
     refreshSession,
     login,
+    register,
     logout,
     can: (permission) => hasPermission(session, permission),
     canAny: (permissions) => hasAnyPermission(session, permissions),
     clearNotice: () => setNotice(null),
-  }), [bootstrapError, login, logout, notice, refreshSession, session, status]);
+  }), [bootstrapError, login, logout, notice, refreshSession, register, session, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

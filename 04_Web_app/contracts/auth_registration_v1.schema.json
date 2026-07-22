@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x5-mmm.local/contracts/auth_registration_v1.schema.json",
+  "title": "Auth Registration V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["email", "password"],
+  "properties": {
+    "email": {"type": "string", "format": "email", "maxLength": 254},
+    "password": {"type": "string", "minLength": 12, "maxLength": 256, "writeOnly": true},
+    "display_name": {"type": "string", "minLength": 2, "maxLength": 120}
+  }
+}
