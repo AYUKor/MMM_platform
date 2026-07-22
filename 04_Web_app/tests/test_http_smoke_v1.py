@@ -580,7 +580,8 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.9.0")
+        self.assertEqual(openapi["info"]["version"], "1.10.0")
+        self.assertIn("/api/v1/auth/register", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view-v2", openapi["paths"])

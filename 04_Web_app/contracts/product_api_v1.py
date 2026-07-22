@@ -104,6 +104,18 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "display_text": "Слишком много попыток входа.",
         "user_action": "Повторите попытку немного позже.",
     },
+    "AUTH_REGISTRATION_INVALID": {
+        "http_status": 422,
+        "retryable": True,
+        "display_text": "Данные регистрации заполнены некорректно.",
+        "user_action": "Проверьте email, пароль и имя, затем повторите попытку.",
+    },
+    "AUTH_REGISTRATION_FAILED": {
+        "http_status": 409,
+        "retryable": True,
+        "display_text": "Не удалось создать учетную запись.",
+        "user_action": "Возможно, такой адрес уже зарегистрирован — попробуйте войти в систему.",
+    },
     "AUTH_REQUIRED": {
         "http_status": 401,
         "retryable": True,

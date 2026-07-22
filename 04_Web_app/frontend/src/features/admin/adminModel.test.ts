@@ -95,7 +95,8 @@ describe("Phase E admin URL state", () => {
 
 describe("Phase E admin labels and missing-value semantics", () => {
   it("provides reviewed Russian labels for every audit event and result", () => {
-    expect(AUDIT_EVENT_TYPES).toHaveLength(11);
+    expect(AUDIT_EVENT_TYPES).toHaveLength(12);
+    expect(AUDIT_EVENT_TYPES).toContain("user_self_registered");
     for (const eventType of AUDIT_EVENT_TYPES) {
       expect(EVENT_LABELS[eventType]).toEqual(expect.any(String));
       expect(EVENT_LABELS[eventType]).not.toBe(eventType);

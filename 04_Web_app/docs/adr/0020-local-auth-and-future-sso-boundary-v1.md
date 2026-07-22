@@ -86,5 +86,29 @@ Auth/admin responses and errors are explicitly non-cacheable through
 - switching to SSO does not require changing frontend permissions or product
   result contracts;
 - SQLite is intentionally a single-node pilot store;
-- MFA, recovery email, self-registration and password reset are absent;
+- MFA, recovery email and password reset are absent; self-registration was
+  added by the 2026-07-23 amendment below;
 - the local provider is not a claim of company-contour readiness.
+
+## Amendment 2026-07-23: self-service registration
+
+Owner decision of 2026-07-23 supersedes the "self-registration is absent"
+consequence above for the research pilot:
+
+- any user who can reach the service from the corporate VPN may create an
+  account through `POST /api/v1/auth/register`;
+- the email domain is not restricted to any corporate domain;
+- self-registered users always receive the `analyst` role; `viewer` and
+  `admin` assignments remain available only through the admin service;
+- a successful registration immediately issues the same server-side session
+  as login (HttpOnly cookie, `auth_session_v1` payload), with no intermediate
+  screens;
+- registration reuses the existing Argon2id hasher, password policy, email
+  and display-name validators, the login attempt window/cooldown rate limit,
+  and the append-only audit log (`user_self_registered` event);
+- a duplicate email receives the generic, non-confirming
+  `AUTH_REGISTRATION_FAILED` response: it never states whether the account
+  exists, and audit entries never contain the attempted email.
+
+All other decisions in this ADR, including the future SSO boundary and the
+CSRF/CORS controls, remain unchanged.

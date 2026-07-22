@@ -128,6 +128,7 @@ from services.auth_admin import (  # noqa: E402
     opaque_id as auth_opaque_id,
 )
 from contracts.auth_session_v1 import validate_auth_session  # noqa: E402
+from contracts.auth_registration_v1 import validate_auth_registration  # noqa: E402
 from contracts.admin_user_detail_v1 import validate_admin_user_detail  # noqa: E402
 from contracts.admin_user_list_v1 import validate_admin_user_list  # noqa: E402
 from contracts.admin_role_catalog_v1 import validate_admin_role_catalog  # noqa: E402
@@ -175,6 +176,7 @@ _CONTRACT_SCHEMA_FILES = {
     "model-overview-v1": WEB_APP_DIR / "contracts" / "model_overview_v1.schema.json",
     "help-catalog-v1": WEB_APP_DIR / "contracts" / "help_catalog_v1.schema.json",
     "auth-session-v1": WEB_APP_DIR / "contracts" / "auth_session_v1.schema.json",
+    "auth-registration-v1": WEB_APP_DIR / "contracts" / "auth_registration_v1.schema.json",
     "admin-user-list-v1": WEB_APP_DIR / "contracts" / "admin_user_list_v1.schema.json",
     "admin-user-detail-v1": WEB_APP_DIR / "contracts" / "admin_user_detail_v1.schema.json",
     "admin-user-mutation-v1": WEB_APP_DIR / "contracts" / "admin_user_mutation_v1.schema.json",
@@ -1554,7 +1556,7 @@ def _required_permission(method: str, path: str) -> str | None:
 
     if path in {"/health", "/ready"}:
         return None
-    if path in {"/api/v1/auth/login", "/api/v1/auth/logout"} and method == "POST":
+    if path in {"/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/register"} and method == "POST":
         return None
     if path == "/api/v1/auth/session" and method == "GET":
         return None
@@ -2175,6 +2177,31 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                     return
                 self._json(
                     HTTPStatus.OK,
+                    response,
+                    extra_headers={"Set-Cookie": self._session_cookie(token)},
+                )
+                return
+
+            if path == "/api/v1/auth/register":
+                try:
+                    payload = self._json_body(maximum_bytes=16 * 1024)
+                    validate_auth_registration(payload)
+                    context, token = application.auth.identity_provider.register(
+                        str(payload["email"]),
+                        str(payload["password"]),
+                        payload.get("display_name"),
+                        request_id=self._request_id,
+                        client_key=str(self.client_address[0]),
+                    )
+                    response = validate_auth_session(authenticated_session_payload(context))
+                except AuthAdminError as exc:
+                    self._auth_admin_error(exc)
+                    return
+                except (json.JSONDecodeError, ValueError):
+                    self._auth_admin_error(auth_error("AUTH_REGISTRATION_INVALID"))
+                    return
+                self._json(
+                    HTTPStatus.CREATED,
                     response,
                     extra_headers={"Set-Cookie": self._session_cookie(token)},
                 )

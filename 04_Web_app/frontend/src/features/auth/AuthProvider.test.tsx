@@ -6,6 +6,7 @@ import {
   getAuthSession,
   loginWithCredentials,
   logoutSession,
+  registerWithCredentials,
 } from "../../shared/api/auth-admin-client";
 import {
   AUTH_FORBIDDEN_EVENT,
@@ -21,6 +22,7 @@ vi.mock("../../shared/api/auth-admin-client", () => ({
   getAuthSession: vi.fn(),
   loginWithCredentials: vi.fn(),
   logoutSession: vi.fn(),
+  registerWithCredentials: vi.fn(),
 }));
 
 function deferred<T>() {
@@ -55,6 +57,12 @@ function AuthProbe() {
         Войти через provider
       </button>
       <button type="button" onClick={() => { void auth.logout(); }}>Выйти через provider</button>
+      <button
+        type="button"
+        onClick={() => { void auth.register("new@example.org", "New-password-2026", "Новый аналитик"); }}
+      >
+        Зарегистрироваться через provider
+      </button>
     </div>
   );
 }
@@ -328,5 +336,31 @@ describe("AuthProvider session lifecycle", () => {
     expect(storageKeys.filter((key) => /auth|session|token/i.test(key))).toEqual([]);
     expect(window.localStorage.getItem("mmm-frontend-theme")).toBe("dark");
     expect(window.sessionStorage.getItem("ui-state")).toBe("preserved");
+  });
+
+  it("rebootstraps after self-registration and clears anonymous cache", async () => {
+    const anonymous = createAnonymousSessionFixture();
+    const registered = createAuthenticatedSessionFixture("analyst");
+    vi.mocked(getAuthSession)
+      .mockResolvedValueOnce(anonymous)
+      .mockResolvedValueOnce(registered);
+    vi.mocked(registerWithCredentials).mockResolvedValueOnce(registered);
+    const queryClient = renderProvider();
+    queryClient.setQueryData(["anonymous-cache"], { value: "stale" });
+    await expectStatus("anonymous");
+    const clear = vi.spyOn(queryClient, "clear");
+
+    fireEvent.click(screen.getByRole("button", { name: "Зарегистрироваться через provider" }));
+
+    await expectStatus("authenticated");
+    expect(registerWithCredentials).toHaveBeenCalledWith({
+      email: "new@example.org",
+      password: "New-password-2026",
+      display_name: "Новый аналитик",
+    });
+    expect(getAuthSession).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("auth-role")).toHaveTextContent("Аналитик");
+    expect(clear).toHaveBeenCalledOnce();
+    expect(queryClient.getQueryData(["anonymous-cache"])).toBeUndefined();
   });
 });

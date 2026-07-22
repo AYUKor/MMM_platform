@@ -111,6 +111,11 @@ const contracts = [
     output: "auth-session-v1.ts",
   },
   {
+    schema: "auth_registration_v1.schema.json",
+    typeName: "AuthRegistrationV1",
+    output: "auth-registration-v1.ts",
+  },
+  {
     schema: "admin_user_list_v1.schema.json",
     typeName: "AdminUserListV1",
     output: "admin-user-list-v1.ts",

@@ -21,6 +21,14 @@ SSO, MFA, centralized secrets, SIEM or company IAM governance.
 - explicit credentialed CORS allowlist;
 - Origin and Host validation on POST/PATCH;
 - per-identity/client login window and cooldown;
+- self-service registration (owner decision 2026-07-23) limited to the
+  `analyst` role with any email domain; administrative roles remain
+  admin-assignable only;
+- registration shares the login attempt window/cooldown rate limit;
+- duplicate-email registration returns a generic, non-confirming error and
+  the audit log never stores attempted emails;
+- every successful self-registration appends a `user_self_registered` audit
+  event;
 - generic unknown-email/wrong-password response;
 - centralized permission guard with separate `401` and `403`;
 - field/action-level admin enforcement: profile/status changes require
@@ -43,8 +51,10 @@ JSON, Markdown or service files.
 ## Known pilot limitations
 
 - one SQLite file and one application node;
-- no MFA, password recovery email, password rotation workflow or
-  self-registration;
+- self-registration is open to anyone who can reach the service over the
+  network; there is no email confirmation, invitation flow or corporate
+  account lifecycle check, so network reachability is the only gate;
+- no MFA, password recovery email or password rotation workflow;
 - no Redis/shared session service;
 - rate limiting is process/database local and keyed by normalized identity plus
   directly observed client address;

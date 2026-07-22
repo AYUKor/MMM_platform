@@ -197,6 +197,130 @@ class AuthAdminServiceTest(unittest.TestCase):
             )
         self.assertEqual(captured.exception.code, "AUTH_RATE_LIMITED")
 
+    def test_self_registration_creates_analyst_session_and_audit_event(self) -> None:
+        context, token = self.stack.identity_provider.register(
+            "New-Analyst@Example.org",
+            "Self-registered-2026",
+            "Новый аналитик",
+            request_id=opaque_id("req"),
+            client_key="10.10.0.1",
+        )
+        self.assertEqual(context.role_id, "analyst")
+        self.assertNotIn("admin.users.read", context.permissions)
+        self.assertNotIn("admin.roles.write", context.permissions)
+        self.assertEqual(
+            self.stack.identity_provider.resolve_session(
+                token,
+                request_id=opaque_id("req"),
+            ).state,
+            "authenticated",
+        )
+        user = self.stack.users.find_by_email("new-analyst@example.org")
+        assert user is not None
+        self.assertEqual(user["role_id"], "analyst")
+        self.assertEqual(user["status"], "active")
+        self.assertIsNone(user["created_by_user_id"])
+        self.assertTrue(str(user["password_hash"]).startswith("$argon2id$"))
+        self.assertNotIn("Self-registered-2026", str(user["password_hash"]))
+
+        events, total = self.stack.audit.query(
+            page=1,
+            page_size=10,
+            actor_user_id=None,
+            event_type="user_self_registered",
+            occurred_from=None,
+            occurred_to=None,
+            sort="occurred_desc",
+        )
+        self.assertEqual(total, 1)
+        self.assertEqual(events[0]["target_id"], user["user_id"])
+        self.assertEqual(events[0]["result"], "succeeded")
+        serialized = json.dumps(events, ensure_ascii=False).casefold()
+        self.assertNotIn("new-analyst@example.org", serialized)
+        self.assertNotIn("self-registered-2026", serialized)
+
+        derived, _ = self.stack.identity_provider.register(
+            "derived@example.org",
+            "Derived-password-2026",
+            None,
+            request_id=opaque_id("req"),
+            client_key="10.10.0.2",
+        )
+        self.assertEqual(derived.display_name, "derived")
+        blank, _ = self.stack.identity_provider.register(
+            "blank-name@example.org",
+            "Blank-name-password-2026",
+            "   ",
+            request_id=opaque_id("req"),
+            client_key="10.10.0.3",
+        )
+        self.assertEqual(blank.display_name, "blank-name")
+
+    def test_self_registration_duplicate_email_is_non_disclosing(self) -> None:
+        with self.assertRaises(AuthAdminError) as captured:
+            self.stack.identity_provider.register(
+                "ADMIN@example.org",
+                "Duplicate-password-2026",
+                None,
+                request_id=opaque_id("req"),
+                client_key="10.10.0.4",
+            )
+        self.assertEqual(captured.exception.code, "AUTH_REGISTRATION_FAILED")
+        self.assertEqual(captured.exception.http_status, 409)
+        self.assertNotIn("admin@example.org", captured.exception.display_text.casefold())
+        events, total = self.stack.audit.query(
+            page=1,
+            page_size=10,
+            actor_user_id=None,
+            event_type="user_self_registered",
+            occurred_from=None,
+            occurred_to=None,
+            sort="occurred_desc",
+        )
+        self.assertEqual((events, total), ([], 0))
+        original = self.stack.users.find_by_email("admin@example.org")
+        assert original is not None
+        self.assertEqual(original["role_id"], "admin")
+
+    def test_self_registration_validation_and_rate_limit(self) -> None:
+        for email, password in (
+            ("weak@example.org", "short"),
+            ("weak@example.org", "no-digits-inside-this-password"),
+            ("not-an-email", "Valid-password-2026"),
+        ):
+            with self.assertRaises(AuthAdminError) as captured:
+                self.stack.identity_provider.register(
+                    email,
+                    password,
+                    None,
+                    request_id=opaque_id("req"),
+                    client_key="10.10.0.5",
+                )
+            self.assertEqual(captured.exception.code, "AUTH_REGISTRATION_INVALID")
+            self.assertEqual(captured.exception.http_status, 422)
+        self.assertIsNone(self.stack.users.find_by_email("weak@example.org"))
+
+        limited = build_local_auth_stack(_settings(self.root / "reglimit", max_attempts=2))
+        for _ in range(2):
+            with self.assertRaises(AuthAdminError) as failed:
+                limited.identity_provider.register(
+                    "invalid-email",
+                    "short",
+                    None,
+                    request_id=opaque_id("req"),
+                    client_key="10.10.0.6",
+                )
+            self.assertEqual(failed.exception.code, "AUTH_REGISTRATION_INVALID")
+        with self.assertRaises(AuthAdminError) as throttled:
+            limited.identity_provider.register(
+                "still-invalid",
+                "Throttled-password-2026",
+                None,
+                request_id=opaque_id("req"),
+                client_key="10.10.0.6",
+            )
+        self.assertEqual(throttled.exception.code, "AUTH_RATE_LIMITED")
+
     def test_session_expiry_revoke_and_disabled_user(self) -> None:
         resolution = self.stack.identity_provider.resolve_session(
             self.admin_token,
@@ -799,6 +923,7 @@ class AuthAdminHttpTest(unittest.TestCase):
             validate_admin_system_status(invalid_system)
         for contract_name in (
             "auth-session-v1",
+            "auth-registration-v1",
             "admin-user-list-v1",
             "admin-user-detail-v1",
             "admin-user-mutation-v1",
@@ -813,6 +938,87 @@ class AuthAdminHttpTest(unittest.TestCase):
             )
             self.assertEqual(status, 200)
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
+
+    def test_self_registration_http_flow_issues_analyst_session(self) -> None:
+        status, session, headers = self.request(
+            "POST",
+            "/api/v1/auth/register",
+            payload={
+                "email": "self@example.org",
+                "password": "Self-registered-2026",
+                "display_name": "Самостоятельный аналитик",
+            },
+        )
+        self.assertEqual(status, 201)
+        self.assertTrue(session["authenticated"])
+        self.assertEqual(session["user"]["role"]["role_id"], "analyst")
+        self.assertNotIn("admin.users.read", session["user"]["permissions"])
+        self.assertEqual(validate_auth_session(session), session)
+        self.assert_security_headers(headers)
+        self.assertNotIn("token", json.dumps(session).casefold())
+        set_cookie = headers["Set-Cookie"]
+        for flag in ("HttpOnly", "SameSite=Lax", "Path=/api/v1"):
+            self.assertIn(flag, set_cookie)
+        browser_cookie = set_cookie.split(";", 1)[0]
+        status, current, _ = self.request(
+            "GET", "/api/v1/auth/session", cookie=browser_cookie
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(current["authenticated"])
+        status, error, _ = self.request(
+            "GET", "/api/v1/admin/users", cookie=browser_cookie
+        )
+        self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
+
+        status, audit, _ = self.request(
+            "GET",
+            "/api/v1/admin/audit?event_type=user_self_registered",
+            cookie=self.cookies["admin"],
+        )
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(audit["pagination"]["total_items"], 1)
+        serialized = json.dumps(audit, ensure_ascii=False).casefold()
+        self.assertNotIn("self@example.org", serialized)
+
+    def test_self_registration_http_failures_stay_generic(self) -> None:
+        status, error, headers = self.request(
+            "POST",
+            "/api/v1/auth/register",
+            payload={"email": "analyst@example.org", "password": "Another-password-2026"},
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(error["error"]["code"], "AUTH_REGISTRATION_FAILED")
+        self.assertNotIn("analyst@example.org", json.dumps(error))
+        self.assert_security_headers(headers)
+
+        for payload in (
+            {"email": "new@example.org", "password": "short"},
+            {"email": "new@example.org", "password": "no-digits-inside-this-password"},
+            {"email": "invalid", "password": "Valid-password-2026"},
+            {"email": "new@example.org", "password": "Valid-password-2026", "role_id": "admin"},
+        ):
+            status, error, _ = self.request(
+                "POST",
+                "/api/v1/auth/register",
+                payload=payload,
+            )
+            self.assertEqual((status, error["error"]["code"]), (422, "AUTH_REGISTRATION_INVALID"))
+        self.assertIsNone(self.application.auth.users.find_by_email("new@example.org"))
+
+        status, error, _ = self.request(
+            "POST",
+            "/api/v1/auth/register",
+            payload={"email": "csrf@example.org", "password": "Csrf-password-2026"},
+            origin=None,
+        )
+        self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
+        status, error, _ = self.request(
+            "POST",
+            "/api/v1/auth/register",
+            payload={"email": "csrf@example.org", "password": "Csrf-password-2026"},
+            origin="https://evil.example.org",
+        )
+        self.assertEqual((status, error["error"]["code"]), (403, "PERMISSION_DENIED"))
 
     def test_csrf_origin_and_last_admin_are_enforced(self) -> None:
         status, error, _ = self.request(

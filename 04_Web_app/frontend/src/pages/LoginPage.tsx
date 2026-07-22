@@ -25,6 +25,10 @@ export function LoginPage() {
         await auth.login(email, password);
         navigate(returnTo, { replace: true });
       }}
+      onRegister={async (email, password, displayName) => {
+        await auth.register(email, password, displayName ?? undefined);
+        navigate(returnTo, { replace: true });
+      }}
     />
   );
 }

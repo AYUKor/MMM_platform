@@ -109,7 +109,8 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/help/catalog", document["paths"])
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.9.0")
+        self.assertEqual(document["info"]["version"], "1.10.0")
+        self.assertIn("/api/v1/auth/register", document["paths"])
         for schema_name in (
             "JobResultViewV2",
             "ValidationResultV2",

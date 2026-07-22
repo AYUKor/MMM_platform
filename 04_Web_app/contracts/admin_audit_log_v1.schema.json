@@ -19,7 +19,7 @@
       "required": ["event_id", "event_type", "occurred_at_utc", "actor_user_id", "actor_display_name", "target_type", "target_id", "result", "browser_safe_summary", "request_id"],
       "properties": {
         "event_id": {"type": "string", "pattern": "^evt_[0-9a-f]{24}$"},
-        "event_type": {"enum": ["login_succeeded", "login_failed", "logout", "session_revoked", "user_created", "user_updated", "user_enabled", "user_disabled", "role_changed", "admin_viewed_system_status", "admin_viewed_audit_log"]},
+        "event_type": {"enum": ["login_succeeded", "login_failed", "logout", "session_revoked", "user_created", "user_updated", "user_enabled", "user_disabled", "user_self_registered", "role_changed", "admin_viewed_system_status", "admin_viewed_audit_log"]},
         "occurred_at_utc": {"type": "string", "format": "date-time"},
         "actor_user_id": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^usr_[0-9a-f]{24}$"}]},
         "actor_display_name": {"type": ["string", "null"], "minLength": 1, "maxLength": 120},

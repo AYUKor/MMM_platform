@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.9.0",
+    "version": "1.10.0",
     "description": "Versioned HTTP boundary for local pilot authentication, administration, campaign upload, validation, asynchronous calculation jobs, browser-safe progress, results, product navigation, model information, help and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -44,6 +44,19 @@
         "responses": {
           "200": {"description": "Authenticated server-side session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthSession"}}}},
           "401": {"$ref": "#/components/responses/ApiError"},
+          "429": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "security": [],
+        "operationId": "registerLocalPilotUser",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthRegistration"}}}},
+        "responses": {
+          "201": {"description": "Self-registered analyst session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthSession"}}}},
+          "409": {"$ref": "#/components/responses/ApiError"},
+          "422": {"$ref": "#/components/responses/ApiError"},
           "429": {"$ref": "#/components/responses/ApiError"}
         }
       }
@@ -737,6 +750,7 @@
       "ModelOverview": {"$ref": "./contracts/model-overview-v1.json"},
       "HelpCatalog": {"$ref": "./contracts/help-catalog-v1.json"}
       ,"AuthSession": {"$ref": "./auth_session_v1.schema.json"}
+      ,"AuthRegistration": {"$ref": "./auth_registration_v1.schema.json"}
       ,"AdminUserList": {"$ref": "./admin_user_list_v1.schema.json"}
       ,"AdminUserDetail": {"$ref": "./admin_user_detail_v1.schema.json"}
       ,"AdminUserMutation": {"$ref": "./admin_user_mutation_v1.schema.json"}

@@ -18,6 +18,7 @@ export interface Event {
     | "user_updated"
     | "user_enabled"
     | "user_disabled"
+    | "user_self_registered"
     | "role_changed"
     | "admin_viewed_system_status"
     | "admin_viewed_audit_log";

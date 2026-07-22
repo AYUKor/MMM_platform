@@ -35,6 +35,7 @@ AUDIT_EVENT_TYPES = {
     "user_updated",
     "user_enabled",
     "user_disabled",
+    "user_self_registered",
     "role_changed",
     "admin_viewed_system_status",
     "admin_viewed_audit_log",
@@ -233,6 +234,15 @@ def auth_error(code: str) -> AuthAdminError:
         "AUTH_RATE_LIMITED": (
             429,
             "Слишком много попыток входа. Повторите попытку немного позже.",
+        ),
+        "AUTH_REGISTRATION_INVALID": (
+            422,
+            "Данные регистрации заполнены некорректно.",
+        ),
+        "AUTH_REGISTRATION_FAILED": (
+            409,
+            "Не удалось создать учетную запись. "
+            "Возможно, такой адрес уже зарегистрирован — попробуйте войти в систему.",
         ),
         "PERMISSION_DENIED": (403, "Недостаточно прав для выполнения этого действия."),
         "ADMIN_USER_NOT_FOUND": (404, "Пользователь не найден."),
@@ -903,6 +913,16 @@ class IdentityProvider(Protocol):
         client_key: str,
     ) -> tuple[RequestContext, str]: ...
 
+    def register(
+        self,
+        email: str,
+        password: str,
+        display_name: str | None = None,
+        *,
+        request_id: str,
+        client_key: str,
+    ) -> tuple[RequestContext, str]: ...
+
     def resolve_session(self, token: str | None, *, request_id: str) -> SessionResolution: ...
 
     def logout(self, token: str | None, *, request_id: str) -> None: ...
@@ -1097,6 +1117,95 @@ class LocalPilotIdentityProvider:
                 connection=connection,
             )
         return self._context(user, session, request_id=request_id), token
+
+    def register(
+        self,
+        email: str,
+        password: str,
+        display_name: str | None = None,
+        *,
+        request_id: str,
+        client_key: str,
+    ) -> tuple[RequestContext, str]:
+        """Self-service registration with the fixed default analyst role."""
+
+        now = utc_now()
+        subject = self._login_subject(email, client_key)
+        attempts, latest = self.attempts.recent_count_and_latest(
+            subject,
+            since=now - timedelta(seconds=self.settings.login_window_seconds),
+        )
+        if (
+            attempts >= self.settings.login_max_attempts
+            and latest is not None
+            and latest + timedelta(seconds=self.settings.login_cooldown_seconds) > now
+        ):
+            raise auth_error("AUTH_RATE_LIMITED")
+
+        try:
+            normalized_email = normalize_email(email)
+            validated_display_name = self._registration_display_name(
+                normalized_email,
+                display_name,
+            )
+            validate_password_policy(password)
+        except ValueError as exc:
+            with self.database.transaction() as connection:
+                self.attempts.record(subject, now=now, connection=connection)
+            raise AuthAdminError("AUTH_REGISTRATION_INVALID", 422, str(exc)) from exc
+
+        # Hash before the duplicate check so response timing does not reveal
+        # whether an account already exists.
+        password_hash = self.hasher.hash_password(password)
+        token = secrets.token_urlsafe(32)
+        token_digest = self.token_digest(token)
+        expires_at = now + timedelta(seconds=self.settings.session_ttl_seconds)
+        with self.database.transaction() as connection:
+            if self.users.find_by_email(normalized_email, connection=connection) is not None:
+                self.attempts.record(subject, now=now, connection=connection)
+                raise auth_error("AUTH_REGISTRATION_FAILED")
+            user = self.users.create(
+                email_normalized=normalized_email,
+                display_name=validated_display_name,
+                password_hash=password_hash,
+                password_algorithm=self.hasher.algorithm_version,
+                role_id="analyst",
+                created_by_user_id=None,
+                now=now,
+                connection=connection,
+            )
+            session = self.sessions.create(
+                user_id=str(user["user_id"]),
+                token_digest=token_digest,
+                created_at=now,
+                expires_at=expires_at,
+                idle_timeout_seconds=self.settings.idle_timeout_seconds,
+                connection=connection,
+            )
+            self.attempts.clear(subject, connection=connection)
+            self.audit.append(
+                self._audit_event(
+                    event_type="user_self_registered",
+                    now=now,
+                    request_id=request_id,
+                    actor=user,
+                    target_type="user",
+                    target_id=str(user["user_id"]),
+                    result="succeeded",
+                    summary="Пользователь зарегистрировался самостоятельно.",
+                ),
+                connection=connection,
+            )
+        return self._context(user, session, request_id=request_id), token
+
+    @staticmethod
+    def _registration_display_name(normalized_email: str, display_name: str | None) -> str:
+        if display_name is not None and display_name.strip():
+            return validate_display_name(display_name)
+        candidate = normalized_email.split("@", 1)[0][:120]
+        if len(candidate) < 2:
+            candidate = "Пользователь pilot"
+        return validate_display_name(candidate)
 
     def resolve_session(self, token: str | None, *, request_id: str) -> SessionResolution:
         if not token:
