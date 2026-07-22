@@ -68,11 +68,22 @@ def _config_sha256(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _project_path(project_root: Path, value: Any, field_name: str) -> Path:
+def _project_path(
+    project_root: Path,
+    value: Any,
+    field_name: str,
+    *,
+    resolve_symlinks: bool = True,
+) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty path")
     candidate = Path(value).expanduser()
-    return (candidate if candidate.is_absolute() else project_root / candidate).resolve()
+    absolute = candidate if candidate.is_absolute() else project_root / candidate
+    if resolve_symlinks:
+        return absolute.resolve()
+    # Normalise without resolving symlinks: a configured interpreter may be a
+    # venv symlink whose link target lacks the venv layout (pyvenv.cfg).
+    return Path(os.path.abspath(absolute))
 
 
 def _positive_number(value: Any, field_name: str) -> float:
@@ -155,9 +166,14 @@ def build_settings(
     )
     python_value = worker.get("python_executable")
     python_executable = (
-        Path(sys.executable).resolve()
+        Path(os.path.abspath(sys.executable))
         if python_value in {None, ""}
-        else _project_path(project_root, python_value, "worker.python_executable")
+        else _project_path(
+            project_root,
+            python_value,
+            "worker.python_executable",
+            resolve_symlinks=False,
+        )
     )
     state_root = _project_path(project_root, paths.get("state_root"), "paths.state_root")
     runtime_root = _project_path(project_root, paths.get("runtime_root"), "paths.runtime_root")
