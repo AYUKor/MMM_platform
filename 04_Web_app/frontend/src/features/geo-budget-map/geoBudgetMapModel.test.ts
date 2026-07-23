@@ -398,7 +398,7 @@ describe("accessible point copy", () => {
     expect(historicalLabel).toContain("Москва");
     expect(historicalLabel).toContain("Исторический рекламный бюджет");
     expect(historicalLabel).toContain("Доля общего бюджета");
-    expect(historicalLabel).toContain("Дней с рекламной активностью: 500");
+    expect(historicalLabel).not.toContain("Дней с рекламной активностью");
     expect(historicalLabel).toContain("Период данных: 01.01.2025 — 31.05.2026");
     expect(historicalLabel).not.toContain("Кампаний");
 
