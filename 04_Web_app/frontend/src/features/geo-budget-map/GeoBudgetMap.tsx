@@ -251,10 +251,6 @@ function Tooltip({
         {mode === "historical-model" ? (
           <>
             <div>
-              <dt>Дней с рекламной активностью</dt>
-              <dd>{formatInteger(point.activeDaysN ?? null)}</dd>
-            </div>
-            <div>
               <dt>Период данных</dt>
               <dd>{periodValue}</dd>
             </div>

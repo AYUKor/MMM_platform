@@ -395,7 +395,6 @@ export function formatGeoPointAccessibleLabel(
     `${mode === "historical-model" ? "Доля общего бюджета" : "Доля бюджета"}: ${formatPercent(point.budgetShare)}`,
   ];
   if (mode === "historical-model") {
-    parts.push(`Дней с рекламной активностью: ${formatInteger(point.activeDaysN ?? null)}`);
     parts.push(periodDisplayText?.trim() || "Период данных: Нет данных");
   } else {
     parts.push(`Каналы: ${point.channels?.length ? point.channels.join(", ") : "Нет данных"}`);
