@@ -351,8 +351,7 @@ test("historical map tooltip supports mouse and keyboard with Escape restore", a
   await expect(tooltip).toContainText("1,5 млрд ₽");
   await expect(tooltip).toContainText("Доля общего бюджета");
   await expect(tooltip).toContainText("17,3 %");
-  await expect(tooltip).toContainText("Дней с рекламной активностью");
-  await expect(tooltip).toContainText("480");
+  await expect(tooltip).not.toContainText("Дней с рекламной активностью");
   await expect(tooltip).toContainText("01.01.2025 — 31.05.2026");
   await expect(tooltip).not.toContainText("Кампаний");
 
@@ -561,7 +560,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("tooltip")).toBeVisible();
     const tooltip = page.getByRole("tooltip");
     await expect(tooltip).toContainText("Исторический рекламный бюджет");
-    await expect(tooltip).toContainText("Дней с рекламной активностью");
+    await expect(tooltip).not.toContainText("Дней с рекламной активностью");
     await expect(tooltip).toContainText("Период данных");
     await expect(tooltip).not.toContainText("Кампаний");
     await captureHistoricalGeoReview(page, `home-historical-tooltip-${theme}.png`);
