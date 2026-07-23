@@ -97,13 +97,12 @@ describe("GeoBudgetMap", () => {
     expect(within(tooltip).getByText(point.geoDisplayName)).toBeInTheDocument();
     expect(within(tooltip).getByText("Исторический рекламный бюджет")).toBeInTheDocument();
     expect(within(tooltip).getByText("Доля общего бюджета")).toBeInTheDocument();
-    expect(within(tooltip).getByText("Дней с рекламной активностью")).toBeInTheDocument();
-    expect(within(tooltip).getByText(String(point.activeDaysN))).toBeInTheDocument();
+    expect(within(tooltip).queryByText("Дней с рекламной активностью")).not.toBeInTheDocument();
     expect(within(tooltip).getByText("Период данных")).toBeInTheDocument();
     expect(within(tooltip).getByText("01.01.2025 — 31.05.2026")).toBeInTheDocument();
     expect(within(tooltip).queryByText(/Кампани/u)).not.toBeInTheDocument();
     expect(marker).toHaveAccessibleName(/Исторический рекламный бюджет/);
-    expect(marker).toHaveAccessibleName(/Дней с рекламной активностью/);
+    expect(marker).not.toHaveAccessibleName(/Дней с рекламной активностью/);
     expect(marker).not.toHaveAccessibleName(/Кампани/u);
 
     screen.getByRole("button", { name: "Закрыть подсказку" }).focus();

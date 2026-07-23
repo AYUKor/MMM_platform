@@ -170,7 +170,7 @@ test.describe("Phase E.1F historical Home live acceptance", () => {
     await map.locator(`[data-map-marker="${moscow?.geo_id}"]`).focus();
     const tooltip = page.getByRole("tooltip");
     await expect(tooltip).toContainText("Исторический рекламный бюджет");
-    await expect(tooltip).toContainText("Дней с рекламной активностью");
+    await expect(tooltip).not.toContainText("Дней с рекламной активностью");
     await expect(tooltip).toContainText(
       payload.period_display_text.replace(/^Период данных:\s*/u, ""),
     );
@@ -562,8 +562,7 @@ test.describe("Phase E.1D live backend acceptance", () => {
     await expect(tooltip).toContainText(largestRow.geo_display_name);
     await expect(tooltip).toContainText("Исторический рекламный бюджет");
     await expect(tooltip).toContainText(formatRub(largestRow.historical_total_budget_rub));
-    await expect(tooltip).toContainText("Дней с рекламной активностью");
-    await expect(tooltip).toContainText(formatInteger(largestRow.active_days_n));
+    await expect(tooltip).not.toContainText("Дней с рекламной активностью");
     await expect(tooltip).toContainText(
       geoBudget.period_display_text.replace(/^Период данных:\s*/u, ""),
     );
