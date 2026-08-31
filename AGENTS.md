@@ -1,134 +1,125 @@
-# AGENTS.md - X5 MMM Enterprise Application
+# AGENTS.md — MMM Platform
 
-## Role
+## Назначение
 
-Codex is an implementation agent.
-The user is the product owner and MMM methodology owner.
-Do not make business, Finance, security, infrastructure, or model-governance decisions on behalf of their owners.
+Этот репозиторий содержит released application code MMM Platform: backend, frontend,
+контракты, тесты, model-serving adapters, deployment templates и документацию.
+Рабочий корень репозитория: `05_MMM_localapp/`.
 
-## Required Context
+Главный принцип: сначала установить текущую истину по физическим артефактам и
+живому коду, затем предлагать изменение. Нельзя превращать предположение, старый
+handoff или имя каталога в подтверждённый факт.
 
-Before every task, read in this order:
+## Что прочитать перед нетривиальной работой
 
-1. `AGENTS.md`.
-2. `04_Web_app/PROJECT_BRIEF.md`.
-3. `04_Web_app/CURRENT_TRUTH.md`.
-4. `04_Web_app/PROJECT_HANDOFF.md`.
-5. The task-specific contract and applicable ADR under `04_Web_app/docs/adr/`.
-6. For calculation-facing work, the referenced registry pointer, registration, run card, result artifacts, and QA evidence.
+1. Этот `AGENTS.md`.
+2. `04_Web_app/PROJECT_BRIEF.md` — стабильная цель продукта.
+3. `04_Web_app/CURRENT_TRUTH.md` — последняя зафиксированная текущая истина.
+4. `04_Web_app/PROJECT_HANDOFF.md` — карта системы и передача контекста.
+5. Релевантные accepted ADR, schemas, policies, manifests, runbooks и тесты.
+6. Для истории решений — project brain вне этого Git-репозитория:
+   `../01_Main_Brain_MMM/wiki/`.
 
-If a required file is missing, stop and report it. If documents or evidence disagree about the same fact, stop and report the exact conflict. Do not guess which source is newer and do not use file modification time as a substitute for verification.
+Если документы расходятся с кодом или проверяемым артефактом, не продолжать как
+будто противоречия нет: зафиксировать конфликт, выбрать более сильное evidence или
+пометить результат `UNKNOWN`.
 
-## Source-Of-Truth Hierarchy
+## Иерархия фактических источников
 
-The hierarchy assigns ownership by topic; it is not permission to ignore a conflict:
+Для утверждений о текущем состоянии использовать такой порядок:
 
-1. Agent behavior and working constraints: `AGENTS.md`.
-2. Stable product purpose and non-negotiable product rules: `04_Web_app/PROJECT_BRIEF.md`.
-3. Evidence-backed current package, run, readiness, and blocker facts: `04_Web_app/CURRENT_TRUTH.md` together with its cited registry and artifact paths.
-4. Frozen application contracts and integration handoff: `04_Web_app/PROJECT_HANDOFF.md` and accepted ADRs.
-5. Actual calculation behavior: the existing tested source under `02_Code/`.
-6. Package activation and immutable model identity: registry pointers and registrations under `03_Outputs/01_PyMC_outputs/00_Model_registry/`.
-7. Completed calculation evidence: immutable model packages, run cards, manifests, hashes, and marketer artifacts under `03_Outputs/`.
-8. Project brain notes: methodology context and decision history under `01_Main_Brain_MMM/`; they do not override live registry or artifact evidence.
+1. live code, API/schema contracts, активные configs/policies, manifests и
+   физически проверенные artifacts;
+2. текущий Git state и история merged changes;
+3. deployment evidence и актуальные runbooks;
+4. `CURRENT_TRUTH.md`;
+5. `PROJECT_HANDOFF.md` и принятые ADR;
+6. narrative handoff;
+7. старые phase docs, архивные summaries и исторические brain notes.
 
-When `CURRENT_TRUTH.md` conflicts with its cited evidence, stop and refresh the document through a dedicated truth-freeze task. Never silently select one value.
+`AGENTS.md` задаёт правила работы, а `PROJECT_BRIEF.md` — стабильную цель; они не
+заменяют проверку текущей реализации. Accepted ADR задаёт одобренную семантику,
+но её фактическое внедрение должно подтверждаться кодом и тестами.
 
-## Calculation Boundary
+## Граница расчётов и изменений
 
-The existing calculation source of truth remains:
+- Не запускать DWH SQL без прямого разрешения.
+- Не пересчитывать модели, панели, posteriors, forecasts, optimizer outputs или
+  reports без прямого разрешения.
+- Не менять model semantics, posterior/training logic, optimizer logic,
+  recommendation policy или business KPI contract, если это не входит в явно
+  согласованный scope.
+- Raw data считать immutable. Новые результаты создавать versioned рядом с
+  исходными; не перезаписывать единственный экземпляр.
+- Перед любым расчётом фиксировать population, grain, period, denominator,
+  estimand, counterfactual, maturity/as-of semantics и epistemic status.
+- Разделять causal estimate от operational proxy. Нормализация или перевод в
+  маржу не исправляет неверный counterfactual.
 
-- `02_Code/01_PyMC/mmm_core`;
-- `02_Code/03_AC_forecast`;
-- `02_Code/02_Budget_optimizer`;
-- immutable packages and derived artifacts under `03_Outputs`.
+## Local workspace safety
 
-The web application must invoke this existing boundary. Never copy or reimplement adstock, saturation, scaling, posterior scoring, support gates, forecast, or optimizer mathematics in the web layer.
+Аудит локального workspace по умолчанию строго read-only.
 
-## Non-Negotiable Rules
+- Не перемещать, не переименовывать и не удалять файлы или каталоги.
+- Не считать каталог устаревшим только по имени, дате или расположению.
+- До предложения миграции проверить code imports, configs, manifests, hashes,
+  symlinks, notebooks, runbooks и внешние зависимости.
+- Сохранять raw sources и невоспроизводимые artifacts.
+- Destructive cleanup — отдельная задача с явным подтверждением пользователя.
+- Миграция допустима только по схеме `copy first -> verify -> switch references ->
+  delete last`, причём последний шаг требует отдельного разрешения.
+- Данные и model artifacts могут находиться в родительском workspace вне Git;
+  отсутствие файла внутри clone не означает его отсутствие или ненужность.
 
-- Never duplicate `mmm_core`.
-- Never invent, interpolate, or hard-code production calculation results.
-- Never label synthetic data, mocks, or fixtures as production evidence.
-- Never create fake production routes or placeholder authentication presented as real.
-- Never run PyMC training unless explicitly requested.
-- Never run notebooks from the web application.
-- Never execute long model work inside an HTTP request.
-- Never use diagnostic-only targets as optimizer objectives.
-- Never auto-recommend an unsafe candidate.
-- Preserve `best_raw`, `best_safe`, and `no_safe_candidate` as separate outcomes.
-- Do not add production dependencies without explicit approval.
-- Do not change domain contracts silently; version and review every breaking change.
-- Do not expose local absolute paths in API contracts or browser responses.
+Планируемая структура `03_ML_MMM/{00_Data,01_Test,02_Predfin,03_Fin}` пока не
+создана. До отдельной milestone нельзя раскладывать файлы по этой схеме.
 
-## Task Scoping
+## Git и GitHub
 
-Before editing, define one reviewable milestone and an explicit file allowlist. List files and systems that are out of scope. Do not widen the task to an adjacent milestone without user approval.
+- `origin/main` — source of truth для released application code.
+- Одна задача — одна ветка `codex/<task>` — один PR.
+- Все исправления review по задаче остаются в том же PR.
+- Codex может создать commit и Draft PR только в согласованном scope.
+- Codex никогда не merge'ит PR самостоятельно.
+- Запрещены destructive Git actions без явного разрешения: `reset --hard`,
+  force-push, удаление веток, переписывание history, удаление чужих изменений.
+- Не трогать unrelated dirty/untracked files. В отчёте отделять их от изменений
+  текущей задачи.
 
-For documentation-only tasks, do not create application scaffolding, dependencies, generated schemas, migrations, containers, or runtime code. For implementation tasks, modify only the approved ownership boundary and call the existing calculation core.
+## Server и deployment
 
-Mocks and fixtures must be clearly named and labeled. A UI fixture must be derived from a verified real result or explicitly marked synthetic; it must never masquerade as a production response.
+- Сервер не изменять без отдельного явного разрешения.
+- Не выполнять SSH, restart, deploy, config edit, certificate operation или
+  cleanup в рамках локального аудита.
+- Документированный server status не выдавать за live-verified status.
+- Не публиковать IP, jump-host details, ключи, credentials, cookies, tokens,
+  private certificates или иные secrets.
+- Model serving bundle переносится отдельно от application Git и должен
+  проверяться по manifest/hash; source panel на сервер не переносится.
 
-## Git And Review Rules
+## Реализация и проверка
 
-- Work on a dedicated branch named with the `codex/` prefix unless the user specifies another convention.
-- Before application-code work, verify that the repository is under Git. If Git metadata is absent, stop and report it; do not initialize a repository or configure a remote without explicit approval.
-- Keep commits small, scoped, and reviewable.
-- Do not merge to `main`, force-push, rewrite history, or bypass review.
-- Do not stage or commit unrelated user changes.
-- Require review for domain contracts, migrations, security behavior, model activation behavior, and production dependencies.
+- Предпочитать локальные воспроизводимые pipelines, функции с type hints и
+  docstrings, deterministic seeds, logging и явные sanity/shape checks.
+- Notebook — читаемый интерфейс; повторяемую логику выносить в `src/`, когда это
+  улучшает воспроизводимость.
+- Проверять изменения пропорционально риску: targeted tests, затем связанный
+  regression surface. Не скрывать known failing tests.
+- Для UI сверять фактический router, API calls, permissions и состояния, а не
+  только макеты или phase docs.
+- Для model-serving сверять pointer -> package manifest -> policy -> adapter ->
+  public contract.
 
-## Security And Company Data
+## Документация и handoff
 
-- Do not upload real company data, model packages, outputs, or credentials to external services.
-- Do not commit secrets, tokens, passwords, certificates, VPN details, or personal data.
-- Use approved secret management and least-privilege service identities; never place secrets in source, fixtures, logs, or frontend bundles.
-- Future API contracts must use opaque IDs, artifact IDs, or approved relative object keys, never workstation paths.
-- Preserve upload hashes, actor identity, timestamps, package lineage, policy lineage, and audit events required for reproducibility.
-- Do not execute DWH queries or move company data outside the approved contour without explicit authorization.
-- Treat authentication, authorization, retention, malware scanning, audit, backup, and deletion rules as approval-gated infrastructure decisions.
+После meaningful progress обновлять только разрешённые пользователем документы.
+Фиксировать:
 
-## Task Protocol
+- что проверено и по какому evidence;
+- что является observed fact, documented status, assumption или `UNKNOWN`;
+- какие файлы изменены;
+- tests/checks и их результат;
+- unresolved risks и следующий milestone.
 
-Before editing:
-
-1. State the interpreted goal.
-2. List evidence inspected.
-3. List files proposed for modification.
-4. List files explicitly out of scope.
-5. List tests or documentation checks to run.
-6. Report unresolved assumptions and approvals.
-
-During implementation:
-
-- Work only inside the approved scope.
-- Keep changes small and reviewable.
-- Mark mocks and fixtures explicitly.
-- Report newly discovered conflicts before proceeding.
-
-After implementation:
-
-1. List changed files.
-2. Show important design decisions.
-3. List commands executed.
-4. Report test and verification results.
-5. Report claims that were not rerun or independently verified.
-6. Report remaining gaps and approval owners.
-7. Confirm that no out-of-scope files changed.
-8. Do not merge to `main`.
-
-## Stop Conditions
-
-Stop before application or MMM code editing when:
-
-- the requested active registry package cannot be verified;
-- a required canonical contract or ADR is missing;
-- documents and evidence conflict;
-- a required real fixture is unavailable;
-- the change would duplicate or alter MMM mathematics outside an explicitly approved model milestone;
-- relevant security, company-data, or infrastructure assumptions are unknown;
-- the requested scope spans more than one milestone;
-- Git metadata is absent for an implementation task;
-- the only way forward would expose company data, secrets, or workstation paths.
-
-A documentation-only truth-freeze task may inspect and record these blockers, but it must not bypass them by creating production code.
+Если scope допускает только documentation, любые обнаруженные code/model/server
+проблемы заносятся как ограничения или будущие задачи, но не исправляются.

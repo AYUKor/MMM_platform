@@ -1,114 +1,310 @@
-# X5 MMM Current Truth
+# MMM Platform — Current Truth
 
-Snapshot date: `2026-07-23`.
+## Last verified
 
-This document contains current facts only. It does not activate a model or approve a business policy. Application-contract claims below are limited to the cited implementation and QA evidence. All paths are repository-relative.
+- Verification date: **2026-08-31**.
+- Mode: **C0 — VERIFICATION + DOCUMENTATION ONLY**.
+- Verified against local live code, Git/GitHub state, contracts, policies,
+  manifests, tests, physically present artifacts and local deployment runbooks.
+- No DWH query, model/data recalculation, server connection or deployment was
+  performed.
+- Server facts below are explicitly labelled as documented status; they were not
+  live-verified during C0.
 
-Verification labels:
+## Product status
 
-- `verified`: checked directly against the cited registry entry, manifest, run card, artifact, directory inventory, or checksum on the verification date shown below;
-- `reported-not-rerun`: recorded by an existing QA or decision artifact, but the underlying test or calculation was not rerun during this truth freeze;
-- `unknown`: the evidence needed to decide is absent or the responsible owner has not approved it.
+MMM Platform is an internal research-pilot web application for uploading campaign
+plans, validating geo/channel inputs, calculating posterior-based incremental
+turnover scenarios, reviewing uncertainty and downloading a canonical report.
 
-## Registry, Package, And Run Truth
+The application and portal are implemented. The active model package is **not a
+production model**: it is `preprod_restricted` because sealed OOT validation is
+missing or failed. The product is therefore decision support under explicit risk
+limits, not an automated media-buying or finance approval system.
 
-| Fact | Value | Evidence path | Verification date | Status |
-|---|---|---|---|---|
-| Verified serving package | The current `preprod` pointer resolves to `pkg_807d3ddbae57a52a_9aacd3beb350725b`. This is a preprod package, not a production-active claim. | `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json`; `03_Outputs/01_PyMC_outputs/00_Model_registry/registrations/pkg_807d3ddbae57a52a_9aacd3beb350725b.json` | 2026-07-14 | `verified` |
-| Package fingerprint | `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c` | `03_Outputs/01_PyMC_outputs/00_Model_registry/registrations/pkg_807d3ddbae57a52a_9aacd3beb350725b.json`; `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/model_manifest.json` | 2026-07-14 | `verified` |
-| Registry channel | `preprod`; pointer event `evt_20260714T005037493189+0000_431a268a2e52`; pointer update `2026-07-14T00:50:37.493189+00:00`. | `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json`; `03_Outputs/01_PyMC_outputs/00_Model_registry/events/evt_20260714T005037493189+0000_431a268a2e52.json` | 2026-07-14 | `verified` |
-| Production registry channel | No `production.json` pointer exists. The production-active package ID is therefore not established by the registry. | `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/production.json` (absent); `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/` | 2026-07-14 | `verified` |
-| Package/model status | Package stage `posterior_ready`; activation status `preprod_restricted`; package schema `0.4.0`; gate policy `1.2.0`; production blocker `MISSING_OR_FAILED_OOT_VALIDATION`. | `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/model_manifest.json` | 2026-07-14 | `verified` |
-| Panel lineage | Panel SHA-256 `9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552`; registry registration content SHA-256 `9af56969c969d8d67ea04f429165543bcbb45de83e1372530cd6a429a2eeabf7`. | `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json`; `03_Outputs/01_PyMC_outputs/00_Model_registry/registrations/pkg_807d3ddbae57a52a_9aacd3beb350725b.json`; `03_Outputs/02_Budget_optimizer_outputs/17_Budget_optimizer_14072026_agency_may_tsx_surgical_s6_v3/model_resolution_optimizer.json` | 2026-07-14 | `verified` |
-| Historical model geo-budget evidence | A package-bound `historical_geo_budget_v1` extension was built from the panel recorded in the current registration. Projected Parquet metadata confirms 308,886 rows, 109 columns, 220 geographies and period 2025-01-01 through 2026-05-31. The six-column source total, 220-row aggregate and browser payload reconcile exactly; canonical coverage is 220/220 with zero unlocated budget. Exact financial totals and ranking remain in ignored local evidence and are not committed to the external repository. | `03_Outputs/01_PyMC_outputs/00_Model_registry/package_artifacts/pkg_807d3ddbae57a52a_9aacd3beb350725b/package_artifacts_manifest_v1.json`; `02_Code/01_PyMC/configs/historical_geo_budget_spend_columns_v1.json`; `04_Web_app/docs/integration/BACKEND_PHASE_E1E_HISTORICAL_MODEL_GEO_BUDGET_V1.md` | 2026-07-19 | `verified locally` |
-| Historical replay | Passed at `2026-07-14T00:49:39.882109+00:00`: 12 fits, 61 effects, 64 draws, 3,904 rows, zero effect mismatch rows, maximum absolute effect difference `0.0001068115234375`. | `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/historical_replay_validation.json` | 2026-07-14 | `verified` |
-| OOT status | A valid sealed OOT artifact is unavailable. `oot_validation.json` is absent and the package remains blocked by `MISSING_OR_FAILED_OOT_VALIDATION`. | `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/oot_validation.json` (absent); `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/model_manifest.json` | 2026-07-14 | `verified` |
-| Latest code-lineage optimizer run | `optimizer_agency_gender_boost_contract_v1_14072026`, completed `2026-07-14T20:50:08.044142+00:00` in 46.3 seconds. It replays the immutable normalized gender-boost campaign plan against the same preprod package after the optimizer fallback-policy source change. It contains two campaigns, 128 search draws, 600 finalist draws and a hash-bound run card. | `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/optimizer_agency_gender_boost_contract_v1_14072026_optimizer_run_card.json`; `00_Data/00_Future_Campaigns/02_Validated/optimizer_agency_gender_boost_surgical_s6_v3_14072026_campaign_plan_normalized.csv` | 2026-07-14 | `verified` |
-| Current business policy | Decision policy `optimizer_recommendation_materiality_v2_surgical_search`, SHA-256 `6efac58fee27a59b76d3e830f8d9fba1420da94a68b18cf198e98da5cf25f13f`. Business policy `business_hurdle_unapproved_v1`; mode `allocation_only`; no approved launch/cancel threshold. | `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/optimizer_agency_gender_boost_contract_v1_14072026_optimizer_run_card.json`; `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/business_threshold_policy_snapshot.json` | 2026-07-14 | `verified` |
-| Canonical marketer output set | The project brain identifies optimizer runs 14-17 and their marketer workbooks as the current v3 real-campaign set. The four workbooks were not rerendered in this truth-freeze task. | `03_Outputs/02_Budget_optimizer_outputs/14_Budget_optimizer_14072026_agency_gender_surgical_s6_v3/`; `03_Outputs/02_Budget_optimizer_outputs/15_Budget_optimizer_14072026_agency_gender_boost_surgical_s6_v3/`; `03_Outputs/02_Budget_optimizer_outputs/16_Budget_optimizer_14072026_agency_may_ts5_surgical_s6_v3/`; `03_Outputs/02_Budget_optimizer_outputs/17_Budget_optimizer_14072026_agency_may_tsx_surgical_s6_v3/`; `01_Main_Brain_MMM/wiki/synthesis/x5-mmm-surgical-scenario6-real-campaigns-2026-07-14.md` | 2026-07-14 | `reported-not-rerun` |
-| Latest marketer output | In run 18 the report was built from cached optimizer finalist artifacts, did not recompute forecast, and contains two campaigns with Scenarios 1-6, recommendations, CSV outputs, and `marketer_preprod_forecast_optimizer_report.xlsx`. | `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/marketer_report_card.json`; `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/marketer_preprod_forecast_optimizer_report.xlsx` | 2026-07-14 | `verified` |
-| Superseded handoff package claim | `pkg_5795ed2581eaa9af_9aacd3beb350725b` remains a historical registration but is not the package referenced by the current `preprod` pointer. | `03_Outputs/01_PyMC_outputs/00_Model_registry/registrations/pkg_5795ed2581eaa9af_9aacd3beb350725b.json`; `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json` | 2026-07-14 | `verified` |
+## Repository
 
-## Application And Contract Readiness
+- Released application repository:
+  `/Users/aleksan.korenkov/Work/01_ML_projects/03_ML_MMM/05_MMM_localapp`.
+- Remote: `https://github.com/AYUKor/MMM_platform.git`.
+- `origin/main` is the source of truth for released application code.
+- Data, research outputs, project brain and server-deploy evidence also exist in
+  the parent `03_ML_MMM/` workspace and are not all stored in this Git clone.
+- Pre-existing untracked `05_Presentations/` was found in the clone during C0 and
+  deliberately left untouched.
 
-| Fact | Value | Evidence path | Verification date | Status |
-|---|---|---|---|---|
-| Current web-app code status | `04_Web_app` contains DecisionResult v1, ResultOverview v1, application lifecycle v1, Product API, the completed-result adapter, local Execution Worker, HTTP API, marketer upload/validation service, model passport, runtime launcher/recovery/retention, research-pilot deployment tooling and local pilot authentication/administration. Backend Phase E.1C and merged Frontend Phase E.1D provide canonical map data and one `GeoBudgetMap`. Backend Phase E.1E is merged in PR #27 and provides the package-bound historical model geo-budget builder, manifest, browser contract and endpoint. Frontend Phase E.1F is merged in PR #28 and switches only Home to that historical source; the campaign map remains unchanged. Company queue, PostgreSQL/object-storage adapters and corporate SSO do not exist yet. | `04_Web_app/contracts/`; `04_Web_app/api/`; `04_Web_app/services/historical_model_geo_budget.py`; `02_Code/01_PyMC/mmm_core/historical_geo_budget.py`; `04_Web_app/frontend/src/features/geo-budget-map/`; `04_Web_app/docs/integration/FRONTEND_PHASE_E1F_HISTORICAL_HOME_MAP_V1.md`; PR `#27`; PR `#28` | 2026-07-20 | `verified` |
-| Product API and ModelPassport readiness | `implemented_v2_additive` with OpenAPI `1.10.0`; PR `#33` added the public self-registration endpoint `POST /api/v1/auth/register`, the `auth_registration_v1` contract and error codes `AUTH_REGISTRATION_INVALID`/`AUTH_REGISTRATION_FAILED`. The API publishes liveness/readiness, stable HTTP errors, lifecycle/navigation/auth contracts and discoverable JSON Schemas, including `historical_model_geo_budget_v1` and `auth_registration_v1`. Existing ModelPassport v1 remains compatible; `GET /api/v1/models/active-v2` publishes only `turnover`, one serving target and four active serving fits while retaining the measured research-package count of 12. Packages that do not match the approved 12-to-4 topology fail closed. The v2 passport prohibits production claims and does not expose orders or average basket as application capabilities. | `04_Web_app/contracts/openapi_v1.json`; `04_Web_app/contracts/historical_model_geo_budget_v1.schema.json`; `04_Web_app/services/historical_model_geo_budget.py`; `04_Web_app/docs/adr/0025-historical-model-geo-budget-source-v1.md`; PR `#33` | 2026-07-23 | `verified locally` |
-| Local pilot auth and administration readiness | `implemented_v1` behind an `IdentityProvider` abstraction. Argon2id hashes, HMAC-digested opaque server-side sessions, HttpOnly cookies, Origin/Host CSRF checks, viewer/analyst/admin permissions, centralized route plus action-level service guards, SQLite users/sessions/login-attempts/append-only audit, last-admin protection, disable-time session revoke, system status and environment/CLI bootstrap are implemented. Role assignment is independently protected by `admin.roles.write`; profile/status changes use `admin.users.write`; session revoke uses `admin.sessions.write`. Auth/admin success and error responses are explicitly non-cacheable. Since PR `#33` the provider also supports public self-service registration: any email domain, existing password-policy validation, hard-coded default role `analyst`, an immediate session on success, rate limiting shared with login and non-enumerating duplicate errors (`AUTH_REGISTRATION_FAILED`); privilege elevation remains admin-only. This is a single-node research-pilot provider; corporate SSO, MFA and password recovery are absent. | `04_Web_app/services/auth_admin.py`; `04_Web_app/api/http_smoke.py`; `04_Web_app/contracts/*auth*`; `04_Web_app/contracts/admin_*`; `04_Web_app/docs/security/LOCAL_AUTH_SECURITY_V1.md`; `04_Web_app/tests/test_auth_admin_v1.py`; PR `#33` | 2026-07-23 | `verified` |
-| Product navigation backend readiness | `implemented_v1` on the Backend Phase D branch. `GET /api/v1/workspace/home`, `/api/v1/calculations/history`, `/api/v1/model/overview` and `/api/v1/help/catalog` expose browser-safe read-only projections. History provides server-side pagination, status/search/date filters and stable ordering; model versions come only from registrations or the active verified passport; help comes from versioned structured JSON. Missing facts remain `null`, and fake activity, model quality, versions and articles are prohibited. Frontend integration is a separate milestone. | `04_Web_app/services/product_navigation.py`; `04_Web_app/contracts/*_v1.schema.json`; `04_Web_app/content/help_catalog_v1.json`; `04_Web_app/docs/adr/0019-product-navigation-projections-v1.md` | 2026-07-17 | `verified` |
-| Product progress readiness | `implemented_v1` end to end after merged PR #16. `GET /api/v1/jobs/{job_id}/progress-view` returns one deterministic browser-safe snapshot with one-campaign context, queue state, fixed P01-P09 stages, real Scenario 6 attempt/finalist counters where published, separate report state, actionable errors and terminal result availability. The merged frontend consumes it without reconstructing worker phases. Raw `/progress` remains compatible. `safe_candidates` and `blocked_candidates` are currently `null`; there is no fake ETA or overall percentage. `GET /api/v1/meta/mmm-facts` returns 20 reviewed static facts. | `04_Web_app/contracts/job_progress_view_v1.py`; `04_Web_app/services/job_progress_view.py`; `04_Web_app/frontend/src/pages/CalculationProgressPage.tsx`; `04_Web_app/docs/integration/FRONTEND_JOB_PROGRESS_V1.md`; `04_Web_app/docs/adr/0017-product-progress-view-v1.md` | 2026-07-16 | `verified` |
-| Product result backend readiness | `implemented_v2_additive`. Existing Phase C `/result-view`, `/media-plan`, `/result` and `/overview` remain compatible. `GET /api/v1/jobs/{job_id}/result-view-v2` adds turnover-only S01-S06 projections with explicit requested/allocated/unallocated budget, both ROAS denominators, risk-budget shares, corrected S1 manual-review semantics, one public S5 variant and full-or-infeasible S6. `GET /api/v1/jobs/{job_id}/media-plan-v2` adds paginated allocations and aggregates with canonical geo/channel identities and approved display names. E.1C supplies reviewed point coordinates through the dedicated catalog/validation/workspace projections. Daily scenario rows, map polygons/base geometry and working-plan XLSX remain unavailable. | `04_Web_app/contracts/job_result_view_v2.schema.json`; `04_Web_app/contracts/scenario_media_plan_v2.schema.json`; `04_Web_app/contracts/business_semantics_v2.py`; `04_Web_app/services/business_semantics_v2.py`; `04_Web_app/docs/adr/0023-canonical-geo-catalog-and-map-readiness-v1.md` | 2026-07-18 | `verified` |
-| Frontend interactive geo maps | The PR #26 renderer remains one typed `GeoBudgetMap` with a local Natural Earth outline, fixed Albers Equal Area projection, sqrt budget scaling, collision-aware labels and controlled partial/unavailable states. Frontend Phase E.1F keeps those renderer invariants and the validation-backed campaign mode unchanged, but Home now consumes only `GET /api/v1/model/historical-geo-budget`. Historical tooltip semantics expose budget, share, active days and backend period without campaign counts; workspace geo-budget is not a Home fallback. | `04_Web_app/frontend/src/features/geo-budget-map/`; `04_Web_app/frontend/src/pages/HomePage.tsx`; `04_Web_app/frontend/src/features/product-navigation/HomeView.tsx`; `04_Web_app/docs/integration/FRONTEND_PHASE_E1F_HISTORICAL_HOME_MAP_V1.md` | 2026-07-19 | `verified locally` |
-| Research-pilot deployment readiness | `implemented_v1`. One tool builds and verifies a panel-free registered model bundle, installs it idempotently, renders loopback Python/Nginx/systemd configuration, checks HTTP readiness and disk, and creates verified idle-only runtime backups with empty-target restore. `full_lineage` remains the default model-development check; the explicit `serving_bundle` mode verifies registered inventory and package fingerprint without copying the training panel. No secret or model archive is stored in Git. | `04_Web_app/deployment/research_pilot.py`; `04_Web_app/deployment/requirements-runtime-v1.txt`; `04_Web_app/deployment/README_RESEARCH_PILOT.md`; `04_Web_app/docs/adr/0015-research-pilot-deployment-v1.md` | 2026-07-15 | `verified` |
-| Cross-stack CI readiness | `implemented_v1`. Pull requests that touch the web application now run the existing Python contract suite and a separate locked frontend job on Node 22. The frontend job performs `npm ci`, regenerates TypeScript from JSON Schemas, fails on uncommitted generated drift, runs TypeScript, ESLint, unit tests and the production build. Feature-branch push duplicates were removed; PRs and merged `main` remain checked. | `.github/workflows/webapp-contracts.yml`; PR #9 head `1353db2`; GitHub Actions run `29447849427` | 2026-07-15 | `verified` |
-| Research-pilot runtime profile | `implemented_configuration_boundary`. Both profiles bind Python to loopback. `research_pilot` requires one HTTPS public origin, Secure application-session cookies and the existing reverse-proxy perimeter mode. Config schema `1.2.0` adds non-secret local-auth cost/session settings; the session secret remains environment-only. A 30-day default retention policy supports dry-run and apply, validates opaque IDs, retains active resource families, prunes idempotency indices atomically and records cleanup events. Actual VM/TLS/secret provisioning remains an infrastructure action. | `04_Web_app/backend_runtime.py`; `04_Web_app/config/local_backend_v1.json`; `04_Web_app/config/research_backend_v1.example.json`; `04_Web_app/services/auth_admin.py`; `04_Web_app/services/product_api_service.py`; `04_Web_app/deployment/` | 2026-07-17 | `verified` |
-| DecisionResult readiness | `implemented_v1`. Standard-library domain models and Draft 2020-12 JSON Schema define one job-level result with `campaign_results[]`. Real manifests were assembled for runs 17 and 18; two real-derived sanitized fixtures cover successful safe S6 and gate-blocked S6. | `04_Web_app/contracts/decision_result_v1.py`; `04_Web_app/contracts/decision_result_v1.schema.json`; `04_Web_app/tests/fixtures/`; `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/decision_result_manifest_v1.json` | 2026-07-14 | `verified` |
-| Application lifecycle readiness | `implemented_v1`. Six records define upload, validation, immutable calculation jobs, append-only job transitions, progress, and browser-safe errors. Draft 2020-12 validates wire shape; typed Python parsing additionally enforces legal status combinations, transition and timestamp order, budget reconciliation, selector exclusivity, counters, and path safety. | `04_Web_app/contracts/application_lifecycle_v1.py`; `04_Web_app/contracts/application_lifecycle_v1.schema.json`; `04_Web_app/docs/adr/0002-application-lifecycle-contract-v1.md` | 2026-07-15 | `verified` |
-| Local execution worker readiness | `implemented_v1` for local development. The worker accepts one queued immutable job, verifies source artifacts/package/policies/code/draws/seeds, materializes an attempt-local execution config, launches the existing composite optimizer/report CLI in a process group, translates real JSON progress, handles cancellation/timeout/failure, verifies completed lineage, and composes DecisionResult with the original `job_id`. Local file storage/journal are ports for development, not PostgreSQL, queue, or approved object storage. | `04_Web_app/worker/execution_worker.py`; `04_Web_app/tests/test_execution_worker_v1.py`; `04_Web_app/docs/adr/0003-local-execution-worker-v1.md` | 2026-07-15 | `verified` |
-| DecisionResult adapter | The adapter reads completed optimizer/report artifacts only, verifies declared SHA-256 values, records its own version/SHA-256, maps one or more campaigns into DecisionResult, and does not call forecast or optimizer mathematics. A calculated but non-selected safe S6 is read from the decision pool and remains visible with metrics instead of being mislabeled unavailable. | `04_Web_app/adapters/optimizer_result_adapter.py`; `04_Web_app/tests/test_decision_result_v1.py` | 2026-07-14 | `verified` |
-| Status-semantics readiness | `implemented_v1`. Russian source display values are mapped fail-closed into versioned machine codes for calculation, campaign scale, cell support, optimizer, business decision, quality, recommendation, and plan statuses. Unknown values raise an adapter error. | `04_Web_app/adapters/optimizer_result_adapter.py`; `04_Web_app/tests/test_decision_result_v1.py` | 2026-07-14 | `verified` |
-| Artifact-reference readiness | DecisionResult exposes opaque artifact IDs, kinds, SHA-256 values, sizes, media types, and safe relative storage keys. Workstation paths from local run cards are not copied into the contract. Local hash-checked download is implemented and the Phase 1 marketer Excel action uses only the opaque artifact ID. External object storage and signed delivery remain future infrastructure work. | `04_Web_app/contracts/decision_result_v1.py`; `04_Web_app/adapters/optimizer_result_adapter.py`; `04_Web_app/api/http_smoke.py`; `04_Web_app/frontend/src/widgets/result-overview/CampaignHeader.tsx` | 2026-07-15 | `verified` |
-| Optimizer fallback policy | When a config omits `decision_policy_file`, the optimizer resolves `optimizer_decision_policy_v3.yaml`. V3 requires turnover-only serving, full-budget S6 or explicit infeasibility, and full conservative S5 before a visible partial fallback; explicit policy references remain authoritative. | `02_Code/02_Budget_optimizer/budget_optimizer.py`; `02_Code/02_Budget_optimizer/optimizer_decision_policy_v3.yaml`; `04_Web_app/tests/test_decision_result_v1.py` | 2026-07-17 | `verified` |
-| Repository version-control status | The selected GitHub repository is `AYUKor/MMM_platform`. PRs through `#33` are merged, including Backend Phase E.1E in PR `#27` (`370ea98`), Frontend Phase E.1F in PR `#28` (`1b0b5d5`), Phase F.1 deployment fixes in PR `#29`, the previous truth-freeze in PR `#30`, the symlinked worker python fix in PR `#31`, the Phase F.1 server-deployment truth-freeze in PR `#32` and self-service registration with default analyst role in PR `#33` (`46fe4e9`). `origin/main` head is `46fe4e94a4698a9624c157e722ad83110050fec9`, confirmed against the remote on 2026-07-23. Repository rules prohibit an agent from merging directly to `main`. | `.git/config`; `.github/workflows/webapp-contracts.yml`; `AGENTS.md`; `git log origin/main`; `git ls-remote origin HEAD`; PR `#29`; PR `#30`; PR `#31`; PR `#32`; PR `#33` | 2026-07-23 | `verified` |
-| Source portability | Tracked source and runnable forecast/optimizer documentation no longer depend on a named workstation path. Campaign-specific configs and runtime artifacts may still contain local paths, but they remain outside the source baseline and must be translated to artifact IDs or approved object keys by the future application adapter. | `00_Data/build_weather_v2_exact.py`; `02_Code/02_Budget_optimizer/README.md`; `02_Code/03_AC_forecast/README.md`; `.gitignore` | 2026-07-14 | `verified` |
+## Current Git state
 
-## QA Evidence
+- Verified baseline: local `main` and remote `origin/main` both pointed to
+  `2ead610a56ab26eb38aeb29210d1bab86251f856` on 2026-08-31.
+- Latest verified merged release PR: **#35**, hiding the low-information active-days
+  metric in the historical Home-map tooltip.
+- C0 documentation work is isolated in branch
+  `codex/c0-current-truth-freeze`; its commit SHA is intentionally not embedded in
+  this document because Git history is the authoritative record.
+- Several older temporary worktrees are present/prunable outside this clone. They
+  are not evidence of the current release and were not modified.
 
-| Fact | Value | Evidence path | Verification date | Status |
-|---|---|---|---|---|
-| Registry integrity | A read-only registry resolve for the expected v3 package completed successfully and verified the registered package inventory. | `03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json`; `03_Outputs/01_PyMC_outputs/00_Model_registry/registrations/pkg_807d3ddbae57a52a_9aacd3beb350725b.json`; `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/model_manifest.json` | 2026-07-14 | `verified` |
-| Latest run-card and marketer-artifact integrity | Fresh read-only SHA-256 checks matched all six outputs declared by the optimizer run card, all five outputs declared by the marketer report card, and all six marketer source-artifact hashes for run 17. | `03_Outputs/02_Budget_optimizer_outputs/17_Budget_optimizer_14072026_agency_may_tsx_surgical_s6_v3/optimizer_agency_may_tsx_surgical_s6_v3_14072026_optimizer_run_card.json`; `03_Outputs/02_Budget_optimizer_outputs/17_Budget_optimizer_14072026_agency_may_tsx_surgical_s6_v3/marketer_report_card.json` | 2026-07-14 | `verified` |
-| Backend suite and numerical QA | The canonical local checkout completed `82/82 OK` after the fallback-policy change and immutable run 18 replay. This includes supported-artifact lineage, Scenario 1 serving parity, optimizer policy/support safety, budget preservation, historical replay, OOT contract, registry and guarded-fit tests. No model refit was run. | `02_Code/01_PyMC/tests/`; `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/` | 2026-07-14 | `verified` |
-| DecisionResult contract QA | `9/9` DecisionResult tests passed in the canonical project environment. Runs 14-18 also passed direct schema plus semantic validation for eight campaign results. A fresh source-only clone passed all five fixture/source tests and explicitly skipped four tests that require excluded runtime runs. QA covers two sanitized fixtures, selected and non-selected safe S6, gate-blocked S6, multi-campaign jobs, actual search-attempt diagnostics, fail-closed status mapping, artifact hash tampering, relative artifact references, and optimizer fallback v2. The bundled runtime passed the same behavioral tests with only the optional `jsonschema` test skipped because that package is absent there. | `04_Web_app/tests/test_decision_result_v1.py`; `04_Web_app/tests/fixtures/`; `03_Outputs/02_Budget_optimizer_outputs/14_Budget_optimizer_14072026_agency_gender_surgical_s6_v3/`; `03_Outputs/02_Budget_optimizer_outputs/18_Budget_optimizer_14072026_agency_gender_boost_contract_v1/` | 2026-07-14 | `verified` |
-| Application lifecycle contract QA | `16/16` lifecycle tests passed locally; the combined web-contract suite is `25/25 OK`. Both synthetic bundles contain the same six resource collections and ten records each. Every record passes Draft 2020-12 plus semantic parse/round-trip validation. Negative tests cover malformed status outcomes, blockers, campaign-total mismatch, illegal transitions, cancellation semantics, impossible progress, missing immutable package pins, unknown versions, and unsafe workstation/storage paths. Final GitHub Actions checks passed on both push and PR for head `35a8013`; PR `#2` was then merged without an additional code change. | `04_Web_app/tests/test_application_lifecycle_v1.py`; `04_Web_app/tests/fixtures/application_lifecycle_v1_happy_path_synthetic.json`; `04_Web_app/tests/fixtures/application_lifecycle_v1_failure_path_synthetic.json`; GitHub Actions runs `29375311674` and `29375314472` | 2026-07-15 | `verified` |
-| Local execution worker QA | `5/5` worker tests passed and the combined web-contract suite is now `31/31 OK`. Tests cover one job ID through success, two-campaign progress translation, artifact tampering before process start, protected non-zero failure, process timeout, process-group termination, and cancellation without error misclassification. The subprocess/result used by worker tests are explicitly synthetic and are not MMM evidence. The completed-result adapter override was also checked against real local run 18. | `04_Web_app/tests/test_execution_worker_v1.py`; `04_Web_app/tests/test_decision_result_v1.py`; `04_Web_app/worker/execution_worker.py` | 2026-07-15 | `verified` |
-| Local application and runtime QA | The combined web/backend suite is `51/51 OK` with nine explicit environment/fixture skips. It covers localhost HTTP, upload/validation/job lifecycle, real preprod package validation, idempotency, hash-checked downloads, recovery of queued work, fail-closed interrupted jobs, package pinning, unexpected background failures and the single-instance runtime lock. | `04_Web_app/tests/test_http_smoke_v1.py`; `04_Web_app/tests/test_local_campaign_service.py`; `04_Web_app/tests/test_backend_runtime.py` | 2026-07-15 | `verified` |
-| Product API v1.1 QA | The expanded source-only web/backend suite passes Product API schema/semantics, exact target policy, error catalog, OpenAPI publication, profile/environment guards, pagination, safe retention and live loopback discovery routes. Read-only real-package preflight verifies 55 inventory files and builds a schema-valid passport for 61 capability cells, 220 geographies, historical replay `passed` and sealed OOT `unavailable`. | `04_Web_app/tests/test_product_api_v1.py`; `04_Web_app/tests/test_backend_runtime.py`; `04_Web_app/tests/test_http_smoke_v1.py`; `04_Web_app/docs/adr/0014-product-api-v1-1-and-research-pilot.md` | 2026-07-15 | `verified` |
-| Backend Phase B progress QA | The full source-only web/backend suite discovered 101 tests: 91 passed and 10 external-evidence tests were explicitly skipped. A separate read-only run against the canonical evidence root passed `14/14` active-registry and optimizer-artifact tests; model-registry serving-mode tests passed `7/7`. New coverage includes fixed nine-stage order, queue race fallback, running/terminal states, current-attempt recovery, real Scenario 6 counters, missing optional counters, report publication, one-campaign enforcement, path safety, old ProgressEvent compatibility, 200/404/409/503 HTTP behavior and the static facts endpoint. Generated TypeScript was deterministic; TypeScript, ESLint, `116/116` frontend unit tests and production build passed. | `04_Web_app/tests/test_job_progress_view_v1.py`; `04_Web_app/tests/test_mmm_fact_catalog_v1.py`; `04_Web_app/tests/test_execution_worker_v1.py`; `04_Web_app/tests/test_http_smoke_v1.py`; `02_Code/01_PyMC/tests/test_model_registry.py`; `04_Web_app/frontend/` | 2026-07-16 | `verified` |
-| Backend Phase D product-navigation QA | The complete web/backend suite discovered 122 tests: 111 passed and 11 environment or external-evidence tests were explicitly skipped. The unchanged MMM core suite discovered 78 tests: 76 passed and two fixture-dependent tests were skipped. Generated TypeScript was deterministic; TypeScript and ESLint passed, all `285/285` frontend unit tests passed, and the production build completed. Coverage includes the four new contracts and discovery routes, home counts and unavailable states, server-side history pagination/search/status/date filters/sorts, registry-backed model versions, structured help integrity, browser-safe 404/409/422/503 errors, path leakage and unsupported presentation claims. No refit, MCMC or optimizer run was performed. | `04_Web_app/tests/test_product_navigation_v1.py`; `04_Web_app/tests/test_product_navigation_http_v1.py`; `04_Web_app/tests/`; `02_Code/01_PyMC/tests/`; `04_Web_app/frontend/` | 2026-07-17 | `verified` |
-| Backend Phase E authentication and administration QA | The complete web/backend suite discovered 135 tests: 116 passed and 19 environment or external-evidence tests were explicitly skipped. The unchanged MMM core suite discovered 78 tests: 76 passed and two fixture-dependent tests were skipped. Generated TypeScript was deterministic; TypeScript and ESLint passed, all `319/319` frontend unit tests passed, and the production build completed. Coverage includes Argon2id hashing/rehash, non-disclosing login failures, rate limiting, session lifecycle, exact 401/403 separation, last-active-admin protection, action-level `users.write`/`roles.write`/`sessions.write` enforcement, non-cacheable auth/admin success and error responses, append-only audit, system status, CSRF Origin/Host checks, bootstrap safety, JSON Schema/OpenAPI discovery and credential-free runtime cards. No refit, MCMC, forecast or optimizer run was performed. | `04_Web_app/tests/test_auth_admin_v1.py`; `04_Web_app/tests/test_backend_runtime.py`; `04_Web_app/tests/`; `02_Code/01_PyMC/tests/`; `04_Web_app/frontend/` | 2026-07-17 | `verified` |
-| Backend Phase E.1A business-semantics QA | The full local web/backend suite passed `143` tests with 11 external-evidence skips; MMM core passed `85` with two fixture skips; frontend passed TypeScript, ESLint, `392/392` unit tests and production build. Real acceptance on the 45-row, 15-geo, 3-channel, 267,818,706 RUB campaign preserved every geography and budget. S5 correctly returned a 173,912,511 RUB `safe_partial` plan with 93,906,195 RUB explicit remainder; S6 returned explicit infeasible before posterior-kernel construction because full approved capacity was insufficient. Every S1-S5 v2 media plan retained 45 rows, 15 geographies, three approved channel labels and no truncated machine data. No orders/average-basket KPI or guessed coordinate entered v2. Three final-code runs took 42.653, 43.733 and 45.449 seconds (median 43.733) versus 60.117 seconds in the earlier same-campaign application run; this 27.3% observed median reduction is not a pure target-removal benchmark. | `04_Web_app/tests/test_business_semantics_v2.py`; `02_Code/01_PyMC/tests/test_forecast_optimizer_contract.py`; `04_Web_app/docs/integration/BACKEND_PHASE_E1A_BUSINESS_SEMANTICS_V1.md` | 2026-07-17 | `verified` |
-| Backend Phase E.1C geo-catalog acceptance | Catalog `geo_catalog_v1_2026_07_18` contains 220 unique stable geo IDs, reviewed static GeoNames WGS84 coordinates and 402 unambiguous explicit aliases. The active package guard passed 220/220. Campaign preparation now resolves aliases before package support checks while preserving input/model/display evidence; a real-package test maps `г. Москва` to model key `МОСКВА` and browser label `Москва`. The exact control Excel passed the existing web parser at 45 rows, zero parse issues, 15 geographies, three channels and 267,818,706 RUB; validation/workspace projections both retained 15 rows, budget/share 267,818,706/1.0, 15/15 coordinates, zero unlocated budget and no shortened machine string. A real-package partial test preserves one unknown geo and its 500,000 RUB while model support blocks job creation separately. Workspace aggregation is job-backed, deduplicates repeated `validation_id` references and does not merge independent campaigns merely because their display names match. The full web/backend suite ran 155 tests with 12 explicit skips; MMM core ran 85 with two skips; generated types, TypeScript, ESLint, all 463 frontend unit tests and production build passed. No forecast, optimizer, MCMC or refit was run. | `04_Web_app/data/geo_catalog/`; `02_Code/01_PyMC/mmm_core/campaign_plan.py`; `04_Web_app/services/geo_catalog.py`; `04_Web_app/tests/test_geo_catalog_v1.py`; `04_Web_app/tests/test_local_campaign_service.py`; `04_Web_app/docs/integration/BACKEND_PHASE_E1C_GEO_CATALOG_V1.md` | 2026-07-18 | `verified` |
-| Frontend Phase E.1D acceptance | PR #26 is merged into the Phase E.1E baseline. Before merge, generated drift, TypeScript, ESLint, 483 unit/component tests, production build, 177 Chrome fixture/product checks, a no-interception live-backend acceptance and Safari desktop map interaction passed. Twenty light/dark/compact fixture screenshots remain UI evidence rather than model-result evidence. Backend Phase E.1E leaves all React/CSS/map assets unchanged. | `04_Web_app/docs/integration/FRONTEND_PHASE_E1D_INTERACTIVE_GEO_MAPS_V1.md`; `04_Web_app/docs/ui-review/phase-e1d-interactive-geo-maps-v1/REVIEW_NOTES.md`; `04_Web_app/frontend/e2e/`; merge baseline `73b3c0b` | 2026-07-19 | `verified` |
-| Backend Phase E.1E historical model geo-budget acceptance | Local source-only web/backend discovery ran 161 tests: 149 passed and 12 external optimizer/package fixtures were explicitly skipped. MMM core ran 91 tests: 89 passed and two external fixtures were skipped. The final real registered-panel build completed in 0.686 seconds with 198,246,400 bytes observed peak process RSS, producing an 11,172-byte deterministic Parquet and 121,342-byte metadata sidecar. The browser payload was 81,023 bytes; first and warm service assembly measured 5.30 ms and 2.54 ms. Exact six-column/source/geo reconciliation passed, all 220 geographies received canonical coordinates, no budget was lost and no source panel was opened by the serving endpoint. Generated TypeScript, TypeScript, ESLint, 483 frontend unit tests and production build passed. GitHub Actions run `29663175051` passed `decision-result-v1` in 50 seconds and `frontend-quality` in 1 minute 16 seconds on implementation head `ce1efa1`. | `02_Code/01_PyMC/tests/test_historical_geo_budget.py`; `04_Web_app/tests/test_historical_model_geo_budget_v1.py`; `04_Web_app/tests/test_http_smoke_v1.py`; `04_Web_app/docs/integration/BACKEND_PHASE_E1E_HISTORICAL_MODEL_GEO_BUDGET_V1.md`; GitHub Actions run `29663175051` | 2026-07-19 | `verified` |
-| Frontend Phase E.1F historical Home-map acceptance | Generated contract drift, TypeScript, ESLint, 68 targeted tests, the full 497-test frontend regression and production build passed. Chromium passed 18 targeted Home fixture cases and one unchanged campaign-map regression. Six required light/dark/tooltip/unavailable/mobile screenshots were reviewed without clipping or horizontal overflow. A no-interception local acceptance against the real registered package verified one historical request and no workspace fallback, `status=available`, 220/220 geographies, period 2025-01-01 through 2026-05-31, zero unlocated budget, the backend top three and a campaign-free tooltip with a clean console. Hosted transfer bundles without the package extension remain controlled unavailable; deployment is unchanged. | `04_Web_app/docs/integration/FRONTEND_PHASE_E1F_HISTORICAL_HOME_MAP_V1.md`; `04_Web_app/docs/ui-review/phase-e1f-historical-home-map-v1/REVIEW_NOTES.md`; `04_Web_app/frontend/e2e/product-navigation.visual.spec.ts`; `04_Web_app/frontend/e2e/business-semantics.live.spec.ts` | 2026-07-19 | `verified locally` |
-| Research-pilot deployment QA | MMM core passed `78` tests with two fixture-dependent skips; web/backend passed `66` tests with ten source-artifact-dependent skips. Deployment tests cover panel exclusion, archive tamper detection, serving-completeness, idempotent install, safe render, active-job backup refusal, restore and health/disk. The real package built a verified 58-file bundle with 450,344,722 payload bytes and no training panel. A clean install passed backend preflight, live `/health`, `/ready` and Model Passport routes, executed a posterior forecast with support `within_support`, and completed a smoke optimizer CLI run through Excel generation. On PR #10 implementation head `9a3d517`, clean GitHub Actions run `29451316495` passed Python/backend in 15 seconds and frontend-quality in 44 seconds. | `02_Code/01_PyMC/tests/`; `04_Web_app/tests/`; `04_Web_app/tests/test_research_pilot_deployment_v1.py`; `04_Web_app/docs/adr/0015-research-pilot-deployment-v1.md`; GitHub Actions run `29451316495` | 2026-07-15 | `verified` |
-| Real localhost E2E acceptance | Job `job_85c4b1ac16afa1a5e165` completed the real HTTP -> immutable job -> optimizer subprocess -> DecisionResult -> ResultOverview -> artifact-download path on commit `f576210`. It pinned package `pkg_807d3ddbae57a52a_9aacd3beb350725b`, used smoke sampling `64/16/32`, produced marketer Excel artifact `artifact_28e7ba84da4fc45de755`, and the downloaded file matched SHA-256 `65e2a26c45357e7ad862520a1204050dfc9b8ed15e7b3d8505413b47acc21c82`. All three workbook sheets rendered without clipped explanations, formula errors, or workstation paths. This is application acceptance evidence, not business-effect or production-model evidence. | `04_Web_app/docs/adr/0010-real-localhost-e2e-acceptance.md`; ignored local runtime under `04_Web_app/var/local/` | 2026-07-15 | `verified` |
-| Phase 1 frontend integration QA | The merged Phase 1 frontend passed schema generation, TypeScript typecheck, ESLint, production build, and `15/15` unit tests after integration. A live browser loaded real job `job_85c4b1ac16afa1a5e165` from `GET /api/v1/jobs/{job_id}/result`, rendered the real campaign/scenario metrics without an error state, enabled the marketer Excel action, and the backend returned artifact `artifact_28e7ba84da4fc45de755` with HTTP 200. The browser contains no MMM or optimizer mathematics. | `04_Web_app/frontend/`; `04_Web_app/docs/adr/0011-phase-1-frontend-http-bridge.md`; ignored local runtime under `04_Web_app/var/local/` | 2026-07-15 | `verified` |
-| Core marketer flow QA | The merged frontend passed generated-contract verification, TypeScript typecheck, ESLint, production build, and `20/20` unit tests. Real standard-profile job `job_66ae8290e5d41b825808` was created from the browser validation review, completed in about 42 seconds, redirected to its DecisionResult, appeared in server-backed history, reopened from history, and returned Excel artifact `artifact_8680fdb78deeb02354a7` with HTTP 200. The downloaded 13,555-byte workbook matched SHA-256 `8dd3d76ed5cd3b49d94f96c6921d1887672d9dded338dc5c791f564c261ad21a`. Native file-picker automation remained unconfirmed; upload itself was exercised through the same HTTP endpoint. | `04_Web_app/frontend/`; `04_Web_app/docs/adr/0012-local-core-marketer-flow.md`; `04_Web_app/docs/adr/0013-real-core-marketer-flow-acceptance.md`; ignored local runtime under `04_Web_app/var/local/` | 2026-07-15 | `verified` |
-| Post-merge backend/frontend source QA | A clean release-candidate based on current `main` merge commit `182e81e` reran the combined checks after PR #10 and PR #11. MMM core passed 78 tests with two fixture skips. With the installed serving bundle, web/backend discovered 66 tests: 57 passed and nine historical optimizer-run fixture tests were explicitly skipped. Generated-contract drift, TypeScript, ESLint, `79/79` frontend unit tests and production build passed. Playwright/Chrome passed `14/14` after HTTP mode was pinned inside the Playwright web-server config rather than inherited from the developer shell. The real-package campaign-service fixture now explicitly verifies `serving_bundle` semantics without weakening registry immutability or the real-job clean-source guardrail. | `02_Code/01_PyMC/tests/`; `04_Web_app/tests/`; `04_Web_app/frontend/`; `04_Web_app/docs/adr/0016-post-merge-full-stack-acceptance.md`; merge commit `182e81eb2fd20d992966950687a40abbfe3aa319` | 2026-07-16 | `verified` |
-| Post-merge real full-stack acceptance | Real localhost job `job_409c15a7af306e5ef9ea` exercised the panel-free serving bundle, `GET /api/v1/models/active`, upload HTTP endpoint, browser validation review, browser job creation, worker progress, real posterior forecast, Scenarios 1-6, ResultOverview pages and artifact download. Package `pkg_807d3ddbae57a52a_9aacd3beb350725b` was pinned; the campaign had one supported `МОСКВА x OOH_Total` cell and `400,000 RUB` budget. S1-S5 were reliable and identical as expected for a one-cell plan; S6 was explicitly unavailable because no budget transfer was possible. Excel artifact `artifact_d600032588c98b8e2495` was `12,379` bytes and its downloaded SHA-256 matched `d54588551930e0305aac56f553bba13c29836aeb1a14d5eed96815075d75911d`. Native file-picker automation and a fresh workbook render were not established by this acceptance; the upload used the same HTTP endpoint and workbook integrity/type were verified. | `04_Web_app/docs/adr/0016-post-merge-full-stack-acceptance.md`; ignored release-candidate runtime | 2026-07-16 | `verified` with the stated UI/file-render limitations |
-| Integration CI acceptance | On PR #9 head `1353db2`, GitHub Actions run `29447849427` completed `decision-result-v1` in 12 seconds and `frontend-quality` in 48 seconds. The clean Ubuntu frontend job installed the locked dependency graph, verified generated contract sources, passed TypeScript, ESLint, `49/49` unit tests and production build. Local verification matched these results; the Python suite passed `61/61` with ten expected source-only skips. Playwright remains outside this CI milestone. | `.github/workflows/webapp-contracts.yml`; `04_Web_app/frontend/package-lock.json`; GitHub Actions run `29447849427` | 2026-07-15 | `verified` |
-| Backend core QA | The backend branch completed `75` core tests with status `OK`; two fixture-dependent groups were explicitly skipped. Coverage includes forecast/optimizer contracts, report layout, guarded fit, registry, historical replay and OOT contract behavior. | `02_Code/01_PyMC/tests/test_forecast_optimizer_contract.py`; `02_Code/01_PyMC/tests/test_model_fit_contract.py` | 2026-07-15 | `verified` |
-| Standalone current test report | No machine-readable standalone test report for the reported `82/82` run was located; the surviving evidence is the project brain QA record and test source files. | `01_Main_Brain_MMM/wiki/log.md`; `01_Main_Brain_MMM/wiki/synthesis/x5-mmm-surgical-scenario6-real-campaigns-2026-07-14.md`; `02_Code/01_PyMC/tests/` | 2026-07-14 | `verified` |
-| Pre-existing backend test failures on `main` | PR `#33` reports two failures reproducible on pristine `main` before its changes and still present after merge: `test_central_permissions_distinguish_401_and_403` (`test_auth_admin_v1`) and `test_product_metadata_readiness_schemas_and_job_query` (`test_http_smoke_v1`), both `409 != 200`. They were not rerun during this truth freeze and await a dedicated fix milestone. | PR `#33`; `04_Web_app/tests/test_auth_admin_v1.py`; `04_Web_app/tests/test_http_smoke_v1.py` | 2026-07-23 | `reported-not-rerun` |
+## Deployment
 
-## Server Deployment Truth (Phase F.1/F.2)
+The accepted deployment flow is:
 
-| Fact | Value | Evidence path | Verification date | Status |
-|---|---|---|---|---|
-| Research-pilot server deployment | The research pilot is deployed on the dedicated corporate VM approved for the MMM system (Ubuntu 24.04, 32 CPU, 251 GB RAM, VPN-only contour; SSH access only through an internal jump host; no outbound internet, packages come from the approved `art.x5.ru` mirrors). The backend runs as enabled systemd service `x5-mmm-backend` under the unprivileged `x5mmm` account and binds loopback only; Nginx terminates TLS on port 443 for two names - primary `mmm.x5.ru` and temporary working `mmm.x5.internal` - with one internal-CA certificate whose SAN covers both names and the server internal address, and serves the same-origin frontend build. Runtime config uses `public_base_url: https://mmm.x5.ru` and four allowed origins (both names with and without `:8443`). Health, backup and retention systemd timers are enabled. Health checks passed on both names on 2026-07-23. | Server-side `/etc/x5-mmm/research_backend.json`; server-side `/etc/systemd/system/x5-mmm-backend.service`; server-side `/etc/nginx/sites-available/x5-mmm-research`; `04_Web_app/deployment/research_pilot.py` | 2026-07-23 | `verified` |
-| Deployed code and model identity | Server checkout HEAD is `46fe4e94a4698a9624c157e722ad83110050fec9` (`origin/main` after PR `#33`) at `/opt/x5-mmm/app`, with `x5-mmm-backend.service` active. Installed model bundle SHA-256 `cfcc661e220e5eb1b15a73807022f8775a16762778830015dc5c42f6df990616`, package `pkg_807d3ddbae57a52a_9aacd3beb350725b`; the package fingerprint matches the registry truth above. After the 2026-07-22 acceptance incident the full registry including `package_artifacts/` was synchronized to the server (15 files, exact mirror). | Server-side `/opt/x5-mmm/app`; `03_Outputs/01_PyMC_outputs/00_Model_registry/` | 2026-07-23 | `verified` |
-| Live server acceptance calculation | The 45-row, 15-geo, 3-channel, 267,818,706 RUB control campaign completed twice through the real browser path (`job_2c3c290cf977344376d3`, `job_d1e21d5dfa28dda62352`). Scenario S01-S06 numbers reconcile exactly (zero differing cells across all workbook sheets) between both server runs and against the local reference run; the downloaded Excel matched its stored artifact SHA-256. Durations were 129.3 s and 130.6 s versus 46-61 s locally; the product owner accepted this constant per-core CPU difference for the research pilot on 2026-07-22. | Server-side run cards under `/var/lib/x5-mmm/runtime/`; ignored local evidence under `04_Web_app/var/local/runtime/job_13bebe361e1f5cded3f1/` | 2026-07-22 | `verified` |
-| Backup and restore acceptance | A manual quiesced backup completed with `created_and_verified`, `verify-backup` passed, and a scratch restore matched live state (`job.json` byte-identical). After acceptance the auth database moved under `state/` so user accounts are inside the backup scope; the renewed backup contains 91 files including `state/auth/auth.sqlite3`. | Server-side `/var/backups/x5-mmm/x5-mmm-runtime-20260722T200832Z.tar.gz`; `04_Web_app/deployment/research_pilot.py` | 2026-07-22 | `verified` |
-| Deployment acceptance incidents | Four deployment-layer issues were found and fixed during acceptance, none touching MMM mathematics: the owner tunnel origin was added to `allowed_origins`; the registry `package_artifacts/` extension was synchronized to the server; the worker escaped the venv through a resolved python symlink (server workaround: copied interpreter; code fix merged in PR `#31` on 2026-07-22); the auth database moved inside the backup scope. No production model claim was made. | Server-side systemd journal and config history; PR `#31` | 2026-07-22 | `verified` |
-| Server access model | Owner access currently uses an SSH tunnel to `https://mmm.x5.internal:8443` (allowlisted Origin) plus the internal CA `MMM Internal CA`. Since PR `#33` self-service registration is open on the portal: any email domain, default role `analyst`, session issued immediately after registration; this supersedes the earlier 'no self-registration by design' rule under the owner's 2026-07-23 amendment to ADR 0020. Marketer access still requires corporate VPN plus the pending external IT actions below (DNS, firewall, proxy exceptions, corporate CA certificate). JupyterHub for ML engineers is deployed (dedicated row below). | `04_Web_app/docs/adr/0020-local-auth-and-future-sso-boundary-v1.md`; `04_Web_app/docs/security/LOCAL_AUTH_SECURITY_V1.md`; server-side Nginx/backend configuration; PR `#33` | 2026-07-23 | `verified` |
-| Self-service registration live acceptance (F.2) | End-to-end on the server: a test user registered through the public portal and received an immediate session; an admin disabled the account and the disabled login was rejected with `AUTH_ACCOUNT_DISABLED`; the test user was removed afterwards. | Server-side live check; PR `#33` | 2026-07-23 | `verified` |
-| JupyterHub deployment (F.2) | JupyterHub 5.5.0 with JupyterLab 4.6.2 and NativeAuthenticator 1.3.0 runs in conda env `/opt/anaconda3/envs/jupyterhub` (packages from the `art.x5.ru` mirrors) as enabled and active systemd service `x5-jupyterhub.service`, bound to `127.0.0.1:8000` only and proxied by the same Nginx under the `/hub/` prefix (effective pages `/hub/hub/...`, standard hub_prefix behavior). Self-registration is open (`open_signup`); per-user system accounts are created automatically at first login through a custom `NativeWithSystemUsers` authenticator, because the stock `create_system_users` mode is incompatible with NativeAuthenticator. Live E2E passed: anonymous registration, server spawn, JupyterLab HTTP 200, isolation confirmed (no sudo, no read access to `/etc/x5-mmm` or `/var/lib/x5-mmm`), then the test user was removed. | Server-side systemd unit `x5-jupyterhub.service`; server-side Nginx configuration; `server-deploy/SERVER_RUNBOOK.md` (outside Git) | 2026-07-23 | `verified` |
-| DevOps/IT handoff package (F.2) | Employee access to the portal is blocked by pending actions outside the project contour: an internal DNS A record for `mmm.x5.ru` pointing to the server internal address; opening TCP 443 from the corporate VPN pools; corporate proxy exceptions (employees currently receive `ERR_PROXY_CONNECTION_FAILED`, confirmed by screenshot); signing of the prepared CSR by the corporate CA. The CSR and the IT ticket live in `server-deploy/devops-handoff/` (outside Git). This is an external infrastructure blocker, not an application-code issue. | `server-deploy/devops-handoff/` (outside Git); server-side Nginx/CSR material | 2026-07-23 | `verified` as a pending external action |
-| Open operational tails (F.2) | `/opt/x5-mmm/app` is mode `0755` and therefore readable by local server users (application code only, no data; Nginx serves static assets from it, so permission tightening is a separate task); resource limits on per-user Jupyter servers are not configured; the employee unavailability incident sits with IT (DNS/firewall/proxy). | Server-side directory permissions; `server-deploy/SERVER_RUNBOOK.md` v1.2 (outside Git) | 2026-07-23 | `verified` |
-| Operational documents (outside Git) | Server operations are documented in `server-deploy/` (outside Git): `SERVER_RUNBOOK.md` v1.2, `ONBOARDING_MARKETER.md`, `ONBOARDING_ML_ENGINEER.md` and `DEVOPS_HANDOFF.md`. | `server-deploy/` (outside Git) | 2026-07-23 | `verified` |
+`accepted local code -> GitHub main -> same-origin frontend build -> offline Git
+bundle transfer -> corporate server Git -> static dist replacement -> backend/UI
+health and hash checks`.
 
-## Unresolved Blockers
+- Frontend production build uses `VITE_API_BASE_URL=""` and same-origin `/api`.
+- The corporate server is documented as having no outbound GitHub access; offline
+  Git bundles are therefore the intended application-code transfer mechanism.
+- The panel-free model serving package is transferred and hash-verified separately
+  from application Git.
+- `server-deploy/deploy-frontend-pr35.sh` is a release-specific script, not a
+  complete reusable transfer pipeline: it assumes the required bundle/remote state
+  is already available. Local bundle snapshots inspected during C0 do not by
+  themselves prove a fresh PR #35 transfer. This deployment evidence gap remains.
 
-| Blocker | Current fact | Evidence path | Verification date | Status |
-|---|---|---|---|---|
-| Production model activation | Blocked until valid sealed OOT evidence passes the required gate. Local/preprod application development is not blocked by this. | `03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/model_manifest.json`; `04_Web_app/docs/adr/0001-source-of-truth-and-boundaries.md` | 2026-07-14 | `verified` |
-| Business launch decision | No approved ROAS or contribution-margin hurdle exists; current output is allocation-only and cannot make launch/cancel decisions. | `03_Outputs/02_Budget_optimizer_outputs/17_Budget_optimizer_14072026_agency_may_tsx_surgical_s6_v3/business_threshold_policy_snapshot.json`; `04_Web_app/OPEN_DECISIONS.md` | 2026-07-14 | `verified` |
-| Research deployment | The external VM, TLS perimeter, rendered installation, self-service registration, dual-name serving and JupyterHub are executed through Phase F.2, and the live remote campaign acceptance passed (see Server Deployment Truth, Phase F.1/F.2). Remaining work is external IT action: an internal DNS A record for `mmm.x5.ru`, TCP 443 from the VPN pools, corporate proxy exceptions and corporate-CA CSR signing. Until those land, the portal is unreachable for employees - an external infrastructure blocker, not an application gap. | Server Deployment Truth above; `04_Web_app/deployment/`; `04_Web_app/docs/adr/0015-research-pilot-deployment-v1.md`; `04_Web_app/OPEN_DECISIONS.md`; `server-deploy/devops-handoff/` (outside Git) | 2026-07-23 | `verified` |
-| Company durable runtime boundary | Local/research JSON state, thread dispatch and file locking are single-node adapters. Queue claim/lease, PostgreSQL transactions, distributed idempotency and production retry orchestration remain unimplemented, but they do not block the accepted research pilot. | `04_Web_app/api/http_smoke.py`; `04_Web_app/services/local_campaign_service.py`; `04_Web_app/backend_runtime.py`; `04_Web_app/docs/adr/0014-product-api-v1-1-and-research-pilot.md` | 2026-07-15 | `verified` |
-| Artifact delivery | Local artifact download by opaque ID with size and SHA-256 verification and terminal-resource retention are implemented. External object storage and signed URLs remain optional future company/multi-node work. | `04_Web_app/api/http_smoke.py`; `04_Web_app/services/product_api_service.py`; `04_Web_app/OPEN_DECISIONS.md` | 2026-07-15 | `verified` |
-| Media-plan constraints | Inventory, contractual minima/maxima, mandatory placements, and geo exclusions are not yet approved as first-class inputs. | `01_Main_Brain_MMM/wiki/synthesis/x5-mmm-surgical-scenario6-real-campaigns-2026-07-14.md`; `04_Web_app/OPEN_DECISIONS.md` | 2026-07-14 | `reported-not-rerun` |
-| Company infrastructure and security | Local pilot RBAC, server-side sessions and append-only administrative audit are implemented. Corporate SSO/MFA, approved runtime platform, object storage, malware scanning, centralized audit/SIEM, backup and related company controls still require owner approval. | `04_Web_app/docs/adr/0020-local-auth-and-future-sso-boundary-v1.md`; `04_Web_app/docs/security/LOCAL_AUTH_SECURITY_V1.md`; `04_Web_app/OPEN_DECISIONS.md` | 2026-07-17 | `unknown` |
-| GitHub governance | The repository and initial source-only push are established, and the repository owner authorized this source-baseline transfer on 2026-07-14. Corporate permission for storing company source in a personal private GitHub repository, branch protection, required reviewers and CI policy remain unresolved. | `.git/config`; `04_Web_app/OPEN_DECISIONS.md` | 2026-07-14 | `verified` |
+## Server status
+
+**Documented operational status, last accepted 2026-07-23; not live-verified in
+C0:**
+
+- Primary product URL: `https://mmm.x5.ru`.
+- Reserved fallback name: `mmm.x5.internal`.
+- Nginx terminates HTTPS and serves the frontend; backend systemd service
+  `x5-mmm-backend` listens on loopback `127.0.0.1:8765`.
+- JupyterHub is exposed by the same nginx under `/hub/` and listens on loopback.
+- Documented acceptance included browser calculation flow, exact reconciliation,
+  health checks, backups and retention timers.
+
+Local onboarding and historical DevOps documents still contain stale `.internal`,
+manual-hosts, CA, firewall or certificate wording. Current runbook evidence makes
+`.ru` the primary documented URL, but employee reachability was not independently
+checked on 2026-08-31.
+
+## Model
+
+Active pointer chain:
+
+`03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json`
+-> `pkg_807d3ddbae57a52a_9aacd3beb350725b`.
+
+- Package fingerprint:
+  `807d3ddbae57a52ad184f94cd5442cdefd97764fe3903e5b250b5d04cd26c62c`.
+- Package schema: `0.4.0`; gate policy: `1.2.0`.
+- Stage: `posterior_ready`.
+- Activation: `preprod_restricted`.
+- Blocking gate: `MISSING_OR_FAILED_OOT_VALIDATION`.
+- No `production.json` pointer was found.
+- Research package contains 12 posterior fits:
+  4 segments (`ТС5/Онлайн`, `ТС5/Оффлайн`, `ТСХ/Онлайн`, `ТСХ/Оффлайн`)
+  x 3 targets (`turnover_per_user`, `orders_per_user`, `avg_basket`).
+- All 12 expected fits and diagnostics are present; historical replay passed.
+  This does not replace sealed OOT validation.
+
+The model estimates incremental media contribution under a campaign versus a
+no-campaign counterfactual. It is not a full turnover forecast and does not prove
+causality against all unobserved confounding.
+
+## Serving
+
+- Product serving activates only `turnover_per_user`: **4 active serving models**,
+  one per segment.
+- The 8 orders/basket research fits remain package evidence but are not active
+  business-serving targets.
+- Public target id is `turnover`.
+- Serving contracts fail closed unless the package has exactly 12 research models
+  and the allowed 4 turnover serving models.
+- Serving status must be described as restricted preproduction, never as
+  unrestricted production readiness.
+
+## Source data
+
+Canonical physical panel:
+
+`/Users/aleksan.korenkov/Work/01_ML_projects/03_ML_MMM/00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
+
+- Recomputed SHA-256:
+  `9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552`.
+- Physical metadata: 308,886 rows, 109 columns, 220 unique `geo_label` values.
+- Panel period: **2025-01-01–2026-05-31**.
+- Model training period: **2025-01-01–2026-03-20**.
+- Development shadow/holdout: **2026-03-21–2026-05-31**.
+
+Therefore 2026-05-31 is the end of the source panel, not the end of model training.
+The registry records a workspace-relative data path; the physical panel is outside
+the application Git clone. It is excluded from the panel-free server bundle.
+
+## Scenarios
+
+The public scenario set is S1–S6:
+
+- **S1 Uploaded plan** — factual/reference allocation. It is always retained and
+  requires manual review; it is never automatically presented as an optimized
+  recommendation.
+- **S2 Equal cells** — equal budget across eligible geo x channel cells.
+- **S3 Equal geographies within channel totals** — preserves channel totals and
+  equalizes eligible geographies.
+- **S4 Equal channels within geography totals** — preserves geography totals and
+  equalizes eligible channels.
+- **S5 Conservative** — searches approved support levels from p95 through p99 to
+  robust upper bounds. Public result is either `full_conservative` with the full
+  budget and no high-risk cells, or `safe_partial` only after full safe allocation
+  is infeasible. A partial result exposes unallocated budget and cannot be an
+  automatic recommendation.
+- **S6 Adaptive/effect-first** — posterior marginal-effect search inside approved
+  risk limits. `full_effect_maximizing` must allocate the full requested budget;
+  otherwise status is explicitly `infeasible` with null business metrics. The
+  policy does not claim a global mathematical optimum.
+
+Only a complete policy-safe plan with material improvement may be recommended. If
+that condition is absent, S1 remains the decision reference.
+
+## Result semantics
+
+Primary business result is posterior incremental turnover with uncertainty:
+
+- incremental turnover `p10 / p50 / p90`;
+- ROAS with an explicit requested- or allocated-budget denominator;
+- requested, allocated and unallocated budget;
+- allocation share and reconciliation;
+- risk composition, warnings and limiting constraints;
+- geo x channel media plan.
+
+`orders`, `average basket`, orders per 100k and related bridge metrics are not v2
+product KPIs. They must not be reconstructed from research fits and shown as active
+serving outcomes.
+
+## Geo
+
+- Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
+  aliases.
+- Catalog version: `geo_catalog_v1_2026_07_18`, based on a GeoNames RU snapshot,
+  WGS84, CC BY 4.0.
+- Verified coverage: 220 catalog geographies, 220 complete unique coordinate
+  pairs, 402 explicit unique aliases.
+- Active turnover serving guard requires 220/220 coverage and fails closed.
+- No runtime geocoding, fuzzy match, nearest-neighbour guess or external map API.
+  Unknown/ambiguous geo retains budget and null coordinates.
+- Frontend uses a bundled Natural Earth outline and a fixed Albers projection.
+
+## Home map
+
+- Source: `GET /api/v1/model/historical-geo-budget` only.
+- It shows historical model-panel advertising budget, not current workspace uploads.
+- Verified artifact total: **8,687,024,294.654741 RUB** across 220 geographies,
+  220/220 located, zero unlocated budget.
+- Period: 2025-01-01–2026-05-31.
+- Artifact SHA-256:
+  `b21266954f27b3f677e5262cb43c7ef7ee02269585d3e5bae9efd762db1de249`.
+- Spend source combines six media columns: `Digital_Performance`, `OOH_Total`,
+  `Indoor`, `Радио`, `Нац_ТВ`, `Рег_ТВ`.
+- `active_days` remains in backend artifact/contract metadata, but the frontend
+  tooltip intentionally does not display it after PR #35.
+
+`GET /api/v1/workspace/geo-budget` still serves calculation-history context; it is
+not the Home-map source.
+
+## Campaign map
+
+New Calculation uses the uploaded plan after validation:
+
+- geo points come from `validation.geo_points`;
+- budget is the current campaign-plan budget;
+- unknown geo is preserved and reported rather than guessed.
+
+Historical Home budget and uploaded campaign budget are different populations and
+must not be mixed in one semantic layer.
+
+## Auth
+
+- Local pilot identity provider with Argon2id password hashes.
+- Opaque server-side sessions; HttpOnly, SameSite=Lax cookie; Secure in research
+  profile; HMAC session digest in SQLite.
+- CSRF Origin/Host checks and no-cache auth/admin responses.
+- Roles: `viewer`, `analyst`, `admin`; route and handler enforcement uses central
+  permissions rather than role-name shortcuts.
+- Login, session, logout and self-registration are implemented. Registration
+  accepts any email domain, assigns `analyst`, opens a session, rate-limits attempts
+  and uses non-enumerating duplicate responses.
+- Admin surfaces cover users, enable/disable, session revoke, roles, system status
+  and audit log.
+- Corporate SSO, MFA and password recovery are not implemented.
+- Auth state is local single-node SQLite, not a multi-node identity platform.
+
+## Reports
+
+- Business KPI source: v2 `result-view-v2` and `media-plan-v2` contracts.
+- Canonical marketer Excel report is hash-verified and downloadable through an
+  opaque artifact endpoint with `report.download` permission.
+- The Report tab calls legacy `result-view` only to obtain narrow report-artifact
+  transport metadata. It is not a fallback for business KPI semantics.
+- Media-plan table is v2 geo x channel total. A daily media plan is unavailable.
+- A separate working media-plan XLSX is normally unavailable unless a real artifact
+  was produced; the technical allocation CSV is evidence, not automatically a
+  public marketer download.
+
+## Portal pages
+
+Actual frontend routes:
+
+- `/login`;
+- `/` — Home with historical map;
+- `/calculations` — calculation history;
+- `/calculations/new` — upload and validation states;
+- `/calculations/:id/progress`;
+- `/calculations/:id/result` with tabs **Overview**, **Scenarios & reliability**,
+  **Media plan**, **Report**;
+- `/model` and `/help`;
+- `/admin/users`, `/admin/roles`, `/admin/system`, `/admin/audit`.
+
+There are no separate top-level Validation, Media Plan or Report routes. Protected
+routes use session and permission gates.
+
+## Known limitations
+
+1. Model is `preprod_restricted`; sealed OOT gate blocks production activation.
+2. Product is `allocation_only`; no approved finance launch/cancel hurdle exists.
+3. No corporate SSO/MFA/password recovery; auth and job state are local/single-node.
+4. No Postgres, durable distributed queue, object storage or multi-node failover.
+5. JupyterHub resource limits are not documented as enforced.
+6. Two targeted HTTP tests were reconfirmed failing with `409` on 2026-08-31:
+   workspace home in `AuthAdminHttpTest.test_central_permissions_distinguish_401_and_403`
+   and model overview-v2 in
+   `HttpSmokeV1Test.test_product_metadata_readiness_schemas_and_job_query`.
+7. No daily media plan and no generally available separate working media-plan XLSX.
+8. Server live health/reachability and deployed HEAD were not checked in C0.
+9. Offline transfer is the accepted flow, but release-specific scripts/bundle
+   snapshots do not form a fully self-contained reusable deployment pipeline.
+10. `PROJECT_BRIEF.md`, `OPEN_DECISIONS.md`, onboarding and older DevOps notes retain
+    stale deployment/map wording outside the three-file C0 edit scope.
+11. Application Git and model/data artifacts have separate lineage and transfer
+    paths; both must be verified for a reproducible release.
+12. Local workspace contains duplicated/historical structures and stale worktrees;
+    no item may be removed based on name or age alone.
+13. Corporate governance of the private GitHub repository and branch protection
+    remains unresolved.
+
+## Current milestone
+
+**C0 — MMM Platform Current Truth Freeze.**
+
+Deliverable: verified documentation only. No application, model, data, deployment
+or server mutation belongs to C0. After Draft PR creation, work stops for review.
+
+## Planned milestones
+
+These are recorded plans, not implemented functionality:
+
+1. **C1 — Local Workspace Read-Only Audit.** Inventory and dependency map of the
+   parent `03_ML_MMM/` workspace. No move, rename or deletion. The proposed target
+   structure `03_ML_MMM/{00_Data,01_Test,02_Predfin,03_Fin}` must not be created
+   during the audit.
+2. **B1 — Federal Geo Allocation Audit.** Investigate how the current training and
+   serving transforms handle geo before designing support for uploaded `geo=РФ`.
+   Pre-expansion and reconciliation must be evidence-based. A mean-population
+   fallback is a future requirement to validate, not current behavior.
+3. **A — Historical Campaign Evaluation.** Future causal/research capability, not
+   implemented. Preliminary estimand: marginal incremental turnover of one selected
+   historical campaign while concurrent observed media remains factual. This
+   estimand requires explicit assumptions, identification design and validation
+   before productization.
