@@ -25,6 +25,7 @@ from services.product_navigation import (  # noqa: E402
     ProductNavigationStateError,
     ProductNavigationUnavailableError,
 )
+from tests.synthetic_model_registry import write_synthetic_model_registry  # noqa: E402
 
 
 PASSPORT_FIXTURE = (
@@ -38,13 +39,14 @@ class ProductNavigationHttpTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         root = Path(self.temporary.name)
         passport = json.loads(PASSPORT_FIXTURE.read_text(encoding="utf-8"))
+        self.registry_root = write_synthetic_model_registry(root / "registry", passport)
         self.application = HttpSmokeApplication(
             HttpSmokeSettings(
                 state_root=root / "state",
                 runtime_root=root / "runtime",
                 artifact_root=root / "artifacts",
                 project_root=root,
-                registry_root=root / "registry",
+                registry_root=self.registry_root,
                 auth_database_path=root / "auth.sqlite3",
                 auth_session_secret=TEST_AUTH_SECRET,
                 auth_argon2_time_cost=2,
@@ -168,6 +170,21 @@ class ProductNavigationHttpTest(unittest.TestCase):
         self.assertEqual(status, 503)
         self.assertEqual(payload["error"]["code"], "PRODUCT_NAVIGATION_UNAVAILABLE")
         self.assertNotIn("/Users/", payload["error"]["display_text"])
+
+    def test_model_identity_mismatch_is_explicit_409(self) -> None:
+        write_synthetic_model_registry(
+            self.registry_root,
+            self.application.model_passport,
+            pointer_package_id="pkg_3333333333333333_4444444444444444",
+        )
+        for path in ("/api/v1/model/overview", "/api/v1/model/overview-v2"):
+            with self.subTest(path=path):
+                status, payload = self.request(path)
+                self.assertEqual(status, 409)
+                self.assertEqual(
+                    payload["error"]["code"],
+                    "PRODUCT_NAVIGATION_INCONSISTENT",
+                )
 
     def test_missing_active_model_is_an_explicit_200_state(self) -> None:
         self.application.model_passport = None

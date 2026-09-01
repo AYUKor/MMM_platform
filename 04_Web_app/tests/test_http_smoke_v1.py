@@ -46,6 +46,7 @@ from services.local_campaign_service import (  # noqa: E402
 from services.job_result_view import (  # noqa: E402
     ResultProjectionStateError,
 )
+from tests.synthetic_model_registry import write_synthetic_model_registry  # noqa: E402
 
 
 LIFECYCLE_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "application_lifecycle_v1_happy_path_synthetic.json"
@@ -135,6 +136,8 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.runtime_root = root / "runtime"
         self.artifact_root = root / "artifacts"
         self.artifact_root.mkdir(parents=True)
+        passport = json.loads(PASSPORT_FIXTURE.read_text(encoding="utf-8"))
+        registry_root = write_synthetic_model_registry(root / "registry", passport)
         fixture = json.loads(LIFECYCLE_FIXTURE.read_text(encoding="utf-8"))
         payload = dict(fixture["jobs"][0])
         payload.update(
@@ -189,6 +192,7 @@ class HttpSmokeV1Test(unittest.TestCase):
                 runtime_root=self.runtime_root,
                 artifact_root=self.artifact_root,
                 project_root=WEB_APP_DIR.parent,
+                registry_root=registry_root,
                 timeout_seconds=5,
                 auth_database_path=root / "auth.sqlite3",
                 auth_session_secret=TEST_AUTH_SECRET,
@@ -198,7 +202,7 @@ class HttpSmokeV1Test(unittest.TestCase):
             ),
             worker_factory=worker_factory,
             overview_builder=overview_builder,
-            model_passport=json.loads(PASSPORT_FIXTURE.read_text(encoding="utf-8")),
+            model_passport=passport,
         )
         self.application.campaign_service = LocalCampaignService(
             LocalCampaignServiceSettings(
