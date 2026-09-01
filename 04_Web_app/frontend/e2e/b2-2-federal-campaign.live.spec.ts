@@ -7,6 +7,7 @@ const EMAIL = process.env.B2_2_LIVE_EMAIL ?? "";
 const PASSWORD = process.env.B2_2_LIVE_PASSWORD ?? "";
 
 const FEDERAL_BUDGET_RUB = 100_000_000;
+const SUPPORTED_FLIGHT_DATE = "2026-02-17";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 test.use({ trace: "retain-on-failure", screenshot: "only-on-failure", video: "off" });
@@ -45,7 +46,7 @@ test.describe("B2.2 live federal campaign acceptance", () => {
 
     const content = [
       "campaign_name,segment,geo,channel,start_date,end_date,budget_rub",
-      `B2.2 federal live,ТС5/Онлайн,РФ,Digital_Performance,2026-09-01,2026-09-07,${FEDERAL_BUDGET_RUB}`,
+      `B2.2 federal live,ТС5/Онлайн,РФ,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},${FEDERAL_BUDGET_RUB}`,
       "",
     ].join("\n");
     await page.locator('input[type="file"]').setInputFiles({
