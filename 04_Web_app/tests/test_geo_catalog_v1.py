@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,7 @@ from mmm_core.campaign_plan import (  # noqa: E402
     load_geo_alias_catalog,
     prepare_campaign_from_config,
 )
+from mmm_core.federal_geo_allocator import FederalGeoAllocationError  # noqa: E402
 
 
 CONTROL_GEOS = (
@@ -221,13 +223,17 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
                 },
                 "optimizer": {"targets": ["turnover_per_user"]},
             }
-            prepared = prepare_campaign_from_config(
-                config,
-                config_path,
-                SupportedPackage(),
-                root / "output",
-                purpose="optimizer",
-            )
+            with patch(
+                "mmm_core.campaign_plan.FederalGeoAllocationContext.from_package"
+            ) as federal_context_loader:
+                prepared = prepare_campaign_from_config(
+                    config,
+                    config_path,
+                    SupportedPackage(),
+                    root / "output",
+                    purpose="optimizer",
+                )
+            federal_context_loader.assert_not_called()
             with Path(prepared.normalized_path).open(
                 "r", encoding="utf-8-sig", newline=""
             ) as handle:
@@ -241,6 +247,41 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
             self.assertEqual(normalized[0]["geo_normalization_status"], "alias")
             self.assertEqual(prepared.summary["validation"]["unsupported_rows_n"], 0)
             self.assertEqual(prepared.summary["geo_normalization"]["alias_rows_n"], 1)
+            with Path(prepared.flighting_path).open(
+                "r", encoding="utf-8-sig", newline=""
+            ) as handle:
+                daily = list(csv.DictReader(handle))
+            self.assertEqual(
+                daily,
+                [
+                    {
+                        "campaign_name": "alias-test",
+                        "creative_name": "",
+                        "segment": "ТС5/Оффлайн",
+                        "geo": "САНКТ-ПЕТЕРБУРГ",
+                        "channel": "OOH_Total",
+                        "date": "2026-08-01",
+                        "budget_rub": "50.0",
+                        "flighting_source": "even_split_from_interval",
+                        "source_row_id": "1",
+                        "source_start_date": "2026-08-01",
+                        "source_end_date": "2026-08-02",
+                    },
+                    {
+                        "campaign_name": "alias-test",
+                        "creative_name": "",
+                        "segment": "ТС5/Оффлайн",
+                        "geo": "САНКТ-ПЕТЕРБУРГ",
+                        "channel": "OOH_Total",
+                        "date": "2026-08-02",
+                        "budget_rub": "50.0",
+                        "flighting_source": "even_split_from_interval",
+                        "source_row_id": "1",
+                        "source_start_date": "2026-08-01",
+                        "source_end_date": "2026-08-02",
+                    },
+                ],
+            )
             audit = prepared.summary["geo_normalization"]["catalog_audit"]
             self.assertEqual(audit["catalog_version"], GEO_CATALOG_VERSION)
             self.assertEqual(
@@ -251,6 +292,38 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
                 audit["aliases_sha256"],
                 hashlib.sha256(ALIASES_PATH.read_bytes()).hexdigest(),
             )
+
+    def test_invalid_budget_uses_stable_b2_code_before_model_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign_path = root / "invalid-budget.csv"
+            campaign_path.write_text(
+                "campaign_name,segment,geo,channel,date,budget_rub\n"
+                "invalid-budget,ТС5/Онлайн,Москва,Нац_ТВ,2026-09-01,nan\n",
+                encoding="utf-8",
+            )
+            config_path = root / "workflow.json"
+            config_path.write_text("{}\n", encoding="utf-8")
+            config = {
+                "run_id": "invalid_budget_b2",
+                "paths": {
+                    "campaign_input_dir": str(root),
+                    "campaign_file": campaign_path.name,
+                },
+                "validation": {
+                    "geo_catalog_file": str(CATALOG_PATH),
+                    "geo_alias_catalog_file": str(ALIASES_PATH),
+                },
+            }
+            with self.assertRaises(FederalGeoAllocationError) as caught:
+                prepare_campaign_from_config(
+                    config,
+                    config_path,
+                    object(),
+                    root / "output",
+                    purpose="optimizer",
+                )
+            self.assertEqual(caught.exception.code, "INVALID_BUDGET")
 
     def test_ambiguous_registered_alias_is_explicit_and_forbidden_in_production(self) -> None:
         entries = list(self.catalog.entries[:2])

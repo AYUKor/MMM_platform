@@ -260,6 +260,13 @@ class HttpSmokeSettings:
     model_verification_mode: str = "full_lineage"
     optimizer_policy_path: Path | None = None
     business_policy_path: Path | None = None
+    federal_population_path: Path | None = None
+    federal_population_sha256: str = (
+        "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+    )
+    geo_catalog_sha256: str = (
+        "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
+    )
     timeout_seconds: float = 7200.0
     max_workers: int = 1
     max_upload_bytes: int = 50 * 1024 * 1024
@@ -933,6 +940,16 @@ class HttpSmokeApplication:
                         settings.business_policy_path
                         or project_root / "02_Code" / "02_Budget_optimizer" / "business_threshold_policy_v1.yaml"
                     ).expanduser().resolve(),
+                    federal_population_path=(
+                        settings.federal_population_path
+                        or project_root
+                        / "04_Web_app"
+                        / "data"
+                        / "federal_geo_allocation"
+                        / "geo_reference_v2.csv"
+                    ).expanduser().resolve(),
+                    federal_population_sha256=settings.federal_population_sha256,
+                    geo_catalog_sha256=settings.geo_catalog_sha256,
                     max_upload_bytes=settings.max_upload_bytes,
                 ),
                 self.state,

@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+  "supersedes": "B2_0_ALIASES.json matching rule only",
+  "matching": "exact semantic alias after outer whitespace trim and Unicode case folding; no fuzzy matching, internal whitespace normalization, transliteration, or unlisted synonyms",
+  "semantic_aliases": [
+    "РФ",
+    "Россия",
+    "Российская Федерация"
+  ],
+  "accepted_examples": [
+    "РФ",
+    " рф ",
+    "Россия",
+    " РОССИЯ ",
+    "Российская Федерация",
+    " российская федерация "
+  ],
+  "rejected_examples": [
+    "Вся Россия",
+    "Вся страна",
+    "Russia",
+    "Раша",
+    "Российская  Федерация",
+    "Российская-Федерация"
+  ]
+}

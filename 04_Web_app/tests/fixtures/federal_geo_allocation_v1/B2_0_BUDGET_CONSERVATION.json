@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+  "tolerance_rub": 0.01,
+  "intermediate_rounding": false,
+  "checksum_serialization": "UTF-8 lines sorted by geo_id; weight=.15f and allocated budget=.12f for allocation-vector checksums; aggregated checksums use geo_id|budget=.12f",
+  "cases": [
+    {
+      "case_id": "HIST_NATIONAL_TV_001",
+      "source_total_rub": 851001.7306724521,
+      "allocated_total_rub": 851001.7306724521,
+      "difference_rub": 0.0,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "6cc820a583e6a3c547222d988fdcfa48ff9b357b6ed09bd5e62dfbedd11c520e"
+    },
+    {
+      "case_id": "HIST_DIGITAL_001",
+      "source_total_rub": 25360.29962316331,
+      "allocated_total_rub": 25360.29962316331,
+      "difference_rub": 0.0,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "7cc155121f4ae99d90a5b18b13beb9630b09557f1fb73a6be40beba783d3d915"
+    },
+    {
+      "case_id": "HIST_RADIO_001",
+      "source_total_rub": 103702.3459039579,
+      "allocated_total_rub": 103702.3459039579,
+      "difference_rub": 0.0,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "ddc861dd8c94575644b1351bb36e53b162f3bc38b953787c5e380a9780a13628"
+    },
+    {
+      "case_id": "SYNTH_OOH_001",
+      "source_total_rub": 100000000.0,
+      "allocated_total_rub": 100000000.00000001,
+      "difference_rub": 1.4901161193847656e-08,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "33092ba6dc14b5a3d7abadf974ae7e1cb3fbbce29ac78ca274d3ca652f8f2c16"
+    },
+    {
+      "case_id": "SYNTH_INDOOR_001",
+      "source_total_rub": 100000000.0,
+      "allocated_total_rub": 100000000.00000001,
+      "difference_rub": 1.4901161193847656e-08,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "33092ba6dc14b5a3d7abadf974ae7e1cb3fbbce29ac78ca274d3ca652f8f2c16"
+    },
+    {
+      "case_id": "SYNTH_REGIONAL_TV_001",
+      "source_total_rub": 100000000.0,
+      "allocated_total_rub": 100000000.00000001,
+      "difference_rub": 1.4901161193847656e-08,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "33092ba6dc14b5a3d7abadf974ae7e1cb3fbbce29ac78ca274d3ca652f8f2c16"
+    },
+    {
+      "case_id": "MIXED_RF_MOSCOW_001",
+      "source_total_rub": 120000000.0,
+      "allocated_total_rub": 120000000.00000001,
+      "difference_rub": 1.4901161193847656e-08,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "06385c31ac56188583bf1a65a31883a50bbd1434faf0bfd6629fae9d76329b7c"
+    },
+    {
+      "case_id": "MULTIPLE_RF_ROWS_001",
+      "source_total_rub": 100000000.0,
+      "allocated_total_rub": 100000000.00000001,
+      "difference_rub": 1.4901161193847656e-08,
+      "tolerance_rub": 0.01,
+      "pass": true,
+      "checksum": "53ed4479bc3620d45b140004c9987804f3d17e5dcf5609bead92789cd7b0533d"
+    }
+  ],
+  "all_pass": true
+}

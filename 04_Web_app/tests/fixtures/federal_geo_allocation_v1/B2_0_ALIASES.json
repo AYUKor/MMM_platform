@@ -1,0 +1,19 @@
+{
+  "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+  "matching": "exact case-sensitive string equality; no fuzzy matching or unlisted synonyms",
+  "allowed_federal_values": [
+    "РФ",
+    "Россия",
+    "Российская Федерация"
+  ],
+  "rejected_examples": [
+    {
+      "value": "Вся Россия",
+      "error_code": "UNKNOWN_GEO_VALUE"
+    },
+    {
+      "value": "Вся страна",
+      "error_code": "UNKNOWN_GEO_VALUE"
+    }
+  ]
+}

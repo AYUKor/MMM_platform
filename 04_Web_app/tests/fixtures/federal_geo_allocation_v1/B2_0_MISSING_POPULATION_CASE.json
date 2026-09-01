@@ -1,0 +1,27 @@
+{
+  "case_id": "MISSING_POPULATION_001",
+  "case_type": "synthetic_validation_error",
+  "source": {
+    "source_row_id": "missing-pop:1",
+    "date": "2026-09-01",
+    "business_direction": "ТС5/Онлайн",
+    "channel": "Цифровая реклама",
+    "geo": "РФ",
+    "budget_rub": 100000000.0
+  },
+  "test_mutation": {
+    "geo_id": "geo_96d8acf2128d1686",
+    "geo_label": "МОСКВА",
+    "population_k": null,
+    "note": "Mutation exists only inside this synthetic test fixture; canonical population is unchanged."
+  },
+  "expected": {
+    "status": "ERROR",
+    "error_code": "FEDERAL_POPULATION_MISSING_OR_NONPOSITIVE",
+    "allocation_allowed": false,
+    "expanded_rows": 0,
+    "mean_population_used": false,
+    "geo_excluded": false,
+    "automatic_redistribution": false
+  }
+}

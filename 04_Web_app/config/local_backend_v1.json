@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.2.0",
+  "schema_version": "1.3.0",
   "server": {
     "deployment_profile": "local_development",
     "host": "127.0.0.1",
@@ -19,11 +19,14 @@
     "artifact_root": "04_Web_app/var/local/artifacts",
     "registry_root": "03_Outputs/01_PyMC_outputs/00_Model_registry",
     "optimizer_policy_path": "02_Code/02_Budget_optimizer/optimizer_decision_policy_v3.yaml",
-    "business_policy_path": "02_Code/02_Budget_optimizer/business_threshold_policy_v1.yaml"
+    "business_policy_path": "02_Code/02_Budget_optimizer/business_threshold_policy_v1.yaml",
+    "federal_population_path": "04_Web_app/data/federal_geo_allocation/geo_reference_v2.csv"
   },
   "model": {
     "registry_channel": "preprod",
-    "expected_package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b"
+    "expected_package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b",
+    "federal_population_sha256": "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043",
+    "geo_catalog_sha256": "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
   },
   "worker": {
     "python_executable": null,

@@ -1,0 +1,79 @@
+{
+  "case_id": "MIXED_RF_MOSCOW_001",
+  "case_type": "synthetic_v1_mixed_federal_and_local",
+  "epistemic_status": "synthetic contract case",
+  "source_rows": [
+    {
+      "source_row_id": "mixed:1",
+      "date": "2026-09-01",
+      "business_direction": "ТС5/Онлайн",
+      "channel": "Национальное ТВ",
+      "geo": "РФ",
+      "budget_rub": 100000000.0
+    },
+    {
+      "source_row_id": "mixed:2",
+      "date": "2026-09-01",
+      "business_direction": "ТС5/Онлайн",
+      "channel": "Национальное ТВ",
+      "geo": "Москва",
+      "budget_rub": 20000000.0
+    }
+  ],
+  "expected": {
+    "warning_code": "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+    "eligible_geo_count": 211,
+    "federal_allocated_total_rub": 100000000.00000001,
+    "moscow_federal_weight": 0.07504156019100208,
+    "moscow_federal_budget_rub": 7504156.019100208,
+    "moscow_local_budget_rub": 20000000.0,
+    "moscow_total_budget_rub": 27504156.019100208,
+    "allocated_total_rub": 120000000.00000001,
+    "source_total_rub": 120000000.0,
+    "budget_difference_rub": 1.4901161193847656e-08,
+    "conservation_pass": true,
+    "aggregated_vector_sha256": "06385c31ac56188583bf1a65a31883a50bbd1434faf0bfd6629fae9d76329b7c",
+    "controls": [
+      {
+        "geo_id": "geo_7aafc347a167c4da",
+        "geo_label": "КАЗАНЬ",
+        "geo_display_name": "Казань",
+        "population_k": 1308.0,
+        "weight": 0.00749041214360735,
+        "budget_rub": 749041.214360735
+      },
+      {
+        "geo_id": "geo_94835d40a52e5a3a",
+        "geo_label": "САНКТ-ПЕТЕРБУРГ",
+        "geo_display_name": "Санкт-Петербург",
+        "population_k": 5600.0,
+        "weight": 0.03206904281666755,
+        "budget_rub": 3206904.281666755
+      },
+      {
+        "geo_id": "geo_96d8acf2128d1686",
+        "geo_label": "МОСКВА",
+        "geo_display_name": "Москва",
+        "population_k": 13104.0,
+        "weight": 0.07504156019100208,
+        "budget_rub": 27504156.019100208
+      },
+      {
+        "geo_id": "geo_ae4b572fa4c02f42",
+        "geo_label": "НОВОСИБИРСК",
+        "geo_display_name": "Новосибирск",
+        "population_k": 1635.0,
+        "weight": 0.009363015179509188,
+        "budget_rub": 936301.5179509188
+      },
+      {
+        "geo_id": "geo_e2491244881757a2",
+        "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+        "geo_display_name": "Московская область",
+        "population_k": 8524.0,
+        "weight": 0.04881366445879897,
+        "budget_rub": 4881366.445879897
+      }
+    ]
+  }
+}

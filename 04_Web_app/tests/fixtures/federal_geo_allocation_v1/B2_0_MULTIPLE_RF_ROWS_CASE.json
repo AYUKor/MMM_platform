@@ -1,0 +1,51 @@
+{
+  "case_id": "MULTIPLE_RF_ROWS_001",
+  "case_type": "synthetic_v1_multiple_federal_rows",
+  "source": {
+    "date": "2026-09-01",
+    "business_direction": "ТС5/Онлайн",
+    "channel": "Цифровая реклама",
+    "geo": "РФ",
+    "rows": [
+      {
+        "source_row_id": "multiple:rf:1",
+        "budget_rub": 60000000.0
+      },
+      {
+        "source_row_id": "multiple:rf:2",
+        "budget_rub": 40000000.0
+      }
+    ]
+  },
+  "expected": {
+    "expand_separately": true,
+    "aggregate_only_after_expansion": true,
+    "source_allocations": [
+      {
+        "source_row_id": "multiple:rf:1",
+        "source_budget_rub": 60000000.0,
+        "eligible_geo_count": 211,
+        "allocated_total_rub": 60000000.00000001,
+        "budget_difference_rub": 7.450580596923828e-09,
+        "allocation_vector_sha256": "99918e128cb68973f26a16b74e5e8180a9fc7071f9a71c04baf0052973c3d2de",
+        "provenance_preserved": true
+      },
+      {
+        "source_row_id": "multiple:rf:2",
+        "source_budget_rub": 40000000.0,
+        "eligible_geo_count": 211,
+        "allocated_total_rub": 40000000.0,
+        "budget_difference_rub": 0.0,
+        "allocation_vector_sha256": "0f44305120ecb529ea7fe87c79475e7716f704063f702859ac55bb7d4908a584",
+        "provenance_preserved": true
+      }
+    ],
+    "expanded_rows_before_aggregation": 422,
+    "aggregated_geo_count": 211,
+    "source_total_rub": 100000000.0,
+    "allocated_total_rub": 100000000.00000001,
+    "budget_difference_rub": 1.4901161193847656e-08,
+    "conservation_pass": true,
+    "aggregated_vector_sha256": "53ed4479bc3620d45b140004c9987804f3d17e5dcf5609bead92789cd7b0533d"
+  }
+}

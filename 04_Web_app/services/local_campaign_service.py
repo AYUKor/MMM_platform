@@ -61,9 +61,13 @@ from mmm_core.campaign_plan import (  # noqa: E402
     prepare_campaign_from_config,
     read_campaign_brief,
 )
+from mmm_core.federal_geo_allocator import (  # noqa: E402
+    ERROR_TEXTS as FEDERAL_ERROR_TEXTS,
+    FederalGeoAllocationError,
+)
 from mmm_core.io import load_config  # noqa: E402
 from mmm_core.model_package import sha256_file  # noqa: E402
-from mmm_core.model_package_reader import ModelPackage  # noqa: E402
+from mmm_core.model_package_reader import ModelPackage, ModelPackageError  # noqa: E402
 from mmm_core.model_registry import resolve_model_reference  # noqa: E402
 from services.geo_catalog import ALIASES_PATH, CATALOG_PATH  # noqa: E402
 
@@ -98,6 +102,15 @@ CALCULATION_SOURCE_PATHS = (
     "04_Web_app/contracts",
     "04_Web_app/services",
     "04_Web_app/worker",
+)
+FEDERAL_POPULATION_PATH = (
+    WEB_APP_DIR / "data" / "federal_geo_allocation" / "geo_reference_v2.csv"
+)
+FEDERAL_POPULATION_SHA256 = (
+    "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+)
+GEO_CATALOG_SHA256 = (
+    "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
 )
 
 
@@ -265,6 +278,9 @@ class LocalCampaignServiceSettings:
     expected_package_id: str
     optimizer_policy_path: Path
     business_policy_path: Path
+    federal_population_path: Path = FEDERAL_POPULATION_PATH
+    federal_population_sha256: str = FEDERAL_POPULATION_SHA256
+    geo_catalog_sha256: str = GEO_CATALOG_SHA256
     model_verification_mode: str = "full_lineage"
     max_upload_bytes: int = 50 * 1024 * 1024
     default_sampling: SamplingProfile = SamplingProfile(
@@ -282,9 +298,19 @@ class LocalCampaignServiceSettings:
             raise ValueError("Pinned registry channel and package ID are required")
         if self.model_verification_mode not in {"full_lineage", "serving_bundle"}:
             raise ValueError("Unknown model verification mode")
-        for path in (self.optimizer_policy_path, self.business_policy_path):
+        for path in (
+            self.optimizer_policy_path,
+            self.business_policy_path,
+            self.federal_population_path,
+        ):
             if not path.expanduser().resolve().is_file():
                 raise FileNotFoundError(path)
+        for name, value in (
+            ("federal_population_sha256", self.federal_population_sha256),
+            ("geo_catalog_sha256", self.geo_catalog_sha256),
+        ):
+            if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+                raise ValueError(f"{name} must be a lowercase SHA-256")
         self.default_sampling.validate("default_sampling")
 
 
@@ -556,6 +582,17 @@ class LocalCampaignService:
                 "geo_catalog_file": str(CATALOG_PATH.resolve()),
                 "geo_alias_catalog_file": str(ALIASES_PATH.resolve()),
             },
+            "federal_geo_allocation": {
+                "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+                "population_file": str(
+                    self.settings.federal_population_path.resolve()
+                ),
+                "population_sha256": self.settings.federal_population_sha256,
+                "geo_catalog_sha256": self.settings.geo_catalog_sha256,
+                "input_file_id": source.artifact_id,
+                "input_file_sha256": source.sha256,
+                "validation_started_at_utc": validation.started_at_utc,
+            },
             "future_controls": {
                 "strategy": "historical_analog_period",
                 "analog_year": 2025,
@@ -593,14 +630,27 @@ class LocalCampaignService:
                 config_key,
                 kind="workflow_config",
             )
-            run_dir, resolution = resolve_model_reference(config, config_path, purpose="optimizer")
-            package = ModelPackage.from_run_dir(
-                run_dir,
-                require_posterior_ready=False,
-                validate_hash=(
-                    resolution.get("verification_mode", "full_lineage") == "full_lineage"
-                ),
-            )
+            try:
+                run_dir, resolution = resolve_model_reference(
+                    config,
+                    config_path,
+                    purpose="optimizer",
+                )
+                package = ModelPackage.from_run_dir(
+                    run_dir,
+                    require_posterior_ready=False,
+                    validate_hash=(
+                        resolution.get("verification_mode", "full_lineage")
+                        == "full_lineage"
+                    ),
+                )
+            except FederalGeoAllocationError:
+                raise
+            except (FileNotFoundError, ModelPackageError, ValueError) as exc:
+                raise FederalGeoAllocationError(
+                    "PACKAGE_POINTER_OR_HASH_MISMATCH",
+                    technical_details=str(exc),
+                ) from exc
             preparation_dir = Path(config["paths"]["output_dir"])
             prep = prepare_campaign_from_config(
                 config,
@@ -608,6 +658,7 @@ class LocalCampaignService:
                 package,
                 preparation_dir,
                 purpose="optimizer",
+                model_resolution=resolution,
             )
             valid = self._build_valid_validation(
                 upload,
@@ -632,6 +683,10 @@ class LocalCampaignService:
                 self.state.write_validation(invalid)
                 return
             policies = self._policy_selection(package)
+            federal_artifacts = self._persist_federal_artifacts(
+                validation.validation_id,
+                prep,
+            )
             self.state.write_validation_inputs(
                 validation.validation_id,
                 {
@@ -644,17 +699,39 @@ class LocalCampaignService:
                         "business_policy_sha256": policies.business_policy_sha256,
                         "business_decision_mode": policies.business_decision_mode,
                     },
+                    "federal_geo_allocation": federal_artifacts,
                 },
             )
             self.state.write_validation(valid)
-        except Exception:
-            log_path = (
-                self.settings.validation_runtime_root
-                / validation.validation_id
-                / "protected_validation.log"
+        except FederalGeoAllocationError as exc:
+            self._write_protected_validation_error(validation.validation_id)
+            audit_key = (
+                f"validations/{validation.validation_id}/prepared/"
+                "federal_geo_allocation_error_audit.json"
             )
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_path.write_text(traceback.format_exc(), encoding="utf-8")
+            audit_path = _safe_child(self.settings.artifact_root, audit_key)
+            _write_json(
+                audit_path,
+                {
+                    "schema_version": "1.0.0",
+                    "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+                    "input_file_id": validation.source_payload.artifact_id,
+                    "input_file_sha256": validation.source_payload.sha256,
+                    "started_at_utc": validation.started_at_utc,
+                    "errors": [{"code": exc.code}],
+                    "warnings": [],
+                },
+            )
+            invalid = replace(
+                validation,
+                status=LifecycleStatus("invalid", "План нельзя отправить в расчет"),
+                finished_at_utc=_utc_now(),
+                blocking_errors=(self._federal_error_issue(exc),),
+            )
+            invalid.validate()
+            self.state.write_validation(invalid)
+        except Exception:
+            self._write_protected_validation_error(validation.validation_id)
             issue = self._validation_failure_issue(validation.validation_id)
             invalid = replace(
                 validation,
@@ -664,6 +741,61 @@ class LocalCampaignService:
             )
             invalid.validate()
             self.state.write_validation(invalid)
+
+    def _write_protected_validation_error(self, validation_id: str) -> None:
+        log_path = (
+            self.settings.validation_runtime_root
+            / validation_id
+            / "protected_validation.log"
+        )
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(traceback.format_exc(), encoding="utf-8")
+
+    @staticmethod
+    def _federal_error_issue(error: FederalGeoAllocationError) -> ValidationIssue:
+        return ValidationIssue(
+            code=error.code,
+            severity="blocking",
+            display_text=FEDERAL_ERROR_TEXTS[error.code],
+            scope="upload",
+            recoverable=True,
+            what=FEDERAL_ERROR_TEXTS[error.code],
+            why=(
+                "Проверка федерального распределения завершилась fail-closed: "
+                "неподтвержденные или неполные данные не передаются в forecast."
+            ),
+            recommended_action=(
+                "Исправьте входной план либо обратитесь к владельцу model package, "
+                "если ошибка связана с целостностью справочников."
+            ),
+        )
+
+    def _persist_federal_artifacts(
+        self,
+        validation_id: str,
+        prep: Any,
+    ) -> dict[str, Any]:
+        prefix = f"validations/{validation_id}/prepared"
+        artifacts: dict[str, Any] = {}
+        if prep.federal_provenance_path:
+            artifacts["provenance"] = asdict(
+                _artifact(
+                    self.settings.artifact_root,
+                    f"{prefix}/federal_geo_allocation_provenance.csv",
+                    kind="federal_geo_allocation_provenance",
+                    source=Path(prep.federal_provenance_path),
+                )
+            )
+        if prep.federal_audit_path:
+            artifacts["audit"] = asdict(
+                _artifact(
+                    self.settings.artifact_root,
+                    f"{prefix}/federal_geo_allocation_audit.json",
+                    kind="federal_geo_allocation_audit",
+                    source=Path(prep.federal_audit_path),
+                )
+            )
+        return artifacts
 
     @staticmethod
     def _failed_model_support_preview(
@@ -866,7 +998,48 @@ class LocalCampaignService:
             production_blockers=tuple(str(value) for value in model_summary.get("production_blockers") or []),
         )
         warnings = self._validation_warnings(validation_rows, campaigns)
+        federal_summary = prep.summary.get("federal_geo_allocation") or {}
+        for warning in federal_summary.get("warnings") or []:
+            if warning.get("code") != "FEDERAL_AND_LOCAL_GEO_OVERLAP":
+                continue
+            warnings += (
+                ValidationIssue(
+                    code="FEDERAL_AND_LOCAL_GEO_OVERLAP",
+                    severity="warning",
+                    display_text=str(warning.get("display_text") or ""),
+                    scope="campaign",
+                    recoverable=True,
+                    what=(
+                        "В одном plan обнаружены федеральные и локальные строки "
+                        "для одинаковых даты, направления и канала."
+                    ),
+                    why=(
+                        "По утвержденной additive-семантике локальный бюджет "
+                        "добавляется поверх федерального распределения."
+                    ),
+                    recommended_action=(
+                        "Проверьте, что дополнительный локальный бюджет указан "
+                        "намеренно."
+                    ),
+                ),
+            )
         preview = self._validation_preview(normalized_rows, daily_rows, warnings)
+        if federal_summary:
+            preview = replace(
+                preview,
+                checks=(preview.checks or ())
+                + (
+                    ValidationPreviewCheck(
+                        code="FEDERAL_GEO_ALLOCATION",
+                        status="passed",
+                        display_text=(
+                            "Федеральный бюджет распределен по поддерживаемым "
+                            "географиям выбранного бизнес-направления по действующей "
+                            "методике модели."
+                        ),
+                    ),
+                ),
+            )
         valid = replace(
             validation,
             status=LifecycleStatus("valid", "План можно рассчитать"),
@@ -918,7 +1091,7 @@ class LocalCampaignService:
                 end_date=dates[-1],
                 active_days=len(dates),
                 channels=tuple(sorted({str(row["channel"]) for row in source})),
-                geographies=tuple(sorted({str(row["geo"]) for row in source})),
+                geographies=tuple(sorted({str(row["geo"]) for row in daily})),
                 creatives=tuple(creatives),
                 source_rows_n=len(source),
                 normalized_rows_n=len(source),
@@ -960,9 +1133,9 @@ class LocalCampaignService:
         for row in normalized_rows:
             budget = float(row["budget_rub"])
             normalized_channel[str(row["channel"])] += budget
-            normalized_geo[str(row["geo"])] += budget
         for row in daily_rows:
             budget = float(row["budget_rub"])
+            normalized_geo[str(row["geo"])] += budget
             daily_channel_date[(str(row["channel"]), str(row["date"]))] += budget
             daily_geo_date[(str(row["geo"]), str(row["date"]))] += budget
 

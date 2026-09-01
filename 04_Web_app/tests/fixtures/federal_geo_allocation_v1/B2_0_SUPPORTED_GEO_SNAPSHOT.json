@@ -1,0 +1,4105 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+  "snapshot_date": "2026-09-01",
+  "status": "B2_0_REFERENCE_SNAPSHOT",
+  "activation_note": "The resolved package is the current preprod pointer and remains preprod_restricted; this snapshot does not promote or deploy it.",
+  "resolution_contract": {
+    "pointer": "02_Predfin/MMM_platform/03_Outputs/01_PyMC_outputs/00_Model_registry/channels/preprod.json",
+    "pointer_sha256": "3d9967400ee45e9d84f76bc4d4461035b02b42bba963d5087b181c9cb731f4a0",
+    "registration": "02_Predfin/MMM_platform/03_Outputs/01_PyMC_outputs/00_Model_registry/registrations/pkg_807d3ddbae57a52a_9aacd3beb350725b.json",
+    "registration_sha256": "8113f741d0729dfd18c4074a49d4f884493551380454d1c98563312404489c07",
+    "resolved_package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b",
+    "authoritative_direction_support_source": "02_Predfin/MMM_platform/03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/target_denominator_metadata.csv",
+    "authoritative_direction_support_source_sha256": "7cc4088f44797188c39209eead0d0bdfee4cd4600dbbad95fb21fc02851a6fa5",
+    "selection": "distinct geo_label by business direction in target_denominator_metadata.csv",
+    "crosscheck_source": "02_Predfin/MMM_platform/03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/historical_support_bounds.csv",
+    "crosscheck_source_sha256": "88132655fc058e889b5f30ea6b3d09a17ac5e5e2da8e4d9ef1a96a0cd7d8e603",
+    "crosscheck": "For every direction, the authoritative set equals the union of turnover historical_support_bounds.csv geographies across channels.",
+    "capability_source": "02_Predfin/MMM_platform/03_Outputs/01_PyMC_outputs/09_PyMC_14072026_panel_v3_serving_policy_v3/production_panel_v3_q1_2026_guarded_serving_v3/capability_matrix.csv",
+    "capability_source_sha256": "c91d52be7c87f9844c3f5687b5aff3c0a332bc0796bfa6272bab6eec1ecb4c50",
+    "runtime_rule": "B2.1 must resolve the active package at request/run start, verify the pointer, registration and referenced file hashes, and must not hard-code this snapshot."
+  },
+  "population": {
+    "path": "00_Data/raw_external/02_2025_2026Q1_second_pass/01_Raw_Data_v2/geo_reference_v2.csv",
+    "sha256": "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+  },
+  "canonical_geo_catalog": {
+    "path": "01_Test/MMM_platform/04_Web_app/data/geo_catalog/geo_catalog_v1.csv",
+    "sha256": "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
+  },
+  "directions": [
+    {
+      "business_direction": "ТС5/Онлайн",
+      "supported_geo_count": 211,
+      "supported_geographies": [
+        {
+          "geo_id": "geo_031395c2814d1770",
+          "geo_label": "НОВОЧЕРКАССК",
+          "geo_display_name": "Новочеркасск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_05b2b580396e6c77",
+          "geo_label": "БЛАГОВЕЩЕНСК",
+          "geo_display_name": "Благовещенск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_06ad7b89944f92a2",
+          "geo_label": "НИЖНИЙ ТАГИЛ",
+          "geo_display_name": "Нижний Тагил",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0727e7ed2632befc",
+          "geo_label": "РЕСПУБЛИКА АДЫГЕЯ",
+          "geo_display_name": "Республика Адыгея",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_093a1766328e66ca",
+          "geo_label": "ОМСК",
+          "geo_display_name": "Омск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_09500abdc140c57e",
+          "geo_label": "ПЕНЗА",
+          "geo_display_name": "Пенза",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0ceaaee33b14e0a1",
+          "geo_label": "БОРОВИЧИ",
+          "geo_display_name": "Боровичи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0e3003c176b3a09b",
+          "geo_label": "РЕСПУБЛИКА МОРДОВИЯ",
+          "geo_display_name": "Республика Мордовия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_0e45d64437ef0ab3",
+          "geo_label": "БАЛАШИХА",
+          "geo_display_name": "Балашиха",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_108eab140138349f",
+          "geo_label": "ХАНТЫ-МАНСИЙСКИЙ АВТОНОМНЫЙ ОКРУГ",
+          "geo_display_name": "Ханты-Мансийский автономный округ - Югра",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_10d6f86f021847c6",
+          "geo_label": "НОВОЧЕБОКСАРСК",
+          "geo_display_name": "Новочебоксарск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_11dc18bfbea119d8",
+          "geo_label": "ВЛАДИКАВКАЗ",
+          "geo_display_name": "Владикавказ",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_133cdb7dcca84543",
+          "geo_label": "ТОМСК",
+          "geo_display_name": "Томск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_150933c6acf548e4",
+          "geo_label": "МИЧУРИНСК",
+          "geo_display_name": "Мичуринск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1615d65c53e3d88a",
+          "geo_label": "КЕМЕРОВО",
+          "geo_display_name": "Кемерово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_17ab139ca967145a",
+          "geo_label": "МИНЕРАЛЬНЫЕ ВОДЫ",
+          "geo_display_name": "Минеральные Воды",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_17fdd13e7c3490cf",
+          "geo_label": "ИРКУТСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Иркутская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_181e96762afa6524",
+          "geo_label": "ОРЕНБУРГ",
+          "geo_display_name": "Оренбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_192c939939bbebd5",
+          "geo_label": "ТОРЖОК",
+          "geo_display_name": "Торжок",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_19402913187c65e0",
+          "geo_label": "ПЕНЗЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Пензенская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_1a1dd82046f50b13",
+          "geo_label": "АПАТИТЫ",
+          "geo_display_name": "Апатиты",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1abfa315865f6827",
+          "geo_label": "ТАМБОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тамбовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_1b0f112cbf366d9b",
+          "geo_label": "БОР",
+          "geo_display_name": "Бор",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1b10e39705d1b75c",
+          "geo_label": "КАМЕНСК-ШАХТИНСКИЙ",
+          "geo_display_name": "Каменск-Шахтинский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d4e10a78edc1614",
+          "geo_label": "УГЛИЧ",
+          "geo_display_name": "Углич",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d58a46bdd0a4846",
+          "geo_label": "ВЕЛИКИЙ НОВГОРОД",
+          "geo_display_name": "Великий Новгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d7333fd2a3c8715",
+          "geo_label": "УЛАН-УДЭ",
+          "geo_display_name": "Улан-Удэ",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1e05d321927cf372",
+          "geo_label": "ВЫШНИЙ ВОЛОЧЕК",
+          "geo_display_name": "Вышний Волочек",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_212302479b4c065e",
+          "geo_label": "ЯРОСЛАВЛЬ",
+          "geo_display_name": "Ярославль",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_23aeed82014ce95e",
+          "geo_label": "КРАСНОДАРСКИЙ КРАЙ",
+          "geo_display_name": "Краснодарский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2412d29f1964da67",
+          "geo_label": "ВИДНОЕ",
+          "geo_display_name": "Видное",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_244e457664df05ed",
+          "geo_label": "ЙОШКАР-ОЛА",
+          "geo_display_name": "Йошкар-Ола",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_27c6321193c78661",
+          "geo_label": "ШУЯ",
+          "geo_display_name": "Шуя",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2a7d6797adab975f",
+          "geo_label": "САМАРА",
+          "geo_display_name": "Самара",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2bb56ca5ca40c1f7",
+          "geo_label": "ХАБАРОВСКИЙ КРАЙ",
+          "geo_display_name": "Хабаровский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2bb5b3c30eec3850",
+          "geo_label": "РЕСПУБЛИКА СЕВЕРНАЯ ОСЕТИЯ",
+          "geo_display_name": "Республика Северная Осетия - Алания",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2c847ca0173b1925",
+          "geo_label": "КУЗНЕЦК",
+          "geo_display_name": "Кузнецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2db8f7f2a69e53db",
+          "geo_label": "МАЙКОП",
+          "geo_display_name": "Майкоп",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2e944fce52e678a6",
+          "geo_label": "СОЧИ",
+          "geo_display_name": "Сочи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2f2ef7a4526bd34a",
+          "geo_label": "БРЯНСК",
+          "geo_display_name": "Брянск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_30d57e2af9301114",
+          "geo_label": "ЕКАТЕРИНБУРГ",
+          "geo_display_name": "Екатеринбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3150ebe5e447e018",
+          "geo_label": "РЕСПУБЛИКА КАРЕЛИЯ",
+          "geo_display_name": "Республика Карелия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_3291a51b87f87713",
+          "geo_label": "БИРОБИДЖАН",
+          "geo_display_name": "Биробиджан",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_360bec89c52dae41",
+          "geo_label": "ВОЛГОГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Волгоградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_37451e5dce8192aa",
+          "geo_label": "ПЕРМЬ",
+          "geo_display_name": "Пермь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_39bd072f033b68ee",
+          "geo_label": "ТУЛА",
+          "geo_display_name": "Тула",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3a3c9a16bd3f4347",
+          "geo_label": "ЧИТА",
+          "geo_display_name": "Чита",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3adf62e63c7fd5d5",
+          "geo_label": "ИВАНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ивановская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_3c2426b44557da90",
+          "geo_label": "КОТЛАС",
+          "geo_display_name": "Котлас",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3c537c4cd22a8b1f",
+          "geo_label": "ЧЕРЕПОВЕЦ",
+          "geo_display_name": "Череповец",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3f3864f3f1391c1f",
+          "geo_label": "МУРМАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Мурманская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4182ea75dbfa6adf",
+          "geo_label": "СЫКТЫВКАР",
+          "geo_display_name": "Сыктывкар",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_425d8ef3221e32b8",
+          "geo_label": "ПОДОЛЬСК",
+          "geo_display_name": "Подольск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_42f01deb191fb1c1",
+          "geo_label": "ЯКУТСК",
+          "geo_display_name": "Якутск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_42f79d22f4fb70a5",
+          "geo_label": "РЫБИНСК",
+          "geo_display_name": "Рыбинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_43e3aae44829f95f",
+          "geo_label": "КОВРОВ",
+          "geo_display_name": "Ковров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_441492c9e1030bce",
+          "geo_label": "КОРОЛЕВ",
+          "geo_display_name": "Королев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_441a51f1a1a48fa7",
+          "geo_label": "БАТАЙСК",
+          "geo_display_name": "Батайск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_47e505cb9a22cb1f",
+          "geo_label": "МУРМАНСК",
+          "geo_display_name": "Мурманск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_480f3d37706eea65",
+          "geo_label": "ЖЕЛЕЗНОГОРСК",
+          "geo_display_name": "Железногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4bb0b2082503653a",
+          "geo_label": "КОРЯЖМА",
+          "geo_display_name": "Коряжма",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4d36b8978c7dd983",
+          "geo_label": "ЧЕЛЯБИНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Челябинская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4ddce812b8d17e01",
+          "geo_label": "ОРЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Орловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4f53b0ec17d55e63",
+          "geo_label": "ЯРОСЛАВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ярославская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4f53b29b6ff02d79",
+          "geo_label": "ПАРТИЗАНСК",
+          "geo_display_name": "Партизанск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_520151290ea3255a",
+          "geo_label": "ВЫБОРГ",
+          "geo_display_name": "Выборг",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_528f8766cd1b4fae",
+          "geo_label": "РЕСПУБЛИКА БУРЯТИЯ",
+          "geo_display_name": "Республика Бурятия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5626b585975ad5ce",
+          "geo_label": "ОРЕНБУРГСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Оренбургская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_57f4ff5d3ee8852e",
+          "geo_label": "ТВЕРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тверская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_59073a79559340a0",
+          "geo_label": "НИЖНЕКАМСК",
+          "geo_display_name": "Нижнекамск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5ac7acde3cdf68a6",
+          "geo_label": "ХАНТЫ-МАНСИЙСК",
+          "geo_display_name": "Ханты-Мансийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b050d7ea114dc2e",
+          "geo_label": "КИРОВ",
+          "geo_display_name": "Киров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b43415568bcd9ce",
+          "geo_label": "ПСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Псковская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5d01870a3a173190",
+          "geo_label": "ЧЕЛЯБИНСК",
+          "geo_display_name": "Челябинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5d87c0fa88acedb1",
+          "geo_label": "ТЮМЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тюменская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5fa9084303383362",
+          "geo_label": "САРАТОВ",
+          "geo_display_name": "Саратов",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_603847d7490bba77",
+          "geo_label": "КРАСНОДАР",
+          "geo_display_name": "Краснодар",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_609ae2c3e4e515a0",
+          "geo_label": "ИЖЕВСК",
+          "geo_display_name": "Ижевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_61fb685891366787",
+          "geo_label": "ГУСЬ-ХРУСТАЛЬНЫЙ",
+          "geo_display_name": "Гусь-Хрустальный",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6250113c3a735179",
+          "geo_label": "РЯЗАНЬ",
+          "geo_display_name": "Рязань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_64a57807beaa1977",
+          "geo_label": "ПСКОВ",
+          "geo_display_name": "Псков",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_654946621661ed59",
+          "geo_label": "РОСТОВ-НА-ДОНУ",
+          "geo_display_name": "Ростов-на-Дону",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_66524d70cfd80f33",
+          "geo_label": "БЕЛГОРОД",
+          "geo_display_name": "Белгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_679fcdcbff1d857e",
+          "geo_label": "ЛИПЕЦК",
+          "geo_display_name": "Липецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6835667d9b3fc15f",
+          "geo_label": "ИВАНОВО",
+          "geo_display_name": "Иваново",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_692c9f128b3b5f84",
+          "geo_label": "КИРОВСК",
+          "geo_display_name": "Кировск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_69a60951706b056a",
+          "geo_label": "ВОЛОГОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Вологодская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_6c2900420be7fcb0",
+          "geo_label": "ЕССЕНТУКИ",
+          "geo_display_name": "Ессентуки",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6de565131413b901",
+          "geo_label": "ТЮМЕНЬ",
+          "geo_display_name": "Тюмень",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6ea343b71af7c34e",
+          "geo_label": "ТОМСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Томская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_6ead6cdc17609501",
+          "geo_label": "СТАВРОПОЛЬСКИЙ КРАЙ",
+          "geo_display_name": "Ставропольский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_6ef64f38d40f6a76",
+          "geo_label": "КРАСНОЯРСКИЙ КРАЙ",
+          "geo_display_name": "Красноярский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_723bec066ed256b0",
+          "geo_label": "ВЯЗНИКИ",
+          "geo_display_name": "Вязники",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_724a73c8229d5e9b",
+          "geo_label": "КОМСОМОЛЬСК-НА-АМУРЕ",
+          "geo_display_name": "Комсомольск-на-Амуре",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_74240820071487d1",
+          "geo_label": "АНАПА",
+          "geo_display_name": "Анапа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_746b7f322c7d4483",
+          "geo_label": "ФОКИНО",
+          "geo_display_name": "Фокино",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7518d7367997f3ed",
+          "geo_label": "ТВЕРЬ",
+          "geo_display_name": "Тверь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_75b1c7a1ec0c6bca",
+          "geo_label": "ОРЕЛ",
+          "geo_display_name": "Орел",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_76c59267159b9cf1",
+          "geo_label": "ЛИПЕЦКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Липецкая область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_79524caf0e86edf3",
+          "geo_label": "ЭНГЕЛЬС",
+          "geo_display_name": "Энгельс",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7aafc347a167c4da",
+          "geo_label": "КАЗАНЬ",
+          "geo_display_name": "Казань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7b998ab602a8bb85",
+          "geo_label": "СМОЛЕНСК",
+          "geo_display_name": "Смоленск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7d1b5b95bf81cf12",
+          "geo_label": "САРАНСК",
+          "geo_display_name": "Саранск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_81b9346d310ccb3a",
+          "geo_label": "КОНАКОВО",
+          "geo_display_name": "Конаково",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_82e3d00fad994578",
+          "geo_label": "КУРГАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Курганская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_845dcb133962087a",
+          "geo_label": "ЗАБАЙКАЛЬСКИЙ КРАЙ",
+          "geo_display_name": "Забайкальский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_84e5fcec31012b88",
+          "geo_label": "ВОЛГОГРАД",
+          "geo_display_name": "Волгоград",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_870a7f937ff57ad8",
+          "geo_label": "СТАРЫЙ ОСКОЛ",
+          "geo_display_name": "Старый Оскол",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_89551556910e5180",
+          "geo_label": "ОЛЕНЕГОРСК",
+          "geo_display_name": "Оленегорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_89a058f5b87790ec",
+          "geo_label": "КОСТРОМСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Костромская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_8a262b9422eb5010",
+          "geo_label": "БАРНАУЛ",
+          "geo_display_name": "Барнаул",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8ac7fd9d42e86e8f",
+          "geo_label": "БЕРДСК",
+          "geo_display_name": "Бердск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8d0ec5d509e7e256",
+          "geo_label": "КУРГАН",
+          "geo_display_name": "Курган",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8d8df24c5ffbb97d",
+          "geo_label": "УЛЬЯНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ульяновская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_8e220753930a277f",
+          "geo_label": "КИСЛОВОДСК",
+          "geo_display_name": "Кисловодск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8e7b7c971d1eaa78",
+          "geo_label": "БЕРЕЗОВСКИЙ",
+          "geo_display_name": "Березовский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_91572a7fdf0c3bc8",
+          "geo_label": "АРХАНГЕЛЬСК",
+          "geo_display_name": "Архангельск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_91a30b433c3f5106",
+          "geo_label": "ШАХТЫ",
+          "geo_display_name": "Шахты",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_92b6cf23ae9992dc",
+          "geo_label": "КУРСК",
+          "geo_display_name": "Курск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_93400a42108562f8",
+          "geo_label": "КОСТРОМА",
+          "geo_display_name": "Кострома",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_93a89aa2fbcf50f7",
+          "geo_label": "КРАСНОЯРСК",
+          "geo_display_name": "Красноярск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_94835d40a52e5a3a",
+          "geo_label": "САНКТ-ПЕТЕРБУРГ",
+          "geo_display_name": "Санкт-Петербург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9519057ac44fcf68",
+          "geo_label": "ЧЕРКЕССК",
+          "geo_display_name": "Черкесск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_957e66011fc7614c",
+          "geo_label": "АЛЕКСАНДРОВ",
+          "geo_display_name": "Александров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9580f4dcafacc7a3",
+          "geo_label": "НАХОДКА",
+          "geo_display_name": "Находка",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_95a5bc5573fb18d5",
+          "geo_label": "КУРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Курская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_95ccc4904baeea20",
+          "geo_label": "УЛЬЯНОВСК",
+          "geo_display_name": "Ульяновск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_965336b61d1b679c",
+          "geo_label": "УФА",
+          "geo_display_name": "Уфа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_96d8acf2128d1686",
+          "geo_label": "МОСКВА",
+          "geo_display_name": "Москва",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_99113e492e368d1e",
+          "geo_label": "БЕЛГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Белгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9920888cf795b8e9",
+          "geo_label": "ХАБАРОВСК",
+          "geo_display_name": "Хабаровск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9ad85b7d0d60c3a8",
+          "geo_label": "СОКОЛ",
+          "geo_display_name": "Сокол",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9adf3ba9e73a727e",
+          "geo_label": "РЕСПУБЛИКА КОМИ",
+          "geo_display_name": "Республика Коми",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9bb973af0c5b0b78",
+          "geo_label": "ВЕЛИКИЕ ЛУКИ",
+          "geo_display_name": "Великие Луки",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9cc418889ab160c9",
+          "geo_label": "РЕСПУБЛИКА УДМУРТИЯ",
+          "geo_display_name": "Удмуртская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9db51a9fcbbd555e",
+          "geo_label": "ВОЛОГДА",
+          "geo_display_name": "Вологда",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9f4af49a5d901612",
+          "geo_label": "ТИХОРЕЦК",
+          "geo_display_name": "Тихорецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9fa9947d05f9c106",
+          "geo_label": "КАЛИНИНГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Калининградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a1c32c91e8ec8e60",
+          "geo_label": "ОСТРОВ",
+          "geo_display_name": "Остров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a1c56e2e4c4466f8",
+          "geo_label": "КАЛИНИНГРАД",
+          "geo_display_name": "Калининград",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a20b0e6e0fac037b",
+          "geo_label": "НИЖНЕВАРТОВСК",
+          "geo_display_name": "Нижневартовск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a3d9a7e7e08bfe50",
+          "geo_label": "БОЛЬШОЙ КАМЕНЬ",
+          "geo_display_name": "Большой Камень",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a58138e94aa78713",
+          "geo_label": "ЛЕНИНГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ленинградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a7670443521246e9",
+          "geo_label": "ДОЛГОПРУДНЫЙ",
+          "geo_display_name": "Долгопрудный",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a8cb66747ba3b026",
+          "geo_label": "ПЕТРОЗАВОДСК",
+          "geo_display_name": "Петрозаводск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a9d7e611872fa730",
+          "geo_label": "РАМЕНСКОЕ",
+          "geo_display_name": "Раменское",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_aa6a3705d9ba05dd",
+          "geo_label": "ЛОБНЯ",
+          "geo_display_name": "Лобня",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_aaf573ca2de434b2",
+          "geo_label": "РОСТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ростовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_abf1e3dc13d4e6b6",
+          "geo_label": "КИНЕШМА",
+          "geo_display_name": "Кинешма",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ad615a694a8e9a54",
+          "geo_label": "НОВОКУЗНЕЦК",
+          "geo_display_name": "Новокузнецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ad76eb61a0c4abf1",
+          "geo_label": "АРМАВИР",
+          "geo_display_name": "Армавир",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ae4b572fa4c02f42",
+          "geo_label": "НОВОСИБИРСК",
+          "geo_display_name": "Новосибирск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b03bdf6566284376",
+          "geo_label": "СТАВРОПОЛЬ",
+          "geo_display_name": "Ставрополь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b25fd4fb102fd0bb",
+          "geo_label": "ЧЕБОКСАРЫ",
+          "geo_display_name": "Чебоксары",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b43f77bcf0d0291c",
+          "geo_label": "КЕМЕРОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Кемеровская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_b894719643de2741",
+          "geo_label": "ЩЕЛКОВО",
+          "geo_display_name": "Щелково",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ba7e7b605d51de94",
+          "geo_label": "ПЕРМСКИЙ КРАЙ",
+          "geo_display_name": "Пермский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_be918c5b97ba92ab",
+          "geo_label": "НОВОКУЙБЫШЕВСК",
+          "geo_display_name": "Новокуйбышевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c0f79969c9badc87",
+          "geo_label": "САМАРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Самарская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0f7fc02db8bce9b",
+          "geo_label": "АСТРАХАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Астраханская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0fb54b8d7d439bc",
+          "geo_label": "КРАСНОГОРСК",
+          "geo_display_name": "Красногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c39a937a4a265d1a",
+          "geo_label": "КИРОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Кировская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c51dfc7db7a809e9",
+          "geo_label": "НАЛЬЧИК",
+          "geo_display_name": "Нальчик",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c5bbbb417c2f21f1",
+          "geo_label": "ВОРОНЕЖ",
+          "geo_display_name": "Воронеж",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c6774093951808be",
+          "geo_label": "СЕВЕРОДВИНСК",
+          "geo_display_name": "Северодвинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c702f60ace70d5f2",
+          "geo_label": "СОЛНЕЧНОГОРСК",
+          "geo_display_name": "Солнечногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c704aed06fb8903b",
+          "geo_label": "НОВОСИБИРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Новосибирская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ca87e5cd19f69216",
+          "geo_label": "РЕСПУБЛИКА БАШКОРТОСТАН",
+          "geo_display_name": "Республика Башкортостан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ca921138dd63e5b0",
+          "geo_label": "ТОЛЬЯТТИ",
+          "geo_display_name": "Тольятти",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cb64426d56fd2a49",
+          "geo_label": "ВЛАДИМИР",
+          "geo_display_name": "Владимир",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cc6d40a0fd8a0441",
+          "geo_label": "УССУРИЙСК",
+          "geo_display_name": "Уссурийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cda5a80a3b7169f4",
+          "geo_label": "САРАТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Саратовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ce5654ff1584e47a",
+          "geo_label": "ТАГАНРОГ",
+          "geo_display_name": "Таганрог",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cf2e9cf981259b4e",
+          "geo_label": "АЛЬМЕТЬЕВСК",
+          "geo_display_name": "Альметьевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d21f368556678496",
+          "geo_label": "РЕСПУБЛИКА ЧУВАШИЯ",
+          "geo_display_name": "Чувашская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d2c4415cd7421cea",
+          "geo_label": "УХТА",
+          "geo_display_name": "Ухта",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d2d740a2dfa1cdf2",
+          "geo_label": "ВОРОНЕЖСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Воронежская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d2f332559d2b8768",
+          "geo_label": "ТУТАЕВ",
+          "geo_display_name": "Тутаев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d32a2da6f7fa7234",
+          "geo_label": "УДОМЛЯ",
+          "geo_display_name": "Удомля",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d36bbe7743558685",
+          "geo_label": "АРТЕМ",
+          "geo_display_name": "Артем",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d83edfd6628e9afc",
+          "geo_label": "РЕСПУБЛИКА ТАТАРСТАН",
+          "geo_display_name": "Республика Татарстан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d8ed17b732f43f57",
+          "geo_label": "НАБЕРЕЖНЫЕ ЧЕЛНЫ",
+          "geo_display_name": "Набережные Челны",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_daf6c4eb196f4842",
+          "geo_label": "АРСЕНЬЕВ",
+          "geo_display_name": "Арсеньев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_db7fa1f7c10dbe2c",
+          "geo_label": "МАГНИТОГОРСК",
+          "geo_display_name": "Магнитогорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_dd8200d841f8b809",
+          "geo_label": "РЕСПУБЛИКА КАЛМЫКИЯ",
+          "geo_display_name": "Республика Калмыкия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_de69fcc1dc39ab66",
+          "geo_label": "СУРГУТ",
+          "geo_display_name": "Сургут",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ded441dd9232ea01",
+          "geo_label": "МОНЧЕГОРСК",
+          "geo_display_name": "Мончегорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_dfda5c672fb61686",
+          "geo_label": "ВЛАДИВОСТОК",
+          "geo_display_name": "Владивосток",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e10794967a6913ef",
+          "geo_label": "ТАМБОВ",
+          "geo_display_name": "Тамбов",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e1c6a5b04a684a5f",
+          "geo_label": "АРХАНГЕЛЬСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Архангельская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e1f551bc52b231f4",
+          "geo_label": "ОМСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Омская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e2491244881757a2",
+          "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Московская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e316c8f3c2dba674",
+          "geo_label": "АСТРАХАНЬ",
+          "geo_display_name": "Астрахань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e3bf4c0631680742",
+          "geo_label": "ИРКУТСК",
+          "geo_display_name": "Иркутск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e6e7e70b713bacde",
+          "geo_label": "СВЕРДЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Свердловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e6eb0fa6da272e9b",
+          "geo_label": "НОВОРОССИЙСК",
+          "geo_display_name": "Новороссийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e8a9ff18d4cc574a",
+          "geo_label": "ДЗЕРЖИНСК",
+          "geo_display_name": "Дзержинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ea4bfd6090011e7d",
+          "geo_label": "МЫТИЩИ",
+          "geo_display_name": "Мытищи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_eb5910a08dfcc5c1",
+          "geo_label": "ПЯТИГОРСК",
+          "geo_display_name": "Пятигорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ee195086e4c581bf",
+          "geo_label": "МИАСС",
+          "geo_display_name": "Миасс",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ef9368375b7cd433",
+          "geo_label": "АЛТАЙСКИЙ КРАЙ",
+          "geo_display_name": "Алтайский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f0896a12c6bd4ebd",
+          "geo_label": "АКСАЙ",
+          "geo_display_name": "Аксай",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f34399b4da91273c",
+          "geo_label": "НИЖЕГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Нижегородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f37af7616df95109",
+          "geo_label": "НОВГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Новгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f3bc16c2258e5d7a",
+          "geo_label": "КАБАРДИНО-БАЛКАРСКАЯ РЕСПУБЛИКА",
+          "geo_display_name": "Кабардино-Балкарская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f6705f8d048e2b53",
+          "geo_label": "ПЕРЕСЛАВЛЬ-ЗАЛЕССКИЙ",
+          "geo_display_name": "Переславль-Залесский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f9ca0ddcdbe5e80b",
+          "geo_label": "РЕСПУБЛИКА МАРИЙ ЭЛ",
+          "geo_display_name": "Республика Марий Эл",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_fa69b41c3243fefc",
+          "geo_label": "КАЛУГА",
+          "geo_display_name": "Калуга",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_fb2194782021ba45",
+          "geo_label": "КИРИШИ",
+          "geo_display_name": "Кириши",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_fbf9c84b011ebd56",
+          "geo_label": "ДОМОДЕДОВО",
+          "geo_display_name": "Домодедово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ff1cdaafe9cbdd42",
+          "geo_label": "ХИМКИ",
+          "geo_display_name": "Химки",
+          "geo_type": "city"
+        }
+      ],
+      "geo_id_list_sha256": "ff1e63a48e369f9642107923629d0a425f4a3dc86fc6e51dcb35ff738c8a0fa1",
+      "package_capability_channels": [
+        "Digital_Performance",
+        "Indoor",
+        "OOH_Total",
+        "Нац_ТВ",
+        "Радио",
+        "Рег_ТВ"
+      ],
+      "federal_rule_supported_channels": [
+        "Digital_Performance",
+        "OOH_Total",
+        "Indoor",
+        "Радио",
+        "Нац_ТВ",
+        "Рег_ТВ"
+      ],
+      "support_union_equals_denominator_geos": true,
+      "missing_population": [],
+      "missing_catalog": []
+    },
+    {
+      "business_direction": "ТС5/Оффлайн",
+      "supported_geo_count": 220,
+      "supported_geographies": [
+        {
+          "geo_id": "geo_031395c2814d1770",
+          "geo_label": "НОВОЧЕРКАССК",
+          "geo_display_name": "Новочеркасск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_05b2b580396e6c77",
+          "geo_label": "БЛАГОВЕЩЕНСК",
+          "geo_display_name": "Благовещенск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_06ad7b89944f92a2",
+          "geo_label": "НИЖНИЙ ТАГИЛ",
+          "geo_display_name": "Нижний Тагил",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0727e7ed2632befc",
+          "geo_label": "РЕСПУБЛИКА АДЫГЕЯ",
+          "geo_display_name": "Республика Адыгея",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_093a1766328e66ca",
+          "geo_label": "ОМСК",
+          "geo_display_name": "Омск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_09500abdc140c57e",
+          "geo_label": "ПЕНЗА",
+          "geo_display_name": "Пенза",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0ceaaee33b14e0a1",
+          "geo_label": "БОРОВИЧИ",
+          "geo_display_name": "Боровичи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0e3003c176b3a09b",
+          "geo_label": "РЕСПУБЛИКА МОРДОВИЯ",
+          "geo_display_name": "Республика Мордовия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_0e45d64437ef0ab3",
+          "geo_label": "БАЛАШИХА",
+          "geo_display_name": "Балашиха",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_108eab140138349f",
+          "geo_label": "ХАНТЫ-МАНСИЙСКИЙ АВТОНОМНЫЙ ОКРУГ",
+          "geo_display_name": "Ханты-Мансийский автономный округ - Югра",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_10d6f86f021847c6",
+          "geo_label": "НОВОЧЕБОКСАРСК",
+          "geo_display_name": "Новочебоксарск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_11dc18bfbea119d8",
+          "geo_label": "ВЛАДИКАВКАЗ",
+          "geo_display_name": "Владикавказ",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_133cdb7dcca84543",
+          "geo_label": "ТОМСК",
+          "geo_display_name": "Томск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_150933c6acf548e4",
+          "geo_label": "МИЧУРИНСК",
+          "geo_display_name": "Мичуринск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1615d65c53e3d88a",
+          "geo_label": "КЕМЕРОВО",
+          "geo_display_name": "Кемерово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_17ab139ca967145a",
+          "geo_label": "МИНЕРАЛЬНЫЕ ВОДЫ",
+          "geo_display_name": "Минеральные Воды",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_17fdd13e7c3490cf",
+          "geo_label": "ИРКУТСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Иркутская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_181e96762afa6524",
+          "geo_label": "ОРЕНБУРГ",
+          "geo_display_name": "Оренбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_192c939939bbebd5",
+          "geo_label": "ТОРЖОК",
+          "geo_display_name": "Торжок",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_19402913187c65e0",
+          "geo_label": "ПЕНЗЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Пензенская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_1a1dd82046f50b13",
+          "geo_label": "АПАТИТЫ",
+          "geo_display_name": "Апатиты",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1abfa315865f6827",
+          "geo_label": "ТАМБОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тамбовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_1b0f112cbf366d9b",
+          "geo_label": "БОР",
+          "geo_display_name": "Бор",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1b10e39705d1b75c",
+          "geo_label": "КАМЕНСК-ШАХТИНСКИЙ",
+          "geo_display_name": "Каменск-Шахтинский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d4e10a78edc1614",
+          "geo_label": "УГЛИЧ",
+          "geo_display_name": "Углич",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d58a46bdd0a4846",
+          "geo_label": "ВЕЛИКИЙ НОВГОРОД",
+          "geo_display_name": "Великий Новгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d7333fd2a3c8715",
+          "geo_label": "УЛАН-УДЭ",
+          "geo_display_name": "Улан-Удэ",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1e05d321927cf372",
+          "geo_label": "ВЫШНИЙ ВОЛОЧЕК",
+          "geo_display_name": "Вышний Волочек",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_212302479b4c065e",
+          "geo_label": "ЯРОСЛАВЛЬ",
+          "geo_display_name": "Ярославль",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_23aeed82014ce95e",
+          "geo_label": "КРАСНОДАРСКИЙ КРАЙ",
+          "geo_display_name": "Краснодарский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2412d29f1964da67",
+          "geo_label": "ВИДНОЕ",
+          "geo_display_name": "Видное",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_244e457664df05ed",
+          "geo_label": "ЙОШКАР-ОЛА",
+          "geo_display_name": "Йошкар-Ола",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_27c6321193c78661",
+          "geo_label": "ШУЯ",
+          "geo_display_name": "Шуя",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2a7d6797adab975f",
+          "geo_label": "САМАРА",
+          "geo_display_name": "Самара",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2bb56ca5ca40c1f7",
+          "geo_label": "ХАБАРОВСКИЙ КРАЙ",
+          "geo_display_name": "Хабаровский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2bb5b3c30eec3850",
+          "geo_label": "РЕСПУБЛИКА СЕВЕРНАЯ ОСЕТИЯ",
+          "geo_display_name": "Республика Северная Осетия - Алания",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2c847ca0173b1925",
+          "geo_label": "КУЗНЕЦК",
+          "geo_display_name": "Кузнецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2db8f7f2a69e53db",
+          "geo_label": "МАЙКОП",
+          "geo_display_name": "Майкоп",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2e944fce52e678a6",
+          "geo_label": "СОЧИ",
+          "geo_display_name": "Сочи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2f2ef7a4526bd34a",
+          "geo_label": "БРЯНСК",
+          "geo_display_name": "Брянск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_30d57e2af9301114",
+          "geo_label": "ЕКАТЕРИНБУРГ",
+          "geo_display_name": "Екатеринбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3150ebe5e447e018",
+          "geo_label": "РЕСПУБЛИКА КАРЕЛИЯ",
+          "geo_display_name": "Республика Карелия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_3291a51b87f87713",
+          "geo_label": "БИРОБИДЖАН",
+          "geo_display_name": "Биробиджан",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3346e213f2315f11",
+          "geo_label": "КСТОВСКИЙ РАЙОН",
+          "geo_display_name": "Кстовский район",
+          "geo_type": "district"
+        },
+        {
+          "geo_id": "geo_360bec89c52dae41",
+          "geo_label": "ВОЛГОГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Волгоградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_37451e5dce8192aa",
+          "geo_label": "ПЕРМЬ",
+          "geo_display_name": "Пермь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_39bd072f033b68ee",
+          "geo_label": "ТУЛА",
+          "geo_display_name": "Тула",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3a3c9a16bd3f4347",
+          "geo_label": "ЧИТА",
+          "geo_display_name": "Чита",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3adf62e63c7fd5d5",
+          "geo_label": "ИВАНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ивановская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_3c2426b44557da90",
+          "geo_label": "КОТЛАС",
+          "geo_display_name": "Котлас",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3c537c4cd22a8b1f",
+          "geo_label": "ЧЕРЕПОВЕЦ",
+          "geo_display_name": "Череповец",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3f3864f3f1391c1f",
+          "geo_label": "МУРМАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Мурманская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4182ea75dbfa6adf",
+          "geo_label": "СЫКТЫВКАР",
+          "geo_display_name": "Сыктывкар",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_425d8ef3221e32b8",
+          "geo_label": "ПОДОЛЬСК",
+          "geo_display_name": "Подольск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_42f01deb191fb1c1",
+          "geo_label": "ЯКУТСК",
+          "geo_display_name": "Якутск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_42f79d22f4fb70a5",
+          "geo_label": "РЫБИНСК",
+          "geo_display_name": "Рыбинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_43e3aae44829f95f",
+          "geo_label": "КОВРОВ",
+          "geo_display_name": "Ковров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_441492c9e1030bce",
+          "geo_label": "КОРОЛЕВ",
+          "geo_display_name": "Королев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_441a51f1a1a48fa7",
+          "geo_label": "БАТАЙСК",
+          "geo_display_name": "Батайск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_47e505cb9a22cb1f",
+          "geo_label": "МУРМАНСК",
+          "geo_display_name": "Мурманск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_480f3d37706eea65",
+          "geo_label": "ЖЕЛЕЗНОГОРСК",
+          "geo_display_name": "Железногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4ac7810d9df81d3b",
+          "geo_label": "ВЕЛИКИЙ УСТЮГ",
+          "geo_display_name": "Великий Устюг",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4bb0b2082503653a",
+          "geo_label": "КОРЯЖМА",
+          "geo_display_name": "Коряжма",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4d36b8978c7dd983",
+          "geo_label": "ЧЕЛЯБИНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Челябинская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4ddce812b8d17e01",
+          "geo_label": "ОРЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Орловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4f53b0ec17d55e63",
+          "geo_label": "ЯРОСЛАВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ярославская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4f53b29b6ff02d79",
+          "geo_label": "ПАРТИЗАНСК",
+          "geo_display_name": "Партизанск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_520151290ea3255a",
+          "geo_label": "ВЫБОРГ",
+          "geo_display_name": "Выборг",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_528f8766cd1b4fae",
+          "geo_label": "РЕСПУБЛИКА БУРЯТИЯ",
+          "geo_display_name": "Республика Бурятия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5626b585975ad5ce",
+          "geo_label": "ОРЕНБУРГСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Оренбургская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_57f4ff5d3ee8852e",
+          "geo_label": "ТВЕРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тверская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_59073a79559340a0",
+          "geo_label": "НИЖНЕКАМСК",
+          "geo_display_name": "Нижнекамск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5ac7acde3cdf68a6",
+          "geo_label": "ХАНТЫ-МАНСИЙСК",
+          "geo_display_name": "Ханты-Мансийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b050d7ea114dc2e",
+          "geo_label": "КИРОВ",
+          "geo_display_name": "Киров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b43415568bcd9ce",
+          "geo_label": "ПСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Псковская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5d01870a3a173190",
+          "geo_label": "ЧЕЛЯБИНСК",
+          "geo_display_name": "Челябинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5d87c0fa88acedb1",
+          "geo_label": "ТЮМЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тюменская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5fa9084303383362",
+          "geo_label": "САРАТОВ",
+          "geo_display_name": "Саратов",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_603847d7490bba77",
+          "geo_label": "КРАСНОДАР",
+          "geo_display_name": "Краснодар",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_609ae2c3e4e515a0",
+          "geo_label": "ИЖЕВСК",
+          "geo_display_name": "Ижевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_61fb685891366787",
+          "geo_label": "ГУСЬ-ХРУСТАЛЬНЫЙ",
+          "geo_display_name": "Гусь-Хрустальный",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6250113c3a735179",
+          "geo_label": "РЯЗАНЬ",
+          "geo_display_name": "Рязань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_64a57807beaa1977",
+          "geo_label": "ПСКОВ",
+          "geo_display_name": "Псков",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6527fd7958b63ecb",
+          "geo_label": "ТИМАШЕВСК",
+          "geo_display_name": "Тимашевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_654946621661ed59",
+          "geo_label": "РОСТОВ-НА-ДОНУ",
+          "geo_display_name": "Ростов-на-Дону",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_66524d70cfd80f33",
+          "geo_label": "БЕЛГОРОД",
+          "geo_display_name": "Белгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_679fcdcbff1d857e",
+          "geo_label": "ЛИПЕЦК",
+          "geo_display_name": "Липецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6835667d9b3fc15f",
+          "geo_label": "ИВАНОВО",
+          "geo_display_name": "Иваново",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_692c9f128b3b5f84",
+          "geo_label": "КИРОВСК",
+          "geo_display_name": "Кировск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_69a60951706b056a",
+          "geo_label": "ВОЛОГОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Вологодская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_6c2900420be7fcb0",
+          "geo_label": "ЕССЕНТУКИ",
+          "geo_display_name": "Ессентуки",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6de565131413b901",
+          "geo_label": "ТЮМЕНЬ",
+          "geo_display_name": "Тюмень",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6ea343b71af7c34e",
+          "geo_label": "ТОМСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Томская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_6ead6cdc17609501",
+          "geo_label": "СТАВРОПОЛЬСКИЙ КРАЙ",
+          "geo_display_name": "Ставропольский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_6ef64f38d40f6a76",
+          "geo_label": "КРАСНОЯРСКИЙ КРАЙ",
+          "geo_display_name": "Красноярский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_723bec066ed256b0",
+          "geo_label": "ВЯЗНИКИ",
+          "geo_display_name": "Вязники",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_724a73c8229d5e9b",
+          "geo_label": "КОМСОМОЛЬСК-НА-АМУРЕ",
+          "geo_display_name": "Комсомольск-на-Амуре",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_74240820071487d1",
+          "geo_label": "АНАПА",
+          "geo_display_name": "Анапа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_746b7f322c7d4483",
+          "geo_label": "ФОКИНО",
+          "geo_display_name": "Фокино",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7518d7367997f3ed",
+          "geo_label": "ТВЕРЬ",
+          "geo_display_name": "Тверь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_75b1c7a1ec0c6bca",
+          "geo_label": "ОРЕЛ",
+          "geo_display_name": "Орел",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_76c59267159b9cf1",
+          "geo_label": "ЛИПЕЦКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Липецкая область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_77d766e98e94b5b2",
+          "geo_label": "КАРАЧАЕВО-ЧЕРКЕССКАЯ РЕСПУБЛИКА",
+          "geo_display_name": "Карачаево-Черкесская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_79524caf0e86edf3",
+          "geo_label": "ЭНГЕЛЬС",
+          "geo_display_name": "Энгельс",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7aafc347a167c4da",
+          "geo_label": "КАЗАНЬ",
+          "geo_display_name": "Казань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7b998ab602a8bb85",
+          "geo_label": "СМОЛЕНСК",
+          "geo_display_name": "Смоленск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7d1b5b95bf81cf12",
+          "geo_label": "САРАНСК",
+          "geo_display_name": "Саранск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_81b9346d310ccb3a",
+          "geo_label": "КОНАКОВО",
+          "geo_display_name": "Конаково",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_82e3d00fad994578",
+          "geo_label": "КУРГАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Курганская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_845dcb133962087a",
+          "geo_label": "ЗАБАЙКАЛЬСКИЙ КРАЙ",
+          "geo_display_name": "Забайкальский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_84e5fcec31012b88",
+          "geo_label": "ВОЛГОГРАД",
+          "geo_display_name": "Волгоград",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_870a7f937ff57ad8",
+          "geo_label": "СТАРЫЙ ОСКОЛ",
+          "geo_display_name": "Старый Оскол",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_89551556910e5180",
+          "geo_label": "ОЛЕНЕГОРСК",
+          "geo_display_name": "Оленегорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_89a058f5b87790ec",
+          "geo_label": "КОСТРОМСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Костромская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_8a262b9422eb5010",
+          "geo_label": "БАРНАУЛ",
+          "geo_display_name": "Барнаул",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8ac7fd9d42e86e8f",
+          "geo_label": "БЕРДСК",
+          "geo_display_name": "Бердск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8aec4909737b94ec",
+          "geo_label": "ОСТАШЕВО",
+          "geo_display_name": "Осташево",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8d0ec5d509e7e256",
+          "geo_label": "КУРГАН",
+          "geo_display_name": "Курган",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8d8df24c5ffbb97d",
+          "geo_label": "УЛЬЯНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ульяновская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_8e220753930a277f",
+          "geo_label": "КИСЛОВОДСК",
+          "geo_display_name": "Кисловодск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8e7b7c971d1eaa78",
+          "geo_label": "БЕРЕЗОВСКИЙ",
+          "geo_display_name": "Березовский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8ff699c8119ebd8b",
+          "geo_label": "ЗАВИДОВО",
+          "geo_display_name": "Завидово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_91572a7fdf0c3bc8",
+          "geo_label": "АРХАНГЕЛЬСК",
+          "geo_display_name": "Архангельск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_91a30b433c3f5106",
+          "geo_label": "ШАХТЫ",
+          "geo_display_name": "Шахты",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_92b6cf23ae9992dc",
+          "geo_label": "КУРСК",
+          "geo_display_name": "Курск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_93400a42108562f8",
+          "geo_label": "КОСТРОМА",
+          "geo_display_name": "Кострома",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_93a89aa2fbcf50f7",
+          "geo_label": "КРАСНОЯРСК",
+          "geo_display_name": "Красноярск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_94835d40a52e5a3a",
+          "geo_label": "САНКТ-ПЕТЕРБУРГ",
+          "geo_display_name": "Санкт-Петербург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9519057ac44fcf68",
+          "geo_label": "ЧЕРКЕССК",
+          "geo_display_name": "Черкесск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_957e66011fc7614c",
+          "geo_label": "АЛЕКСАНДРОВ",
+          "geo_display_name": "Александров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9580f4dcafacc7a3",
+          "geo_label": "НАХОДКА",
+          "geo_display_name": "Находка",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_95a5bc5573fb18d5",
+          "geo_label": "КУРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Курская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_95ccc4904baeea20",
+          "geo_label": "УЛЬЯНОВСК",
+          "geo_display_name": "Ульяновск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_965336b61d1b679c",
+          "geo_label": "УФА",
+          "geo_display_name": "Уфа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_96d8acf2128d1686",
+          "geo_label": "МОСКВА",
+          "geo_display_name": "Москва",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_99113e492e368d1e",
+          "geo_label": "БЕЛГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Белгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9920888cf795b8e9",
+          "geo_label": "ХАБАРОВСК",
+          "geo_display_name": "Хабаровск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9ad85b7d0d60c3a8",
+          "geo_label": "СОКОЛ",
+          "geo_display_name": "Сокол",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9adf3ba9e73a727e",
+          "geo_label": "РЕСПУБЛИКА КОМИ",
+          "geo_display_name": "Республика Коми",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9bb973af0c5b0b78",
+          "geo_label": "ВЕЛИКИЕ ЛУКИ",
+          "geo_display_name": "Великие Луки",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9cc418889ab160c9",
+          "geo_label": "РЕСПУБЛИКА УДМУРТИЯ",
+          "geo_display_name": "Удмуртская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9db51a9fcbbd555e",
+          "geo_label": "ВОЛОГДА",
+          "geo_display_name": "Вологда",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9f4af49a5d901612",
+          "geo_label": "ТИХОРЕЦК",
+          "geo_display_name": "Тихорецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9fa9947d05f9c106",
+          "geo_label": "КАЛИНИНГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Калининградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a1c32c91e8ec8e60",
+          "geo_label": "ОСТРОВ",
+          "geo_display_name": "Остров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a1c56e2e4c4466f8",
+          "geo_label": "КАЛИНИНГРАД",
+          "geo_display_name": "Калининград",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a20b0e6e0fac037b",
+          "geo_label": "НИЖНЕВАРТОВСК",
+          "geo_display_name": "Нижневартовск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a3d9a7e7e08bfe50",
+          "geo_label": "БОЛЬШОЙ КАМЕНЬ",
+          "geo_display_name": "Большой Камень",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a58138e94aa78713",
+          "geo_label": "ЛЕНИНГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ленинградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a7670443521246e9",
+          "geo_label": "ДОЛГОПРУДНЫЙ",
+          "geo_display_name": "Долгопрудный",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a8cb66747ba3b026",
+          "geo_label": "ПЕТРОЗАВОДСК",
+          "geo_display_name": "Петрозаводск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a9d7e611872fa730",
+          "geo_label": "РАМЕНСКОЕ",
+          "geo_display_name": "Раменское",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_aa6a3705d9ba05dd",
+          "geo_label": "ЛОБНЯ",
+          "geo_display_name": "Лобня",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_aaf573ca2de434b2",
+          "geo_label": "РОСТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ростовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_abf1e3dc13d4e6b6",
+          "geo_label": "КИНЕШМА",
+          "geo_display_name": "Кинешма",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ad615a694a8e9a54",
+          "geo_label": "НОВОКУЗНЕЦК",
+          "geo_display_name": "Новокузнецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ad76eb61a0c4abf1",
+          "geo_label": "АРМАВИР",
+          "geo_display_name": "Армавир",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ae4b572fa4c02f42",
+          "geo_label": "НОВОСИБИРСК",
+          "geo_display_name": "Новосибирск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ae8f762709d06545",
+          "geo_label": "БЕЖЕЦК",
+          "geo_display_name": "Бежецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b03bdf6566284376",
+          "geo_label": "СТАВРОПОЛЬ",
+          "geo_display_name": "Ставрополь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b25fd4fb102fd0bb",
+          "geo_label": "ЧЕБОКСАРЫ",
+          "geo_display_name": "Чебоксары",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b43f77bcf0d0291c",
+          "geo_label": "КЕМЕРОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Кемеровская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_b894719643de2741",
+          "geo_label": "ЩЕЛКОВО",
+          "geo_display_name": "Щелково",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ba7e7b605d51de94",
+          "geo_label": "ПЕРМСКИЙ КРАЙ",
+          "geo_display_name": "Пермский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_be918c5b97ba92ab",
+          "geo_label": "НОВОКУЙБЫШЕВСК",
+          "geo_display_name": "Новокуйбышевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c0f79969c9badc87",
+          "geo_label": "САМАРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Самарская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0f7fc02db8bce9b",
+          "geo_label": "АСТРАХАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Астраханская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0fb54b8d7d439bc",
+          "geo_label": "КРАСНОГОРСК",
+          "geo_display_name": "Красногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c39a937a4a265d1a",
+          "geo_label": "КИРОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Кировская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c51dfc7db7a809e9",
+          "geo_label": "НАЛЬЧИК",
+          "geo_display_name": "Нальчик",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c5bbbb417c2f21f1",
+          "geo_label": "ВОРОНЕЖ",
+          "geo_display_name": "Воронеж",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c6774093951808be",
+          "geo_label": "СЕВЕРОДВИНСК",
+          "geo_display_name": "Северодвинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c702f60ace70d5f2",
+          "geo_label": "СОЛНЕЧНОГОРСК",
+          "geo_display_name": "Солнечногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c704aed06fb8903b",
+          "geo_label": "НОВОСИБИРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Новосибирская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c7f12238925542ef",
+          "geo_label": "СЛАВЯНСК-НА-КУБАНИ",
+          "geo_display_name": "Славянск-на-Кубани",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ca87e5cd19f69216",
+          "geo_label": "РЕСПУБЛИКА БАШКОРТОСТАН",
+          "geo_display_name": "Республика Башкортостан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ca921138dd63e5b0",
+          "geo_label": "ТОЛЬЯТТИ",
+          "geo_display_name": "Тольятти",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cb64426d56fd2a49",
+          "geo_label": "ВЛАДИМИР",
+          "geo_display_name": "Владимир",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cc6d40a0fd8a0441",
+          "geo_label": "УССУРИЙСК",
+          "geo_display_name": "Уссурийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cda5a80a3b7169f4",
+          "geo_label": "САРАТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Саратовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ce5654ff1584e47a",
+          "geo_label": "ТАГАНРОГ",
+          "geo_display_name": "Таганрог",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cf2e9cf981259b4e",
+          "geo_label": "АЛЬМЕТЬЕВСК",
+          "geo_display_name": "Альметьевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d21f368556678496",
+          "geo_label": "РЕСПУБЛИКА ЧУВАШИЯ",
+          "geo_display_name": "Чувашская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d2c4415cd7421cea",
+          "geo_label": "УХТА",
+          "geo_display_name": "Ухта",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d2d740a2dfa1cdf2",
+          "geo_label": "ВОРОНЕЖСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Воронежская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d2f332559d2b8768",
+          "geo_label": "ТУТАЕВ",
+          "geo_display_name": "Тутаев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d32a2da6f7fa7234",
+          "geo_label": "УДОМЛЯ",
+          "geo_display_name": "Удомля",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d36bbe7743558685",
+          "geo_label": "АРТЕМ",
+          "geo_display_name": "Артем",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d83edfd6628e9afc",
+          "geo_label": "РЕСПУБЛИКА ТАТАРСТАН",
+          "geo_display_name": "Республика Татарстан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d8ed17b732f43f57",
+          "geo_label": "НАБЕРЕЖНЫЕ ЧЕЛНЫ",
+          "geo_display_name": "Набережные Челны",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_daf6c4eb196f4842",
+          "geo_label": "АРСЕНЬЕВ",
+          "geo_display_name": "Арсеньев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_db7fa1f7c10dbe2c",
+          "geo_label": "МАГНИТОГОРСК",
+          "geo_display_name": "Магнитогорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_dd8200d841f8b809",
+          "geo_label": "РЕСПУБЛИКА КАЛМЫКИЯ",
+          "geo_display_name": "Республика Калмыкия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_de69fcc1dc39ab66",
+          "geo_label": "СУРГУТ",
+          "geo_display_name": "Сургут",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ded441dd9232ea01",
+          "geo_label": "МОНЧЕГОРСК",
+          "geo_display_name": "Мончегорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_dfda5c672fb61686",
+          "geo_label": "ВЛАДИВОСТОК",
+          "geo_display_name": "Владивосток",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e10794967a6913ef",
+          "geo_label": "ТАМБОВ",
+          "geo_display_name": "Тамбов",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e1c6a5b04a684a5f",
+          "geo_label": "АРХАНГЕЛЬСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Архангельская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e1f551bc52b231f4",
+          "geo_label": "ОМСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Омская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e2491244881757a2",
+          "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Московская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e316c8f3c2dba674",
+          "geo_label": "АСТРАХАНЬ",
+          "geo_display_name": "Астрахань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e3bf4c0631680742",
+          "geo_label": "ИРКУТСК",
+          "geo_display_name": "Иркутск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e6e7e70b713bacde",
+          "geo_label": "СВЕРДЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Свердловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e6eb0fa6da272e9b",
+          "geo_label": "НОВОРОССИЙСК",
+          "geo_display_name": "Новороссийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e8a9ff18d4cc574a",
+          "geo_label": "ДЗЕРЖИНСК",
+          "geo_display_name": "Дзержинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ea4bfd6090011e7d",
+          "geo_label": "МЫТИЩИ",
+          "geo_display_name": "Мытищи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_eb5910a08dfcc5c1",
+          "geo_label": "ПЯТИГОРСК",
+          "geo_display_name": "Пятигорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ee195086e4c581bf",
+          "geo_label": "МИАСС",
+          "geo_display_name": "Миасс",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ef9368375b7cd433",
+          "geo_label": "АЛТАЙСКИЙ КРАЙ",
+          "geo_display_name": "Алтайский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f0896a12c6bd4ebd",
+          "geo_label": "АКСАЙ",
+          "geo_display_name": "Аксай",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f2a156c9dae90dad",
+          "geo_label": "ЛЮБЕРЦЫ",
+          "geo_display_name": "Люберцы",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f34399b4da91273c",
+          "geo_label": "НИЖЕГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Нижегородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f37af7616df95109",
+          "geo_label": "НОВГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Новгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f3bc16c2258e5d7a",
+          "geo_label": "КАБАРДИНО-БАЛКАРСКАЯ РЕСПУБЛИКА",
+          "geo_display_name": "Кабардино-Балкарская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f6705f8d048e2b53",
+          "geo_label": "ПЕРЕСЛАВЛЬ-ЗАЛЕССКИЙ",
+          "geo_display_name": "Переславль-Залесский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f9ca0ddcdbe5e80b",
+          "geo_label": "РЕСПУБЛИКА МАРИЙ ЭЛ",
+          "geo_display_name": "Республика Марий Эл",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_fa69b41c3243fefc",
+          "geo_label": "КАЛУГА",
+          "geo_display_name": "Калуга",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_fb2194782021ba45",
+          "geo_label": "КИРИШИ",
+          "geo_display_name": "Кириши",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_fbf9c84b011ebd56",
+          "geo_label": "ДОМОДЕДОВО",
+          "geo_display_name": "Домодедово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ff1cdaafe9cbdd42",
+          "geo_label": "ХИМКИ",
+          "geo_display_name": "Химки",
+          "geo_type": "city"
+        }
+      ],
+      "geo_id_list_sha256": "6efbbcaaa1cc002e476092db8c57290692a1853cb52760c9c847c3f6547b8aba",
+      "package_capability_channels": [
+        "Indoor",
+        "OOH_Total",
+        "Нац_ТВ",
+        "Радио",
+        "Рег_ТВ"
+      ],
+      "federal_rule_supported_channels": [
+        "Digital_Performance",
+        "OOH_Total",
+        "Indoor",
+        "Радио",
+        "Нац_ТВ",
+        "Рег_ТВ"
+      ],
+      "support_union_equals_denominator_geos": true,
+      "missing_population": [],
+      "missing_catalog": []
+    },
+    {
+      "business_direction": "ТСХ/Онлайн",
+      "supported_geo_count": 114,
+      "supported_geographies": [
+        {
+          "geo_id": "geo_06ad7b89944f92a2",
+          "geo_label": "НИЖНИЙ ТАГИЛ",
+          "geo_display_name": "Нижний Тагил",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_09500abdc140c57e",
+          "geo_label": "ПЕНЗА",
+          "geo_display_name": "Пенза",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0e3003c176b3a09b",
+          "geo_label": "РЕСПУБЛИКА МОРДОВИЯ",
+          "geo_display_name": "Республика Мордовия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_0e45d64437ef0ab3",
+          "geo_label": "БАЛАШИХА",
+          "geo_display_name": "Балашиха",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_108eab140138349f",
+          "geo_label": "ХАНТЫ-МАНСИЙСКИЙ АВТОНОМНЫЙ ОКРУГ",
+          "geo_display_name": "Ханты-Мансийский автономный округ - Югра",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_181e96762afa6524",
+          "geo_label": "ОРЕНБУРГ",
+          "geo_display_name": "Оренбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_19402913187c65e0",
+          "geo_label": "ПЕНЗЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Пензенская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_1a1dd82046f50b13",
+          "geo_label": "АПАТИТЫ",
+          "geo_display_name": "Апатиты",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1b0f112cbf366d9b",
+          "geo_label": "БОР",
+          "geo_display_name": "Бор",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d58a46bdd0a4846",
+          "geo_label": "ВЕЛИКИЙ НОВГОРОД",
+          "geo_display_name": "Великий Новгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_212302479b4c065e",
+          "geo_label": "ЯРОСЛАВЛЬ",
+          "geo_display_name": "Ярославль",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_23aeed82014ce95e",
+          "geo_label": "КРАСНОДАРСКИЙ КРАЙ",
+          "geo_display_name": "Краснодарский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2412d29f1964da67",
+          "geo_label": "ВИДНОЕ",
+          "geo_display_name": "Видное",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_244e457664df05ed",
+          "geo_label": "ЙОШКАР-ОЛА",
+          "geo_display_name": "Йошкар-Ола",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2a7d6797adab975f",
+          "geo_label": "САМАРА",
+          "geo_display_name": "Самара",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2e944fce52e678a6",
+          "geo_label": "СОЧИ",
+          "geo_display_name": "Сочи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2f2ef7a4526bd34a",
+          "geo_label": "БРЯНСК",
+          "geo_display_name": "Брянск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_30d57e2af9301114",
+          "geo_label": "ЕКАТЕРИНБУРГ",
+          "geo_display_name": "Екатеринбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3150ebe5e447e018",
+          "geo_label": "РЕСПУБЛИКА КАРЕЛИЯ",
+          "geo_display_name": "Республика Карелия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_360bec89c52dae41",
+          "geo_label": "ВОЛГОГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Волгоградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_37451e5dce8192aa",
+          "geo_label": "ПЕРМЬ",
+          "geo_display_name": "Пермь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_39bd072f033b68ee",
+          "geo_label": "ТУЛА",
+          "geo_display_name": "Тула",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3adf62e63c7fd5d5",
+          "geo_label": "ИВАНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ивановская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_3f3864f3f1391c1f",
+          "geo_label": "МУРМАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Мурманская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_425d8ef3221e32b8",
+          "geo_label": "ПОДОЛЬСК",
+          "geo_display_name": "Подольск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_441492c9e1030bce",
+          "geo_label": "КОРОЛЕВ",
+          "geo_display_name": "Королев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_47e505cb9a22cb1f",
+          "geo_label": "МУРМАНСК",
+          "geo_display_name": "Мурманск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4d36b8978c7dd983",
+          "geo_label": "ЧЕЛЯБИНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Челябинская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4ddce812b8d17e01",
+          "geo_label": "ОРЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Орловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4f53b0ec17d55e63",
+          "geo_label": "ЯРОСЛАВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ярославская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_520151290ea3255a",
+          "geo_label": "ВЫБОРГ",
+          "geo_display_name": "Выборг",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5626b585975ad5ce",
+          "geo_label": "ОРЕНБУРГСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Оренбургская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_57f4ff5d3ee8852e",
+          "geo_label": "ТВЕРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тверская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_59073a79559340a0",
+          "geo_label": "НИЖНЕКАМСК",
+          "geo_display_name": "Нижнекамск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5ac7acde3cdf68a6",
+          "geo_label": "ХАНТЫ-МАНСИЙСК",
+          "geo_display_name": "Ханты-Мансийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b050d7ea114dc2e",
+          "geo_label": "КИРОВ",
+          "geo_display_name": "Киров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b43415568bcd9ce",
+          "geo_label": "ПСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Псковская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5d01870a3a173190",
+          "geo_label": "ЧЕЛЯБИНСК",
+          "geo_display_name": "Челябинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5d87c0fa88acedb1",
+          "geo_label": "ТЮМЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тюменская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5fa9084303383362",
+          "geo_label": "САРАТОВ",
+          "geo_display_name": "Саратов",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_603847d7490bba77",
+          "geo_label": "КРАСНОДАР",
+          "geo_display_name": "Краснодар",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_609ae2c3e4e515a0",
+          "geo_label": "ИЖЕВСК",
+          "geo_display_name": "Ижевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6250113c3a735179",
+          "geo_label": "РЯЗАНЬ",
+          "geo_display_name": "Рязань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_64a57807beaa1977",
+          "geo_label": "ПСКОВ",
+          "geo_display_name": "Псков",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_654946621661ed59",
+          "geo_label": "РОСТОВ-НА-ДОНУ",
+          "geo_display_name": "Ростов-на-Дону",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_66524d70cfd80f33",
+          "geo_label": "БЕЛГОРОД",
+          "geo_display_name": "Белгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_679fcdcbff1d857e",
+          "geo_label": "ЛИПЕЦК",
+          "geo_display_name": "Липецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6835667d9b3fc15f",
+          "geo_label": "ИВАНОВО",
+          "geo_display_name": "Иваново",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6c2900420be7fcb0",
+          "geo_label": "ЕССЕНТУКИ",
+          "geo_display_name": "Ессентуки",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6de565131413b901",
+          "geo_label": "ТЮМЕНЬ",
+          "geo_display_name": "Тюмень",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6ead6cdc17609501",
+          "geo_label": "СТАВРОПОЛЬСКИЙ КРАЙ",
+          "geo_display_name": "Ставропольский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_74240820071487d1",
+          "geo_label": "АНАПА",
+          "geo_display_name": "Анапа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7518d7367997f3ed",
+          "geo_label": "ТВЕРЬ",
+          "geo_display_name": "Тверь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_75b1c7a1ec0c6bca",
+          "geo_label": "ОРЕЛ",
+          "geo_display_name": "Орел",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_76c59267159b9cf1",
+          "geo_label": "ЛИПЕЦКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Липецкая область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_79524caf0e86edf3",
+          "geo_label": "ЭНГЕЛЬС",
+          "geo_display_name": "Энгельс",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7aafc347a167c4da",
+          "geo_label": "КАЗАНЬ",
+          "geo_display_name": "Казань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7b998ab602a8bb85",
+          "geo_label": "СМОЛЕНСК",
+          "geo_display_name": "Смоленск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7d1b5b95bf81cf12",
+          "geo_label": "САРАНСК",
+          "geo_display_name": "Саранск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_84e5fcec31012b88",
+          "geo_label": "ВОЛГОГРАД",
+          "geo_display_name": "Волгоград",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_870a7f937ff57ad8",
+          "geo_label": "СТАРЫЙ ОСКОЛ",
+          "geo_display_name": "Старый Оскол",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8d8df24c5ffbb97d",
+          "geo_label": "УЛЬЯНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ульяновская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_8e220753930a277f",
+          "geo_label": "КИСЛОВОДСК",
+          "geo_display_name": "Кисловодск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8e7b7c971d1eaa78",
+          "geo_label": "БЕРЕЗОВСКИЙ",
+          "geo_display_name": "Березовский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_92b6cf23ae9992dc",
+          "geo_label": "КУРСК",
+          "geo_display_name": "Курск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_94835d40a52e5a3a",
+          "geo_label": "САНКТ-ПЕТЕРБУРГ",
+          "geo_display_name": "Санкт-Петербург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9519057ac44fcf68",
+          "geo_label": "ЧЕРКЕССК",
+          "geo_display_name": "Черкесск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_95a5bc5573fb18d5",
+          "geo_label": "КУРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Курская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_95ccc4904baeea20",
+          "geo_label": "УЛЬЯНОВСК",
+          "geo_display_name": "Ульяновск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_965336b61d1b679c",
+          "geo_label": "УФА",
+          "geo_display_name": "Уфа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_96d8acf2128d1686",
+          "geo_label": "МОСКВА",
+          "geo_display_name": "Москва",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_99113e492e368d1e",
+          "geo_label": "БЕЛГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Белгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9cc418889ab160c9",
+          "geo_label": "РЕСПУБЛИКА УДМУРТИЯ",
+          "geo_display_name": "Удмуртская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a20b0e6e0fac037b",
+          "geo_label": "НИЖНЕВАРТОВСК",
+          "geo_display_name": "Нижневартовск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a58138e94aa78713",
+          "geo_label": "ЛЕНИНГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ленинградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a7670443521246e9",
+          "geo_label": "ДОЛГОПРУДНЫЙ",
+          "geo_display_name": "Долгопрудный",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a8cb66747ba3b026",
+          "geo_label": "ПЕТРОЗАВОДСК",
+          "geo_display_name": "Петрозаводск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a9d7e611872fa730",
+          "geo_label": "РАМЕНСКОЕ",
+          "geo_display_name": "Раменское",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_aaf573ca2de434b2",
+          "geo_label": "РОСТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ростовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_b03bdf6566284376",
+          "geo_label": "СТАВРОПОЛЬ",
+          "geo_display_name": "Ставрополь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b25fd4fb102fd0bb",
+          "geo_label": "ЧЕБОКСАРЫ",
+          "geo_display_name": "Чебоксары",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b894719643de2741",
+          "geo_label": "ЩЕЛКОВО",
+          "geo_display_name": "Щелково",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ba7e7b605d51de94",
+          "geo_label": "ПЕРМСКИЙ КРАЙ",
+          "geo_display_name": "Пермский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_be918c5b97ba92ab",
+          "geo_label": "НОВОКУЙБЫШЕВСК",
+          "geo_display_name": "Новокуйбышевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c0f79969c9badc87",
+          "geo_label": "САМАРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Самарская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0f7fc02db8bce9b",
+          "geo_label": "АСТРАХАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Астраханская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0fb54b8d7d439bc",
+          "geo_label": "КРАСНОГОРСК",
+          "geo_display_name": "Красногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c39a937a4a265d1a",
+          "geo_label": "КИРОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Кировская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c5bbbb417c2f21f1",
+          "geo_label": "ВОРОНЕЖ",
+          "geo_display_name": "Воронеж",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c702f60ace70d5f2",
+          "geo_label": "СОЛНЕЧНОГОРСК",
+          "geo_display_name": "Солнечногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ca87e5cd19f69216",
+          "geo_label": "РЕСПУБЛИКА БАШКОРТОСТАН",
+          "geo_display_name": "Республика Башкортостан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ca921138dd63e5b0",
+          "geo_label": "ТОЛЬЯТТИ",
+          "geo_display_name": "Тольятти",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cb64426d56fd2a49",
+          "geo_label": "ВЛАДИМИР",
+          "geo_display_name": "Владимир",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cda5a80a3b7169f4",
+          "geo_label": "САРАТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Саратовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ce5654ff1584e47a",
+          "geo_label": "ТАГАНРОГ",
+          "geo_display_name": "Таганрог",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d21f368556678496",
+          "geo_label": "РЕСПУБЛИКА ЧУВАШИЯ",
+          "geo_display_name": "Чувашская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d2d740a2dfa1cdf2",
+          "geo_label": "ВОРОНЕЖСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Воронежская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d83edfd6628e9afc",
+          "geo_label": "РЕСПУБЛИКА ТАТАРСТАН",
+          "geo_display_name": "Республика Татарстан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d8ed17b732f43f57",
+          "geo_label": "НАБЕРЕЖНЫЕ ЧЕЛНЫ",
+          "geo_display_name": "Набережные Челны",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_db7fa1f7c10dbe2c",
+          "geo_label": "МАГНИТОГОРСК",
+          "geo_display_name": "Магнитогорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_de69fcc1dc39ab66",
+          "geo_label": "СУРГУТ",
+          "geo_display_name": "Сургут",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e2491244881757a2",
+          "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Московская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e316c8f3c2dba674",
+          "geo_label": "АСТРАХАНЬ",
+          "geo_display_name": "Астрахань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e6e7e70b713bacde",
+          "geo_label": "СВЕРДЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Свердловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e6eb0fa6da272e9b",
+          "geo_label": "НОВОРОССИЙСК",
+          "geo_display_name": "Новороссийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e8a9ff18d4cc574a",
+          "geo_label": "ДЗЕРЖИНСК",
+          "geo_display_name": "Дзержинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ea4bfd6090011e7d",
+          "geo_label": "МЫТИЩИ",
+          "geo_display_name": "Мытищи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_eb5910a08dfcc5c1",
+          "geo_label": "ПЯТИГОРСК",
+          "geo_display_name": "Пятигорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f34399b4da91273c",
+          "geo_label": "НИЖЕГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Нижегородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f37af7616df95109",
+          "geo_label": "НОВГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Новгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f9ca0ddcdbe5e80b",
+          "geo_label": "РЕСПУБЛИКА МАРИЙ ЭЛ",
+          "geo_display_name": "Республика Марий Эл",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_fa69b41c3243fefc",
+          "geo_label": "КАЛУГА",
+          "geo_display_name": "Калуга",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_fbf9c84b011ebd56",
+          "geo_label": "ДОМОДЕДОВО",
+          "geo_display_name": "Домодедово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ff1cdaafe9cbdd42",
+          "geo_label": "ХИМКИ",
+          "geo_display_name": "Химки",
+          "geo_type": "city"
+        }
+      ],
+      "geo_id_list_sha256": "29b5accef107982761b7465f9a9eefea23b59911e0fa6c0d1ad0c0ad50991a8a",
+      "package_capability_channels": [
+        "Digital_Performance",
+        "OOH_Total",
+        "Радио",
+        "Рег_ТВ"
+      ],
+      "federal_rule_supported_channels": [
+        "Digital_Performance",
+        "OOH_Total",
+        "Indoor",
+        "Радио",
+        "Нац_ТВ",
+        "Рег_ТВ"
+      ],
+      "support_union_equals_denominator_geos": true,
+      "missing_population": [],
+      "missing_catalog": []
+    },
+    {
+      "business_direction": "ТСХ/Оффлайн",
+      "supported_geo_count": 117,
+      "supported_geographies": [
+        {
+          "geo_id": "geo_031395c2814d1770",
+          "geo_label": "НОВОЧЕРКАССК",
+          "geo_display_name": "Новочеркасск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_06ad7b89944f92a2",
+          "geo_label": "НИЖНИЙ ТАГИЛ",
+          "geo_display_name": "Нижний Тагил",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_09500abdc140c57e",
+          "geo_label": "ПЕНЗА",
+          "geo_display_name": "Пенза",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_0e3003c176b3a09b",
+          "geo_label": "РЕСПУБЛИКА МОРДОВИЯ",
+          "geo_display_name": "Республика Мордовия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_0e45d64437ef0ab3",
+          "geo_label": "БАЛАШИХА",
+          "geo_display_name": "Балашиха",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_108eab140138349f",
+          "geo_label": "ХАНТЫ-МАНСИЙСКИЙ АВТОНОМНЫЙ ОКРУГ",
+          "geo_display_name": "Ханты-Мансийский автономный округ - Югра",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_181e96762afa6524",
+          "geo_label": "ОРЕНБУРГ",
+          "geo_display_name": "Оренбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_19402913187c65e0",
+          "geo_label": "ПЕНЗЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Пензенская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_1a1dd82046f50b13",
+          "geo_label": "АПАТИТЫ",
+          "geo_display_name": "Апатиты",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1b0f112cbf366d9b",
+          "geo_label": "БОР",
+          "geo_display_name": "Бор",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_1d58a46bdd0a4846",
+          "geo_label": "ВЕЛИКИЙ НОВГОРОД",
+          "geo_display_name": "Великий Новгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_212302479b4c065e",
+          "geo_label": "ЯРОСЛАВЛЬ",
+          "geo_display_name": "Ярославль",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_23aeed82014ce95e",
+          "geo_label": "КРАСНОДАРСКИЙ КРАЙ",
+          "geo_display_name": "Краснодарский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_2412d29f1964da67",
+          "geo_label": "ВИДНОЕ",
+          "geo_display_name": "Видное",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_244e457664df05ed",
+          "geo_label": "ЙОШКАР-ОЛА",
+          "geo_display_name": "Йошкар-Ола",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2a7d6797adab975f",
+          "geo_label": "САМАРА",
+          "geo_display_name": "Самара",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2e944fce52e678a6",
+          "geo_label": "СОЧИ",
+          "geo_display_name": "Сочи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_2f2ef7a4526bd34a",
+          "geo_label": "БРЯНСК",
+          "geo_display_name": "Брянск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_30d57e2af9301114",
+          "geo_label": "ЕКАТЕРИНБУРГ",
+          "geo_display_name": "Екатеринбург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3150ebe5e447e018",
+          "geo_label": "РЕСПУБЛИКА КАРЕЛИЯ",
+          "geo_display_name": "Республика Карелия",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_360bec89c52dae41",
+          "geo_label": "ВОЛГОГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Волгоградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_37451e5dce8192aa",
+          "geo_label": "ПЕРМЬ",
+          "geo_display_name": "Пермь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_39bd072f033b68ee",
+          "geo_label": "ТУЛА",
+          "geo_display_name": "Тула",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_3adf62e63c7fd5d5",
+          "geo_label": "ИВАНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ивановская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_3f3864f3f1391c1f",
+          "geo_label": "МУРМАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Мурманская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_425d8ef3221e32b8",
+          "geo_label": "ПОДОЛЬСК",
+          "geo_display_name": "Подольск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_441492c9e1030bce",
+          "geo_label": "КОРОЛЕВ",
+          "geo_display_name": "Королев",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_47e505cb9a22cb1f",
+          "geo_label": "МУРМАНСК",
+          "geo_display_name": "Мурманск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_4d36b8978c7dd983",
+          "geo_label": "ЧЕЛЯБИНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Челябинская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4ddce812b8d17e01",
+          "geo_label": "ОРЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Орловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_4f53b0ec17d55e63",
+          "geo_label": "ЯРОСЛАВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ярославская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_520151290ea3255a",
+          "geo_label": "ВЫБОРГ",
+          "geo_display_name": "Выборг",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5626b585975ad5ce",
+          "geo_label": "ОРЕНБУРГСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Оренбургская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_57f4ff5d3ee8852e",
+          "geo_label": "ТВЕРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тверская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_59073a79559340a0",
+          "geo_label": "НИЖНЕКАМСК",
+          "geo_display_name": "Нижнекамск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5ac7acde3cdf68a6",
+          "geo_label": "ХАНТЫ-МАНСИЙСК",
+          "geo_display_name": "Ханты-Мансийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b050d7ea114dc2e",
+          "geo_label": "КИРОВ",
+          "geo_display_name": "Киров",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5b43415568bcd9ce",
+          "geo_label": "ПСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Псковская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5d01870a3a173190",
+          "geo_label": "ЧЕЛЯБИНСК",
+          "geo_display_name": "Челябинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_5d87c0fa88acedb1",
+          "geo_label": "ТЮМЕНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Тюменская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_5fa9084303383362",
+          "geo_label": "САРАТОВ",
+          "geo_display_name": "Саратов",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_603847d7490bba77",
+          "geo_label": "КРАСНОДАР",
+          "geo_display_name": "Краснодар",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_609ae2c3e4e515a0",
+          "geo_label": "ИЖЕВСК",
+          "geo_display_name": "Ижевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6250113c3a735179",
+          "geo_label": "РЯЗАНЬ",
+          "geo_display_name": "Рязань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_64a57807beaa1977",
+          "geo_label": "ПСКОВ",
+          "geo_display_name": "Псков",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_654946621661ed59",
+          "geo_label": "РОСТОВ-НА-ДОНУ",
+          "geo_display_name": "Ростов-на-Дону",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_66524d70cfd80f33",
+          "geo_label": "БЕЛГОРОД",
+          "geo_display_name": "Белгород",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_679fcdcbff1d857e",
+          "geo_label": "ЛИПЕЦК",
+          "geo_display_name": "Липецк",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6835667d9b3fc15f",
+          "geo_label": "ИВАНОВО",
+          "geo_display_name": "Иваново",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6c2900420be7fcb0",
+          "geo_label": "ЕССЕНТУКИ",
+          "geo_display_name": "Ессентуки",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6de565131413b901",
+          "geo_label": "ТЮМЕНЬ",
+          "geo_display_name": "Тюмень",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_6ead6cdc17609501",
+          "geo_label": "СТАВРОПОЛЬСКИЙ КРАЙ",
+          "geo_display_name": "Ставропольский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_74240820071487d1",
+          "geo_label": "АНАПА",
+          "geo_display_name": "Анапа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7518d7367997f3ed",
+          "geo_label": "ТВЕРЬ",
+          "geo_display_name": "Тверь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_75b1c7a1ec0c6bca",
+          "geo_label": "ОРЕЛ",
+          "geo_display_name": "Орел",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_76c59267159b9cf1",
+          "geo_label": "ЛИПЕЦКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Липецкая область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_77d766e98e94b5b2",
+          "geo_label": "КАРАЧАЕВО-ЧЕРКЕССКАЯ РЕСПУБЛИКА",
+          "geo_display_name": "Карачаево-Черкесская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_79524caf0e86edf3",
+          "geo_label": "ЭНГЕЛЬС",
+          "geo_display_name": "Энгельс",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7aafc347a167c4da",
+          "geo_label": "КАЗАНЬ",
+          "geo_display_name": "Казань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7b998ab602a8bb85",
+          "geo_label": "СМОЛЕНСК",
+          "geo_display_name": "Смоленск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_7d1b5b95bf81cf12",
+          "geo_label": "САРАНСК",
+          "geo_display_name": "Саранск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_84e5fcec31012b88",
+          "geo_label": "ВОЛГОГРАД",
+          "geo_display_name": "Волгоград",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_870a7f937ff57ad8",
+          "geo_label": "СТАРЫЙ ОСКОЛ",
+          "geo_display_name": "Старый Оскол",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8d8df24c5ffbb97d",
+          "geo_label": "УЛЬЯНОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ульяновская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_8e220753930a277f",
+          "geo_label": "КИСЛОВОДСК",
+          "geo_display_name": "Кисловодск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_8e7b7c971d1eaa78",
+          "geo_label": "БЕРЕЗОВСКИЙ",
+          "geo_display_name": "Березовский",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_92b6cf23ae9992dc",
+          "geo_label": "КУРСК",
+          "geo_display_name": "Курск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_94835d40a52e5a3a",
+          "geo_label": "САНКТ-ПЕТЕРБУРГ",
+          "geo_display_name": "Санкт-Петербург",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_9519057ac44fcf68",
+          "geo_label": "ЧЕРКЕССК",
+          "geo_display_name": "Черкесск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_95a5bc5573fb18d5",
+          "geo_label": "КУРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Курская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_95ccc4904baeea20",
+          "geo_label": "УЛЬЯНОВСК",
+          "geo_display_name": "Ульяновск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_965336b61d1b679c",
+          "geo_label": "УФА",
+          "geo_display_name": "Уфа",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_96d8acf2128d1686",
+          "geo_label": "МОСКВА",
+          "geo_display_name": "Москва",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_99113e492e368d1e",
+          "geo_label": "БЕЛГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Белгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_9cc418889ab160c9",
+          "geo_label": "РЕСПУБЛИКА УДМУРТИЯ",
+          "geo_display_name": "Удмуртская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a20b0e6e0fac037b",
+          "geo_label": "НИЖНЕВАРТОВСК",
+          "geo_display_name": "Нижневартовск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a58138e94aa78713",
+          "geo_label": "ЛЕНИНГРАДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ленинградская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_a7670443521246e9",
+          "geo_label": "ДОЛГОПРУДНЫЙ",
+          "geo_display_name": "Долгопрудный",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a8cb66747ba3b026",
+          "geo_label": "ПЕТРОЗАВОДСК",
+          "geo_display_name": "Петрозаводск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_a9d7e611872fa730",
+          "geo_label": "РАМЕНСКОЕ",
+          "geo_display_name": "Раменское",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_aaf573ca2de434b2",
+          "geo_label": "РОСТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Ростовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_b03bdf6566284376",
+          "geo_label": "СТАВРОПОЛЬ",
+          "geo_display_name": "Ставрополь",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b25fd4fb102fd0bb",
+          "geo_label": "ЧЕБОКСАРЫ",
+          "geo_display_name": "Чебоксары",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_b894719643de2741",
+          "geo_label": "ЩЕЛКОВО",
+          "geo_display_name": "Щелково",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ba7e7b605d51de94",
+          "geo_label": "ПЕРМСКИЙ КРАЙ",
+          "geo_display_name": "Пермский край",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_be918c5b97ba92ab",
+          "geo_label": "НОВОКУЙБЫШЕВСК",
+          "geo_display_name": "Новокуйбышевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c0f79969c9badc87",
+          "geo_label": "САМАРСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Самарская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0f7fc02db8bce9b",
+          "geo_label": "АСТРАХАНСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Астраханская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c0fb54b8d7d439bc",
+          "geo_label": "КРАСНОГОРСК",
+          "geo_display_name": "Красногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c39a937a4a265d1a",
+          "geo_label": "КИРОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Кировская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_c5bbbb417c2f21f1",
+          "geo_label": "ВОРОНЕЖ",
+          "geo_display_name": "Воронеж",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_c702f60ace70d5f2",
+          "geo_label": "СОЛНЕЧНОГОРСК",
+          "geo_display_name": "Солнечногорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ca87e5cd19f69216",
+          "geo_label": "РЕСПУБЛИКА БАШКОРТОСТАН",
+          "geo_display_name": "Республика Башкортостан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ca921138dd63e5b0",
+          "geo_label": "ТОЛЬЯТТИ",
+          "geo_display_name": "Тольятти",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cb64426d56fd2a49",
+          "geo_label": "ВЛАДИМИР",
+          "geo_display_name": "Владимир",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cda5a80a3b7169f4",
+          "geo_label": "САРАТОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Саратовская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_ce5654ff1584e47a",
+          "geo_label": "ТАГАНРОГ",
+          "geo_display_name": "Таганрог",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_cf2e9cf981259b4e",
+          "geo_label": "АЛЬМЕТЬЕВСК",
+          "geo_display_name": "Альметьевск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_d21f368556678496",
+          "geo_label": "РЕСПУБЛИКА ЧУВАШИЯ",
+          "geo_display_name": "Чувашская Республика",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d2d740a2dfa1cdf2",
+          "geo_label": "ВОРОНЕЖСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Воронежская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d83edfd6628e9afc",
+          "geo_label": "РЕСПУБЛИКА ТАТАРСТАН",
+          "geo_display_name": "Республика Татарстан",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_d8ed17b732f43f57",
+          "geo_label": "НАБЕРЕЖНЫЕ ЧЕЛНЫ",
+          "geo_display_name": "Набережные Челны",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_db7fa1f7c10dbe2c",
+          "geo_label": "МАГНИТОГОРСК",
+          "geo_display_name": "Магнитогорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_de69fcc1dc39ab66",
+          "geo_label": "СУРГУТ",
+          "geo_display_name": "Сургут",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e2491244881757a2",
+          "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Московская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e316c8f3c2dba674",
+          "geo_label": "АСТРАХАНЬ",
+          "geo_display_name": "Астрахань",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e6e7e70b713bacde",
+          "geo_label": "СВЕРДЛОВСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Свердловская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_e6eb0fa6da272e9b",
+          "geo_label": "НОВОРОССИЙСК",
+          "geo_display_name": "Новороссийск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_e8a9ff18d4cc574a",
+          "geo_label": "ДЗЕРЖИНСК",
+          "geo_display_name": "Дзержинск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ea4bfd6090011e7d",
+          "geo_label": "МЫТИЩИ",
+          "geo_display_name": "Мытищи",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_eb5910a08dfcc5c1",
+          "geo_label": "ПЯТИГОРСК",
+          "geo_display_name": "Пятигорск",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_f34399b4da91273c",
+          "geo_label": "НИЖЕГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Нижегородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f37af7616df95109",
+          "geo_label": "НОВГОРОДСКАЯ ОБЛАСТЬ",
+          "geo_display_name": "Новгородская область",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_f9ca0ddcdbe5e80b",
+          "geo_label": "РЕСПУБЛИКА МАРИЙ ЭЛ",
+          "geo_display_name": "Республика Марий Эл",
+          "geo_type": "region"
+        },
+        {
+          "geo_id": "geo_fa69b41c3243fefc",
+          "geo_label": "КАЛУГА",
+          "geo_display_name": "Калуга",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_fbf9c84b011ebd56",
+          "geo_label": "ДОМОДЕДОВО",
+          "geo_display_name": "Домодедово",
+          "geo_type": "city"
+        },
+        {
+          "geo_id": "geo_ff1cdaafe9cbdd42",
+          "geo_label": "ХИМКИ",
+          "geo_display_name": "Химки",
+          "geo_type": "city"
+        }
+      ],
+      "geo_id_list_sha256": "4d5afe4718020420eff76b4a618724af4cc07d2369be3b13db40e9efbc1a77af",
+      "package_capability_channels": [
+        "Digital_Performance",
+        "OOH_Total",
+        "Нац_ТВ",
+        "Радио",
+        "Рег_ТВ"
+      ],
+      "federal_rule_supported_channels": [
+        "Digital_Performance",
+        "OOH_Total",
+        "Indoor",
+        "Радио",
+        "Нац_ТВ",
+        "Рег_ТВ"
+      ],
+      "support_union_equals_denominator_geos": true,
+      "missing_population": [],
+      "missing_catalog": []
+    }
+  ]
+}
