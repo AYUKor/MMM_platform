@@ -8,6 +8,8 @@ const PASSWORD = process.env.B2_2_LIVE_PASSWORD ?? "";
 
 const FEDERAL_BUDGET_RUB = 100_000_000;
 const SUPPORTED_FLIGHT_DATE = "2026-01-01";
+const LIVE_BUSINESS_DIRECTION = "ТСХ/Онлайн";
+const EXPECTED_GEO_COUNT = 114;
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 test.use({ trace: "retain-on-failure", screenshot: "only-on-failure", video: "off" });
@@ -46,7 +48,7 @@ test.describe("B2.2 live federal campaign acceptance", () => {
 
     const content = [
       "campaign_name,segment,geo,channel,start_date,end_date,budget_rub",
-      `B2.2 federal live,ТС5/Онлайн,РФ,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},${FEDERAL_BUDGET_RUB}`,
+      `B2.2 federal live,${LIVE_BUSINESS_DIRECTION},РФ,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},${FEDERAL_BUDGET_RUB}`,
       "",
     ].join("\n");
     await page.locator('input[type="file"]').setInputFiles({
@@ -70,7 +72,7 @@ test.describe("B2.2 live federal campaign acceptance", () => {
       status: "available",
       source_rows_count: 1,
       source_budget_rub: FEDERAL_BUDGET_RUB,
-      geo_count: 211,
+      geo_count: EXPECTED_GEO_COUNT,
       mixed_local_overlap: false,
     });
     expect(
@@ -79,19 +81,19 @@ test.describe("B2.2 live federal campaign acceptance", () => {
     expect(Math.abs(validation.federal_allocation.difference_rub)).toBeLessThanOrEqual(0.01);
     expect(validation.map_coverage).toMatchObject({
       status: "available",
-      located_geographies_n: 211,
+      located_geographies_n: EXPECTED_GEO_COUNT,
       unlocated_geographies_n: 0,
       unlocated_budget_rub: 0,
     });
-    expect(validation.geo_points).toHaveLength(211);
+    expect(validation.geo_points).toHaveLength(EXPECTED_GEO_COUNT);
 
     const federal = page.getByRole("heading", { name: "Обнаружено федеральное размещение" })
       .locator("xpath=ancestor::section[1]");
     await expect(federal).toBeVisible();
     await expect(federal).toContainText("Распределено полностью · 0 ₽");
-    await expect(federal).toContainText("211");
+    await expect(federal).toContainText(String(EXPECTED_GEO_COUNT));
     const map = page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
-    await expect(map.locator("[data-map-marker]")).toHaveCount(211);
+    await expect(map.locator("[data-map-marker]")).toHaveCount(EXPECTED_GEO_COUNT);
 
     const continueButton = page.getByRole("button", { name: /Продолжить (к сценариям|с ограничениями)/ });
     await continueButton.click();
