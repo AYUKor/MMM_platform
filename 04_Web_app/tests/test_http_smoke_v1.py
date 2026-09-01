@@ -573,6 +573,20 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertTrue(template.startswith(b"PK"))
         self.assertIn("campaign-plan-template.xlsx", headers["Content-Disposition"])
 
+        with patch.object(
+            self.application,
+            "media_plan_dictionary",
+            return_value=b"PK\x03\x04synthetic-dictionary",
+        ):
+            status, dictionary, headers = self._request(
+                "GET",
+                "/api/v1/templates/media-plan-dictionary",
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(dictionary.startswith(b"PK"))
+        self.assertIn("filename*=UTF-8''", headers["Content-Disposition"])
+        self.assertEqual(headers["Cache-Control"], "no-store")
+
         status, catalog, _ = self._request("GET", "/api/v1/meta/errors")
         self.assertEqual(status, 200)
         self.assertEqual(catalog["contract_name"], "http_error_catalog_v1")
@@ -584,7 +598,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.10.0")
+        self.assertEqual(openapi["info"]["version"], "1.11.0")
         self.assertIn("/api/v1/auth/register", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
@@ -600,6 +614,7 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertIn("/api/v1/workspace/geo-budget", openapi["paths"])
         self.assertIn("/api/v1/model/historical-geo-budget", openapi["paths"])
         self.assertIn("/api/v1/help/catalog", openapi["paths"])
+        self.assertIn("/api/v1/templates/media-plan-dictionary", openapi["paths"])
         for contract in (
             "application-lifecycle-v1",
             "decision-result-v1",

@@ -178,6 +178,23 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertEqual(content, self.campaign_csv)
 
     @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_dictionary_context_uses_active_package_support_counts(self) -> None:
+        context = self.service.federal_allocation_context()
+        self.assertEqual(context.package_id, PACKAGE_ID)
+        self.assertEqual(
+            {
+                direction: len(geographies)
+                for direction, geographies in context.eligible_by_direction.items()
+            },
+            {
+                "ТС5/Онлайн": 211,
+                "ТС5/Оффлайн": 220,
+                "ТСХ/Онлайн": 114,
+                "ТСХ/Оффлайн": 117,
+            },
+        )
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
     def test_real_package_validation_builds_immutable_job_inputs(self) -> None:
         upload, _ = self.service.create_upload(
             filename="campaign.csv",
@@ -454,11 +471,11 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertTrue(all(row["source_row_id"] == "" for row in aggregated_rows))
 
     @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
-    def test_unknown_geo_is_rejected_by_stable_b2_error_code(self) -> None:
+    def test_unknown_vsia_rossia_alias_is_rejected_with_human_guidance(self) -> None:
         content = (
             "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
             "Partial map,ТС5/Онлайн,г. Москва,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
-            "Partial map,ТС5/Онлайн,НЕИЗВЕСТНОЕ ГЕО,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
+            "Partial map,ТС5/Онлайн,Вся Россия,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
         ).encode("utf-8")
         upload, _ = self.service.create_upload(
             filename="partial-map.csv",
@@ -477,6 +494,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertEqual(
             final["blocking_errors"][0]["code"], "UNKNOWN_GEO_VALUE"
         )
+        self.assertIn("«РФ», «Россия»", final["blocking_errors"][0]["display_text"])
         self.assertIsNone(final["totals"])
         self.assertIsNone(final["normalized_plan"])
         serialized = json.dumps(final, ensure_ascii=False)

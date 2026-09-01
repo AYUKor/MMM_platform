@@ -4,7 +4,7 @@
   "title": "ValidationResultV2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract_name", "schema_version", "validation_id", "status", "job_creation_allowed", "file_validation", "model_limitations", "map_coverage", "geo_points"],
+  "required": ["contract_name", "schema_version", "validation_id", "status", "job_creation_allowed", "file_validation", "federal_allocation", "model_limitations", "map_coverage", "geo_points"],
   "properties": {
     "contract_name": {"const": "validation_result_v2"},
     "schema_version": {"const": "2.0.0"},
@@ -25,6 +25,47 @@
         "blocking_errors_n": {"type": "integer", "minimum": 0},
         "warnings_n": {"type": "integer", "minimum": 0},
         "checks": {"type": "array", "items": {"type": "object", "required": ["code", "status", "display_text"], "properties": {"code": {"type": "string"}, "status": {"enum": ["passed", "warning", "failed", "unavailable"]}, "display_text": {"type": "string"}}, "additionalProperties": false}}
+      }
+    },
+    "federal_allocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "title", "description", "policy_version", "package_id", "source_rows_count", "source_budget_rub", "allocated_budget_rub", "difference_rub", "geo_count", "method_display_name", "channels", "business_directions", "mixed_local_overlap", "information", "warnings", "errors", "breakdown"],
+      "properties": {
+        "status": {"enum": ["none", "available", "error"]},
+        "title": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
+        "policy_version": {"type": ["string", "null"]},
+        "package_id": {"type": ["string", "null"]},
+        "source_rows_count": {"type": "integer", "minimum": 0},
+        "source_budget_rub": {"type": "number", "minimum": 0},
+        "allocated_budget_rub": {"type": "number", "minimum": 0},
+        "difference_rub": {"type": "number", "minimum": 0},
+        "geo_count": {"type": ["integer", "null"], "minimum": 1},
+        "method_display_name": {"type": ["string", "null"]},
+        "channels": {"type": "array", "items": {"$ref": "#/$defs/channelIdentity"}, "uniqueItems": true},
+        "business_directions": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "mixed_local_overlap": {"type": "boolean"},
+        "information": {"type": "array", "items": {"$ref": "#/$defs/statusMessage"}, "uniqueItems": true},
+        "warnings": {"type": "array", "items": {"$ref": "#/$defs/statusMessage"}, "uniqueItems": true},
+        "errors": {"type": "array", "items": {"$ref": "#/$defs/statusMessage"}, "uniqueItems": true},
+        "breakdown": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["business_direction", "channels", "source_rows_count", "source_budget_rub", "allocated_budget_rub", "difference_rub", "geo_count"],
+            "properties": {
+              "business_direction": {"type": "string", "minLength": 1},
+              "channels": {"type": "array", "items": {"$ref": "#/$defs/channelIdentity"}, "uniqueItems": true},
+              "source_rows_count": {"type": "integer", "minimum": 0},
+              "source_budget_rub": {"type": "number", "minimum": 0},
+              "allocated_budget_rub": {"type": "number", "minimum": 0},
+              "difference_rub": {"type": "number", "minimum": 0},
+              "geo_count": {"type": ["integer", "null"], "minimum": 1}
+            }
+          }
+        }
       }
     },
     "model_limitations": {
@@ -56,6 +97,24 @@
     }
   },
   "$defs": {
+    "statusMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "display_text"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "display_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "channelIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel_id", "channel_display_name"],
+      "properties": {
+        "channel_id": {"type": "string", "minLength": 1},
+        "channel_display_name": {"type": "string", "minLength": 1}
+      }
+    },
     "geoPoint": {
       "oneOf": [
         {"$ref": "#/$defs/canonicalGeoPoint"},

@@ -105,6 +105,7 @@
 .businessValidation { display: grid; gap: var(--space-5); }
 .validationLead,
 .fileValidationSection,
+.federalSection,
 .modelLimitationsSection,
 .geoReadinessSection { min-width: 0; padding: var(--space-5); border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-primary); }
 .validationLead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
@@ -122,6 +123,29 @@
 .compactChecks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
 .compactChecks article { display: flex; align-items: flex-start; gap: 0.75rem; padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--background); }
 .compactChecks p { margin: 0; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.45; }
+.federalSection { border-left: 4px solid var(--accent-strong); }
+.federalSectionError { border-left-color: var(--danger); }
+.federalDescription { max-width: 78ch; margin: var(--space-4) 0 0; color: var(--text-secondary); line-height: 1.55; }
+.federalFacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: var(--space-5) 0 0; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.federalFacts div { min-width: 0; padding: var(--space-4); border-right: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default); }
+.federalFacts div:nth-child(3n) { border-right: 0; }
+.federalFacts div:nth-last-child(-n + 3) { border-bottom: 0; }
+.federalFacts dt,
+.federalBreakdown dt { color: var(--text-secondary); font-size: 0.68rem; }
+.federalFacts dd,
+.federalBreakdown dd { margin: 0.35rem 0 0; font-weight: 800; overflow-wrap: anywhere; }
+.federalMeta { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); margin-top: var(--space-4); color: var(--text-secondary); font-size: 0.78rem; line-height: 1.5; }
+.federalMeta strong { color: var(--text-primary); }
+.federalBreakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+.federalBreakdown article { min-width: 0; padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--background); }
+.federalBreakdown header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.federalBreakdown h3 { margin: 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+.federalBreakdown header span { color: var(--text-secondary); font-size: 0.72rem; }
+.federalBreakdown dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: var(--space-3) 0 0; }
+.federalBreakdown dl div { min-width: 0; padding-right: var(--space-3); }
+.federalMessages { display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.federalMessages p { margin: 0; padding: var(--space-3) var(--space-4); border-left: 3px solid var(--warning); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: color-mix(in srgb, var(--warning) 9%, var(--background)); color: var(--text-primary); font-size: 0.82rem; line-height: 1.5; }
+.federalSectionError .federalMessages p { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, var(--background)); }
 .limitationList { display: grid; gap: var(--space-3); margin-top: var(--space-5); }
 .limitationList > article { display: grid; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--background); }
 .limitationList header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
@@ -154,6 +178,8 @@
   .validationLead,
   .limitationList header { align-items: flex-start; flex-direction: column; }
   .validationFacts,
+  .federalFacts,
+  .federalBreakdown,
   .compactChecks,
   .limitationList dl,
   .geoList { grid-template-columns: 1fr; }
@@ -162,6 +188,10 @@
   .validationFacts div:nth-child(-n + 3),
   .limitationList dl div,
   .limitationList dl div:nth-child(2n) { border-right: 0; border-bottom: 1px solid var(--border-default); }
+  .federalFacts div,
+  .federalFacts div:nth-child(3n),
+  .federalFacts div:nth-last-child(-n + 3) { border-right: 0; border-bottom: 1px solid var(--border-default); }
+  .federalFacts div:last-child { border-bottom: 0; }
   .validationFacts div:last-child,
   .limitationList dl div:last-child { border-bottom: 0; }
   .limitationList ul { columns: 1; }

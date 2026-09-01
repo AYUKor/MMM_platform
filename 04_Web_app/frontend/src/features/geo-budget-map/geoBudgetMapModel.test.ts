@@ -138,6 +138,12 @@ function validationPayload(): ValidationResultV2 {
       warnings_n: 1,
       checks: [],
     },
+    federal_allocation: {
+      status: "none", title: null, description: null, policy_version: null, package_id: null,
+      source_rows_count: 0, source_budget_rub: 0, allocated_budget_rub: 0, difference_rub: 0,
+      geo_count: null, method_display_name: null, channels: [], business_directions: [],
+      mixed_local_overlap: false, information: [], warnings: [], errors: [], breakdown: [],
+    },
     model_limitations: [],
     map_coverage: {
       status: "partial",

@@ -63,6 +63,7 @@ from mmm_core.campaign_plan import (  # noqa: E402
 )
 from mmm_core.federal_geo_allocator import (  # noqa: E402
     ERROR_TEXTS as FEDERAL_ERROR_TEXTS,
+    FederalGeoAllocationContext,
     FederalGeoAllocationError,
 )
 from mmm_core.io import load_config  # noqa: E402
@@ -331,6 +332,57 @@ class LocalCampaignService:
         self.job_submitter = job_submitter
         self.settings.artifact_root.mkdir(parents=True, exist_ok=True)
         self.settings.validation_runtime_root.mkdir(parents=True, exist_ok=True)
+
+    def federal_allocation_context(self) -> FederalGeoAllocationContext:
+        """Resolve and verify the same immutable context used by validation."""
+
+        config = {
+            "model_ref": {
+                "source": "registry",
+                "registry_root": str(self.settings.registry_root.resolve()),
+                "channel": self.settings.registry_channel,
+                "expected_package_id": self.settings.expected_package_id,
+                "verification_mode": self.settings.model_verification_mode,
+            }
+        }
+        try:
+            run_dir, resolution = resolve_model_reference(
+                config,
+                WEB_APP_DIR / "services" / "media_plan_dictionary.py",
+                purpose="media_plan_dictionary",
+            )
+            package = ModelPackage.from_run_dir(
+                run_dir,
+                require_posterior_ready=False,
+                validate_hash=(
+                    resolution.get("verification_mode", "full_lineage")
+                    == "full_lineage"
+                ),
+            )
+            return FederalGeoAllocationContext.from_package(
+                package,
+                package_id=str(resolution.get("package_id") or ""),
+                package_pointer_sha256=str(
+                    resolution.get("pointer_snapshot_sha256") or ""
+                ),
+                registration_content_sha256=str(
+                    resolution.get("registration_content_sha256") or ""
+                ),
+                registered_inventory_sha256=dict(
+                    resolution.get("registered_inventory_sha256") or {}
+                ),
+                population_path=self.settings.federal_population_path.resolve(),
+                expected_population_sha256=self.settings.federal_population_sha256,
+                geo_catalog_path=CATALOG_PATH.resolve(),
+                expected_geo_catalog_sha256=self.settings.geo_catalog_sha256,
+            )
+        except FederalGeoAllocationError:
+            raise
+        except (FileNotFoundError, ModelPackageError, ValueError) as exc:
+            raise FederalGeoAllocationError(
+                "PACKAGE_POINTER_OR_HASH_MISMATCH",
+                technical_details=str(exc),
+            ) from exc
 
     def recover_pending_resources(self) -> dict[str, int]:
         """Resubmit deterministic upload parsing and validation after restart."""

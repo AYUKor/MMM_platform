@@ -382,6 +382,78 @@ function limitationTypeLabel(
   return "Допустимое применение модели";
 }
 
+function FederalAllocationNotice({
+  federal,
+}: {
+  federal: ValidationResultV2["federal_allocation"];
+}) {
+  if (federal.status === "none") return null;
+  if (federal.status === "error") {
+    return (
+      <section className={`${styles.federalSection} ${styles.federalSectionError}`} aria-labelledby="federal-allocation-title">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.eyebrow}>Федеральное размещение</span>
+            <h2 id="federal-allocation-title">Федеральный бюджет не распределен</h2>
+          </div>
+          <StatusBadge tone="danger">Нужно исправить</StatusBadge>
+        </div>
+        <div className={styles.federalMessages} role="alert">
+          {federal.errors.map((error) => <p key={error.code}>{error.display_text}</p>)}
+        </div>
+      </section>
+    );
+  }
+
+  const fullyAllocated = federal.difference_rub <= 0.01;
+  return (
+    <section className={styles.federalSection} aria-labelledby="federal-allocation-title">
+      <div className={styles.sectionHeading}>
+        <div>
+          <span className={styles.eyebrow}>Информация о медиаплане</span>
+          <h2 id="federal-allocation-title">{federal.title}</h2>
+        </div>
+        <StatusBadge tone="accent">Распределено</StatusBadge>
+      </div>
+      <p className={styles.federalDescription}>{federal.description}</p>
+      <dl className={styles.federalFacts}>
+        <div><dt>Исходный федеральный бюджет</dt><dd>{formatRub(federal.source_budget_rub)}</dd></div>
+        <div><dt>Распределенный бюджет</dt><dd>{formatRub(federal.allocated_budget_rub)}</dd></div>
+        <div><dt>Географий распределения</dt><dd>{federal.geo_count ?? "По направлениям"}</dd></div>
+        <div><dt>Метод</dt><dd>{federal.method_display_name}</dd></div>
+        <div><dt>Исходных строк</dt><dd>{federal.source_rows_count}</dd></div>
+        <div>
+          <dt>Разница</dt>
+          <dd>{fullyAllocated ? "Распределено полностью · 0 ₽" : formatRub(federal.difference_rub)}</dd>
+        </div>
+      </dl>
+      <div className={styles.federalMeta}>
+        <span><strong>Каналы:</strong> {federal.channels.map((channel) => channel.channel_display_name).join(", ")}</span>
+        <span><strong>Направления:</strong> {federal.business_directions.join(", ")}</span>
+      </div>
+      {federal.breakdown.length > 1 ? (
+        <div className={styles.federalBreakdown}>
+          {federal.breakdown.map((row) => (
+            <article key={row.business_direction}>
+              <header><h3>{row.business_direction}</h3><span>{row.geo_count ?? "Нет данных"} географий</span></header>
+              <dl>
+                <div><dt>Строк</dt><dd>{row.source_rows_count}</dd></div>
+                <div><dt>Исходный бюджет</dt><dd>{formatRub(row.source_budget_rub)}</dd></div>
+                <div><dt>Распределено</dt><dd>{formatRub(row.allocated_budget_rub)}</dd></div>
+              </dl>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      {federal.warnings.length > 0 ? (
+        <div className={styles.federalMessages} role="status">
+          {federal.warnings.map((warning) => <p key={warning.code}>{warning.display_text}</p>)}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function BusinessValidationReview({ validation }: { validation: ValidationResultV2 }) {
   const ready = validation.job_creation_allowed && validation.file_validation.status !== "failed";
   const fileFailed = validation.file_validation.status === "failed";
@@ -460,6 +532,8 @@ export function BusinessValidationReview({ validation }: { validation: Validatio
           <div className={styles.inlineEmpty}><StatusBadge tone="neutral">Нет данных</StatusBadge><p>Детализация проверки файла недоступна.</p></div>
         )}
       </section>
+
+      <FederalAllocationNotice federal={validation.federal_allocation} />
 
       <section className={styles.modelLimitationsSection} aria-labelledby="model-limitations-title">
         <div className={styles.sectionHeading}>

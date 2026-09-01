@@ -161,4 +161,60 @@ describe("new calculation preview", () => {
     rerender(<BusinessValidationReview validation={unavailable} />);
     expect(screen.getByRole("heading", { name: "Результат проверки пока недоступен" })).toBeInTheDocument();
   });
+
+  it("renders federal allocation only from backend-provided totals and wording", () => {
+    const validation = buildValidationResultV2();
+    validation.federal_allocation = {
+      status: "available",
+      title: "Обнаружено федеральное размещение",
+      description: "Федеральный бюджет автоматически распределен между поддерживаемыми географиями модели выбранного бизнес-направления пропорционально населению.",
+      policy_version: "FEDERAL_GEO_ALLOCATION_V1",
+      package_id: "pkg_1234567890abcdef_1234567890abcdef",
+      source_rows_count: 2,
+      source_budget_rub: 100_000_000,
+      allocated_budget_rub: 100_000_000,
+      difference_rub: 0.000001,
+      geo_count: 211,
+      method_display_name: "Пропорционально населению",
+      channels: [{ channel_id: "Digital_Performance", channel_display_name: "Цифровая реклама" }],
+      business_directions: ["ТС5/Онлайн"],
+      mixed_local_overlap: true,
+      information: [{ code: "FEDERAL_GEO_ALLOCATION_INFO", display_text: "Информация сохранена." }],
+      warnings: [{ code: "FEDERAL_AND_LOCAL_GEO_OVERLAP", display_text: "Локальные суммы будут добавлены поверх федерального распределения." }],
+      errors: [],
+      breakdown: [{
+        business_direction: "ТС5/Онлайн",
+        channels: [{ channel_id: "Digital_Performance", channel_display_name: "Цифровая реклама" }],
+        source_rows_count: 2,
+        source_budget_rub: 100_000_000,
+        allocated_budget_rub: 100_000_000,
+        difference_rub: 0,
+        geo_count: 211,
+      }],
+    };
+    const { container } = render(<BusinessValidationReview validation={validation} />);
+
+    expect(screen.getByRole("heading", { name: "Обнаружено федеральное размещение" })).toBeInTheDocument();
+    expect(screen.getAllByText("100 млн ₽", { selector: "dd" })).toHaveLength(2);
+    expect(screen.getByText("211", { selector: "dd" })).toBeInTheDocument();
+    expect(screen.getByText("Пропорционально населению")).toBeInTheDocument();
+    expect(screen.getByText("Распределено полностью · 0 ₽")).toBeInTheDocument();
+    expect(screen.getByText("Локальные суммы будут добавлены поверх федерального распределения.")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("Digital_Performance");
+    expect(container.textContent).not.toContain("pkg_1234567890abcdef_1234567890abcdef");
+  });
+
+  it("shows a backend federal error as a blocking human message", () => {
+    const validation = buildValidationResultV2();
+    validation.federal_allocation = {
+      status: "error", title: null, description: null, policy_version: null, package_id: null,
+      source_rows_count: 0, source_budget_rub: 0, allocated_budget_rub: 0, difference_rub: 0,
+      geo_count: null, method_display_name: null, channels: [], business_directions: [],
+      mixed_local_overlap: false, information: [], warnings: [], breakdown: [],
+      errors: [{ code: "UNKNOWN_GEO_VALUE", display_text: "География «Вся Россия» не распознана. Укажите РФ, Россия или Российская Федерация." }],
+    };
+    render(<BusinessValidationReview validation={validation} />);
+    expect(screen.getByRole("heading", { name: "Федеральный бюджет не распределен" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Вся Россия");
+  });
 });

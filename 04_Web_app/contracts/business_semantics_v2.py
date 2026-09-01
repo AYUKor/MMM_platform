@@ -418,6 +418,195 @@ def validate_validation_result_v2(payload: Mapping[str, Any]) -> Mapping[str, An
         raise BusinessSemanticsContractError("File validation status is invalid")
     if bool(payload.get("job_creation_allowed")) and file_validation.get("status") == "failed":
         raise BusinessSemanticsContractError("Failed file validation cannot allow calculation")
+    federal = payload.get("federal_allocation") or {}
+    federal_status = federal.get("status")
+    if federal_status not in {"none", "available", "error"}:
+        raise BusinessSemanticsContractError("Federal allocation status is invalid")
+    source_rows_count = _non_negative_integer(
+        federal.get("source_rows_count"), "federal_allocation.source_rows_count"
+    )
+    source_budget = float(
+        _non_negative(
+            federal.get("source_budget_rub"),
+            "federal_allocation.source_budget_rub",
+        )
+    )
+    allocated_budget = float(
+        _non_negative(
+            federal.get("allocated_budget_rub"),
+            "federal_allocation.allocated_budget_rub",
+        )
+    )
+    difference = float(
+        _non_negative(
+            federal.get("difference_rub"),
+            "federal_allocation.difference_rub",
+        )
+    )
+    messages: dict[str, list[Mapping[str, Any]]] = {}
+    for message_kind in ("information", "warnings", "errors"):
+        values = federal.get(message_kind)
+        if not isinstance(values, list):
+            raise BusinessSemanticsContractError(
+                f"federal_allocation.{message_kind} must be an array"
+            )
+        messages[message_kind] = values
+        seen_message_codes: set[str] = set()
+        for index, message in enumerate(values):
+            if not isinstance(message, Mapping):
+                raise BusinessSemanticsContractError(
+                    f"federal_allocation.{message_kind}[{index}] is invalid"
+                )
+            code = _required_text(
+                message.get("code"),
+                f"federal_allocation.{message_kind}[{index}].code",
+            )
+            _required_text(
+                message.get("display_text"),
+                f"federal_allocation.{message_kind}[{index}].display_text",
+            )
+            if code in seen_message_codes:
+                raise BusinessSemanticsContractError(
+                    f"federal_allocation.{message_kind} contains duplicate codes"
+                )
+            seen_message_codes.add(code)
+    federal_channels = federal.get("channels") or []
+    if not isinstance(federal_channels, list):
+        raise BusinessSemanticsContractError(
+            "Federal allocation channels are invalid"
+        )
+    channel_ids: set[str] = set()
+    for index, channel in enumerate(federal_channels):
+        _channel(channel, f"federal_allocation.channels[{index}]")
+        channel_id = str(channel.get("channel_id"))
+        if channel_id in channel_ids:
+            raise BusinessSemanticsContractError(
+                "Federal allocation channels contain duplicates"
+            )
+        channel_ids.add(channel_id)
+    directions = federal.get("business_directions") or []
+    if not isinstance(directions, list) or any(
+        not isinstance(direction, str) or not direction.strip()
+        for direction in directions
+    ) or len(set(directions)) != len(directions):
+        raise BusinessSemanticsContractError(
+            "Federal allocation business directions are invalid"
+        )
+    breakdown = federal.get("breakdown") or []
+    if not isinstance(breakdown, list):
+        raise BusinessSemanticsContractError("Federal allocation breakdown is invalid")
+    if not isinstance(federal.get("mixed_local_overlap"), bool):
+        raise BusinessSemanticsContractError(
+            "federal_allocation.mixed_local_overlap must be boolean"
+        )
+    breakdown_source = 0.0
+    breakdown_allocated = 0.0
+    breakdown_rows = 0
+    breakdown_directions: list[str] = []
+    for index, row in enumerate(breakdown):
+        if not isinstance(row, Mapping):
+            raise BusinessSemanticsContractError(
+                f"federal_allocation.breakdown[{index}] is invalid"
+            )
+        direction = _required_text(
+            row.get("business_direction"),
+            f"federal_allocation.breakdown[{index}].business_direction",
+        )
+        breakdown_directions.append(direction)
+        breakdown_rows += _non_negative_integer(
+            row.get("source_rows_count"),
+            f"federal_allocation.breakdown[{index}].source_rows_count",
+        )
+        row_source = float(
+            _non_negative(
+                row.get("source_budget_rub"),
+                f"federal_allocation.breakdown[{index}].source_budget_rub",
+            )
+        )
+        row_allocated = float(
+            _non_negative(
+                row.get("allocated_budget_rub"),
+                f"federal_allocation.breakdown[{index}].allocated_budget_rub",
+            )
+        )
+        row_difference = float(
+            _non_negative(
+                row.get("difference_rub"),
+                f"federal_allocation.breakdown[{index}].difference_rub",
+            )
+        )
+        if abs(abs(row_source - row_allocated) - row_difference) > 1e-6:
+            raise BusinessSemanticsContractError(
+                "Federal allocation breakdown difference does not reconcile"
+            )
+        geo_count = row.get("geo_count")
+        if geo_count is not None and (
+            not isinstance(geo_count, int) or isinstance(geo_count, bool) or geo_count < 1
+        ):
+            raise BusinessSemanticsContractError(
+                "Federal allocation breakdown geo count is invalid"
+            )
+        for channel_index, channel in enumerate(row.get("channels") or []):
+            _channel(
+                channel,
+                f"federal_allocation.breakdown[{index}].channels[{channel_index}]",
+            )
+        breakdown_source += row_source
+        breakdown_allocated += row_allocated
+    if federal_status == "available":
+        for field in ("title", "description", "policy_version", "package_id", "method_display_name"):
+            _required_text(federal.get(field), f"federal_allocation.{field}")
+        if source_rows_count < 1 or not breakdown:
+            raise BusinessSemanticsContractError(
+                "Available federal allocation requires source rows and breakdown"
+            )
+        if difference > 0.01 + 1e-9 or abs(abs(source_budget - allocated_budget) - difference) > 1e-6:
+            raise BusinessSemanticsContractError(
+                "Federal allocation budget difference does not reconcile"
+            )
+        if (
+            abs(breakdown_source - source_budget) > 1e-6
+            or abs(breakdown_allocated - allocated_budget) > 1e-6
+            or breakdown_rows != source_rows_count
+            or breakdown_directions != directions
+        ):
+            raise BusinessSemanticsContractError(
+                "Federal allocation breakdown does not reconcile with totals"
+            )
+        geo_count = federal.get("geo_count")
+        if len(directions) == 1:
+            if not isinstance(geo_count, int) or isinstance(geo_count, bool) or geo_count < 1:
+                raise BusinessSemanticsContractError(
+                    "Single-direction federal allocation requires a geo count"
+                )
+        elif geo_count is not None:
+            raise BusinessSemanticsContractError(
+                "Multi-direction federal allocation cannot publish one geo count"
+            )
+        if messages["errors"]:
+            raise BusinessSemanticsContractError(
+                "Available federal allocation cannot contain errors"
+            )
+    else:
+        if any((source_rows_count, source_budget, allocated_budget, difference, breakdown)):
+            raise BusinessSemanticsContractError(
+                "Non-available federal allocation cannot publish calculated values"
+            )
+        if any(
+            federal.get(field) is not None
+            for field in ("title", "description", "policy_version", "package_id", "geo_count", "method_display_name")
+        ) or federal_channels or directions or federal.get("mixed_local_overlap"):
+            raise BusinessSemanticsContractError(
+                "Non-available federal allocation contains unsupported details"
+            )
+        if federal_status == "none" and any(messages.values()):
+            raise BusinessSemanticsContractError(
+                "Absent federal allocation cannot contain messages"
+            )
+        if federal_status == "error" and not messages["errors"]:
+            raise BusinessSemanticsContractError(
+                "Federal allocation error requires a human-readable message"
+            )
     limitations = payload.get("model_limitations") or []
     seen: set[tuple[str, str, str]] = set()
     for index, limitation in enumerate(limitations):

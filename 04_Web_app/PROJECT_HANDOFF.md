@@ -7,7 +7,7 @@ continue MMM Platform work without relying on old chats. It explains why the
 system exists, how its current pieces fit together, which design decisions are
 intentional, where the evidence lives and what is still unresolved.
 
-For a terse statement of facts as of 2026-09-01, read `CURRENT_TRUTH.md`. This
+For a terse statement of facts as of 2026-09-02, read `CURRENT_TRUTH.md`. This
 document adds architecture, decision history and continuation rules; it should not
 be treated as stronger evidence than live code, contracts, Git or verified
 artifacts.
@@ -84,7 +84,7 @@ entrypoints are canonical.
 ```text
 campaign upload
   -> parsing and canonical validation
-  -> geo alias normalization and support checks
+  -> geo alias normalization, federal expansion and support checks
   -> workspace + immutable input/artifact lineage
   -> background execution worker
   -> turnover-only forecast adapter
@@ -109,6 +109,14 @@ deployment: verified Fin artifact -> separately authorized server update
 ```
 
 The source parquet remains outside the server serving bundle.
+
+Federal upload semantics are versioned separately as
+`FEDERAL_GEO_ALLOCATION_V1`. The allocator expands each federal daily source row
+to canonical model geographies before forecast; durable audit/provenance artifacts
+preserve source-row lineage. B2.2 exposes only a safe aggregate projection to the
+browser and adds an active-package dictionary. See
+`docs/integration/FEDERAL_GEO_ALLOCATION_V1.md` and
+`docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
 
 ## 6. Model methodology
 
@@ -533,7 +541,8 @@ Do not restore these without a new approved decision:
 - sealed OOT gate blocks production activation;
 - observational/specification and support-extrapolation risk remains;
 - product is allocation-only and lacks an approved finance launch/cancel threshold;
-- no current federal `РФ` upload policy;
+- federal upload is implemented in the Test B2.2 candidate but has not yet passed
+  post-merge Predfin/Fin promotion;
 - no historical campaign evaluation capability.
 
 ### Product/runtime
@@ -591,21 +600,21 @@ switch only after PASS. The exact contracts are under
 C3 cleanup is not authorized. The observation period must include one real B1/B2
 Federal Geo Allocation cycle through all four contours and a new Fin release.
 
-## 20. Federal geo allocation — future requirement
+## 20. Federal geo allocation
 
-Future portal behavior must accept `geo=РФ` for every supported media channel, for
-example a national TV row with a federal date interval and budget.
+B1, B2.0 and B2.1 established and implemented
+`FEDERAL_GEO_ALLOCATION_V1`. Approved aliases are `РФ`, `Россия` and
+`Российская Федерация`, with outer-whitespace trimming and case-insensitive
+matching only. Each federal daily source row expands independently and only then
+aggregates to the existing forecast grain. Weights use the pinned population over
+the active package's eligible direction geographies. Missing population blocks the
+plan; a mean fallback is not current policy.
 
-Do not implement an allocation algorithm from intuition. **B1 — Federal Geo
-Allocation Audit** must first locate and reproduce the current training-data
-transformation that expands agency `РФ` rows to model-level geographies. Required
-checks include eligible population, channel-specific behavior, date/spend
-conservation, exact rounding/reconciliation, missing population and unsupported
-geo.
-
-A fallback using mean population when population is missing is a future requirement
-to validate. It is not current product behavior and must not be added before B1
-establishes the governing transformation.
+B2.2 adds the completed Test-contour product path: an additive browser-safe
+`federal_allocation` projection derived from the durable audit, an active-package
+dictionary endpoint, federal validation/mixed/error UI and unchanged handoff of
+canonical geo rows to campaign map, calculation, result, media plan and report.
+See `docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
 
 ## 21. Historical campaign evaluation — future requirement
 
@@ -628,11 +637,9 @@ design are approved.
 
 ## 22. Next milestones
 
-1. **B1 — Federal Geo Allocation Audit** — find the existing transformation before
-   implementation.
-2. **B2 — Federal Geo Allocation implementation/validation** — use B1 evidence and
-   carry the change through Test, Predfin and a new Fin release as the post-C2.6
-   observation proof.
+1. **B2.2 review and post-merge Predfin acceptance** — use the exact reviewed
+   commit and workspace promotion gates; Codex must not merge the PR.
+2. **B2.3 or later federal work** — do not start without a separate task.
 3. **A — Historical Campaign Evaluation methodology** — establish identification
    and validation before product work.
 4. **Model production gate** — separate future milestone for sealed OOT evidence and
@@ -714,17 +721,17 @@ on the old outcome.
 - End meaningful work with changed files, verification, known limitations, blockers
   and the next explicitly approved action.
 
-## 25. C2.6 handoff state
+## 25. B2.2 handoff state
 
-C2 relocation and legacy-root switch are complete. Current application source of
-truth is `origin/main@546c5dd60bfd7f62ab79a4fe6621964696f732a1` with tree
-`e1c66f5cea72e636adb0e848a5c5d91747ca6d42`. Frozen Predfin/Fin remains at
-application commit `2a6e07755f0db494a064b7db6517219325850179` and the same
-restricted model identity. The C2.6 documentation branch is
-`codex/c2-6-canonical-root`; it must be reviewed through its PR and not merged by
-Codex.
+C2 relocation and legacy-root switch are complete. The B2.2 branch starts from
+`origin/main@52461f6e00b4b6fe705a341d30747e0067ae3b24`, the user-merged PR #40
+identity. Frozen Predfin/Fin remains at application commit
+`2a6e07755f0db494a064b7db6517219325850179` and the same restricted model
+identity. B2.2 is isolated in `codex/b2-2-federal-campaign-ux`; it must be reviewed
+through its PR and not merged by Codex.
 
 Pre- and post-rename operational smoke and path scans pass without legacy fallback.
-The next proof milestone is B1/B2 Federal Geo Allocation through all four contours.
-The active model stays restricted, the server is unchanged, and C3 cleanup is not
-authorized.
+The current Test milestone is B2.2 Federal Campaign User Flow. Post-merge Predfin
+acceptance remains a separate controlled operation; B2.3, Fin, deployment and C3
+cleanup are not authorized. The active model stays restricted and the server is
+unchanged.

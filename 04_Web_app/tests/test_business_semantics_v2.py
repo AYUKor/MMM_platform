@@ -36,6 +36,7 @@ from mmm_core.serving_semantics import (  # noqa: E402
     channel_display_name,
 )
 from services.business_semantics_v2 import (  # noqa: E402
+    build_federal_allocation_summary,
     build_geo_catalog,
     build_model_overview_v2,
     build_model_passport_v2,
@@ -49,6 +50,25 @@ FIXTURE_DIR = WEB_APP_DIR / "tests" / "fixtures"
 CHANNELS = ["Digital_Performance", "OOH_Total", "Радио"]
 GEOS = [f"ГЕО {index:02d}" for index in range(1, 16)]
 REQUESTED_BUDGET = 267_818_706.0
+
+
+def _federal_audit(rows: list[dict]) -> dict:
+    source_budget = sum(float(row["source_budget_rub"]) for row in rows)
+    allocated_budget = sum(float(row["allocated_total_rub"]) for row in rows)
+    return {
+        "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+        "package_id": "pkg_1234567890abcdef_1234567890abcdef",
+        "source_row_reconciliation": rows,
+        "totals": {
+            "federal_source_budget_rub": source_budget,
+            "federal_allocated_budget_rub": allocated_budget,
+        },
+        "information": [{
+            "code": "FEDERAL_GEO_ALLOCATION_INFO",
+            "display_text": "Федеральный бюджет распределен по действующей методике модели.",
+        }],
+        "warnings": [],
+    }
 
 
 def _schema_valid(schema: dict, payload: dict) -> None:
@@ -327,6 +347,51 @@ def _result_payload() -> dict:
 
 
 class BusinessSemanticsV2Test(unittest.TestCase):
+    def test_federal_projection_counts_original_rows_and_reconciles_budget(self) -> None:
+        audit = _federal_audit([
+            {"source_row_id": "row_a", "date": "2026-09-01", "business_direction": "ТС5/Онлайн", "channel": "Digital_Performance", "original_geo": "РФ", "source_budget_rub": 60.0, "eligible_geo_count": 211, "allocated_total_rub": 60.0, "difference_rub": 0.0},
+            {"source_row_id": "row_a", "date": "2026-09-02", "business_direction": "ТС5/Онлайн", "channel": "Digital_Performance", "original_geo": "РФ", "source_budget_rub": 40.0, "eligible_geo_count": 211, "allocated_total_rub": 40.0, "difference_rub": 0.0},
+            {"source_row_id": "row_b", "date": "2026-09-01", "business_direction": "ТС5/Онлайн", "channel": "Digital_Performance", "original_geo": "Россия", "source_budget_rub": 50.0, "eligible_geo_count": 211, "allocated_total_rub": 50.0, "difference_rub": 0.0},
+        ])
+        audit["warnings"] = [{
+            "code": "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+            "display_text": "Локальные суммы добавляются поверх федерального распределения.",
+        }]
+        summary = build_federal_allocation_summary(audit)
+        self.assertEqual(summary["status"], "available")
+        self.assertEqual(summary["source_rows_count"], 2)
+        self.assertEqual(summary["geo_count"], 211)
+        self.assertEqual(summary["source_budget_rub"], 150.0)
+        self.assertEqual(summary["allocated_budget_rub"], 150.0)
+        self.assertEqual(summary["difference_rub"], 0.0)
+        self.assertTrue(summary["mixed_local_overlap"])
+        self.assertEqual(summary["channels"][0]["channel_display_name"], "Цифровая реклама")
+
+    def test_federal_projection_uses_direction_breakdown_without_one_geo_count(self) -> None:
+        summary = build_federal_allocation_summary(_federal_audit([
+            {"source_row_id": "row_a", "date": "2026-09-01", "business_direction": "ТС5/Онлайн", "channel": "Нац_ТВ", "original_geo": "РФ", "source_budget_rub": 60.0, "eligible_geo_count": 211, "allocated_total_rub": 60.0, "difference_rub": 0.0},
+            {"source_row_id": "row_b", "date": "2026-09-01", "business_direction": "ТСХ/Онлайн", "channel": "Нац_ТВ", "original_geo": "Российская Федерация", "source_budget_rub": 40.0, "eligible_geo_count": 114, "allocated_total_rub": 40.0, "difference_rub": 0.0},
+        ]))
+        self.assertIsNone(summary["geo_count"])
+        self.assertEqual(summary["business_directions"], ["ТС5/Онлайн", "ТСХ/Онлайн"])
+        self.assertEqual(
+            [(row["business_direction"], row["geo_count"]) for row in summary["breakdown"]],
+            [("ТС5/Онлайн", 211), ("ТСХ/Онлайн", 114)],
+        )
+
+    def test_federal_projection_has_none_and_safe_error_states(self) -> None:
+        self.assertEqual(build_federal_allocation_summary(None)["status"], "none")
+        error = build_federal_allocation_summary(
+            None,
+            issues=[{
+                "code": "UNKNOWN_GEO_VALUE",
+                "display_text": "География не распознана. Укажите РФ, Россия или Российская Федерация.",
+            }],
+        )
+        self.assertEqual(error["status"], "error")
+        self.assertIn("РФ", error["errors"][0]["display_text"])
+        self.assertNotIn("/Users/", json.dumps(error, ensure_ascii=False))
+
     def test_channel_catalog_is_versioned_and_fail_closed(self) -> None:
         self.assertEqual(channel_display_name("Digital_Performance"), "Цифровая реклама")
         self.assertEqual(channel_display_name("OOH_Total"), "Наружная реклама")
