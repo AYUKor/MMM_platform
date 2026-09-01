@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import csv
 import hashlib
 import json
@@ -608,6 +609,37 @@ class FederalContextLoaderTest(unittest.TestCase):
         with self.assertRaises(FederalGeoAllocationError) as caught:
             self._load(package, inventory)
         self.assertEqual(caught.exception.code, "SUPPORTED_GEO_NOT_IN_CATALOG")
+
+
+class FederalGeoAllocationEntrypointTest(unittest.TestCase):
+    def test_forecast_and_optimizer_forward_verified_model_resolution(self) -> None:
+        """Every executable preparation path must carry the pinned package identity."""
+
+        entrypoints = (
+            PROJECT_ROOT / "02_Code" / "02_Budget_optimizer" / "budget_optimizer.py",
+            PROJECT_ROOT / "02_Code" / "03_AC_forecast" / "ac_forecast.py",
+        )
+        for path in entrypoints:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            calls = [
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "prepare_campaign_from_config"
+            ]
+            self.assertTrue(calls, path.name)
+            for call in calls:
+                forwarded = next(
+                    (
+                        keyword.value
+                        for keyword in call.keywords
+                        if keyword.arg == "model_resolution"
+                    ),
+                    None,
+                )
+                self.assertIsInstance(forwarded, ast.Name, path.name)
+                self.assertEqual(forwarded.id, "model_resolution", path.name)
 
 
 if __name__ == "__main__":

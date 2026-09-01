@@ -147,7 +147,14 @@ def main() -> None:
         return
 
     if args.prepare_campaign_only:
-        prep = prepare_campaign_from_config(config, config_path, package, output_dir, purpose="optimizer")
+        prep = prepare_campaign_from_config(
+            config,
+            config_path,
+            package,
+            output_dir,
+            purpose="optimizer",
+            model_resolution=model_resolution,
+        )
         print(f"Normalized campaign: {prep.normalized_path}")
         print(f"Daily flighting: {prep.flighting_path}")
         print(f"Model validation: {prep.validation_path}")
@@ -157,7 +164,14 @@ def main() -> None:
     if args.check_model_package_only:
         return
 
-    prep = prepare_campaign_from_config(config, config_path, package, output_dir, purpose="optimizer")
+    prep = prepare_campaign_from_config(
+        config,
+        config_path,
+        package,
+        output_dir,
+        purpose="optimizer",
+        model_resolution=model_resolution,
+    )
     run_id = str(config.get("run_id") or "budget_optimizer")
     opt_cfg = (config.get("optimizer") or {}).get("scenario_6") or {}
     search_requested = int(opt_cfg.get("search_candidates") or opt_cfg.get("monte_carlo_candidates") or 80)

@@ -111,7 +111,14 @@ def main() -> None:
         return
 
     if args.prepare_campaign_only:
-        prep = prepare_campaign_from_config(config, config_path, package, output_dir, purpose="forecast")
+        prep = prepare_campaign_from_config(
+            config,
+            config_path,
+            package,
+            output_dir,
+            purpose="forecast",
+            model_resolution=model_resolution,
+        )
         print(f"Normalized campaign: {prep.normalized_path}")
         print(f"Daily flighting: {prep.flighting_path}")
         print(f"Model validation: {prep.validation_path}")
@@ -121,7 +128,14 @@ def main() -> None:
     if args.check_model_package_only:
         return
 
-    prep = prepare_campaign_from_config(config, config_path, package, output_dir, purpose="forecast")
+    prep = prepare_campaign_from_config(
+        config,
+        config_path,
+        package,
+        output_dir,
+        purpose="forecast",
+        model_resolution=model_resolution,
+    )
     forecast_cfg = config.get("forecast") or {}
     run_id = str(config.get("run_id") or "campaign_forecast")
     n_samples = int(forecast_cfg.get("posterior_samples") or 300)
