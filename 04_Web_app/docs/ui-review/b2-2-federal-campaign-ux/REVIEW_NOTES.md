@@ -38,21 +38,39 @@ spreadsheet tooling. Подтверждены три листа, readable header
 
 ## Browser matrix
 
-- Chromium desktop + responsive automation: passed;
-- WebKit `Desktop Safari` automation: passed for download controls, federal
-  validation, mixed plan, unknown alias, map, scenarios and 375/1024 overflow;
-- native Safari manual smoke: pending; Safari 26.2 установлен, но штатный
-  `safaridriver` требует вручную включить Developer -> Allow remote automation.
+- Chromium full suite: 189 passed, 4 opt-in live skipped;
+- WebKit `Desktop Safari` full suite: 189 passed, 4 opt-in live skipped;
+- targeted федеральный Chromium и WebKit flow, light/dark, 375/1024 overflow и
+  keyboard/pointer map behavior: passed;
+- native Safari: not accepted. `safaridriver /status` отвечает `ready=true`, но
+  создание browser session возвращает `session not created`, потому что Safari
+  `Developer -> Allow remote automation` выключен. Настройка не изменялась.
 
 ## Live acceptance
 
 No-interception test использует временные state/runtime/artifact directories и
-read-only active package evidence. На clean commit `49b5dac4ada52545167c83675c28afe61fd61be4`
-успешно завершен job `job_722829320d6cfd6beef8`: `ТСХ/Онлайн`, 100,000,000 RUB,
-114/114 mapped geographies, zero unlocated, result/media plan/report download.
+read-only active package evidence. Exact code candidate
+`bac0672fc3c2f4a26c8984ad416e6300e38f4de8` использовал package
+`pkg_807d3ddbae57a52a_9aacd3beb350725b` и прошел:
 
-PR нельзя переводить в Ready: `ТС5/Онлайн` federal plan раскрывает 211 geo, но
-Якутск имеет только один denominator row (`2026-01-01`), тогда как forecast
-carryover horizon требует следующую дату до `end_date + l_max`. Fail-closed
-ошибка воспроизведена на exact committed candidate. B2.2 не меняет model data,
-support universe или denominator fallback.
+- `ТС5/Онлайн`, `2026-09-01`: 211 declared -> 175 ready, 36 excluded,
+  100,000,000 RUB -> 100,000,000 RUB, difference <= 0.01 RUB, 175 map points,
+  zero unlocated; full result/media plan/report job
+  `job_a56d2b1cc5ebb03ae51e` succeeded;
+- `ТСХ/Онлайн`: 114 declared -> 103 ready, validation passed;
+- explicit Якутск: validation blocked before job with the approved human text;
+- explicit Москва: validation and full job `job_9529fb96fb4e0c7c181c` succeeded;
+- `РФ + Москва`: validation passed with one additive overlap warning;
+- `РФ + Якутск`: federal 100,000,000 RUB reconciliation remained complete, while
+  the explicit Якутск row blocked job creation.
+
+## Regression evidence
+
+- backend/web: 204 passed, 10 skipped, 839 subtests passed;
+- PyMC contract suite: 90 passed, 9 skipped, 4 subtests passed;
+- frontend unit: 42 files, 508 tests passed;
+- TypeScript, ESLint, generated contract drift and production build: passed;
+- build retains the pre-existing non-blocking warning for a chunk above 500 kB.
+
+PR #41 must remain Draft until native Safari smoke passes. Required operator
+action: `Safari -> Settings -> Developer -> Allow remote automation`.

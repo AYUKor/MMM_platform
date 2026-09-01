@@ -135,7 +135,9 @@ node node_modules/@playwright/test/cli.js test \
 100,000,000 RUB -> 100,000,000 RUB, `211 declared -> 175 ready` mapped
 geographies и zero unlocated для `ТС5/Онлайн`, запускает job, открывает
 result/media plan и проверяет report download. В том же live acceptance отдельно
-проверяется `114 declared -> 103 ready` для `ТСХ/Онлайн`.
+проверяется `114 declared -> 103 ready` для `ТСХ/Онлайн`, ранняя блокировка
+локального Якутска, полный расчет локальной Москвы, разрешенный `РФ + Москва` и
+блокирующий explicit Якутск в `РФ + Якутск`.
 
 ## Browser и visual evidence
 
@@ -153,6 +155,15 @@ node node_modules/@playwright/test/cli.js test \
 PNG хранятся только в `docs/ui-review/b2-2-federal-campaign-ux/` и не входят в
 runtime bundle. Они являются UI fixture evidence, а не результатом реального MMM
 расчёта.
+
+Полные Chromium и WebKit suites проходят по 189 tests при четырех opt-in live
+skips. Native Safari проверяется отдельно через штатный `safaridriver`; если
+создание session сообщает, что remote automation выключена, системные настройки
+не изменяются автоматически. Оператор включает:
+
+`Safari -> Settings -> Developer -> Allow remote automation`.
+
+До успешного native Safari smoke PR остается Draft.
 
 ## Post-merge Predfin materialization
 

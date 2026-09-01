@@ -627,8 +627,10 @@ outside the ready subset block; forecast retains its runtime guard.
 
 For `2026-09-01` current-package regression evidence is 175/182/103/104 ready
 geographies from declared 211/220/114/117. These values are not hard-coded in
-production. PR #41 remains Draft until full regression, live acceptance, Safari
-status and CI are complete.
+production. Full backend/frontend regression, Chromium/WebKit and real-package
+live acceptance pass. Native Safari session creation is still blocked by the
+disabled `Developer -> Allow remote automation` setting; PR #41 remains Draft
+until that smoke and CI are complete.
 
 ## 21. Historical campaign evaluation — future requirement
 
@@ -748,4 +750,6 @@ Pre- and post-rename operational smoke and path scans pass without legacy fallba
 The current Test milestone is B2.2S Forecast Geo Availability on the existing
 B2.2 branch and Draft PR #41. Post-merge Predfin acceptance remains a separate
 controlled operation; B2.3, Fin, deployment and C3 cleanup are not authorized.
-The active model stays restricted and the server is unchanged.
+Code-side and no-interception live gates pass; native Safari is the remaining
+local gate because remote automation is disabled. The active model stays
+restricted and the server is unchanged.
