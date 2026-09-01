@@ -542,7 +542,9 @@ Do not restore these without a new approved decision:
 - observational/specification and support-extrapolation risk remains;
 - product is allocation-only and lacks an approved finance launch/cancel threshold;
 - federal upload is implemented in the Test B2.2 candidate but has not yet passed
-  post-merge Predfin/Fin promotion;
+  acceptance: `ТСХ/Онлайн` completes the no-interception result/report path, but
+  `ТС5/Онлайн` fails because Yakutsk has one denominator date and cannot cover the
+  mandatory carryover horizon;
 - no historical campaign evaluation capability.
 
 ### Product/runtime
@@ -615,6 +617,13 @@ B2.2 adds the completed Test-contour product path: an additive browser-safe
 dictionary endpoint, federal validation/mixed/error UI and unchanged handoff of
 canonical geo rows to campaign map, calculation, result, media plan and report.
 See `docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
+
+Acceptance is not complete. A real active-package job succeeds end-to-end for
+`ТСХ/Онлайн` (114 geo). `ТС5/Онлайн` expands to 211 geo, but Yakutsk has only the
+`2026-01-01` denominator row; forecast carryover requires dates through
+`end_date + l_max` and correctly fails closed. Do not solve this by silently
+dropping a geography or enabling a new fallback. It requires a separately approved
+model/package-data or federal support-universe decision.
 
 ## 21. Historical campaign evaluation — future requirement
 
@@ -732,6 +741,6 @@ through its PR and not merged by Codex.
 
 Pre- and post-rename operational smoke and path scans pass without legacy fallback.
 The current Test milestone is B2.2 Federal Campaign User Flow. Post-merge Predfin
-acceptance remains a separate controlled operation; B2.3, Fin, deployment and C3
-cleanup are not authorized. The active model stays restricted and the server is
-unchanged.
+acceptance remains blocked by the `ТС5/Онлайн` denominator/carryover mismatch and
+is a separate controlled operation; B2.3, Fin, deployment and C3 cleanup are not
+authorized. The active model stays restricted and the server is unchanged.

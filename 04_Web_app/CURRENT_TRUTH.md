@@ -214,6 +214,13 @@ active-package dictionary is available at
 `GET /api/v1/templates/media-plan-dictionary`. Full product semantics and test
 matrix are in `docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
 
+Live Test acceptance is partial. The complete no-interception path succeeds for
+`ТСХ/Онлайн` (114 geographies), including result, media plan and report. It fails
+closed for `ТС5/Онлайн`: the federal universe is 211 geographies, while Yakutsk
+has only one denominator date (`2026-01-01`), shorter than the forecast carryover
+horizon through `end_date + l_max`. B2.2 does not alter this model/package or
+support-universe policy. The candidate therefore remains `NOT_ACCEPTED` and Draft.
+
 - Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
   aliases.
 - Catalog version: `geo_catalog_v1_2026_07_18`, based on a GeoNames RU snapshot,
@@ -322,6 +329,10 @@ routes use session and permission gates.
     rehabilitation before reuse.
 13. Corporate governance of the private GitHub repository and branch protection
     remains unresolved.
+14. B2.2 federal calculation is not forecastable for every advertised direction:
+    `ТС5/Онлайн` includes Yakutsk in its 211-geo support universe, but its one-row
+    denominator history cannot cover the mandatory carryover horizon. Resolving
+    this requires a separate model/package-data or support-policy decision.
 
 ## Current milestone
 
@@ -330,8 +341,10 @@ routes use session and permission gates.
 The Test candidate accepts the approved federal aliases, renders an additive
 backend `federal_allocation` projection, downloads an active-package dictionary
 and passes the expanded canonical geo plan into the unchanged calculation flow.
-Predfin/Fin materialization, deployment, production activation, B2.3 and C3 cleanup
-remain outside this milestone.
+The full flow passes for `ТСХ/Онлайн`, but the `ТС5/Онлайн` denominator blocker
+above prevents B2.2 acceptance and Ready-for-review. Predfin/Fin materialization,
+deployment, production activation, B2.3 and C3 cleanup remain outside this
+milestone.
 
 ## Planned milestones
 

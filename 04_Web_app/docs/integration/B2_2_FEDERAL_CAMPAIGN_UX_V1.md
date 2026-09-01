@@ -109,8 +109,20 @@ node node_modules/@playwright/test/cli.js test \
 ```
 
 Он не подменяет routes: скачивает оба XLSX, загружает `geo=РФ`, сверяет
-100,000,000 RUB -> 100,000,000 RUB, 211/211 mapped geographies и zero unlocated,
-запускает job, открывает result/media plan и проверяет report download.
+100,000,000 RUB -> 100,000,000 RUB, 114/114 mapped geographies и zero unlocated
+для `ТСХ/Онлайн`, запускает job, открывает result/media plan и проверяет report
+download.
+
+На active package этот no-interception path завершился успешно для
+`ТСХ/Онлайн`. Отдельная проверка `ТС5/Онлайн` выявила acceptance blocker:
+federal support universe содержит 211 географий, но у Якутска в
+`target_denominator_metadata.csv` есть только одна дата `2026-01-01`. Forecast
+оценивает carryover horizon до `end_date + l_max`; даже однодневный план на
+`2026-01-01` требует denominator на `2026-01-09` и fail-closed останавливается.
+Это нельзя исправлять в B2.2 изменением allocator, support universe, denominator
+fallback или MMM semantics. До отдельного решения по model/package data либо
+support-universe policy B2.2 не может считаться полностью принятым для всех
+объявленных направлений.
 
 ## Browser и visual evidence
 

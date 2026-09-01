@@ -41,12 +41,18 @@ spreadsheet tooling. Подтверждены три листа, readable header
 - Chromium desktop + responsive automation: passed;
 - WebKit `Desktop Safari` automation: passed for download controls, federal
   validation, mixed plan, unknown alias, map, scenarios and 375/1024 overflow;
-- native Safari manual smoke: фиксируется отдельно перед переводом PR в Ready.
+- native Safari manual smoke: pending; Safari 26.2 установлен, но штатный
+  `safaridriver` требует вручную включить Developer -> Allow remote automation.
 
 ## Live acceptance
 
 No-interception test использует временные state/runtime/artifact directories и
-read-only active package evidence. Он должен быть запущен на clean committed
-candidate, потому что backend намеренно блокирует real job при tracked source
-changes. Итоговые job/result/report identifiers и totals фиксируются после
-финального прогона.
+read-only active package evidence. На clean commit `49b5dac4ada52545167c83675c28afe61fd61be4`
+успешно завершен job `job_722829320d6cfd6beef8`: `ТСХ/Онлайн`, 100,000,000 RUB,
+114/114 mapped geographies, zero unlocated, result/media plan/report download.
+
+PR нельзя переводить в Ready: `ТС5/Онлайн` federal plan раскрывает 211 geo, но
+Якутск имеет только один denominator row (`2026-01-01`), тогда как forecast
+carryover horizon требует следующую дату до `end_date + l_max`. Fail-closed
+ошибка воспроизведена на exact committed candidate. B2.2 не меняет model data,
+support universe или denominator fallback.
