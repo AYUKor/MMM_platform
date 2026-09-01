@@ -7,7 +7,7 @@ const EMAIL = process.env.B2_2_LIVE_EMAIL ?? "";
 const PASSWORD = process.env.B2_2_LIVE_PASSWORD ?? "";
 
 const FEDERAL_BUDGET_RUB = 100_000_000;
-const SUPPORTED_FLIGHT_DATE = "2026-02-17";
+const SUPPORTED_FLIGHT_DATE = "2026-01-01";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 test.use({ trace: "retain-on-failure", screenshot: "only-on-failure", video: "off" });
