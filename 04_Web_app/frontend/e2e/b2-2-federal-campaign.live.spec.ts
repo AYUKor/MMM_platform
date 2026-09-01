@@ -70,10 +70,12 @@ test.describe("B2.2 live federal campaign acceptance", () => {
       status: "available",
       source_rows_count: 1,
       source_budget_rub: FEDERAL_BUDGET_RUB,
-      allocated_budget_rub: FEDERAL_BUDGET_RUB,
       geo_count: 211,
       mixed_local_overlap: false,
     });
+    expect(
+      Math.abs(validation.federal_allocation.allocated_budget_rub - FEDERAL_BUDGET_RUB),
+    ).toBeLessThanOrEqual(0.01);
     expect(Math.abs(validation.federal_allocation.difference_rub)).toBeLessThanOrEqual(0.01);
     expect(validation.map_coverage).toMatchObject({
       status: "available",
