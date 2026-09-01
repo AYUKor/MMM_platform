@@ -34,6 +34,13 @@ export interface ValidationResultV2 {
     allocated_budget_rub: number;
     difference_rub: number;
     geo_count: number | null;
+    declared_geo_count: number | null;
+    ready_geo_count: number | null;
+    excluded_geo_count: number | null;
+    denominator_policy_version: string | null;
+    lmax: number | null;
+    required_period_start: string | null;
+    required_period_end: string | null;
     method_display_name: string | null;
     channels: ChannelIdentity[];
     business_directions: string[];
@@ -49,6 +56,11 @@ export interface ValidationResultV2 {
       allocated_budget_rub: number;
       difference_rub: number;
       geo_count: number | null;
+      declared_geo_count: number | null;
+      ready_geo_count: number | null;
+      excluded_geo_count: number | null;
+      period_start: string | null;
+      period_end: string | null;
     }[];
   };
   model_limitations: {

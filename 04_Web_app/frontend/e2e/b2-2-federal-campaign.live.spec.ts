@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
 
@@ -7,10 +7,54 @@ const EMAIL = process.env.B2_2_LIVE_EMAIL ?? "";
 const PASSWORD = process.env.B2_2_LIVE_PASSWORD ?? "";
 
 const FEDERAL_BUDGET_RUB = 100_000_000;
-const SUPPORTED_FLIGHT_DATE = "2026-01-01";
-const LIVE_BUSINESS_DIRECTION = "ТСХ/Онлайн";
-const EXPECTED_GEO_COUNT = 114;
+const SUPPORTED_FLIGHT_DATE = "2026-09-01";
+const LIVE_BUSINESS_DIRECTION = "ТС5/Онлайн";
+const DECLARED_GEO_COUNT = 211;
+const EXPECTED_GEO_COUNT = 175;
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+async function validateLivePlan(page: Page, filename: string, rows: readonly string[]) {
+  await page.goto("/calculations/new");
+  const content = [
+    "campaign_name,segment,geo,channel,start_date,end_date,budget_rub",
+    ...rows,
+    "",
+  ].join("\n");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: filename,
+    mimeType: "text/csv",
+    buffer: Buffer.from(content, "utf-8"),
+  });
+  await page.getByRole("button", { name: "Загрузить файл" }).click();
+  await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+  const validationResponse = page.waitForResponse((response) => (
+    response.request().method() === "GET"
+    && /\/api\/v1\/validations\/validation_[a-z0-9]+\/view-v2$/.test(new URL(response.url()).pathname)
+    && response.status() === 200
+  ), { timeout: 120_000 });
+  await page.getByRole("button", { name: "Продолжить к проверке" }).click();
+  return (await validationResponse).json();
+}
+
+async function runValidatedPlanToResult(page: Page) {
+  const continueButton = page.getByRole("button", { name: /Продолжить (к сценариям|с ограничениями)/ });
+  await continueButton.click();
+  await expect(page.getByRole("button", { name: "Запустить расчет" })).toBeVisible();
+  await page.getByRole("button", { name: "Запустить расчет" }).click();
+  await expect(page).toHaveURL(/\/calculations\/job_[a-z0-9]+\/progress/);
+  const jobId = new URL(page.url()).pathname.split("/")[2];
+  expect(jobId).toMatch(/^job_[a-z0-9]+$/);
+  const resultLink = page.getByRole("link", { name: "Открыть результат" });
+  await expect(resultLink).toBeVisible({ timeout: 2_100_000 });
+  await resultLink.click();
+  await expect(page).toHaveURL(new RegExp(`/calculations/${jobId}/result`));
+  await expect(page.getByRole("heading", { name: "Оборот и ROAS" })).toBeVisible({
+    timeout: 120_000,
+  });
+  return jobId;
+}
 
 test.use({ trace: "retain-on-failure", screenshot: "only-on-failure", video: "off" });
 
@@ -73,6 +117,12 @@ test.describe("B2.2 live federal campaign acceptance", () => {
       source_rows_count: 1,
       source_budget_rub: FEDERAL_BUDGET_RUB,
       geo_count: EXPECTED_GEO_COUNT,
+      declared_geo_count: DECLARED_GEO_COUNT,
+      ready_geo_count: EXPECTED_GEO_COUNT,
+      excluded_geo_count: DECLARED_GEO_COUNT - EXPECTED_GEO_COUNT,
+      lmax: 14,
+      required_period_start: "2026-09-01",
+      required_period_end: "2026-09-15",
       mixed_local_overlap: false,
     });
     expect(
@@ -135,5 +185,103 @@ test.describe("B2.2 live federal campaign acceptance", () => {
     const verified = await page.request.get(reportDownload.url());
     expect(verified.status()).toBe(200);
     expect(verified.headers()["content-type"]).toContain(XLSX_MIME);
+
+    await page.goto("/calculations/new");
+    const tsxContent = [
+      "campaign_name,segment,geo,channel,start_date,end_date,budget_rub",
+      `B2.2 TSX federal live,ТСХ/Онлайн,РФ,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},${FEDERAL_BUDGET_RUB}`,
+      "",
+    ].join("\n");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "b2-2-tsx-federal-live.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(tsxContent, "utf-8"),
+    });
+    await page.getByRole("button", { name: "Загрузить файл" }).click();
+    await expect(page.getByText("Файл успешно прочитан", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole("button", { name: "Продолжить к проверке" }).click();
+    const tsxValidationResponse = await page.waitForResponse((response) => (
+      response.request().method() === "GET"
+      && /\/api\/v1\/validations\/validation_[a-z0-9]+\/view-v2$/.test(new URL(response.url()).pathname)
+      && response.status() === 200
+    ), { timeout: 120_000 });
+    const tsxValidation = await tsxValidationResponse.json();
+    expect(tsxValidation.federal_allocation).toMatchObject({
+      status: "available",
+      declared_geo_count: 114,
+      ready_geo_count: 103,
+      excluded_geo_count: 11,
+      allocated_budget_rub: FEDERAL_BUDGET_RUB,
+    });
+    expect(tsxValidation.geo_points).toHaveLength(103);
+    expect(tsxValidation.map_coverage.unlocated_geographies_n).toBe(0);
+
+    const yakutskValidation = await validateLivePlan(
+      page,
+      "b2-2-yakutsk-local-live.csv",
+      [`B2.2 Yakutsk local live,${LIVE_BUSINESS_DIRECTION},Якутск,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},1000000`],
+    );
+    expect(yakutskValidation.job_creation_allowed).toBe(false);
+    expect(yakutskValidation.model_limitations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        limitation_type: "geo_not_forecast_ready_for_period",
+        blocks_calculation: true,
+      }),
+    ]));
+    await expect(page.getByText(/не может надежно рассчитать географию «Якутск»/)).toBeVisible();
+
+    const moscowValidation = await validateLivePlan(
+      page,
+      "b2-2-moscow-local-live.csv",
+      [`B2.2 Moscow local live,${LIVE_BUSINESS_DIRECTION},Москва,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},1000000`],
+    );
+    expect(moscowValidation.job_creation_allowed).toBe(true);
+    expect(moscowValidation.geo_points).toHaveLength(1);
+    expect(moscowValidation.geo_points[0].geo_display_name).toBe("Москва");
+    await runValidatedPlanToResult(page);
+
+    const mixedMoscowValidation = await validateLivePlan(
+      page,
+      "b2-2-federal-moscow-live.csv",
+      [
+        `B2.2 federal Moscow live,${LIVE_BUSINESS_DIRECTION},РФ,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},${FEDERAL_BUDGET_RUB}`,
+        `B2.2 federal Moscow live,${LIVE_BUSINESS_DIRECTION},Москва,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},1000000`,
+      ],
+    );
+    expect(mixedMoscowValidation.job_creation_allowed).toBe(true);
+    expect(mixedMoscowValidation.federal_allocation).toMatchObject({
+      status: "available",
+      ready_geo_count: EXPECTED_GEO_COUNT,
+      allocated_budget_rub: FEDERAL_BUDGET_RUB,
+      mixed_local_overlap: true,
+    });
+    expect(mixedMoscowValidation.federal_allocation.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "FEDERAL_AND_LOCAL_GEO_OVERLAP" }),
+    ]));
+
+    const mixedYakutskValidation = await validateLivePlan(
+      page,
+      "b2-2-federal-yakutsk-live.csv",
+      [
+        `B2.2 federal Yakutsk live,${LIVE_BUSINESS_DIRECTION},РФ,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},${FEDERAL_BUDGET_RUB}`,
+        `B2.2 federal Yakutsk live,${LIVE_BUSINESS_DIRECTION},Якутск,Digital_Performance,${SUPPORTED_FLIGHT_DATE},${SUPPORTED_FLIGHT_DATE},1000000`,
+      ],
+    );
+    expect(mixedYakutskValidation.job_creation_allowed).toBe(false);
+    expect(mixedYakutskValidation.federal_allocation).toMatchObject({
+      status: "available",
+      ready_geo_count: EXPECTED_GEO_COUNT,
+      allocated_budget_rub: FEDERAL_BUDGET_RUB,
+      difference_rub: 0,
+      mixed_local_overlap: true,
+    });
+    expect(mixedYakutskValidation.model_limitations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        limitation_type: "geo_not_forecast_ready_for_period",
+        blocks_calculation: true,
+      }),
+    ]));
   });
 });

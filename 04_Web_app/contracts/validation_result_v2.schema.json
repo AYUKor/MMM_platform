@@ -30,7 +30,7 @@
     "federal_allocation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "title", "description", "policy_version", "package_id", "source_rows_count", "source_budget_rub", "allocated_budget_rub", "difference_rub", "geo_count", "method_display_name", "channels", "business_directions", "mixed_local_overlap", "information", "warnings", "errors", "breakdown"],
+      "required": ["status", "title", "description", "policy_version", "package_id", "source_rows_count", "source_budget_rub", "allocated_budget_rub", "difference_rub", "geo_count", "declared_geo_count", "ready_geo_count", "excluded_geo_count", "denominator_policy_version", "lmax", "required_period_start", "required_period_end", "method_display_name", "channels", "business_directions", "mixed_local_overlap", "information", "warnings", "errors", "breakdown"],
       "properties": {
         "status": {"enum": ["none", "available", "error"]},
         "title": {"type": ["string", "null"]},
@@ -42,6 +42,13 @@
         "allocated_budget_rub": {"type": "number", "minimum": 0},
         "difference_rub": {"type": "number", "minimum": 0},
         "geo_count": {"type": ["integer", "null"], "minimum": 1},
+        "declared_geo_count": {"type": ["integer", "null"], "minimum": 0},
+        "ready_geo_count": {"type": ["integer", "null"], "minimum": 0},
+        "excluded_geo_count": {"type": ["integer", "null"], "minimum": 0},
+        "denominator_policy_version": {"type": ["string", "null"]},
+        "lmax": {"type": ["integer", "null"], "minimum": 0},
+        "required_period_start": {"type": ["string", "null"], "format": "date"},
+        "required_period_end": {"type": ["string", "null"], "format": "date"},
         "method_display_name": {"type": ["string", "null"]},
         "channels": {"type": "array", "items": {"$ref": "#/$defs/channelIdentity"}, "uniqueItems": true},
         "business_directions": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
@@ -54,7 +61,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["business_direction", "channels", "source_rows_count", "source_budget_rub", "allocated_budget_rub", "difference_rub", "geo_count"],
+            "required": ["business_direction", "channels", "source_rows_count", "source_budget_rub", "allocated_budget_rub", "difference_rub", "geo_count", "declared_geo_count", "ready_geo_count", "excluded_geo_count", "period_start", "period_end"],
             "properties": {
               "business_direction": {"type": "string", "minLength": 1},
               "channels": {"type": "array", "items": {"$ref": "#/$defs/channelIdentity"}, "uniqueItems": true},
@@ -62,7 +69,12 @@
               "source_budget_rub": {"type": "number", "minimum": 0},
               "allocated_budget_rub": {"type": "number", "minimum": 0},
               "difference_rub": {"type": "number", "minimum": 0},
-              "geo_count": {"type": ["integer", "null"], "minimum": 1}
+              "geo_count": {"type": ["integer", "null"], "minimum": 1},
+              "declared_geo_count": {"type": ["integer", "null"], "minimum": 0},
+              "ready_geo_count": {"type": ["integer", "null"], "minimum": 0},
+              "excluded_geo_count": {"type": ["integer", "null"], "minimum": 0},
+              "period_start": {"type": ["string", "null"], "format": "date"},
+              "period_end": {"type": ["string", "null"], "format": "date"}
             }
           }
         }

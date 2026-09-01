@@ -379,6 +379,39 @@ class BusinessSemanticsV2Test(unittest.TestCase):
             [("ТС5/Онлайн", 211), ("ТСХ/Онлайн", 114)],
         )
 
+    def test_federal_projection_exposes_period_availability_contract(self) -> None:
+        summary = build_federal_allocation_summary(
+            _federal_audit(
+                [
+                    {
+                        "source_row_id": "row_a",
+                        "date": "2026-09-01",
+                        "business_direction": "ТС5/Онлайн",
+                        "channel": "Digital_Performance",
+                        "original_geo": "РФ",
+                        "source_budget_rub": 100.0,
+                        "eligible_geo_count": 175,
+                        "declared_geo_count": 211,
+                        "ready_geo_count": 175,
+                        "excluded_geo_count": 36,
+                        "required_start": "2026-09-01",
+                        "required_end": "2026-09-15",
+                        "lmax": 14,
+                        "denominator_policy_version": "FORECAST_DENOMINATOR_RESOLUTION_V1",
+                        "allocated_total_rub": 100.0,
+                        "difference_rub": 0.0,
+                    }
+                ]
+            )
+        )
+        self.assertEqual(summary["declared_geo_count"], 211)
+        self.assertEqual(summary["ready_geo_count"], 175)
+        self.assertEqual(summary["excluded_geo_count"], 36)
+        self.assertEqual(summary["lmax"], 14)
+        self.assertEqual(summary["required_period_start"], "2026-09-01")
+        self.assertEqual(summary["required_period_end"], "2026-09-15")
+        self.assertEqual(summary["breakdown"][0]["period_end"], "2026-09-15")
+
     def test_federal_projection_has_none_and_safe_error_states(self) -> None:
         self.assertEqual(build_federal_allocation_summary(None)["status"], "none")
         error = build_federal_allocation_summary(

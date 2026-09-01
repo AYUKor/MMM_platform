@@ -275,6 +275,59 @@ class FederalGeoAllocatorGoldenTest(unittest.TestCase):
                 expected["allocation_vector_sha256"],
             )
 
+    def test_period_specific_ready_universe_is_supplied_by_orchestration(self) -> None:
+        declared = self.context.eligible_by_direction["ТС5/Онлайн"]
+        first_ready = tuple(geo.geo_label for geo in declared[:175])
+        second_ready = tuple(geo.geo_label for geo in declared[:174])
+        rows = [
+            _row(source_row_id="row:period:1", budget=10_000_000.0),
+            _row(
+                source_row_id="row:period:2",
+                budget=20_000_000.0,
+                date="2026-10-01",
+            ),
+        ]
+        audit = {
+            "row:period:1": {
+                "declared_geo_count": 211,
+                "ready_geo_count": 175,
+                "excluded_geo_count": 36,
+                "required_start": "2026-09-01",
+                "required_end": "2026-09-15",
+                "lmax": 14,
+                "denominator_policy_version": "FORECAST_DENOMINATOR_RESOLUTION_V1",
+                "availability_policy_version": "FORECAST_GEO_AVAILABILITY_V1",
+            },
+            "row:period:2": {
+                "declared_geo_count": 211,
+                "ready_geo_count": 174,
+                "excluded_geo_count": 37,
+                "required_start": "2026-10-01",
+                "required_end": "2026-10-15",
+                "lmax": 14,
+                "denominator_policy_version": "FORECAST_DENOMINATOR_RESOLUTION_V1",
+                "availability_policy_version": "FORECAST_GEO_AVAILABILITY_V1",
+            },
+        }
+        result = self.allocator.allocate(
+            rows,
+            eligible_geo_labels_by_source_row_id={
+                "row:period:1": first_ready,
+                "row:period:2": second_ready,
+            },
+            eligibility_audit_by_source_row_id=audit,
+        )
+        counts = {
+            row["source_row_id"]: row["eligible_geo_count"]
+            for row in result.audit["source_row_reconciliation"]
+        }
+        self.assertEqual(counts, {"row:period:1": 175, "row:period:2": 174})
+        self.assertLessEqual(
+            result.audit["totals"]["difference_rub"],
+            CONSERVATION_TOLERANCE_RUB,
+        )
+        self.assertTrue(all(row["source_row_id"] == "" for row in result.aggregated_rows))
+
     def test_historical_b1_goldens_keep_formula_controls_explicit(self) -> None:
         cases = _json("B2_0_GOLDEN_HISTORICAL_CASES.json")["cases"]
         eligibility = {
@@ -574,7 +627,7 @@ class FederalContextLoaderTest(unittest.TestCase):
             self._load(package, inventory)
         self.assertEqual(caught.exception.code, "PACKAGE_POINTER_OR_HASH_MISMATCH")
 
-    def test_missing_population_is_rejected_without_fallback(self) -> None:
+    def test_missing_population_blocks_only_when_geo_is_in_ready_universe(self) -> None:
         package, inventory = self._package()
         rows = _csv_rows(POPULATION_PATH)
         for row in rows:
@@ -582,17 +635,29 @@ class FederalContextLoaderTest(unittest.TestCase):
                 row["population_k"] = ""
         mutated = self.root / "population.csv"
         self._write_csv(mutated, rows, list(rows[0]))
+        context = self._load(
+            package,
+            inventory,
+            population_path=mutated,
+            population_sha256=sha256_file(mutated) or "",
+        )
+        allocator = FederalGeoAllocator(context)
         with self.assertRaises(FederalGeoAllocationError) as caught:
-            self._load(
-                package,
-                inventory,
-                population_path=mutated,
-                population_sha256=sha256_file(mutated) or "",
-            )
+            allocator.allocate([_row()])
         self.assertEqual(
             caught.exception.code,
             "FEDERAL_POPULATION_MISSING_OR_NONPOSITIVE",
         )
+        ready_without_moscow = tuple(
+            geo.geo_label
+            for geo in context.eligible_by_direction["ТС5/Онлайн"]
+            if geo.geo_label != "МОСКВА"
+        )
+        result = allocator.allocate(
+            [_row()],
+            eligible_geo_labels_by_source_row_id={"row:1": ready_without_moscow},
+        )
+        self.assertEqual(len(result.aggregated_rows), 210)
 
     def test_supported_geo_missing_from_catalog_is_rejected(self) -> None:
         package, inventory = self._package()

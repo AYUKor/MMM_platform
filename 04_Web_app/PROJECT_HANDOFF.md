@@ -618,12 +618,17 @@ dictionary endpoint, federal validation/mixed/error UI and unchanged handoff of
 canonical geo rows to campaign map, calculation, result, media plan and report.
 See `docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
 
-Acceptance is not complete. A real active-package job succeeds end-to-end for
-`ТСХ/Онлайн` (114 geo). `ТС5/Онлайн` expands to 211 geo, but Yakutsk has only the
-`2026-01-01` denominator row; forecast carryover requires dates through
-`end_date + l_max` and correctly fails closed. Do not solve this by silently
-dropping a geography or enabling a new fallback. It requires a separately approved
-model/package-data or federal support-universe decision.
+B2.2S resolves the temporal mismatch before job creation. The shared
+`ForecastGeoAvailabilityResolver` uses the exact denominator lookup also used by
+`ForecastEngine`, includes carryover through `end_date + lmax`, and produces a
+source-row-specific ready subset. The allocator still uses the same population
+formula but receives that subset from orchestration. Explicit local geographies
+outside the ready subset block; forecast retains its runtime guard.
+
+For `2026-09-01` current-package regression evidence is 175/182/103/104 ready
+geographies from declared 211/220/114/117. These values are not hard-coded in
+production. PR #41 remains Draft until full regression, live acceptance, Safari
+status and CI are complete.
 
 ## 21. Historical campaign evaluation — future requirement
 
@@ -740,7 +745,7 @@ identity. B2.2 is isolated in `codex/b2-2-federal-campaign-ux`; it must be revie
 through its PR and not merged by Codex.
 
 Pre- and post-rename operational smoke and path scans pass without legacy fallback.
-The current Test milestone is B2.2 Federal Campaign User Flow. Post-merge Predfin
-acceptance remains blocked by the `ТС5/Онлайн` denominator/carryover mismatch and
-is a separate controlled operation; B2.3, Fin, deployment and C3 cleanup are not
-authorized. The active model stays restricted and the server is unchanged.
+The current Test milestone is B2.2S Forecast Geo Availability on the existing
+B2.2 branch and Draft PR #41. Post-merge Predfin acceptance remains a separate
+controlled operation; B2.3, Fin, deployment and C3 cleanup are not authorized.
+The active model stays restricted and the server is unchanged.

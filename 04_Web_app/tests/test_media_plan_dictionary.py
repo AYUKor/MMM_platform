@@ -83,10 +83,15 @@ class MediaPlanDictionaryTest(unittest.TestCase):
         geography_rows = list(
             workbook["Географии"].iter_rows(values_only=True)
         )
-        self.assertEqual(len(geography_rows) - 1, 220)
+        self.assertIn("Фактическая доступность расчета зависит от дат", geography_rows[0][0])
+        self.assertEqual(
+            geography_rows[1],
+            ("География", "ТС5 Онлайн", "ТС5 Офлайн", "ТСХ Онлайн", "ТСХ Офлайн"),
+        )
+        self.assertEqual(len(geography_rows) - 2, 220)
         for index, expected in enumerate(counts.values(), start=1):
             self.assertEqual(
-                sum(row[index] == "Да" for row in geography_rows[1:]),
+                sum(row[index] == "Да" for row in geography_rows[2:]),
                 expected,
             )
 

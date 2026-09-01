@@ -14,7 +14,6 @@ import csv
 import hashlib
 import math
 import re
-from bisect import bisect_left
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -26,6 +25,11 @@ from .federal_geo_allocator import (
     FederalGeoAllocationError,
     FederalGeoAllocator,
     is_federal_geo,
+)
+from .forecast_geo_availability import (
+    ANALOG_DENOMINATOR_MAX_NEAREST_GAP_DAYS,
+    ForecastGeoAvailabilityResolver,
+    HistoricalDenominatorResolver,
 )
 from .io import ensure_dir, project_root, resolve_path, write_json
 from .model_package_reader import ModelPackage
@@ -440,7 +444,15 @@ def _package_population_weights(
     if denominators is None:
         denominators = pd.read_csv(
             path,
-            usecols=["segment", "geo_label", "date", "population_k"],
+            usecols=[
+                "segment",
+                "geo_label",
+                "date",
+                "population_k",
+                "unique_users",
+                "orders_cnt",
+                "market_size_tier",
+            ],
         )
     segment_denominators = denominators[denominators["segment"].eq(segment)].copy()
     segment_denominators["population_k"] = pd.to_numeric(
@@ -485,13 +497,6 @@ def _package_population_weights(
     )
 
 
-def _date_in_year(value: date, year: int) -> date:
-    try:
-        return value.replace(year=year)
-    except ValueError:
-        return value.replace(year=year, day=28)
-
-
 def _denominator_period_eligible_geos(
     denominators: Any,
     geos: set[str],
@@ -502,55 +507,41 @@ def _denominator_period_eligible_geos(
     missing_geo_policy: str,
     max_nearest_gap_days: int,
 ) -> set[str]:
-    """Return geos whose denominator can be resolved for every future date."""
-    try:
-        import pandas as pd  # type: ignore
-    except Exception as exc:  # pragma: no cover - runtime env
-        raise CampaignPlanError("Denominator coverage validation requires pandas") from exc
-    frame = denominators[denominators["geo_label"].astype(str).isin(geos)].copy()
-    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.date
-    frame = frame.dropna(subset=["date"])
-    dates_by_geo_year: dict[tuple[str, int], list[date]] = {}
-    for (geo, year), sub in frame.groupby(
-        [frame["geo_label"].astype(str), frame["date"].map(lambda value: value.year)],
-        dropna=False,
-    ):
-        dates_by_geo_year[(str(geo), int(year))] = sorted(set(sub["date"]))
-    available_years: dict[str, list[int]] = defaultdict(list)
-    for geo, year in dates_by_geo_year:
-        available_years[geo].append(year)
+    """Return geos resolvable by the exact shared forecast denominator policy."""
+
+    if int(max_nearest_gap_days) != ANALOG_DENOMINATOR_MAX_NEAREST_GAP_DAYS:
+        raise CampaignPlanError(
+            "Campaign adapter max_nearest_gap_days differs from the forecast policy"
+        )
+    resolver = HistoricalDenominatorResolver(denominators)
+    segments = {
+        str(value)
+        for value in denominators["segment"].dropna().astype(str).tolist()
+    }
+    if len(segments) != 1:
+        raise CampaignPlanError(
+            "Denominator coverage validation requires exactly one segment"
+        )
+    segment = next(iter(segments))
     future_dates: list[date] = []
     current = future_start
     while current <= future_end:
         future_dates.append(current)
         current += timedelta(days=1)
 
-    def _has_near_date(values: list[date], target_date: date) -> bool:
-        position = bisect_left(values, target_date)
-        candidates = values[max(position - 1, 0) : position + 1]
-        return bool(candidates) and min(abs((value - target_date).days) for value in candidates) <= max_nearest_gap_days
-
     eligible: set[str] = set()
     for geo in geos:
-        years = sorted(set(available_years.get(geo, [])))
-        if not years:
-            continue
         geo_ok = True
         for future_date in future_dates:
-            preferred_year = int(analog_year) if analog_year is not None else future_date.year - 1
-            candidate_years = [preferred_year]
-            if missing_geo_policy == "nearest_available_year_same_geo":
-                candidate_years.extend(
-                    year for year in sorted(years, key=lambda value: (abs(value - preferred_year), value))
-                    if year != preferred_year
+            try:
+                resolver.resolve(
+                    segment,
+                    geo,
+                    future_date,
+                    analog_year=analog_year,
+                    missing_geo_policy=missing_geo_policy,
                 )
-            if not any(
-                _has_near_date(
-                    dates_by_geo_year.get((geo, candidate_year), []),
-                    _date_in_year(future_date, candidate_year),
-                )
-                for candidate_year in candidate_years
-            ):
+            except ValueError:
                 geo_ok = False
                 break
         if geo_ok:
@@ -618,7 +609,15 @@ def adapt_x5_agency_kpi_workbook(
     denominator_path = package.run_dir / "target_denominator_metadata.csv"
     denominators = pd.read_csv(
         denominator_path,
-        usecols=["segment", "geo_label", "date", "population_k"],
+        usecols=[
+            "segment",
+            "geo_label",
+            "date",
+            "population_k",
+            "unique_users",
+            "orders_cnt",
+            "market_size_tier",
+        ],
     )
     canonical_rows: list[dict[str, Any]] = []
     excluded_rows: list[dict[str, Any]] = []
@@ -1058,6 +1057,7 @@ class CampaignPrepareResult:
     summary: dict[str, Any]
     federal_provenance_path: str | None = None
     federal_audit_path: str | None = None
+    forecast_geo_availability_audit_path: str | None = None
 
 
 def normalize_campaign_rows(
@@ -1309,6 +1309,146 @@ def validate_campaign_against_package(
     return validation_rows, summary
 
 
+def _forecast_geo_availability_for_rows(
+    package: ModelPackage,
+    normalized_rows: list[dict[str, Any]],
+    *,
+    package_id: str,
+    future_controls: dict[str, Any],
+) -> tuple[
+    dict[str, Any],
+    dict[str, tuple[str, ...]],
+    dict[str, dict[str, Any]],
+    set[tuple[str, str, str]],
+]:
+    """Resolve one period-specific eligible universe per original source row."""
+
+    analog_year_raw = future_controls.get("analog_year")
+    analog_year = int(analog_year_raw) if analog_year_raw is not None else None
+    missing_geo_policy = str(
+        future_controls.get("missing_geo_policy") or "fail"
+    )
+    resolver = ForecastGeoAvailabilityResolver.from_package(
+        package,
+        package_id=package_id,
+    )
+    cache: dict[tuple[str, str, date, date], Any] = {}
+    ready_by_source_row_id: dict[str, tuple[str, ...]] = {}
+    eligibility_audit_by_source_row_id: dict[str, dict[str, Any]] = {}
+    blocked_local_keys: set[tuple[str, str, str]] = set()
+    source_rows: list[dict[str, Any]] = []
+    for row in normalized_rows:
+        source_row_id = str(row.get("source_row_id") or "")
+        start = _parse_date(row.get("date") or row.get("start_date"))
+        end = _parse_date(row.get("date") or row.get("end_date"))
+        if start is None or end is None:
+            continue
+        direction = str(row.get("segment") or "")
+        channel = str(row.get("channel") or "")
+        cache_key = (direction, channel, start, end)
+        availability = cache.get(cache_key)
+        if availability is None:
+            availability = resolver.resolve(
+                direction=direction,
+                channel=channel,
+                campaign_start=start,
+                campaign_end=end,
+                analog_year=analog_year,
+                missing_geo_policy=missing_geo_policy,
+            )
+            cache[cache_key] = availability
+        compact = availability.compact_audit()
+        is_federal = is_federal_geo(row.get("geo"))
+        source_audit = {
+            "source_row_id": source_row_id,
+            "source_geo": str(row.get("geo") or ""),
+            "is_federal": is_federal,
+            **compact,
+        }
+        source_rows.append(source_audit)
+        eligibility_audit_by_source_row_id[source_row_id] = compact
+        if is_federal:
+            ready_by_source_row_id[source_row_id] = availability.ready_geos
+            continue
+        geo = str(row.get("geo") or "")
+        if geo in availability.declared_geos and geo not in availability.ready_geos:
+            blocked_local_keys.add((direction, channel, geo))
+
+    return (
+        {
+            "schema_version": "1.0.0",
+            "package_id": package_id,
+            "availability_policy_version": (
+                source_rows[0].get("availability_policy_version")
+                if source_rows
+                else "FORECAST_GEO_AVAILABILITY_V1"
+            ),
+            "denominator_policy_version": (
+                source_rows[0].get("denominator_policy_version")
+                if source_rows
+                else "FORECAST_DENOMINATOR_RESOLUTION_V1"
+            ),
+            "analog_year": analog_year,
+            "missing_geo_policy": missing_geo_policy,
+            "source_rows_n": len(source_rows),
+            "blocking_local_source_rows_n": sum(
+                1
+                for row in source_rows
+                if not row["is_federal"]
+                and (
+                    str(row["direction"]),
+                    str(row["channel"]),
+                    str(row["source_geo"]),
+                )
+                in blocked_local_keys
+            ),
+            "source_rows": source_rows,
+        },
+        ready_by_source_row_id,
+        eligibility_audit_by_source_row_id,
+        blocked_local_keys,
+    )
+
+
+def _apply_temporal_availability_to_validation(
+    validation_rows: list[dict[str, Any]],
+    blocked_local_keys: set[tuple[str, str, str]],
+) -> dict[str, Any]:
+    for row in validation_rows:
+        key = (
+            str(row.get("segment") or ""),
+            str(row.get("channel") or ""),
+            str(row.get("geo") or ""),
+        )
+        if key not in blocked_local_keys:
+            continue
+        row["supported_by_model"] = False
+        row["forecast_use"] = "not_ready"
+        row["optimizer_use"] = "not_ready"
+        row["reason"] = "geo_not_forecast_ready_for_period"
+        row["gate_reason_codes"] = "GEO_NOT_FORECAST_READY_FOR_PERIOD"
+    counts = Counter(str(row.get("allowed_use") or "") for row in validation_rows)
+    return {
+        "validation_rows_n": len(validation_rows),
+        "supported_rows_n": sum(
+            1 for row in validation_rows if bool(row.get("supported_by_model"))
+        ),
+        "unsupported_rows_n": sum(
+            1 for row in validation_rows if not bool(row.get("supported_by_model"))
+        ),
+        "allowed_use_counts": dict(counts),
+        "risky_supported_rows_n": sum(
+            1
+            for row in validation_rows
+            if bool(row.get("supported_by_model"))
+            and (
+                row.get("allowed_use") != "primary"
+                or row.get("risk_level") != "low"
+            )
+        ),
+    }
+
+
 def prepare_campaign_from_config(
     config: dict[str, Any],
     config_path: Path,
@@ -1431,6 +1571,34 @@ def prepare_campaign_from_config(
                 + ",".join(str(row["source_row_id"]) for row in unknown_geos[:20])
             ),
         )
+    forecast_geo_availability_audit: dict[str, Any] | None = None
+    ready_geos_by_source_row_id: dict[str, tuple[str, ...]] = {}
+    eligibility_audit_by_source_row_id: dict[str, dict[str, Any]] = {}
+    blocked_local_availability_keys: set[tuple[str, str, str]] = set()
+    future_controls = dict(config.get("future_controls") or {})
+    forecast_geo_availability_audit_path: Path | None = None
+    if future_controls:
+        (
+            forecast_geo_availability_audit,
+            ready_geos_by_source_row_id,
+            eligibility_audit_by_source_row_id,
+            blocked_local_availability_keys,
+        ) = _forecast_geo_availability_for_rows(
+            package,
+            normalized_rows,
+            package_id=str(
+                (model_resolution or {}).get("package_id")
+                or package.model_run_id
+            ),
+            future_controls=future_controls,
+        )
+        forecast_geo_availability_audit_path = (
+            output_dir / f"{stem}_forecast_geo_availability_audit.json"
+        )
+        write_json(
+            forecast_geo_availability_audit_path,
+            forecast_geo_availability_audit,
+        )
     daily_rows = build_daily_flighting(normalized_rows)
 
     input_total = sum(float(r["budget_rub"]) for r in normalized_rows)
@@ -1512,7 +1680,15 @@ def prepare_campaign_from_config(
             geo_catalog_path=resolved_geo_catalog_path,
             expected_geo_catalog_sha256=expected_geo_catalog_sha256,
         )
-        allocation = FederalGeoAllocator(context).allocate(daily_rows)
+        allocation = FederalGeoAllocator(context).allocate(
+            daily_rows,
+            eligible_geo_labels_by_source_row_id=(
+                ready_geos_by_source_row_id if future_controls else None
+            ),
+            eligibility_audit_by_source_row_id=(
+                eligibility_audit_by_source_row_id if future_controls else None
+            ),
+        )
         daily_rows = [dict(row) for row in allocation.aggregated_rows]
         validation_input_rows = daily_rows
         federal_provenance_path = (
@@ -1546,6 +1722,11 @@ def prepare_campaign_from_config(
         validation_input_rows,
         targets,
     )
+    if blocked_local_availability_keys:
+        validation_summary = _apply_temporal_availability_to_validation(
+            validation_rows,
+            blocked_local_availability_keys,
+        )
 
     _write_csv(normalized_path, normalized_rows)
     _write_csv(flighting_path, daily_rows)
@@ -1604,6 +1785,7 @@ def prepare_campaign_from_config(
         "normalized": _campaign_totals(normalized_rows),
         "daily_flighting": _campaign_totals(daily_rows),
         "federal_geo_allocation": federal_allocation,
+        "forecast_geo_availability": forecast_geo_availability_audit,
         "budget_reconciliation_abs_diff": round(abs(input_total - daily_total), 6),
         "raw_to_normalized_budget_abs_diff": round(abs(raw_total - input_total), 6),
         "fail_on_parse_issues": fail_on_parse_issues,
@@ -1623,6 +1805,11 @@ def prepare_campaign_from_config(
             ),
             "federal_audit_path": (
                 str(federal_audit_path) if federal_audit_path else None
+            ),
+            "forecast_geo_availability_audit_path": (
+                str(forecast_geo_availability_audit_path)
+                if forecast_geo_availability_audit_path
+                else None
             ),
         },
     }
@@ -1644,4 +1831,9 @@ def prepare_campaign_from_config(
             str(federal_provenance_path) if federal_provenance_path else None
         ),
         federal_audit_path=(str(federal_audit_path) if federal_audit_path else None),
+        forecast_geo_availability_audit_path=(
+            str(forecast_geo_availability_audit_path)
+            if forecast_geo_availability_audit_path
+            else None
+        ),
     )

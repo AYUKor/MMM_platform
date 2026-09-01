@@ -35,16 +35,24 @@ _CHANNEL_DESCRIPTIONS: Final = {
 }
 
 
-def _format_table_sheet(sheet: Worksheet, *, widths: tuple[int, ...]) -> None:
-    sheet.freeze_panes = "A2"
-    sheet.auto_filter.ref = sheet.dimensions
-    for cell in sheet[1]:
+def _format_table_sheet(
+    sheet: Worksheet,
+    *,
+    widths: tuple[int, ...],
+    header_row: int = 1,
+) -> None:
+    sheet.freeze_panes = f"A{header_row + 1}"
+    last_column = sheet.cell(header_row, len(widths)).column_letter
+    sheet.auto_filter.ref = f"A{header_row}:{last_column}{sheet.max_row}"
+    for cell in sheet[header_row]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="214E63")
         cell.alignment = Alignment(horizontal="center", vertical="center")
     for index, width in enumerate(widths, start=1):
-        sheet.column_dimensions[sheet.cell(1, index).column_letter].width = width
-    for row in sheet.iter_rows(min_row=2):
+        sheet.column_dimensions[
+            sheet.cell(header_row, index).column_letter
+        ].width = width
+    for row in sheet.iter_rows(min_row=header_row + 1):
         for cell in row:
             cell.alignment = Alignment(vertical="top", wrap_text=True)
 
@@ -77,6 +85,18 @@ def build_media_plan_dictionary(
 
     geographies = workbook.create_sheet("Географии")
     geographies.append(
+        (
+            "Список показывает географии, заявленные текущей моделью. "
+            "Фактическая доступность расчета зависит от дат кампании и "
+            "проверяется при загрузке медиаплана.",
+        )
+    )
+    geographies.merge_cells("A1:E1")
+    geographies["A1"].font = Font(bold=True, color="214E63")
+    geographies["A1"].fill = PatternFill("solid", fgColor="DDEBF2")
+    geographies["A1"].alignment = Alignment(wrap_text=True, vertical="center")
+    geographies.row_dimensions[1].height = 34
+    geographies.append(
         ("География", *(display for _, display in _DIRECTION_COLUMNS))
     )
     eligible_ids = {
@@ -94,7 +114,11 @@ def build_media_plan_dictionary(
                 *("Да" if geo_id in eligible_ids[direction] else "Нет" for direction, _ in _DIRECTION_COLUMNS),
             )
         )
-    _format_table_sheet(geographies, widths=(34, 18, 18, 18, 18))
+    _format_table_sheet(
+        geographies,
+        widths=(34, 18, 18, 18, 18),
+        header_row=2,
+    )
 
     russia = workbook.create_sheet("Как указать всю Россию")
     russia.append(("Раздел", "Содержание"))
@@ -110,9 +134,9 @@ def build_media_plan_dictionary(
     russia.append(
         (
             "Что произойдет",
-            "Федеральный бюджет будет автоматически распределен между "
-            "поддерживаемыми географиями модели выбранного бизнес-направления "
-            "пропорционально населению.",
+            "Федеральный бюджет будет распределен между географиями, для которых "
+            "модель поддерживает расчет на выбранный период, пропорционально "
+            "населению.",
         )
     )
     russia.append(

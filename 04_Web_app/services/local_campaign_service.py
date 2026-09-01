@@ -70,7 +70,11 @@ from mmm_core.io import load_config  # noqa: E402
 from mmm_core.model_package import sha256_file  # noqa: E402
 from mmm_core.model_package_reader import ModelPackage, ModelPackageError  # noqa: E402
 from mmm_core.model_registry import resolve_model_reference  # noqa: E402
-from services.geo_catalog import ALIASES_PATH, CATALOG_PATH  # noqa: E402
+from services.geo_catalog import (  # noqa: E402
+    ALIASES_PATH,
+    CATALOG_PATH,
+    load_canonical_geo_catalog,
+)
 
 
 PARSER_NAME = "canonical_campaign_plan_parser"
@@ -719,23 +723,12 @@ class LocalCampaignService:
                 resolution,
                 package,
             )
-            if int(prep.summary["validation"].get("unsupported_rows_n") or 0) > 0:
-                issue = self._validation_failure_issue(validation.validation_id)
-                invalid = replace(
-                    valid,
-                    status=LifecycleStatus(
-                        "invalid", "План нельзя отправить в расчет"
-                    ),
-                    finished_at_utc=_utc_now(),
-                    blocking_errors=(issue,),
-                    preview=self._failed_model_support_preview(valid.preview),
-                    job_creation_allowed=False,
-                )
-                invalid.validate()
-                self.state.write_validation(invalid)
-                return
             policies = self._policy_selection(package)
             federal_artifacts = self._persist_federal_artifacts(
+                validation.validation_id,
+                prep,
+            )
+            availability_artifact = self._persist_geo_availability_artifact(
                 validation.validation_id,
                 prep,
             )
@@ -752,11 +745,57 @@ class LocalCampaignService:
                         "business_decision_mode": policies.business_decision_mode,
                     },
                     "federal_geo_allocation": federal_artifacts,
+                    "forecast_geo_availability": availability_artifact,
                 },
             )
+            if int(prep.summary["validation"].get("unsupported_rows_n") or 0) > 0:
+                issue = self._validation_failure_issue(validation.validation_id)
+                invalid = replace(
+                    valid,
+                    status=LifecycleStatus(
+                        "invalid", "План нельзя отправить в расчет"
+                    ),
+                    finished_at_utc=_utc_now(),
+                    blocking_errors=(issue,),
+                    preview=self._failed_model_support_preview(valid.preview),
+                    job_creation_allowed=False,
+                )
+                invalid.validate()
+                self.state.write_validation(invalid)
+                return
             self.state.write_validation(valid)
         except FederalGeoAllocationError as exc:
             self._write_protected_validation_error(validation.validation_id)
+            availability_files = sorted(
+                (
+                    self.settings.validation_runtime_root
+                    / validation.validation_id
+                    / "preparation"
+                ).glob("*_forecast_geo_availability_audit.json")
+            )
+            if len(availability_files) == 1:
+                availability_identity = asdict(
+                    _artifact(
+                        self.settings.artifact_root,
+                        (
+                            f"validations/{validation.validation_id}/prepared/"
+                            "forecast_geo_availability_audit.json"
+                        ),
+                        kind="forecast_geo_availability_audit",
+                        source=availability_files[0],
+                    )
+                )
+                self.state.write_validation_inputs(
+                    validation.validation_id,
+                    {
+                        "workflow_config": asdict(workflow_artifact),
+                        "policies": {},
+                        "federal_geo_allocation": {},
+                        "forecast_geo_availability": {
+                            "audit": availability_identity
+                        },
+                    },
+                )
             audit_key = (
                 f"validations/{validation.validation_id}/prepared/"
                 "federal_geo_allocation_error_audit.json"
@@ -848,6 +887,25 @@ class LocalCampaignService:
                 )
             )
         return artifacts
+
+    def _persist_geo_availability_artifact(
+        self,
+        validation_id: str,
+        prep: Any,
+    ) -> dict[str, Any]:
+        if not prep.forecast_geo_availability_audit_path:
+            return {}
+        prefix = f"validations/{validation_id}/prepared"
+        return {
+            "audit": asdict(
+                _artifact(
+                    self.settings.artifact_root,
+                    f"{prefix}/forecast_geo_availability_audit.json",
+                    kind="forecast_geo_availability_audit",
+                    source=Path(prep.forecast_geo_availability_audit_path),
+                )
+            )
+        }
 
     @staticmethod
     def _failed_model_support_preview(
@@ -941,6 +999,74 @@ class LocalCampaignService:
                 if str(row.get("supported_by_model") or "").lower() != "true"
             ]
             if unsupported:
+                period_unavailable = [
+                    row
+                    for row in unsupported
+                    if str(row.get("reason") or "")
+                    == "geo_not_forecast_ready_for_period"
+                ]
+                if period_unavailable:
+                    affected_geo_labels = sorted(
+                        {str(row.get("geo") or "") for row in period_unavailable}
+                        - {""}
+                    )
+                    catalog = load_canonical_geo_catalog()
+                    affected_geos = sorted(
+                        (
+                            catalog.resolve(label).canonical_geo_display_name
+                            or catalog.resolve(label).geo_display_name
+                        )
+                        for label in affected_geo_labels
+                    )
+                    affected = tuple(
+                        AffectedCell(
+                            campaign_id=_opaque_id(
+                                "campaign", str(row.get("campaign_name") or "")
+                            ),
+                            segment=str(row.get("segment") or ""),
+                            geo=str(row.get("geo") or ""),
+                            channel=str(row.get("channel") or ""),
+                            target=str(row.get("target") or ""),
+                        )
+                        for row in period_unavailable
+                    )
+                    if len(affected_geos) == 1:
+                        display_text = (
+                            "Для выбранного периода модель не может надежно "
+                            f"рассчитать географию «{affected_geos[0]}». "
+                            "Измените географию или период кампании."
+                        )
+                    else:
+                        visible_geos = ", ".join(
+                            f"«{geo}»" for geo in affected_geos[:5]
+                        )
+                        hidden_n = max(len(affected_geos) - 5, 0)
+                        suffix = f", ещё {hidden_n}" if hidden_n else ""
+                        display_text = (
+                            "Для выбранного периода часть географий недоступна "
+                            f"для расчета: {visible_geos}{suffix}. Измените "
+                            "географии или период кампании."
+                        )
+                    return ValidationIssue(
+                        code="GEO_NOT_FORECAST_READY_FOR_PERIOD",
+                        severity="blocking",
+                        display_text=display_text,
+                        scope="cell",
+                        recoverable=True,
+                        affected_cells=affected,
+                        what=(
+                            "Часть локальных географий нельзя рассчитать на "
+                            "выбранные даты."
+                        ),
+                        why=(
+                            "Текущая версия модели не поддерживает расчет этих "
+                            "географий на всем необходимом периоде."
+                        ),
+                        recommended_action=(
+                            "Измените период или исключите отмеченные локальные "
+                            "географии из медиаплана."
+                        ),
+                    )
                 affected = tuple(
                     AffectedCell(
                         campaign_id=_opaque_id(
@@ -1085,9 +1211,9 @@ class LocalCampaignService:
                         code="FEDERAL_GEO_ALLOCATION",
                         status="passed",
                         display_text=(
-                            "Федеральный бюджет распределен по поддерживаемым "
-                            "географиям выбранного бизнес-направления по действующей "
-                            "методике модели."
+                            "Федеральный бюджет распределен между географиями, "
+                            "для которых модель поддерживает расчет на выбранный "
+                            "период, по действующей методике модели."
                         ),
                     ),
                 ),

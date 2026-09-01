@@ -3,7 +3,8 @@
 ## Назначение и граница
 
 B2.2 завершает пользовательский путь федеральной кампании без изменения
-`FederalGeoAllocator`, MMM, optimizer, scenario semantics или geo projection:
+population-weighted allocation formula, MMM, optimizer, scenario semantics или
+geo projection:
 
 ```text
 словарь -> upload -> validation -> federal info -> canonical geo plan
@@ -24,10 +25,11 @@ population weights, allocated budget или reconciliation. Он строго п
   пользователь получает только безопасный русский текст.
 
 Для `available` backend публикует policy/package identity, количество исходных
-строк, исходный и распределённый бюджет, абсолютную difference, display-name
-каналы, business directions, mixed-plan flag и direction breakdown. Full
-population vector, expanded rows, hashes, paths и stack traces в browser contract
-не входят.
+строк, исходный и распределённый бюджет, абсолютную difference, declared/ready/
+excluded geo counts, denominator policy, `lmax`, required period, display-name
+каналы, business directions, mixed-plan flag и direction × channel × period
+breakdown. Full population vector, denominator rows, expanded rows, hashes, paths
+и stack traces в browser contract не входят.
 
 Projection строится не из объекта allocator в памяти. Endpoint повторно читает
 immutable `job_inputs.json`, проверяет SHA/size durable
@@ -35,10 +37,29 @@ immutable `job_inputs.json`, проверяет SHA/size durable
 Expanded provenance CSV и полный audit остаются backend artifacts согласно
 `FEDERAL_GEO_ALLOCATION_V1.md`.
 
-При одном направлении `geo_count` содержит размер его eligible universe. При
-нескольких направлениях верхний `geo_count = null`; frontend показывает
-direction breakdown и не складывает, например, `211 + 114` в фиктивные 325
-географий.
+При одном однородном universe `geo_count` содержит `ready_geo_count`. При разных
+направлениях или периодах верхний count может быть `null`; frontend показывает
+breakdown и не складывает разные universe в фиктивное общее число географий.
+
+## Forecast geo availability
+
+`ForecastGeoAvailabilityResolver` является единственной backend-проверкой
+временной доступности. Он получает pinned package, direction, channel, даты,
+package `l_max` и действующую denominator policy. Exact pure denominator lookup
+используется одновременно resolver-ом и `ForecastEngine`; runtime вызов в
+forecast сохраняется как defense-in-depth.
+
+Для каждой исходной строки required horizon равен
+`campaign_start .. campaign_end + lmax` включительно. Действующая policy:
+analog year 2025, та же geography, ближайшее наблюдение не дальше 7 дней,
+без extrapolation, cross-geo fill или специальных исключений. Федеральная строка
+распределяется только по ready subset; локальная declared-but-not-ready geography
+блокирует validation до создания job.
+
+Текущий package regression на однодневную кампанию `2026-09-01`:
+`175 / 182 / 103 / 104` ready из declared `211 / 220 / 114 / 117` для
+`ТС5 Онлайн / ТС5 Офлайн / ТСХ Онлайн / ТСХ Офлайн`. Это test evidence, а не
+hard-coded production count.
 
 ## Словарь медиаплана
 
@@ -50,7 +71,8 @@ Workbook создаётся при запросе из одного verified act
 canonical geo catalog:
 
 - `Каналы` — шесть display-name каналов, описание и поддержка federal input;
-- `Географии` — 220 canonical geographies и direction support `Да/Нет`;
+- `Географии` — 220 canonical geographies, direction support `Да/Нет` и спокойное
+  пояснение, что фактическая доступность зависит от дат;
 - `Как указать всю Россию` — три точных aliases, правило, пример и mixed-plan
   semantics.
 
@@ -68,7 +90,7 @@ evidence равно `211 / 220 / 114 / 117` для `ТС5 Онлайн / ТС5 �
 
 - `Обнаружено федеральное размещение`;
 - исходный и распределённый бюджеты;
-- число географий или breakdown по направлениям;
+- declared/ready/excluded число географий или breakdown по строкам;
 - метод `Пропорционально населению`;
 - число исходных строк;
 - `Распределено полностью · 0 ₽`, если difference не выше 0.01 RUB.
@@ -78,9 +100,10 @@ Mixed `РФ + local geo` остаётся разрешённым и получа
 additive warning. Неутверждённое `Вся Россия` блокируется человеческой подсказкой
 с тремя разрешёнными значениями.
 
-Campaign map использует существующие `geo_points` после backend expansion. Для
-полностью покрытого federal plan backend возвращает все canonical points и zero
-unlocated budget; отдельной федеральной карты и новой projection нет.
+Campaign map использует существующие `geo_points` после backend expansion и
+показывает только ready allocated geographies. Для полностью покрытого ready
+subset backend возвращает canonical points и zero unlocated budget; отдельной
+федеральной карты и новой projection нет.
 
 ## Test matrix A-J
 
@@ -109,20 +132,10 @@ node node_modules/@playwright/test/cli.js test \
 ```
 
 Он не подменяет routes: скачивает оба XLSX, загружает `geo=РФ`, сверяет
-100,000,000 RUB -> 100,000,000 RUB, 114/114 mapped geographies и zero unlocated
-для `ТСХ/Онлайн`, запускает job, открывает result/media plan и проверяет report
-download.
-
-На active package этот no-interception path завершился успешно для
-`ТСХ/Онлайн`. Отдельная проверка `ТС5/Онлайн` выявила acceptance blocker:
-federal support universe содержит 211 географий, но у Якутска в
-`target_denominator_metadata.csv` есть только одна дата `2026-01-01`. Forecast
-оценивает carryover horizon до `end_date + l_max`; даже однодневный план на
-`2026-01-01` требует denominator на `2026-01-09` и fail-closed останавливается.
-Это нельзя исправлять в B2.2 изменением allocator, support universe, denominator
-fallback или MMM semantics. До отдельного решения по model/package data либо
-support-universe policy B2.2 не может считаться полностью принятым для всех
-объявленных направлений.
+100,000,000 RUB -> 100,000,000 RUB, `211 declared -> 175 ready` mapped
+geographies и zero unlocated для `ТС5/Онлайн`, запускает job, открывает
+result/media plan и проверяет report download. В том же live acceptance отдельно
+проверяется `114 declared -> 103 ready` для `ТСХ/Онлайн`.
 
 ## Browser и visual evidence
 
@@ -163,7 +176,7 @@ acceptance evidence. Эти команды не являются разреше�
 
 ## Не изменено
 
-- `FederalGeoAllocator` и population/support policies;
+- population-weighted allocation formula и population source;
 - MMM/posterior mathematics и model fits;
 - forecast, optimizer и S1-S6 semantics;
 - geo projection и canonical catalog;

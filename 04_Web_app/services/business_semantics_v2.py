@@ -233,8 +233,8 @@ def _read_normalized_rows(path: Path | None) -> list[dict[str, str]]:
 
 _FEDERAL_TITLE = "Обнаружено федеральное размещение"
 _FEDERAL_DESCRIPTION = (
-    "Федеральный бюджет автоматически распределен между поддерживаемыми "
-    "географиями модели выбранного бизнес-направления пропорционально населению."
+    "Федеральный бюджет распределен между географиями, для которых модель "
+    "поддерживает расчет на выбранный период, пропорционально численности населения."
 )
 _FEDERAL_METHOD = "Пропорционально населению"
 
@@ -263,6 +263,13 @@ def _empty_federal_allocation(status: str = "none") -> dict[str, Any]:
         "allocated_budget_rub": 0.0,
         "difference_rub": 0.0,
         "geo_count": None,
+        "declared_geo_count": None,
+        "ready_geo_count": None,
+        "excluded_geo_count": None,
+        "denominator_policy_version": None,
+        "lmax": None,
+        "required_period_start": None,
+        "required_period_end": None,
         "method_display_name": None,
         "channels": [],
         "business_directions": [],
@@ -326,22 +333,42 @@ def build_federal_allocation_summary(
     channel_ids = sorted(
         {str(row.get("channel") or "").strip() for row in reconciliation} - {""}
     )
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in reconciliation:
-        grouped[str(row.get("business_direction") or "").strip()].append(row)
+        grouped[
+            (
+                str(row.get("business_direction") or "").strip(),
+                str(row.get("channel") or "").strip(),
+                str(row.get("required_start") or "").strip(),
+                str(row.get("required_end") or "").strip(),
+            )
+        ].append(row)
 
     breakdown = []
-    for direction in sorted(grouped):
-        rows = grouped[direction]
+    for direction, channel_id, period_start, period_end in sorted(grouped):
+        rows = grouped[(direction, channel_id, period_start, period_end)]
         group_source_ids = {
             str(row.get("source_row_id") or "").strip()
             for row in rows
             if str(row.get("source_row_id") or "").strip()
         }
         group_counts = {int(row.get("eligible_geo_count") or 0) for row in rows}
-        group_channels = sorted(
-            {str(row.get("channel") or "").strip() for row in rows} - {""}
-        )
+        group_channels = [channel_id] if channel_id else []
+        declared_counts = {
+            int(row["declared_geo_count"])
+            for row in rows
+            if row.get("declared_geo_count") not in {None, ""}
+        }
+        ready_counts = {
+            int(row["ready_geo_count"])
+            for row in rows
+            if row.get("ready_geo_count") not in {None, ""}
+        }
+        excluded_counts = {
+            int(row["excluded_geo_count"])
+            for row in rows
+            if row.get("excluded_geo_count") not in {None, ""}
+        }
         source_budget = math.fsum(float(row.get("source_budget_rub") or 0.0) for row in rows)
         allocated_budget = math.fsum(float(row.get("allocated_total_rub") or 0.0) for row in rows)
         breakdown.append(
@@ -353,6 +380,17 @@ def build_federal_allocation_summary(
                 "allocated_budget_rub": allocated_budget,
                 "difference_rub": abs(source_budget - allocated_budget),
                 "geo_count": next(iter(group_counts)) if len(group_counts) == 1 else None,
+                "declared_geo_count": (
+                    next(iter(declared_counts)) if len(declared_counts) == 1 else None
+                ),
+                "ready_geo_count": (
+                    next(iter(ready_counts)) if len(ready_counts) == 1 else None
+                ),
+                "excluded_geo_count": (
+                    next(iter(excluded_counts)) if len(excluded_counts) == 1 else None
+                ),
+                "period_start": period_start or None,
+                "period_end": period_end or None,
             }
         )
 
@@ -369,6 +407,35 @@ def build_federal_allocation_summary(
     )
     warnings = _safe_message_rows(audit.get("warnings"))
     geo_counts = {int(row.get("eligible_geo_count") or 0) for row in reconciliation}
+    declared_geo_counts = {
+        int(row["declared_geo_count"])
+        for row in reconciliation
+        if row.get("declared_geo_count") not in {None, ""}
+    }
+    ready_geo_counts = {
+        int(row["ready_geo_count"])
+        for row in reconciliation
+        if row.get("ready_geo_count") not in {None, ""}
+    }
+    excluded_geo_counts = {
+        int(row["excluded_geo_count"])
+        for row in reconciliation
+        if row.get("excluded_geo_count") not in {None, ""}
+    }
+    denominator_policy_versions = {
+        str(row.get("denominator_policy_version") or "") for row in reconciliation
+    } - {""}
+    lmax_values = {
+        int(row.get("lmax"))
+        for row in reconciliation
+        if row.get("lmax") not in {None, ""}
+    }
+    required_starts = sorted(
+        {str(row.get("required_start") or "") for row in reconciliation} - {""}
+    )
+    required_ends = sorted(
+        {str(row.get("required_end") or "") for row in reconciliation} - {""}
+    )
     return {
         "status": "available",
         "title": _FEDERAL_TITLE,
@@ -384,6 +451,27 @@ def build_federal_allocation_summary(
             if len(directions) == 1 and len(geo_counts) == 1
             else None
         ),
+        "declared_geo_count": (
+            next(iter(declared_geo_counts))
+            if len(declared_geo_counts) == 1
+            else None
+        ),
+        "ready_geo_count": (
+            next(iter(ready_geo_counts)) if len(ready_geo_counts) == 1 else None
+        ),
+        "excluded_geo_count": (
+            next(iter(excluded_geo_counts))
+            if len(excluded_geo_counts) == 1
+            else None
+        ),
+        "denominator_policy_version": (
+            next(iter(denominator_policy_versions))
+            if len(denominator_policy_versions) == 1
+            else None
+        ),
+        "lmax": next(iter(lmax_values)) if len(lmax_values) == 1 else None,
+        "required_period_start": required_starts[0] if required_starts else None,
+        "required_period_end": required_ends[-1] if required_ends else None,
         "method_display_name": _FEDERAL_METHOD,
         "channels": [channel_identity(channel) for channel in channel_ids],
         "business_directions": directions,
@@ -467,8 +555,8 @@ def build_validation_result_v2(
             input_names_by_geo_id[resolved_geo_id].add(
                 str(row.get("input_geo_name") or geo).strip()
             )
-    if not normalized_rows:
-        for resolution in resolutions:
+    for resolution in resolutions:
+        if not channels_by_geo_id[resolution.geo_id]:
             channels_by_geo_id[resolution.geo_id].update(channels)
 
     budget_by_geo_id: dict[str, float] = defaultdict(float)

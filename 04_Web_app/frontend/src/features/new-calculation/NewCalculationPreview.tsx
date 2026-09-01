@@ -419,8 +419,11 @@ function FederalAllocationNotice({
       <dl className={styles.federalFacts}>
         <div><dt>Исходный федеральный бюджет</dt><dd>{formatRub(federal.source_budget_rub)}</dd></div>
         <div><dt>Распределенный бюджет</dt><dd>{formatRub(federal.allocated_budget_rub)}</dd></div>
-        <div><dt>Географий распределения</dt><dd>{federal.geo_count ?? "По направлениям"}</dd></div>
-        <div><dt>Метод</dt><dd>{federal.method_display_name}</dd></div>
+        <div><dt>Географий для расчета</dt><dd>{federal.ready_geo_count ?? federal.geo_count ?? "По строкам"}</dd></div>
+        <div><dt>Заявлено моделью</dt><dd>{federal.declared_geo_count ?? "По строкам"}</dd></div>
+        <div><dt>Исключено по периоду</dt><dd>{federal.excluded_geo_count ?? "По строкам"}</dd></div>
+        <div><dt>Способ распределения</dt><dd>{federal.method_display_name}</dd></div>
+        <div><dt>Необходимый период</dt><dd>{federal.required_period_start && federal.required_period_end ? `${federal.required_period_start} — ${federal.required_period_end}` : "По строкам"}</dd></div>
         <div><dt>Исходных строк</dt><dd>{federal.source_rows_count}</dd></div>
         <div>
           <dt>Разница</dt>
@@ -434,9 +437,12 @@ function FederalAllocationNotice({
       {federal.breakdown.length > 1 ? (
         <div className={styles.federalBreakdown}>
           {federal.breakdown.map((row) => (
-            <article key={row.business_direction}>
-              <header><h3>{row.business_direction}</h3><span>{row.geo_count ?? "Нет данных"} географий</span></header>
+            <article key={`${row.business_direction}-${row.channels[0]?.channel_id ?? "channel"}-${row.period_start ?? "start"}-${row.period_end ?? "end"}`}>
+              <header><h3>{row.business_direction}</h3><span>{row.ready_geo_count ?? row.geo_count ?? "Нет данных"} географий</span></header>
               <dl>
+                <div><dt>Канал</dt><dd>{row.channels.map((channel) => channel.channel_display_name).join(", ")}</dd></div>
+                <div><dt>Период</dt><dd>{row.period_start && row.period_end ? `${row.period_start} — ${row.period_end}` : "Нет данных"}</dd></div>
+                <div><dt>Заявлено / доступно</dt><dd>{row.declared_geo_count ?? "—"} / {row.ready_geo_count ?? "—"}</dd></div>
                 <div><dt>Строк</dt><dd>{row.source_rows_count}</dd></div>
                 <div><dt>Исходный бюджет</dt><dd>{formatRub(row.source_budget_rub)}</dd></div>
                 <div><dt>Распределено</dt><dd>{formatRub(row.allocated_budget_rub)}</dd></div>

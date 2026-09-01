@@ -3,7 +3,7 @@
 ## Last verified
 
 - Verification date: **2026-09-02**.
-- Mode: **B2.2 — FEDERAL CAMPAIGN USER FLOW candidate verification**.
+- Mode: **B2.2S — FORECAST GEO AVAILABILITY implementation verification**.
 - Verified against local live code, Git/GitHub state, contracts, policies,
   manifests, tests, physically present artifacts and local deployment runbooks.
 - No DWH query, model/data recalculation, server connection or deployment was
@@ -201,12 +201,19 @@ serving outcomes.
 
 ## Geo
 
-Federal campaign upload in the B2.2 Test candidate uses
+Federal campaign upload in the B2.2S Test candidate uses
 `FEDERAL_GEO_ALLOCATION_V1`. Approved aliases are `РФ`, `Россия` and
 `Российская Федерация`, with outer-whitespace trimming and case-insensitive
 matching only. Expansion happens independently per federal daily source row over
-the active package's eligible direction geographies; missing population fails
-closed and no mean fallback exists.
+the source row's date-ready subset of active-package direction geographies;
+missing population inside that ready subset fails closed and no mean fallback
+exists.
+
+`ForecastGeoAvailabilityResolver` and `ForecastEngine` use the same pure
+denominator lookup. Required coverage is `campaign_start .. campaign_end + lmax`
+inclusive; active policy is analog year 2025, same geo and nearest observation no
+farther than 7 days. There is no extrapolation, cross-geo fill or Yakutsk special
+case. Runtime forecast denominator resolution remains fail-closed.
 
 `validation_result_v2.federal_allocation` is derived from the durable allocation
 audit and exposes only a browser-safe aggregate/direction breakdown. The
@@ -214,12 +221,12 @@ active-package dictionary is available at
 `GET /api/v1/templates/media-plan-dictionary`. Full product semantics and test
 matrix are in `docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
 
-Live Test acceptance is partial. The complete no-interception path succeeds for
-`ТСХ/Онлайн` (114 geographies), including result, media plan and report. It fails
-closed for `ТС5/Онлайн`: the federal universe is 211 geographies, while Yakutsk
-has only one denominator date (`2026-01-01`), shorter than the forecast carryover
-horizon through `end_date + l_max`. B2.2 does not alter this model/package or
-support-universe policy. The candidate therefore remains `NOT_ACCEPTED` and Draft.
+For a one-day `2026-09-01` campaign the current package regression is
+`175 / 182 / 103 / 104` ready out of declared `211 / 220 / 114 / 117`. These
+counts are test evidence, not production constants. Federal budget is conserved
+inside the ready subset; an explicit local geo outside it blocks validation before
+job creation. PR #41 remains Draft until the complete B2.2S regression, live
+acceptance, Safari status and CI are recorded.
 
 - Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
   aliases.
@@ -329,22 +336,20 @@ routes use session and permission gates.
     rehabilitation before reuse.
 13. Corporate governance of the private GitHub repository and branch protection
     remains unresolved.
-14. B2.2 federal calculation is not forecastable for every advertised direction:
-    `ТС5/Онлайн` includes Yakutsk in its 211-geo support universe, but its one-row
-    denominator history cannot cover the mandatory carryover horizon. Resolving
-    this requires a separate model/package-data or support-policy decision.
+14. The static dictionary intentionally shows declared package support, while
+    actual calculability is date-dependent and is resolved during validation.
+    Consumer code must not treat `211 / 220 / 114 / 117` as ready counts.
 
 ## Current milestone
 
-**B2.2 — Federal Campaign User Flow.**
+**B2.2S — Forecast Geo Availability.**
 
-The Test candidate accepts the approved federal aliases, renders an additive
-backend `federal_allocation` projection, downloads an active-package dictionary
-and passes the expanded canonical geo plan into the unchanged calculation flow.
-The full flow passes for `ТСХ/Онлайн`, but the `ТС5/Онлайн` denominator blocker
-above prevents B2.2 acceptance and Ready-for-review. Predfin/Fin materialization,
-deployment, production activation, B2.3 and C3 cleanup remain outside this
-milestone.
+The Test candidate resolves a source-row-specific date-ready universe before job
+creation, allocates federal budget only within that universe, blocks unavailable
+explicit local geographies and passes the resulting canonical geo plan into the
+unchanged calculation flow. PR #41 stays Draft until all B2.2S acceptance gates
+are complete. Predfin/Fin materialization, deployment, production activation,
+B2.3 and C3 cleanup remain outside this milestone.
 
 ## Planned milestones
 
