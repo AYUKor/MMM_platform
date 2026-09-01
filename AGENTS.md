@@ -4,9 +4,11 @@
 
 Этот репозиторий содержит released application code MMM Platform: backend, frontend,
 контракты, тесты, model-serving adapters, deployment templates и документацию.
-Канонический development checkout находится в
-`03_ML_MMM/01_Test/MMM_platform`; код должен оставаться независимым от конкретного
-абсолютного пути checkout.
+В tracked documentation `<MMM_WORKSPACE_ROOT>` обозначает canonical local
+workspace с контурами `00_Data/`, `01_Test/`, `02_Predfin/` и `03_Fin/`, а
+`<MMM_LEGACY_ROOT>` — legacy rollback-only workspace. Канонический development
+checkout находится в `<MMM_WORKSPACE_ROOT>/01_Test/MMM_platform`. Код должен
+оставаться независимым от конкретного абсолютного пути checkout.
 
 Главный принцип: сначала установить текущую истину по физическим артефактам и
 живому коду, затем предлагать изменение. Нельзя превращать предположение, старый
@@ -20,7 +22,7 @@ handoff или имя каталога в подтверждённый факт.
 4. `04_Web_app/PROJECT_HANDOFF.md` — карта системы и передача контекста.
 5. Релевантные accepted ADR, schemas, policies, manifests, runbooks и тесты.
 6. Для истории решений — project brain вне этого Git-репозитория:
-   `03_ML_MMM/01_Test/project_brain/wiki/`.
+   `<MMM_WORKSPACE_ROOT>/01_Test/project_brain/wiki/`.
 7. Для workspace lifecycle и promotion gates — `04_Web_app/docs/workspace/`.
 
 Если документы расходятся с кодом или проверяемым артефактом, не продолжать как
@@ -74,17 +76,19 @@ handoff или имя каталога в подтверждённый факт.
 - Данные и model artifacts могут находиться в родительском workspace вне Git;
   отсутствие файла внутри clone не означает его отсутствие или ненужность.
 
-После C2.4/C2.5 действует структура
-`03_ML_MMM/{00_Data,01_Test,02_Predfin,03_Fin}`:
+После C2.6 действует `<MMM_WORKSPACE_ROOT>` со структурой
+`{00_Data,01_Test,02_Predfin,03_Fin}`:
 
 - `00_Data` — canonical local data contour;
 - `01_Test` — canonical development/research contour;
 - `02_Predfin` — exact staging/acceptance contour;
 - `03_Fin` — immutable deployable release contour.
 
-Старый workspace имеет роль `LEGACY_ROLLBACK_ONLY`: он физически сохраняется, но
-не является fallback для новой разработки, promotion или release. C3 cleanup не
-разрешён до отдельного решения после observation period.
+Старый workspace `<MMM_LEGACY_ROOT>` имеет роль
+`LEGACY_ROLLBACK_ONLY`: он физически сохраняется, но не является fallback для
+новой разработки, promotion или release. Локальная migration staging copy вне
+`<MMM_WORKSPACE_ROOT>` не является canonical и классифицируется C2.6 отдельно.
+C3 cleanup не разрешён до отдельного решения после observation period.
 
 ## Git и GitHub
 
