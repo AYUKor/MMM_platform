@@ -1,0 +1,199 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+  "purpose": "Synthetic contract coverage for channels without required historical golden examples.",
+  "cases": [
+    {
+      "case_id": "SYNTH_OOH_001",
+      "case_type": "synthetic_v1_channel",
+      "epistemic_status": "synthetic contract case, not a historical campaign",
+      "source": {
+        "source_row_id": "synthetic:SYNTH_OOH_001:1",
+        "date": "2026-09-01",
+        "business_direction": "ТС5/Онлайн",
+        "channel": "Наружная реклама",
+        "canonical_channel": "OOH_Total",
+        "geo": "РФ",
+        "budget_rub": 100000000.0
+      },
+      "expected": {
+        "eligible_geo_count": 211,
+        "population_denominator_k": 174623.235,
+        "allocated_total_rub": 100000000.00000001,
+        "budget_difference_rub": 1.4901161193847656e-08,
+        "conservation_pass": true,
+        "allocation_vector_sha256": "33092ba6dc14b5a3d7abadf974ae7e1cb3fbbce29ac78ca274d3ca652f8f2c16",
+        "controls": [
+          {
+            "geo_id": "geo_7aafc347a167c4da",
+            "geo_label": "КАЗАНЬ",
+            "geo_display_name": "Казань",
+            "population_k": 1308.0,
+            "weight": 0.00749041214360735,
+            "budget_rub": 749041.214360735
+          },
+          {
+            "geo_id": "geo_94835d40a52e5a3a",
+            "geo_label": "САНКТ-ПЕТЕРБУРГ",
+            "geo_display_name": "Санкт-Петербург",
+            "population_k": 5600.0,
+            "weight": 0.03206904281666755,
+            "budget_rub": 3206904.281666755
+          },
+          {
+            "geo_id": "geo_96d8acf2128d1686",
+            "geo_label": "МОСКВА",
+            "geo_display_name": "Москва",
+            "population_k": 13104.0,
+            "weight": 0.07504156019100208,
+            "budget_rub": 7504156.019100208
+          },
+          {
+            "geo_id": "geo_ae4b572fa4c02f42",
+            "geo_label": "НОВОСИБИРСК",
+            "geo_display_name": "Новосибирск",
+            "population_k": 1635.0,
+            "weight": 0.009363015179509188,
+            "budget_rub": 936301.5179509188
+          },
+          {
+            "geo_id": "geo_e2491244881757a2",
+            "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+            "geo_display_name": "Московская область",
+            "population_k": 8524.0,
+            "weight": 0.04881366445879897,
+            "budget_rub": 4881366.445879897
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SYNTH_INDOOR_001",
+      "case_type": "synthetic_v1_channel",
+      "epistemic_status": "synthetic contract case, not a historical campaign",
+      "source": {
+        "source_row_id": "synthetic:SYNTH_INDOOR_001:1",
+        "date": "2026-09-01",
+        "business_direction": "ТС5/Онлайн",
+        "channel": "Indoor",
+        "canonical_channel": "Indoor",
+        "geo": "РФ",
+        "budget_rub": 100000000.0
+      },
+      "expected": {
+        "eligible_geo_count": 211,
+        "population_denominator_k": 174623.235,
+        "allocated_total_rub": 100000000.00000001,
+        "budget_difference_rub": 1.4901161193847656e-08,
+        "conservation_pass": true,
+        "allocation_vector_sha256": "33092ba6dc14b5a3d7abadf974ae7e1cb3fbbce29ac78ca274d3ca652f8f2c16",
+        "controls": [
+          {
+            "geo_id": "geo_7aafc347a167c4da",
+            "geo_label": "КАЗАНЬ",
+            "geo_display_name": "Казань",
+            "population_k": 1308.0,
+            "weight": 0.00749041214360735,
+            "budget_rub": 749041.214360735
+          },
+          {
+            "geo_id": "geo_94835d40a52e5a3a",
+            "geo_label": "САНКТ-ПЕТЕРБУРГ",
+            "geo_display_name": "Санкт-Петербург",
+            "population_k": 5600.0,
+            "weight": 0.03206904281666755,
+            "budget_rub": 3206904.281666755
+          },
+          {
+            "geo_id": "geo_96d8acf2128d1686",
+            "geo_label": "МОСКВА",
+            "geo_display_name": "Москва",
+            "population_k": 13104.0,
+            "weight": 0.07504156019100208,
+            "budget_rub": 7504156.019100208
+          },
+          {
+            "geo_id": "geo_ae4b572fa4c02f42",
+            "geo_label": "НОВОСИБИРСК",
+            "geo_display_name": "Новосибирск",
+            "population_k": 1635.0,
+            "weight": 0.009363015179509188,
+            "budget_rub": 936301.5179509188
+          },
+          {
+            "geo_id": "geo_e2491244881757a2",
+            "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+            "geo_display_name": "Московская область",
+            "population_k": 8524.0,
+            "weight": 0.04881366445879897,
+            "budget_rub": 4881366.445879897
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "SYNTH_REGIONAL_TV_001",
+      "case_type": "synthetic_v1_channel",
+      "epistemic_status": "synthetic contract case, not a historical campaign",
+      "source": {
+        "source_row_id": "synthetic:SYNTH_REGIONAL_TV_001:1",
+        "date": "2026-09-01",
+        "business_direction": "ТС5/Онлайн",
+        "channel": "Региональное ТВ",
+        "canonical_channel": "Рег_ТВ",
+        "geo": "РФ",
+        "budget_rub": 100000000.0
+      },
+      "expected": {
+        "eligible_geo_count": 211,
+        "population_denominator_k": 174623.235,
+        "allocated_total_rub": 100000000.00000001,
+        "budget_difference_rub": 1.4901161193847656e-08,
+        "conservation_pass": true,
+        "allocation_vector_sha256": "33092ba6dc14b5a3d7abadf974ae7e1cb3fbbce29ac78ca274d3ca652f8f2c16",
+        "controls": [
+          {
+            "geo_id": "geo_7aafc347a167c4da",
+            "geo_label": "КАЗАНЬ",
+            "geo_display_name": "Казань",
+            "population_k": 1308.0,
+            "weight": 0.00749041214360735,
+            "budget_rub": 749041.214360735
+          },
+          {
+            "geo_id": "geo_94835d40a52e5a3a",
+            "geo_label": "САНКТ-ПЕТЕРБУРГ",
+            "geo_display_name": "Санкт-Петербург",
+            "population_k": 5600.0,
+            "weight": 0.03206904281666755,
+            "budget_rub": 3206904.281666755
+          },
+          {
+            "geo_id": "geo_96d8acf2128d1686",
+            "geo_label": "МОСКВА",
+            "geo_display_name": "Москва",
+            "population_k": 13104.0,
+            "weight": 0.07504156019100208,
+            "budget_rub": 7504156.019100208
+          },
+          {
+            "geo_id": "geo_ae4b572fa4c02f42",
+            "geo_label": "НОВОСИБИРСК",
+            "geo_display_name": "Новосибирск",
+            "population_k": 1635.0,
+            "weight": 0.009363015179509188,
+            "budget_rub": 936301.5179509188
+          },
+          {
+            "geo_id": "geo_e2491244881757a2",
+            "geo_label": "МОСКОВСКАЯ ОБЛАСТЬ",
+            "geo_display_name": "Московская область",
+            "population_k": 8524.0,
+            "weight": 0.04881366445879897,
+            "budget_rub": 4881366.445879897
+          }
+        ]
+      }
+    }
+  ]
+}

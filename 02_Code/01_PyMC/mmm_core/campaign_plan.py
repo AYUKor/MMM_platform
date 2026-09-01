@@ -21,6 +21,12 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .federal_geo_allocator import (
+    FederalGeoAllocationContext,
+    FederalGeoAllocationError,
+    FederalGeoAllocator,
+    is_federal_geo,
+)
 from .io import ensure_dir, project_root, resolve_path, write_json
 from .model_package_reader import ModelPackage
 
@@ -1050,6 +1056,8 @@ class CampaignPrepareResult:
     issues_path: str | None
     card_path: str
     summary: dict[str, Any]
+    federal_provenance_path: str | None = None
+    federal_audit_path: str | None = None
 
 
 def normalize_campaign_rows(
@@ -1065,7 +1073,18 @@ def normalize_campaign_rows(
         campaign_name = _clean_text(row.get("campaign_name")) or "unknown_campaign"
         creative_name = _clean_text(row.get("creative_name"))
         segment = _clean_text(row.get("segment"))
-        geo_resolution = resolve_geo_alias(row.get("geo"), geo_aliases)
+        raw_geo = row.get("geo")
+        if is_federal_geo(raw_geo):
+            original_geo = str(raw_geo or "").strip()
+            geo_resolution = {
+                "input_geo_name": original_geo,
+                "geo_model_name": original_geo,
+                "canonical_geo_display_name": "РФ",
+                "normalization_status": "federal",
+                "normalization_rule": "federal_geo_allocation_v1_exact_alias",
+            }
+        else:
+            geo_resolution = resolve_geo_alias(raw_geo, geo_aliases)
         geo = geo_resolution["geo_model_name"]
         channel = _clean_text(row.get("channel"))
         budget = _parse_money(row.get("budget_rub"))
@@ -1297,6 +1316,7 @@ def prepare_campaign_from_config(
     output_dir: Path,
     *,
     purpose: str,
+    model_resolution: dict[str, Any] | None = None,
 ) -> CampaignPrepareResult:
     """Read, normalize, flight and validate a campaign brief from workflow config."""
     paths = config.get("paths") or {}
@@ -1350,6 +1370,18 @@ def prepare_campaign_from_config(
         write_json(adapter_audit_path, adapter_audit)
     else:
         raw_rows = read_campaign_brief(campaign_path, sheet_name=sheet_name)
+    for source_index, raw_row in enumerate(raw_rows, start=1):
+        canonical_row = _canonicalize_row(raw_row)
+        source_budget = _parse_money(canonical_row.get("budget_rub"))
+        if (
+            source_budget is None
+            or not math.isfinite(source_budget)
+            or source_budget < 0
+        ):
+            raise FederalGeoAllocationError(
+                "INVALID_BUDGET",
+                technical_details=f"Invalid budget in source row {source_index}",
+            )
     raw_budget = _raw_budget_summary(raw_rows)
     strict_cfg = config.get("validation") or {}
     geo_aliases: dict[str, dict[str, str]] | None = None
@@ -1386,6 +1418,19 @@ def prepare_campaign_from_config(
         raw_rows,
         geo_aliases=geo_aliases,
     )
+    unknown_geos = [
+        row
+        for row in normalized_rows
+        if row.get("geo_normalization_status") == "unknown"
+    ]
+    if unknown_geos:
+        raise FederalGeoAllocationError(
+            "UNKNOWN_GEO_VALUE",
+            technical_details=(
+                "Unknown source row ids: "
+                + ",".join(str(row["source_row_id"]) for row in unknown_geos[:20])
+            ),
+        )
     daily_rows = build_daily_flighting(normalized_rows)
 
     input_total = sum(float(r["budget_rub"]) for r in normalized_rows)
@@ -1398,6 +1443,8 @@ def prepare_campaign_from_config(
     validation_path = output_dir / f"{stem}_campaign_model_validation.csv"
     issues_path = output_dir / f"{stem}_campaign_parse_issues.csv" if issues else None
     card_path = output_dir / f"{stem}_campaign_prepare_card.json"
+    federal_provenance_path: Path | None = None
+    federal_audit_path: Path | None = None
 
     if issues_path is not None:
         _write_csv(issues_path, issues)
@@ -1417,8 +1464,88 @@ def prepare_campaign_from_config(
             f"Budget reconciliation failed: normalized={input_total:.4f}, daily={daily_total:.4f}"
         )
 
+    federal_rows_present = any(is_federal_geo(row.get("geo")) for row in daily_rows)
+    federal_allocation: dict[str, Any] | None = None
+    validation_input_rows = normalized_rows
+    if federal_rows_present:
+        federal_cfg = dict(config.get("federal_geo_allocation") or {})
+        population_value = federal_cfg.get("population_file")
+        expected_population_sha256 = str(
+            federal_cfg.get("population_sha256") or ""
+        )
+        expected_geo_catalog_sha256 = str(
+            federal_cfg.get("geo_catalog_sha256") or ""
+        )
+        resolution = dict(model_resolution or {})
+        if (
+            not population_value
+            or not expected_population_sha256
+            or not expected_geo_catalog_sha256
+            or not resolution
+        ):
+            raise FederalGeoAllocationError(
+                "PACKAGE_POINTER_OR_HASH_MISMATCH",
+                technical_details="Federal allocation configuration is incomplete",
+            )
+        if not geo_catalog_file:
+            raise FederalGeoAllocationError(
+                "PACKAGE_POINTER_OR_HASH_MISMATCH",
+                technical_details="Federal allocation requires the canonical geo catalog",
+            )
+        context = FederalGeoAllocationContext.from_package(
+            package,
+            package_id=str(resolution.get("package_id") or ""),
+            package_pointer_sha256=str(
+                resolution.get("pointer_snapshot_sha256") or ""
+            ),
+            registration_content_sha256=str(
+                resolution.get("registration_content_sha256") or ""
+            ),
+            registered_inventory_sha256=dict(
+                resolution.get("registered_inventory_sha256") or {}
+            ),
+            population_path=resolve_path(
+                population_value,
+                base_dir=config_path.parent,
+            ),
+            expected_population_sha256=expected_population_sha256,
+            geo_catalog_path=resolved_geo_catalog_path,
+            expected_geo_catalog_sha256=expected_geo_catalog_sha256,
+        )
+        allocation = FederalGeoAllocator(context).allocate(daily_rows)
+        daily_rows = [dict(row) for row in allocation.aggregated_rows]
+        validation_input_rows = daily_rows
+        federal_provenance_path = (
+            output_dir / f"{stem}_federal_geo_allocation_provenance.csv"
+        )
+        federal_audit_path = output_dir / f"{stem}_federal_geo_allocation_audit.json"
+        _write_csv(
+            federal_provenance_path,
+            [dict(row) for row in allocation.expanded_rows],
+        )
+        allocation_audit = {
+            **allocation.audit,
+            "input": {
+                "file_id": str(federal_cfg.get("input_file_id") or ""),
+                "file_sha256": str(federal_cfg.get("input_file_sha256") or ""),
+                "validation_started_at_utc": str(
+                    federal_cfg.get("validation_started_at_utc") or ""
+                ),
+            },
+        }
+        write_json(federal_audit_path, allocation_audit)
+        federal_allocation = {
+            **allocation_audit,
+            "provenance_path": str(federal_provenance_path),
+            "audit_path": str(federal_audit_path),
+        }
+
     targets = _targets_from_config(config, package)
-    validation_rows, validation_summary = validate_campaign_against_package(package, normalized_rows, targets)
+    validation_rows, validation_summary = validate_campaign_against_package(
+        package,
+        validation_input_rows,
+        targets,
+    )
 
     _write_csv(normalized_path, normalized_rows)
     _write_csv(flighting_path, daily_rows)
@@ -1449,6 +1576,10 @@ def prepare_campaign_from_config(
                 row.get("geo_normalization_status") == "unknown"
                 for row in normalized_rows
             ),
+            "federal_rows_n": sum(
+                row.get("geo_normalization_status") == "federal"
+                for row in normalized_rows
+            ),
             "rows": [
                 {
                     "source_row_id": row["source_row_id"],
@@ -1472,6 +1603,7 @@ def prepare_campaign_from_config(
         },
         "normalized": _campaign_totals(normalized_rows),
         "daily_flighting": _campaign_totals(daily_rows),
+        "federal_geo_allocation": federal_allocation,
         "budget_reconciliation_abs_diff": round(abs(input_total - daily_total), 6),
         "raw_to_normalized_budget_abs_diff": round(abs(raw_total - input_total), 6),
         "fail_on_parse_issues": fail_on_parse_issues,
@@ -1486,6 +1618,12 @@ def prepare_campaign_from_config(
             "issues_path": str(issues_path) if issues_path else None,
             "card_path": str(card_path),
             "source_adapter_audit_path": str(adapter_audit_path) if adapter_audit_path else None,
+            "federal_provenance_path": (
+                str(federal_provenance_path) if federal_provenance_path else None
+            ),
+            "federal_audit_path": (
+                str(federal_audit_path) if federal_audit_path else None
+            ),
         },
     }
     write_json(card_path, summary)
@@ -1502,4 +1640,8 @@ def prepare_campaign_from_config(
         issues_path=str(issues_path) if issues_path else None,
         card_path=str(card_path),
         summary=summary,
+        federal_provenance_path=(
+            str(federal_provenance_path) if federal_provenance_path else None
+        ),
+        federal_audit_path=(str(federal_audit_path) if federal_audit_path else None),
     )

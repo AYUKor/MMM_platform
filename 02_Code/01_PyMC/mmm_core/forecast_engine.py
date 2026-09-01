@@ -1704,6 +1704,12 @@ def write_forecast_outputs(detail: pd.DataFrame, summary: pd.DataFrame, output_d
 
 def read_daily_flighting(path: str | Path) -> list[dict[str, Any]]:
     rows = _read_csv(Path(path))
+    # Keep federal expansion outside forecast/model math.  This guard is
+    # intentionally repeated at the boundary so a malformed or legacy artifact
+    # cannot silently be treated as a local model geography.
+    from .federal_geo_allocator import assert_no_federal_geo
+
+    assert_no_federal_geo(rows)
     out = []
     for r in rows:
         out.append({

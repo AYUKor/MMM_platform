@@ -315,6 +315,24 @@ def _channel_pointer(root: Path, channel: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _channel_pointer_snapshot(
+    root: Path,
+    channel: str,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Read and hash one exact pointer byte snapshot for run pinning."""
+
+    if channel not in {"preprod", "production"}:
+        raise ValueError("Registry channel must be preprod or production")
+    path = root / "channels" / f"{channel}.json"
+    if not path.is_file():
+        return None, None
+    raw = path.read_bytes()
+    value = json.loads(raw.decode("utf-8"))
+    if not isinstance(value, dict):
+        return None, None
+    return value, hashlib.sha256(raw).hexdigest()
+
+
 def _assert_expected_current(pointer: dict[str, Any] | None, expected_current: str) -> None:
     current = pointer.get("package_id") if pointer else None
     expected = None if expected_current.lower() == "none" else expected_current
@@ -468,7 +486,7 @@ def resolve_channel(
     verification_mode: str = "full_lineage",
 ) -> dict[str, Any]:
     root = resolve_path(registry_root) if registry_root else default_registry_root()
-    pointer = _channel_pointer(root, channel)
+    pointer, pointer_snapshot_sha256 = _channel_pointer_snapshot(root, channel)
     if pointer is None:
         raise FileNotFoundError(f"Registry channel is not active: {channel}")
     package_id = str(pointer["package_id"])
@@ -486,7 +504,14 @@ def resolve_channel(
     ):
         raise ValueError("Registry channel pointer is not bound to the verified registration")
     registration = load_registration(package_id, root)
-    return {**pointer, "verified": verified, "registration": registration}
+    return {
+        **pointer,
+        # Hash the exact in-memory pointer snapshot that was resolved.  A later
+        # pointer update cannot alter the identity pinned for this run.
+        "pointer_snapshot_sha256": pointer_snapshot_sha256,
+        "verified": verified,
+        "registration": registration,
+    }
 
 
 def resolve_model_reference(
@@ -528,6 +553,10 @@ def resolve_model_reference(
             "package_input_fingerprint": registration["package_input_fingerprint"],
             "panel_sha256": registration["panel"]["sha256"],
             "registration_content_sha256": registration["registration_content_sha256"],
+            "pointer_snapshot_sha256": resolved["pointer_snapshot_sha256"],
+            "registered_inventory_sha256": dict(
+                registration.get("inventory_sha256") or {}
+            ),
         }
     if source != "direct":
         raise ValueError(f"Unsupported model_ref.source={source!r}")

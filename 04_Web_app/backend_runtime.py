@@ -42,8 +42,13 @@ from services.auth_admin import (  # noqa: E402
 )
 
 
-CONFIG_SCHEMA_VERSION = "1.2.0"
-SUPPORTED_CONFIG_SCHEMA_VERSIONS = {"1.0.0", "1.1.0", CONFIG_SCHEMA_VERSION}
+CONFIG_SCHEMA_VERSION = "1.3.0"
+SUPPORTED_CONFIG_SCHEMA_VERSIONS = {
+    "1.0.0",
+    "1.1.0",
+    "1.2.0",
+    CONFIG_SCHEMA_VERSION,
+}
 ENV_PUBLIC_BASE_URL = "MMM_BACKEND_PUBLIC_BASE_URL"
 ENV_ALLOWED_ORIGINS = "MMM_BACKEND_ALLOWED_ORIGINS"
 ENV_PORT = "MMM_BACKEND_PORT"
@@ -210,6 +215,20 @@ def build_settings(
             paths.get("business_policy_path"),
             "paths.business_policy_path",
         ),
+        federal_population_path=_project_path(
+            project_root,
+            paths.get("federal_population_path")
+            or "04_Web_app/data/federal_geo_allocation/geo_reference_v2.csv",
+            "paths.federal_population_path",
+        ),
+        federal_population_sha256=str(
+            model.get("federal_population_sha256")
+            or "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+        ),
+        geo_catalog_sha256=str(
+            model.get("geo_catalog_sha256")
+            or "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
+        ),
         timeout_seconds=_positive_number(
             worker.get("timeout_seconds", 7200),
             "worker.timeout_seconds",
@@ -262,6 +281,7 @@ def preflight(
         settings.python_executable,
         settings.optimizer_policy_path,
         settings.business_policy_path,
+        settings.federal_population_path,
         settings.project_root / "02_Code" / "02_Budget_optimizer" / "budget_optimizer.py",
     )
     missing = [str(path) for path in required_files if path is None or not Path(path).is_file()]
