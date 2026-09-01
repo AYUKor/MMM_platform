@@ -334,6 +334,126 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertNotIn("/Users/", json.dumps(final, ensure_ascii=False))
 
     @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_federal_provenance_survives_request_and_fresh_state_read(self) -> None:
+        content = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "Federal durable,ТС5/Онлайн,Россия,Digital_Performance,2026-09-01,2026-09-01,60000000\n"
+            "Federal durable,ТС5/Онлайн,Российская Федерация,Digital_Performance,2026-09-01,2026-09-01,40000000\n"
+            "Federal durable,ТС5/Онлайн,Москва,Digital_Performance,2026-09-01,2026-09-01,20000000\n"
+        ).encode("utf-8")
+        upload, _ = self.service.create_upload(
+            filename="federal-durable.csv",
+            content=content,
+            idempotency_key="upload-federal-durable-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-federal-durable-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "valid", final)
+
+        # The asynchronous validation call is complete. Read the record through a
+        # new state object so the assertions cannot depend on allocator/service
+        # objects or their in-memory FederalGeoAllocationResult.
+        persisted_state = LocalApiState(self.state.root)
+        persisted_validation = persisted_state.read_validation(
+            validation["validation_id"]
+        )
+        persisted_inputs = persisted_state.read_validation_inputs(
+            validation["validation_id"]
+        )
+        warning_codes = {
+            item["code"] for item in persisted_validation["warnings"]
+        }
+        self.assertIn("FEDERAL_AND_LOCAL_GEO_OVERLAP", warning_codes)
+
+        federal = persisted_inputs["federal_geo_allocation"]
+        self.assertEqual(set(federal), {"provenance", "audit"})
+        persisted_paths: dict[str, Path] = {}
+        for name, identity in federal.items():
+            path = self.settings.artifact_root / identity["storage_key"]
+            self.assertTrue(path.is_file())
+            self.assertEqual(
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+                identity["sha256"],
+            )
+            persisted_paths[name] = path
+
+        audit = json.loads(persisted_paths["audit"].read_text(encoding="utf-8"))
+        with persisted_paths["provenance"].open(
+            "r", encoding="utf-8-sig", newline=""
+        ) as handle:
+            provenance = list(csv.DictReader(handle))
+
+        self.assertEqual(audit["policy_version"], "FEDERAL_GEO_ALLOCATION_V1")
+        self.assertEqual(audit["package_id"], PACKAGE_ID)
+        self.assertEqual(audit["federal_source_rows_n"], 2)
+        self.assertEqual(
+            {item["code"] for item in audit["warnings"]},
+            {"FEDERAL_AND_LOCAL_GEO_OVERLAP"},
+        )
+
+        expected_budget_by_geo = {
+            "Россия": 60_000_000.0,
+            "Российская Федерация": 40_000_000.0,
+        }
+        reconciliation = audit["source_row_reconciliation"]
+        self.assertEqual(len(reconciliation), 2)
+        self.assertEqual(
+            {item["original_geo"] for item in reconciliation},
+            set(expected_budget_by_geo),
+        )
+        source_ids = {item["source_row_id"] for item in reconciliation}
+        self.assertEqual(len(source_ids), 2)
+        self.assertNotIn("", source_ids)
+        for item in reconciliation:
+            expected_budget = expected_budget_by_geo[item["original_geo"]]
+            self.assertEqual(item["eligible_geo_count"], 211)
+            self.assertAlmostEqual(item["source_budget_rub"], expected_budget)
+            self.assertAlmostEqual(item["allocated_total_rub"], expected_budget)
+            self.assertLessEqual(item["difference_rub"], 0.01)
+            self.assertTrue(item["conservation_pass"])
+
+        federal_rows = [
+            row for row in provenance if row["row_type"] == "federal_expansion"
+        ]
+        self.assertEqual(len(federal_rows), 422)
+        for item in reconciliation:
+            rows = [
+                row
+                for row in federal_rows
+                if row["source_row_id"] == item["source_row_id"]
+            ]
+            self.assertEqual(len(rows), item["eligible_geo_count"])
+            self.assertTrue(
+                all(row["original_geo"] == item["original_geo"] for row in rows)
+            )
+            self.assertTrue(
+                all(row["policy_version"] == audit["policy_version"] for row in rows)
+            )
+            self.assertTrue(
+                all(row["package_id"] == audit["package_id"] for row in rows)
+            )
+            self.assertTrue(
+                all(
+                    float(row["original_spend_rub"]) == item["source_budget_rub"]
+                    for row in rows
+                )
+            )
+
+        daily_path = (
+            self.settings.artifact_root
+            / persisted_validation["daily_flighting"]["storage_key"]
+        )
+        with daily_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            aggregated_rows = list(csv.DictReader(handle))
+        self.assertEqual(len(aggregated_rows), 211)
+        self.assertTrue(all(row["source_row_id"] == "" for row in aggregated_rows))
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
     def test_unknown_geo_is_rejected_by_stable_b2_error_code(self) -> None:
         content = (
             "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
