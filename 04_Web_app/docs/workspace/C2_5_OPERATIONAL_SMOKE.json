@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0.0",
+  "phase": "C2.5",
+  "observed_at_utc": "2026-09-01T07:32:08.441141+00:00",
+  "status": "passed",
+  "constraints": {
+    "old_workspace_used_as_fallback": false,
+    "old_workspace_read_for_operational_smoke": false,
+    "server_accessed": false,
+    "deployment_performed": false,
+    "model_or_panel_recalculated": false
+  },
+  "c2_4_temporary_cleanup": {
+    "status": "passed",
+    "deleted_directory_count": 4,
+    "deleted_directory_basenames": [
+      "c2_4_bundle_verify_release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642_cc9oy32_",
+      "c2_4_bundle_verify_release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642_topgbfpm",
+      "c2_4_bundle_verify_release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642_vzho66on",
+      "c2_4_transfer_stage_release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642_f4q478zw"
+    ],
+    "inside_fin_release": false,
+    "reproducible_from_fin": true,
+    "retained_private_tmp_evidence": "Baseline inventories and diagnostic scripts were not cleanup targets.",
+    "post_cleanup_verification": {
+      "release_checksum_rows": 665,
+      "release_checksum_mismatches": 0,
+      "model_file_rows": 63,
+      "model_checksum_mismatches": 0,
+      "transfer_artifact_sha256": "d444de768dbcd49b4bb90931b9c8f0f4de3d68bc6c2f30643c7ab84719386f85",
+      "transfer_member_files": 656,
+      "transfer_checksum_rows": 655,
+      "transfer_mismatches": 0,
+      "transfer_unexpected_files": 0,
+      "transfer_missing_files": 0
+    }
+  },
+  "old_workspace_integrity": {
+    "status": "passed_with_volatile_metadata_note",
+    "scope": "Project artifacts; untracked operating-system metadata is reported separately.",
+    "c2_4_baseline_metadata_fingerprint": "330a921b3cdec9b100cdb3b37aa86092649b1a1dc2992fca257b05fd99bb96a1",
+    "c2_5_observed_metadata_fingerprint": "aee83a7c40b3e1e5606f1c5c134aaa2b8f1b1a9833fdae3b4fd4823f2064a7e1",
+    "counts_unchanged": {
+      "directories": 3437,
+      "regular_files": 33952,
+      "symlinks": 1167,
+      "other": 0,
+      "regular_file_bytes": 5061844622
+    },
+    "project_artifact_changes_detected": 0,
+    "c2_5_writes_performed": false,
+    "volatile_metadata_drift": [
+      {
+        "relative_path": "05_MMM_localapp/.DS_Store",
+        "tracked_by_application_git": false,
+        "classification": "VOLATILE_OS_METADATA",
+        "evidence": "Only object newer than the C2.4 stable inventory timestamp; tree counts and aggregate file bytes are unchanged."
+      }
+    ]
+  },
+  "contours": {
+    "00_Data": {
+      "status": "passed",
+      "relative_path": "03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet",
+      "observed": {
+        "sha256": "9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552",
+        "bytes": 49864455,
+        "rows": 308886,
+        "columns": 109,
+        "geographies": 220,
+        "period_start": "2025-01-01",
+        "period_end": "2026-05-31"
+      },
+      "expected": {
+        "sha256": "9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552",
+        "bytes": 49864455,
+        "rows": 308886,
+        "columns": 109,
+        "geographies": 220,
+        "period_start": "2025-01-01",
+        "period_end": "2026-05-31"
+      },
+      "read_method": "PyArrow Parquet metadata plus geo/date columns"
+    },
+    "01_Test": {
+      "status": "passed",
+      "relative_path": "03_ML_MMM/01_Test",
+      "role": "canonical local development/research contour",
+      "git": {
+        "head": "2a6e07755f0db494a064b7db6517219325850179",
+        "tree": "756e7024024e3f9536d43c975feb4f90b17e2581",
+        "tracked_clean": true,
+        "status_porcelain": [],
+        "matches_approved_application": true
+      },
+      "development_check": {
+        "tracked_python_files": 90,
+        "syntax_failures": [],
+        "status": "passed"
+      }
+    },
+    "02_Predfin": {
+      "status": "passed",
+      "relative_path": "03_ML_MMM/02_Predfin",
+      "role": "canonical local staging/acceptance contour",
+      "git": {
+        "head": "2a6e07755f0db494a064b7db6517219325850179",
+        "tree": "756e7024024e3f9536d43c975feb4f90b17e2581",
+        "tracked_clean": true,
+        "status_porcelain": [],
+        "matches_approved_application": true
+      },
+      "handoff_status": "C2_3S_PASS",
+      "handoff_sha256": "b978fffa359a2381c5ffc21096704a4c42550d2c94b82c3af32046e1918ff1d1",
+      "package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b"
+    },
+    "03_Fin": {
+      "status": "passed",
+      "relative_path": "03_ML_MMM/03_Fin",
+      "role": "canonical immutable deployable release contour",
+      "release_id": "release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642",
+      "application_release_status": "approved",
+      "model_serving_status": "preprod_restricted",
+      "model_production_gate": "not_passed",
+      "transfer_verification_status": "passed",
+      "path_independence_status": "passed"
+    }
+  }
+}

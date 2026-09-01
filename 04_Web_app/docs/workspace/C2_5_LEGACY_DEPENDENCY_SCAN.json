@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "phase": "C2.5",
+  "observed_at_utc": "2026-09-01T07:45:27.099435+00:00",
+  "status": "passed",
+  "question": "Can future development and release creation continue if the legacy workspace is read-only or offline?",
+  "answer": "YES",
+  "scope": "Canonical four-contour operational workflow only; archived historical reproducibility is not reclassified as current workflow.",
+  "old_workspace_used_as_fallback": false,
+  "old_workspace_read_for_scan": false,
+  "required_canonical_assets": {
+    "data_panel": true,
+    "development_git": true,
+    "predfin_acceptance": true,
+    "predfin_model_closure": true,
+    "fin_release": true,
+    "fin_transfer": true
+  },
+  "application_scans": {
+    "01_Test": {
+      "files_scanned": 594,
+      "occurrences": [],
+      "runtime_blockers": []
+    },
+    "02_Predfin": {
+      "files_scanned": 585,
+      "occurrences": [
+        {
+          "relative_path": "04_Web_app/CURRENT_TRUTH.md",
+          "occurrences": 2,
+          "classification": "DOCUMENTATION_OR_TEST"
+        }
+      ],
+      "runtime_blockers": []
+    }
+  },
+  "symlinks_targeting_legacy_workspace": [],
+  "existing_inventoried_debt": {
+    "status": "PASS_WITH_INVENTORIED_DEBT",
+    "files_with_references": 430,
+    "total_occurrences": 1339,
+    "runtime_blockers": 0,
+    "class_summary": {
+      "RESEARCH_PATH_DEBT": {
+        "files": 15,
+        "occurrences": 25
+      },
+      "ARCHIVED_NOTEBOOK": {
+        "files": 6,
+        "occurrences": 20
+      },
+      "DOCUMENTATION_ONLY": {
+        "files": 16,
+        "occurrences": 34
+      },
+      "EXPECTED_HISTORICAL_REFERENCE": {
+        "files": 393,
+        "occurrences": 1260
+      }
+    },
+    "interpretation": "Historical/research path debt remains inventoried and is not mass-fixed in C2.5. It is not an allowed entrypoint for the canonical workflow."
+  },
+  "predfin_blocker_counts": {
+    "RUNTIME_BLOCKER": 0,
+    "MODEL_LOOKUP_BLOCKER": 0,
+    "REGISTRY_BLOCKER": 0,
+    "APPLICATION_BLOCKER": 0
+  },
+  "fin_blocker_counts": {
+    "RUNTIME_BLOCKER": 0,
+    "MODEL_LOOKUP_BLOCKER": 0,
+    "REGISTRY_BLOCKER": 0,
+    "APPLICATION_BLOCKER": 0
+  },
+  "release_feasibility": {
+    "data_update": "00_Data is physical and independent.",
+    "development": "01_Test has an independent Git checkout and copied research assets.",
+    "promotion": "02_Predfin has its own exact checkout, physical model closure and acceptance evidence.",
+    "release": "03_Fin has an immutable verified release and transfer artifact.",
+    "server_source": "Fin transfer artifact only."
+  },
+  "limitations": [
+    "Some archived notebooks and historical research records retain legacy absolute paths.",
+    "Those files may require explicit rehabilitation before reuse; they are not canonical operational entrypoints.",
+    "GitHub/network and separately provisioned runtime dependencies remain external dependencies, but neither is the legacy workspace."
+  ]
+}
