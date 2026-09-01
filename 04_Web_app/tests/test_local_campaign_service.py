@@ -537,6 +537,10 @@ class LocalCampaignServiceTest(unittest.TestCase):
             "Для выбранного периода модель не может надежно рассчитать "
             "географию «Якутск». Измените географию или период кампании.",
         )
+        self.assertEqual(
+            final["blocking_errors"][0]["what"],
+            final["blocking_errors"][0]["display_text"],
+        )
         persisted = self.state.read_validation_inputs(validation["validation_id"])
         availability_path = (
             self.settings.artifact_root

@@ -1054,10 +1054,7 @@ class LocalCampaignService:
                         scope="cell",
                         recoverable=True,
                         affected_cells=affected,
-                        what=(
-                            "Часть локальных географий нельзя рассчитать на "
-                            "выбранные даты."
-                        ),
+                        what=display_text,
                         why=(
                             "Текущая версия модели не поддерживает расчет этих "
                             "географий на всем необходимом периоде."
