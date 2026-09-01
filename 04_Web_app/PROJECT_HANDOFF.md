@@ -7,7 +7,7 @@ continue MMM Platform work without relying on old chats. It explains why the
 system exists, how its current pieces fit together, which design decisions are
 intentional, where the evidence lives and what is still unresolved.
 
-For a terse statement of facts as of 2026-08-31, read `CURRENT_TRUTH.md`. This
+For a terse statement of facts as of 2026-09-01, read `CURRENT_TRUTH.md`. This
 document adds architecture, decision history and continuation rules; it should not
 be treated as stronger evidence than live code, contracts, Git or verified
 artifacts.
@@ -43,8 +43,10 @@ Read in this order:
 4. This `PROJECT_HANDOFF.md`.
 5. Relevant accepted ADRs in `04_Web_app/docs/adr/`.
 6. Live schemas/contracts, policies, pointers/manifests, implementation and tests.
-7. Parent workspace project brain for decision history:
-   `../01_Main_Brain_MMM/wiki/`.
+7. Canonical project brain for decision history:
+   `03_ML_MMM/01_Test/project_brain/wiki/`.
+8. Workspace lifecycle, promotion and observation contracts in
+   `04_Web_app/docs/workspace/`.
 
 For current factual claims use this priority:
 
@@ -56,22 +58,22 @@ intent, while code is implemented behavior. Do not silently reinterpret either.
 
 ## 4. Workspace map
 
-Main areas verified during C0:
+Canonical areas verified during C2.5:
 
-- `05_MMM_localapp/` — released application Git repository.
-- `05_MMM_localapp/04_Web_app/` — backend, frontend, contracts, tests and product
-  deployment templates.
-- `05_MMM_localapp/02_Code/` — forecast, optimizer and policy code used by serving.
-- `05_MMM_localapp/03_Outputs/01_PyMC_outputs/00_Model_registry/` — model registry
-  and package metadata committed for lineage.
-- `../00_Data/` — physical source panels and related data outside application Git.
-- `../01_Main_Brain_MMM/` — Obsidian/project knowledge, not released code.
-- `../server-deploy/` — local operational/runbook evidence with sensitive topology;
-  do not copy its secrets or exact infrastructure details into Git.
+- `03_ML_MMM/00_Data/` — immutable/versioned data contour.
+- `03_ML_MMM/01_Test/` — research, experiments, project brain and the canonical
+  application development checkout `MMM_platform/`.
+- `03_ML_MMM/02_Predfin/` — exact candidate checkout, physical model closure and
+  immutable acceptance evidence.
+- `03_ML_MMM/03_Fin/` — versioned immutable releases and verified transfer
+  artifacts.
+- `03_ML_MMM/01_Test/research/legacy_reference/server-deploy/` — preserved copy of
+  the existing server runbook/evidence; do not copy infrastructure secrets or
+  sensitive details into Git.
 
-The parent workspace contains historical and duplicated structures. A directory is
-not obsolete merely because its name looks old. Dependency audit must precede any
-cleanup.
+The old workspace is `LEGACY_ROLLBACK_ONLY`. It remains physical but is not an
+operational fallback. Historical path debt is inventoried and does not authorize
+cleanup or imply that archived entrypoints are canonical.
 
 ## 5. End-to-end architecture
 
@@ -97,8 +99,9 @@ progress and result views rather than recomputing KPIs.
 Application release and model release are separate lineages:
 
 ```text
-application: GitHub main -> offline Git bundle -> server Git + frontend dist
-model: registry pointer -> sealed package manifest -> panel-free transfer -> hash check
+application: Test branch -> reviewed PR -> GitHub main -> Predfin -> Fin
+model: Test candidate -> Predfin closure/acceptance -> Fin panel-free transfer
+deployment: verified Fin artifact -> separately authorized server update
 ```
 
 The source parquet remains outside the server serving bundle.
@@ -166,11 +169,11 @@ Key evidence:
 
 ## 7. Source data and lineage
 
-Canonical panel physically verified in the parent workspace:
+Canonical panel physically verified in the data contour:
 
-`../00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
+`03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
 
-Metadata at C0:
+Metadata reverified during C2.5 operational smoke:
 
 - SHA-256:
   `9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552`;
@@ -185,9 +188,10 @@ This date distinction resolved a recurring documentation error: the source panel
 continues through May, but the training window stops in March. Always read the run
 manifest/config before describing a “training period”.
 
-The registry path is relative to the parent research workspace. The application
-clone alone is not a complete reproducibility package. Model deployment must retain
-panel hash and package lineage without copying the raw panel to the server.
+The application clone alone is not a complete reproducibility package. The
+four-contour workflow supplies data, model closure and acceptance outside Git.
+Model deployment must retain panel hash and package lineage without copying the raw
+panel to the server.
 
 ## 8. Upload, validation and calculation lifecycle
 
@@ -551,32 +555,36 @@ Do not restore these without a new approved decision:
 
 ### Workspace
 
-- application Git, data, research outputs, brain and deployment evidence are spread
-  across several roots;
-- historical worktrees and duplicated-looking directories require dependency
-  mapping before any action;
+- canonical workflow now spans four explicit contours rather than one Git clone;
+- historical/research files retain inventoried absolute-path debt, but operational
+  runtime blockers are zero;
+- historical worktrees and legacy copies remain protected until a later cleanup
+  decision;
 - a missing artifact inside Git may be intentionally external, not lost.
 
-## 19. Local workspace consolidation — planned only
+## 19. Canonical local workspace lifecycle
 
-Future program C proposes this target shape:
+C2 migration is complete through C2.4 and C2.5 adopts this operating shape:
 
 ```text
 03_ML_MMM/
-├── 00_Data/    # raw, external and processed source data
-├── 01_Test/    # research and experimental contour
-├── 02_Predfin/ # local staging and acceptance contour
-└── 03_Fin/     # local mirror of approved release, not development workspace
+├── 00_Data/    # canonical data contour
+├── 01_Test/    # canonical development/research contour
+├── 02_Predfin/ # exact staging and acceptance contour
+└── 03_Fin/     # immutable deployable releases
 ```
 
-This structure is neither created nor approved for migration. The next step is
-**C1 — Local Workspace Read-Only Audit**: inventory, hashes, dependency map,
-Git/worktree map, reproducibility classification and migration risks. C1 must not
-move, rename or delete anything.
+Current release is
+`release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642`. The application is approved;
+the model remains `preprod_restricted` with `production_gate = not_passed`.
 
-Any later migration requires a separate approved milestone and the sequence
-`copy -> verify -> switch references -> delete last`, with deletion separately
-authorized.
+Development starts in Test, candidate acceptance occurs in Predfin, and each Fin
+change creates a new `releases/<release_id>` directory. `CURRENT_RELEASE.json` may
+switch only after PASS. The exact contracts are under
+`04_Web_app/docs/workspace/`.
+
+C3 cleanup is not authorized. The observation period must include one real B1/B2
+Federal Geo Allocation cycle through all four contours and a new Fin release.
 
 ## 20. Federal geo allocation — future requirement
 
@@ -615,18 +623,21 @@ design are approved.
 
 ## 22. Next milestones
 
-1. **C1 — Local Workspace Read-Only Audit** — next immediate milestone.
-2. **B1 — Federal Geo Allocation Audit** — find the existing transformation before
+1. **B1 — Federal Geo Allocation Audit** — find the existing transformation before
    implementation.
+2. **B2 — Federal Geo Allocation implementation/validation** — use B1 evidence and
+   carry the change through Test, Predfin and a new Fin release as the C2.5
+   observation proof.
 3. **A — Historical Campaign Evaluation methodology** — establish identification
    and validation before product work.
 4. **Model production gate** — separate future milestone for sealed OOT evidence and
    activation decision.
-5. **Deployment reproducibility audit** — reconcile generic bundle creation,
-   transfer, deployed SHA and verification without changing the server unless
-   explicitly authorized.
+5. **Deployment milestone** — use only a verified Fin transfer artifact and do not
+   change the server unless explicitly authorized.
+6. **C3 cleanup review** — only after a successful observation release; exact
+   destructive targets still require separate approval.
 
-Do not start any of these automatically after C0.
+Do not start any of these automatically after C2.5.
 
 ## 23. Verification references and safe commands
 
@@ -651,17 +662,19 @@ Useful evidence locations:
 - business/geo/auth/result contracts: `04_Web_app/contracts/` and
   `04_Web_app/services/`;
 - frontend routes and API use: `04_Web_app/frontend/src/`;
-- historical geo artifact: parent workspace
-  `../03_Outputs/01_PyMC_outputs/00_Model_registry/package_artifacts/`
+- historical geo artifact in the accepted model closure under
+  `03_Outputs/01_PyMC_outputs/00_Model_registry/package_artifacts/`
   under the active package's `historical_geo_budget_v1/` extension;
 - application tests: `04_Web_app/tests/` and frontend E2E tests;
 - repository deployment: `04_Web_app/deployment/`;
-- latest operational evidence: parent `server-deploy/` runbooks and manifests.
+- latest preserved operational evidence:
+  `03_ML_MMM/01_Test/research/legacy_reference/server-deploy/`.
+- workspace workflow and promotion gates: `04_Web_app/docs/workspace/`.
 
 Safe artifact verification examples:
 
 ```bash
-shasum -a 256 ../00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet
+shasum -a 256 <workspace-root>/03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet
 git bundle verify <existing-bundle-path>
 ```
 
@@ -671,14 +684,14 @@ commands merely to refresh documentation.
 The two known failing tests were reconfirmed with:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 /Users/aleksan.korenkov/miniconda3/bin/python -B -m unittest \
+PYTHONDONTWRITEBYTECODE=1 python -B -m unittest \
   04_Web_app.tests.test_auth_admin_v1.AuthAdminHttpTest.test_central_permissions_distinguish_401_and_403 \
   04_Web_app.tests.test_http_smoke_v1.HttpSmokeV1Test.test_product_metadata_readiness_schemas_and_job_query
 ```
 
-Expected current C0 outcome: two failures where endpoints return `409` instead of
-the test's expected `200`. Re-verify before treating this as current in a later
-milestone.
+These historical C0 failures were resolved before the C2.4 release. Re-verify the
+relevant regression surface for any new application candidate rather than relying
+on the old outcome.
 
 ## 24. Agent continuation rules
 
@@ -696,12 +709,15 @@ milestone.
 - End meaningful work with changed files, verification, known limitations, blockers
   and the next explicitly approved action.
 
-## 25. C0 handoff state
+## 25. C2.5 handoff state
 
-C0 freezes documentation only. Its baseline application state is
-`main@2ead610a56ab26eb38aeb29210d1bab86251f856`; the documentation branch is
-`codex/c0-current-truth-freeze`. No code, model, data, optimizer, deployment or
-server state belongs in the C0 diff.
+C2 migration is complete through the immutable C2.4 Fin release. Approved
+application baseline is `main@2a6e07755f0db494a064b7db6517219325850179` with
+tree `756e7024024e3f9536d43c975feb4f90b17e2581`. The C2.5 documentation branch is
+`codex/c2-5-workspace-switch-docs`; it must be reviewed through its PR and not
+merged by Codex.
 
-The next agent should wait for review of the C0 Draft PR. It must not begin C1 or
-any future milestone without an explicit user request.
+Operational smoke and legacy dependency scan pass without old-workspace fallback.
+The next proof milestone is B1/B2 Federal Geo Allocation through all four contours.
+The active model stays restricted, the server is unchanged, and C3 cleanup is not
+authorized.

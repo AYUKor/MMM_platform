@@ -2,14 +2,14 @@
 
 ## Last verified
 
-- Verification date: **2026-08-31**.
-- Mode: **C0 — VERIFICATION + DOCUMENTATION ONLY**.
+- Verification date: **2026-09-01**.
+- Mode: **C2.5 — WORKFLOW SWITCH + READINESS VERIFICATION**.
 - Verified against local live code, Git/GitHub state, contracts, policies,
   manifests, tests, physically present artifacts and local deployment runbooks.
 - No DWH query, model/data recalculation, server connection or deployment was
   performed.
 - Server facts below are explicitly labelled as documented status; they were not
-  live-verified during C0.
+  live-verified or changed during C2.5.
 
 ## Product status
 
@@ -24,41 +24,60 @@ limits, not an automated media-buying or finance approval system.
 
 ## Repository
 
-- Released application repository:
-  `/Users/aleksan.korenkov/Work/01_ML_projects/03_ML_MMM/05_MMM_localapp`.
+- Canonical local development repository: `03_ML_MMM/01_Test/MMM_platform`.
 - Remote: `https://github.com/AYUKor/MMM_platform.git`.
 - `origin/main` is the source of truth for released application code.
-- Data, research outputs, project brain and server-deploy evidence also exist in
-  the parent `03_ML_MMM/` workspace and are not all stored in this Git clone.
-- Pre-existing untracked `05_Presentations/` was found in the clone during C0 and
-  deliberately left untouched.
+- Data, research outputs, project brain, staging evidence and Fin releases remain
+  outside this Git clone in their canonical four-contour locations.
+- The old workspace is physically preserved as `LEGACY_ROLLBACK_ONLY`; it is not an
+  operational fallback.
 
 ## Current Git state
 
-- Verified baseline: local `main` and remote `origin/main` both pointed to
-  `2ead610a56ab26eb38aeb29210d1bab86251f856` on 2026-08-31.
-- Latest verified merged release PR: **#35**, hiding the low-information active-days
-  metric in the historical Home-map tooltip.
-- C0 documentation work is isolated in branch
-  `codex/c0-current-truth-freeze`; its commit SHA is intentionally not embedded in
-  this document because Git history is the authoritative record.
-- Several older temporary worktrees are present/prunable outside this clone. They
-  are not evidence of the current release and were not modified.
+- Approved application baseline and fetched `origin/main`:
+  `2a6e07755f0db494a064b7db6517219325850179` with tree
+  `756e7024024e3f9536d43c975feb4f90b17e2581`.
+- PR #37 is included in this baseline; C2.3S verified the exact source and
+  post-merge regression evidence.
+- C2.5 documentation work is isolated in branch
+  `codex/c2-5-workspace-switch-docs` and must be reviewed through its PR.
+- Old Git clones/worktrees remain rollback/reference evidence. C2.5 does not prune
+  or delete them.
+
+## Canonical local workspace
+
+- `03_ML_MMM/00_Data` — canonical local data contour.
+- `03_ML_MMM/01_Test` — canonical local development/research contour.
+- `03_ML_MMM/02_Predfin` — canonical local staging/acceptance contour.
+- `03_ML_MMM/03_Fin` — canonical immutable deployable release contour.
+
+The operational smoke passed using only these contours. Legacy dependency scan
+found zero operational runtime blockers and zero symlinks targeting the old
+workspace. Historical/research path debt remains inventoried and is not mass-fixed
+in C2.5.
+
+Current Fin release:
+`release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642`. Its application is approved;
+its model remains `preprod_restricted` with `production_gate = not_passed`.
 
 ## Deployment
 
 The accepted deployment flow is:
 
-`accepted local code -> GitHub main -> same-origin frontend build -> offline Git
-bundle transfer -> corporate server Git -> static dist replacement -> backend/UI
-health and hash checks`.
+`accepted local code -> GitHub main -> Predfin acceptance -> immutable Fin release
+-> verified Fin transfer artifact -> corporate server Git/static dist/model install
+-> backend/UI health and hash checks`.
 
 - Frontend production build uses `VITE_API_BASE_URL=""` and same-origin `/api`.
 - The corporate server is documented as having no outbound GitHub access; offline
   Git bundles are therefore the intended application-code transfer mechanism.
 - The panel-free model serving package is transferred and hash-verified separately
   from application Git.
-- `server-deploy/deploy-frontend-pr35.sh` is a release-specific script, not a
+- The only permitted local deployment source is the verified transfer artifact of
+  a selected Fin release. Test, Predfin and the legacy workspace are not deployment
+  sources.
+- `03_ML_MMM/01_Test/research/legacy_reference/server-deploy/deploy-frontend-pr35.sh`
+  is a release-specific script, not a
   complete reusable transfer pipeline: it assumes the required bundle/remote state
   is already available. Local bundle snapshots inspected during C0 do not by
   themselves prove a fresh PR #35 transfer. This deployment evidence gap remains.
@@ -66,7 +85,7 @@ health and hash checks`.
 ## Server status
 
 **Documented operational status, last accepted 2026-07-23; not live-verified in
-C0:**
+C2.5:**
 
 - Primary product URL: `https://mmm.x5.ru`.
 - Reserved fallback name: `mmm.x5.internal`.
@@ -79,7 +98,7 @@ C0:**
 Local onboarding and historical DevOps documents still contain stale `.internal`,
 manual-hosts, CA, firewall or certificate wording. Current runbook evidence makes
 `.ru` the primary documented URL, but employee reachability was not independently
-checked on 2026-08-31.
+checked on 2026-09-01.
 
 ## Model
 
@@ -121,7 +140,7 @@ causality against all unobserved confounding.
 
 Canonical physical panel:
 
-`/Users/aleksan.korenkov/Work/01_ML_projects/03_ML_MMM/00_Data/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
+`03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
 
 - Recomputed SHA-256:
   `9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552`.
@@ -267,44 +286,47 @@ routes use session and permission gates.
 3. No corporate SSO/MFA/password recovery; auth and job state are local/single-node.
 4. No Postgres, durable distributed queue, object storage or multi-node failover.
 5. JupyterHub resource limits are not documented as enforced.
-6. Two targeted HTTP tests were reconfirmed failing with `409` on 2026-08-31:
-   workspace home in `AuthAdminHttpTest.test_central_permissions_distinguish_401_and_403`
-   and model overview-v2 in
-   `HttpSmokeV1Test.test_product_metadata_readiness_schemas_and_job_query`.
+6. The two C0 HTTP `409` test-isolation failures were resolved in PR #37. C2.3R
+   recorded 168 passing web tests and 10 expected skips; C2.3S reconfirmed the
+   post-merge regression state.
 7. No daily media plan and no generally available separate working media-plan XLSX.
-8. Server live health/reachability and deployed HEAD were not checked in C0.
-9. Offline transfer is the accepted flow, but release-specific scripts/bundle
-   snapshots do not form a fully self-contained reusable deployment pipeline.
+8. Server live health/reachability and deployed HEAD were not checked in C2.5.
+9. C2.4 produced and independently verified a self-contained release-content
+   transfer artifact. Server dependency provisioning and the operational update
+   sequence still require the accepted runbook and separate authorization.
 10. `PROJECT_BRIEF.md`, `OPEN_DECISIONS.md`, onboarding and older DevOps notes retain
     stale deployment/map wording outside the three-file C0 edit scope.
 11. Application Git and model/data artifacts have separate lineage and transfer
     paths; both must be verified for a reproducible release.
-12. Local workspace contains duplicated/historical structures and stale worktrees;
-    no item may be removed based on name or age alone.
+12. Historical/research files retain inventoried absolute-path debt; canonical
+    operational blockers are zero, but archived entrypoints may need explicit
+    rehabilitation before reuse.
 13. Corporate governance of the private GitHub repository and branch protection
     remains unresolved.
 
 ## Current milestone
 
-**C0 — MMM Platform Current Truth Freeze.**
+**C2.5 — Controlled Workspace Switch and Observation.**
 
-Deliverable: verified documentation only. No application, model, data, deployment
-or server mutation belongs to C0. After Draft PR creation, work stops for review.
+The four-contour workspace is the canonical local workflow. Documentation is
+prepared in a dedicated branch/PR. Server deployment, production activation and C3
+cleanup remain outside scope.
 
 ## Planned milestones
 
-These are recorded plans, not implemented functionality:
-
-1. **C1 — Local Workspace Read-Only Audit.** Inventory and dependency map of the
-   parent `03_ML_MMM/` workspace. No move, rename or deletion. The proposed target
-   structure `03_ML_MMM/{00_Data,01_Test,02_Predfin,03_Fin}` must not be created
-   during the audit.
-2. **B1 — Federal Geo Allocation Audit.** Investigate how the current training and
+1. **B1 — Federal Geo Allocation Audit.** Investigate how the current training and
    serving transforms handle geo before designing support for uploaded `geo=РФ`.
    Pre-expansion and reconciliation must be evidence-based. A mean-population
    fallback is a future requirement to validate, not current behavior.
+2. **B2 — Federal Geo Allocation implementation/validation.** Proceed only from B1
+   evidence and carry the real change through Test, Predfin and a new Fin release.
+   This is the required C2.5 observation proof.
 3. **A — Historical Campaign Evaluation.** Future causal/research capability, not
    implemented. Preliminary estimand: marginal incremental turnover of one selected
    historical campaign while concurrent observed media remains factual. This
    estimand requires explicit assumptions, identification design and validation
    before productization.
+4. **Model production gate.** A separate future milestone for sealed OOT evidence
+   and explicit activation decision.
+5. **C3 cleanup.** Not authorized until the B1/B2 observation cycle completes and a
+   separate destructive-action review approves exact targets.

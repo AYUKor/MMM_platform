@@ -4,7 +4,9 @@
 
 Этот репозиторий содержит released application code MMM Platform: backend, frontend,
 контракты, тесты, model-serving adapters, deployment templates и документацию.
-Рабочий корень репозитория: `05_MMM_localapp/`.
+Канонический development checkout находится в
+`03_ML_MMM/01_Test/MMM_platform`; код должен оставаться независимым от конкретного
+абсолютного пути checkout.
 
 Главный принцип: сначала установить текущую истину по физическим артефактам и
 живому коду, затем предлагать изменение. Нельзя превращать предположение, старый
@@ -18,7 +20,8 @@ handoff или имя каталога в подтверждённый факт.
 4. `04_Web_app/PROJECT_HANDOFF.md` — карта системы и передача контекста.
 5. Релевантные accepted ADR, schemas, policies, manifests, runbooks и тесты.
 6. Для истории решений — project brain вне этого Git-репозитория:
-   `../01_Main_Brain_MMM/wiki/`.
+   `03_ML_MMM/01_Test/project_brain/wiki/`.
+7. Для workspace lifecycle и promotion gates — `04_Web_app/docs/workspace/`.
 
 Если документы расходятся с кодом или проверяемым артефактом, не продолжать как
 будто противоречия нет: зафиксировать конфликт, выбрать более сильное evidence или
@@ -71,12 +74,25 @@ handoff или имя каталога в подтверждённый факт.
 - Данные и model artifacts могут находиться в родительском workspace вне Git;
   отсутствие файла внутри clone не означает его отсутствие или ненужность.
 
-Планируемая структура `03_ML_MMM/{00_Data,01_Test,02_Predfin,03_Fin}` пока не
-создана. До отдельной milestone нельзя раскладывать файлы по этой схеме.
+После C2.4/C2.5 действует структура
+`03_ML_MMM/{00_Data,01_Test,02_Predfin,03_Fin}`:
+
+- `00_Data` — canonical local data contour;
+- `01_Test` — canonical development/research contour;
+- `02_Predfin` — exact staging/acceptance contour;
+- `03_Fin` — immutable deployable release contour.
+
+Старый workspace имеет роль `LEGACY_ROLLBACK_ONLY`: он физически сохраняется, но
+не является fallback для новой разработки, promotion или release. C3 cleanup не
+разрешён до отдельного решения после observation period.
 
 ## Git и GitHub
 
 - `origin/main` — source of truth для released application code.
+- `01_Test/MMM_platform` — единственный canonical local development checkout.
+- `02_Predfin/MMM_platform` получает exact approved candidate, а не незавершённую
+  development branch.
+- Содержимое существующего `03_Fin/releases/<release_id>` не изменяется in-place.
 - Одна задача — одна ветка `codex/<task>` — один PR.
 - Все исправления review по задаче остаются в том же PR.
 - Codex может создать commit и Draft PR только в согласованном scope.
@@ -96,6 +112,9 @@ handoff или имя каталога в подтверждённый факт.
   private certificates или иные secrets.
 - Model serving bundle переносится отдельно от application Git и должен
   проверяться по manifest/hash; source panel на сервер не переносится.
+- Единственный допустимый local source для будущего server deployment — verified
+  transfer artifact из конкретного `03_Fin` release. Не deploy из Test, Predfin,
+  legacy workspace или произвольного checkout.
 
 ## Реализация и проверка
 
