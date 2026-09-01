@@ -2,7 +2,8 @@
 
 ## Decision boundary
 
-`03_ML_MMM/00_Data` is the canonical local data contour. Data acceptance does not
+`<MMM_WORKSPACE_ROOT>/00_Data` is the canonical local data contour. Data acceptance
+does not
 by itself approve a model, application release or deployment.
 
 ## Layers
@@ -61,7 +62,7 @@ explicitly authorized milestone and a run card.
 ## Current panel identity
 
 - Relative path:
-  `03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
+  `<MMM_WORKSPACE_ROOT>/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
 - SHA-256: `9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552`.
 - Size: 49,864,455 bytes.
 - Shape: 308,886 rows and 109 columns.

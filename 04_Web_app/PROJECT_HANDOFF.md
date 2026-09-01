@@ -44,7 +44,7 @@ Read in this order:
 5. Relevant accepted ADRs in `04_Web_app/docs/adr/`.
 6. Live schemas/contracts, policies, pointers/manifests, implementation and tests.
 7. Canonical project brain for decision history:
-   `03_ML_MMM/01_Test/project_brain/wiki/`.
+   `<MMM_WORKSPACE_ROOT>/01_Test/project_brain/wiki/`.
 8. Workspace lifecycle, promotion and observation contracts in
    `04_Web_app/docs/workspace/`.
 
@@ -58,22 +58,26 @@ intent, while code is implemented behavior. Do not silently reinterpret either.
 
 ## 4. Workspace map
 
-Canonical areas verified during C2.5:
+Canonical root verified during C2.6:
 
-- `03_ML_MMM/00_Data/` — immutable/versioned data contour.
-- `03_ML_MMM/01_Test/` — research, experiments, project brain and the canonical
+`<MMM_WORKSPACE_ROOT>`
+
+- `00_Data/` — immutable/versioned data contour.
+- `01_Test/` — research, experiments, project brain and the canonical
   application development checkout `MMM_platform/`.
-- `03_ML_MMM/02_Predfin/` — exact candidate checkout, physical model closure and
+- `02_Predfin/` — exact candidate checkout, physical model closure and
   immutable acceptance evidence.
-- `03_ML_MMM/03_Fin/` — versioned immutable releases and verified transfer
+- `03_Fin/` — versioned immutable releases and verified transfer
   artifacts.
-- `03_ML_MMM/01_Test/research/legacy_reference/server-deploy/` — preserved copy of
+- `01_Test/research/legacy_reference/server-deploy/` — preserved copy of
   the existing server runbook/evidence; do not copy infrastructure secrets or
   sensitive details into Git.
 
-The old workspace is `LEGACY_ROLLBACK_ONLY`. It remains physical but is not an
-operational fallback. Historical path debt is inventoried and does not authorize
-cleanup or imply that archived entrypoints are canonical.
+The old workspace is preserved at `<MMM_LEGACY_ROOT>` with role
+`LEGACY_ROLLBACK_ONLY`; it is not an operational fallback. A remaining local copy
+outside `<MMM_WORKSPACE_ROOT>` is migration staging, not canonical. Historical path
+debt is inventoried and does not authorize cleanup or imply that archived
+entrypoints are canonical.
 
 ## 5. End-to-end architecture
 
@@ -171,7 +175,7 @@ Key evidence:
 
 Canonical panel physically verified in the data contour:
 
-`03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
+`<MMM_WORKSPACE_ROOT>/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
 
 Metadata reverified during C2.5 operational smoke:
 
@@ -538,8 +542,8 @@ Do not restore these without a new approved decision:
 - local SQLite/file state, no Postgres, distributed durable queue, object storage or
   multi-node failover;
 - no daily plan and normally no separate working media-plan XLSX;
-- two targeted HTTP tests still return unexpected `409` for workspace home and
-  model overview-v2;
+- the two historical C0 HTTP `409` test-isolation failures were resolved in PR #37;
+  C2.3S recorded 168 passing web tests with 10 expected skips;
 - JupyterHub resource limits are not documented as enforced.
 
 ### Release/operations
@@ -555,7 +559,8 @@ Do not restore these without a new approved decision:
 
 ### Workspace
 
-- canonical workflow now spans four explicit contours rather than one Git clone;
+- canonical workflow now spans four explicit contours under `<MMM_WORKSPACE_ROOT>`
+  rather than one Git clone;
 - historical/research files retain inventoried absolute-path debt, but operational
   runtime blockers are zero;
 - historical worktrees and legacy copies remain protected until a later cleanup
@@ -564,10 +569,10 @@ Do not restore these without a new approved decision:
 
 ## 19. Canonical local workspace lifecycle
 
-C2 migration is complete through C2.4 and C2.5 adopts this operating shape:
+C2 migration and physical-root switch are complete through C2.6:
 
 ```text
-03_ML_MMM/
+<MMM_WORKSPACE_ROOT>/
 ├── 00_Data/    # canonical data contour
 ├── 01_Test/    # canonical development/research contour
 ├── 02_Predfin/ # exact staging and acceptance contour
@@ -626,7 +631,7 @@ design are approved.
 1. **B1 — Federal Geo Allocation Audit** — find the existing transformation before
    implementation.
 2. **B2 — Federal Geo Allocation implementation/validation** — use B1 evidence and
-   carry the change through Test, Predfin and a new Fin release as the C2.5
+   carry the change through Test, Predfin and a new Fin release as the post-C2.6
    observation proof.
 3. **A — Historical Campaign Evaluation methodology** — establish identification
    and validation before product work.
@@ -637,7 +642,7 @@ design are approved.
 6. **C3 cleanup review** — only after a successful observation release; exact
    destructive targets still require separate approval.
 
-Do not start any of these automatically after C2.5.
+Do not start any of these automatically after C2.6.
 
 ## 23. Verification references and safe commands
 
@@ -668,13 +673,13 @@ Useful evidence locations:
 - application tests: `04_Web_app/tests/` and frontend E2E tests;
 - repository deployment: `04_Web_app/deployment/`;
 - latest preserved operational evidence:
-  `03_ML_MMM/01_Test/research/legacy_reference/server-deploy/`.
+  `<MMM_WORKSPACE_ROOT>/01_Test/research/legacy_reference/server-deploy/`.
 - workspace workflow and promotion gates: `04_Web_app/docs/workspace/`.
 
 Safe artifact verification examples:
 
 ```bash
-shasum -a 256 <workspace-root>/03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet
+shasum -a 256 <MMM_WORKSPACE_ROOT>/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet
 git bundle verify <existing-bundle-path>
 ```
 
@@ -709,15 +714,17 @@ on the old outcome.
 - End meaningful work with changed files, verification, known limitations, blockers
   and the next explicitly approved action.
 
-## 25. C2.5 handoff state
+## 25. C2.6 handoff state
 
-C2 migration is complete through the immutable C2.4 Fin release. Approved
-application baseline is `main@2a6e07755f0db494a064b7db6517219325850179` with
-tree `756e7024024e3f9536d43c975feb4f90b17e2581`. The C2.5 documentation branch is
-`codex/c2-5-workspace-switch-docs`; it must be reviewed through its PR and not
-merged by Codex.
+C2 relocation and legacy-root switch are complete. Current application source of
+truth is `origin/main@546c5dd60bfd7f62ab79a4fe6621964696f732a1` with tree
+`e1c66f5cea72e636adb0e848a5c5d91747ca6d42`. Frozen Predfin/Fin remains at
+application commit `2a6e07755f0db494a064b7db6517219325850179` and the same
+restricted model identity. The C2.6 documentation branch is
+`codex/c2-6-canonical-root`; it must be reviewed through its PR and not merged by
+Codex.
 
-Operational smoke and legacy dependency scan pass without old-workspace fallback.
+Pre- and post-rename operational smoke and path scans pass without legacy fallback.
 The next proof milestone is B1/B2 Federal Geo Allocation through all four contours.
 The active model stays restricted, the server is unchanged, and C3 cleanup is not
 authorized.

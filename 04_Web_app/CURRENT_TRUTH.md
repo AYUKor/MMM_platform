@@ -3,13 +3,13 @@
 ## Last verified
 
 - Verification date: **2026-09-01**.
-- Mode: **C2.5 — WORKFLOW SWITCH + READINESS VERIFICATION**.
+- Mode: **C2.6 — CONTROLLED ROOT SWITCH + VERIFICATION**.
 - Verified against local live code, Git/GitHub state, contracts, policies,
   manifests, tests, physically present artifacts and local deployment runbooks.
 - No DWH query, model/data recalculation, server connection or deployment was
   performed.
 - Server facts below are explicitly labelled as documented status; they were not
-  live-verified or changed during C2.5.
+  live-verified or changed during C2.6.
 
 ## Product status
 
@@ -24,37 +24,44 @@ limits, not an automated media-buying or finance approval system.
 
 ## Repository
 
-- Canonical local development repository: `03_ML_MMM/01_Test/MMM_platform`.
+- Canonical local workspace root: `<MMM_WORKSPACE_ROOT>`.
+- Canonical local development repository: `01_Test/MMM_platform` under that root.
 - Remote: `https://github.com/AYUKor/MMM_platform.git`.
 - `origin/main` is the source of truth for released application code.
 - Data, research outputs, project brain, staging evidence and Fin releases remain
   outside this Git clone in their canonical four-contour locations.
-- The old workspace is physically preserved as `LEGACY_ROLLBACK_ONLY`; it is not an
-  operational fallback.
+- The old workspace is physically preserved at `<MMM_LEGACY_ROOT>` as
+  `LEGACY_ROLLBACK_ONLY`; it is not an operational fallback.
+- A local migration staging copy outside `<MMM_WORKSPACE_ROOT>` is non-canonical,
+  not a development, release or deployment source.
+  C2.6 found zero staging-only files and zero unique staging evidence; it is not an
+  exact current copy because canonical Git/docs/evidence advanced after relocation.
+  It is only a future delete candidate requiring separate authorization.
 
 ## Current Git state
 
-- Approved application baseline and fetched `origin/main`:
-  `2a6e07755f0db494a064b7db6517219325850179` with tree
+- Fetched `origin/main` after merged PR #38:
+  `546c5dd60bfd7f62ab79a4fe6621964696f732a1` with tree
+  `e1c66f5cea72e636adb0e848a5c5d91747ca6d42`.
+- Frozen Predfin/Fin application remains the earlier approved PR #37 identity:
+  commit `2a6e07755f0db494a064b7db6517219325850179`, tree
   `756e7024024e3f9536d43c975feb4f90b17e2581`.
-- PR #37 is included in this baseline; C2.3S verified the exact source and
-  post-merge regression evidence.
-- C2.5 documentation work is isolated in branch
-  `codex/c2-5-workspace-switch-docs` and must be reviewed through its PR.
-- Old Git clones/worktrees remain rollback/reference evidence. C2.5 does not prune
+- C2.6 documentation work is isolated in branch
+  `codex/c2-6-canonical-root`, created directly from current `origin/main`.
+- Old Git clones/worktrees remain rollback/reference evidence. C2.6 does not prune
   or delete them.
 
 ## Canonical local workspace
 
-- `03_ML_MMM/00_Data` — canonical local data contour.
-- `03_ML_MMM/01_Test` — canonical local development/research contour.
-- `03_ML_MMM/02_Predfin` — canonical local staging/acceptance contour.
-- `03_ML_MMM/03_Fin` — canonical immutable deployable release contour.
+- `00_Data` — canonical local data contour.
+- `01_Test` — canonical local development/research contour.
+- `02_Predfin` — canonical local staging/acceptance contour.
+- `03_Fin` — canonical immutable deployable release contour.
 
-The operational smoke passed using only these contours. Legacy dependency scan
-found zero operational runtime blockers and zero symlinks targeting the old
-workspace. Historical/research path debt remains inventoried and is not mass-fixed
-in C2.5.
+Pre- and post-rename operational smoke passed using only these contours at the
+exact canonical root. Both path scans found zero runtime, model-lookup, registry or
+application blockers and no legacy fallback. Historical/provenance/evidence path
+records remain factual history and are not mass-rewritten in C2.6.
 
 Current Fin release:
 `release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642`. Its application is approved;
@@ -76,7 +83,7 @@ The accepted deployment flow is:
 - The only permitted local deployment source is the verified transfer artifact of
   a selected Fin release. Test, Predfin and the legacy workspace are not deployment
   sources.
-- `03_ML_MMM/01_Test/research/legacy_reference/server-deploy/deploy-frontend-pr35.sh`
+- `01_Test/research/legacy_reference/server-deploy/deploy-frontend-pr35.sh`
   is a release-specific script, not a
   complete reusable transfer pipeline: it assumes the required bundle/remote state
   is already available. Local bundle snapshots inspected during C0 do not by
@@ -85,7 +92,7 @@ The accepted deployment flow is:
 ## Server status
 
 **Documented operational status, last accepted 2026-07-23; not live-verified in
-C2.5:**
+C2.6:**
 
 - Primary product URL: `https://mmm.x5.ru`.
 - Reserved fallback name: `mmm.x5.internal`.
@@ -140,7 +147,7 @@ causality against all unobserved confounding.
 
 Canonical physical panel:
 
-`03_ML_MMM/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
+`<MMM_WORKSPACE_ROOT>/00_Data/panels/02_2025_2026Q1_second_pass/panel_final_v3.parquet`.
 
 - Recomputed SHA-256:
   `9aacd3beb350725be483145bf955dbc26f9b5dd7a510708c4ae4ec700e4b4552`.
@@ -290,7 +297,7 @@ routes use session and permission gates.
    recorded 168 passing web tests and 10 expected skips; C2.3S reconfirmed the
    post-merge regression state.
 7. No daily media plan and no generally available separate working media-plan XLSX.
-8. Server live health/reachability and deployed HEAD were not checked in C2.5.
+8. Server live health/reachability and deployed HEAD were not checked in C2.6.
 9. C2.4 produced and independently verified a self-contained release-content
    transfer artifact. Server dependency provisioning and the operational update
    sequence still require the accepted runbook and separate authorization.
@@ -306,11 +313,12 @@ routes use session and permission gates.
 
 ## Current milestone
 
-**C2.5 — Controlled Workspace Switch and Observation.**
+**C2.6 — Canonical Root Verification, Truth Update and Legacy Switch.**
 
-The four-contour workspace is the canonical local workflow. Documentation is
-prepared in a dedicated branch/PR. Server deployment, production activation and C3
-cleanup remain outside scope.
+The four-contour workspace under `<MMM_WORKSPACE_ROOT>` is the canonical local
+workflow. The old root is represented by `<MMM_LEGACY_ROOT>`; the staging copy is
+non-canonical.
+Server deployment, production activation and C3 cleanup remain outside scope.
 
 ## Planned milestones
 
@@ -320,7 +328,7 @@ cleanup remain outside scope.
    fallback is a future requirement to validate, not current behavior.
 2. **B2 — Federal Geo Allocation implementation/validation.** Proceed only from B1
    evidence and carry the real change through Test, Predfin and a new Fin release.
-   This is the required C2.5 observation proof.
+   This is the required post-C2.6 observation proof.
 3. **A — Historical Campaign Evaluation.** Future causal/research capability, not
    implemented. Preliminary estimand: marginal incremental turnover of one selected
    historical campaign while concurrent observed media remains factual. This

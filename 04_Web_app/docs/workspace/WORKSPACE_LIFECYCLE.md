@@ -2,8 +2,10 @@
 
 ## Status and scope
 
-This document defines the canonical local workflow adopted by C2.5. It changes
-local roles and promotion rules only. It does not deploy to the corporate server,
+This document defines the canonical local workflow at `<MMM_WORKSPACE_ROOT>`. This
+placeholder identifies the local root containing `00_Data/`, `01_Test/`,
+`02_Predfin/` and `03_Fin/`. The workflow changes local roles and promotion rules
+only. It does not deploy to the corporate server,
 activate a production model, run OOT validation or authorize C3 cleanup.
 
 All paths below are relative to the local workspace root. New code and config must
@@ -13,14 +15,16 @@ not embed a user-specific absolute path.
 
 | Contour | Canonical role | Allowed work | Forbidden use |
 |---|---|---|---|
-| `03_ML_MMM/00_Data` | Local data source of truth | immutable raw intake, reproducible prepared data, versioned panels and data manifests | model experiments, application development, in-place overwrite of accepted panels |
-| `03_ML_MMM/01_Test` | Development and research | preparation pipelines, panel candidates, training, experiments, B1/B2 Federal Geo Allocation, historical-campaign research and application branches | claiming acceptance or release readiness from development output alone |
-| `03_ML_MMM/02_Predfin` | Staging and acceptance | exact application candidate, approved model candidate, required extensions, security/regression/path checks and immutable acceptance evidence | automatic ingestion of unreviewed experiments or mutable development work |
-| `03_ML_MMM/03_Fin` | Immutable deployable release | versioned approved releases, verified transfer artifacts and machine-readable current-release pointer | development, training, experiments, notebook work or in-place hotfixes |
+| `00_Data` | Local data source of truth | immutable raw intake, reproducible prepared data, versioned panels and data manifests | model experiments, application development, in-place overwrite of accepted panels |
+| `01_Test` | Development and research | preparation pipelines, panel candidates, training, experiments, B1/B2 Federal Geo Allocation, historical-campaign research and application branches | claiming acceptance or release readiness from development output alone |
+| `02_Predfin` | Staging and acceptance | exact application candidate, approved model candidate, required extensions, security/regression/path checks and immutable acceptance evidence | automatic ingestion of unreviewed experiments or mutable development work |
+| `03_Fin` | Immutable deployable release | versioned approved releases, verified transfer artifacts and machine-readable current-release pointer | development, training, experiments, notebook work or in-place hotfixes |
 
-The old workspace is `LEGACY_ROLLBACK_ONLY`. It remains physically available, but
-is not an operational fallback for data update, development, acceptance, release
-creation or deployment.
+The old workspace at `<MMM_LEGACY_ROOT>` is `LEGACY_ROLLBACK_ONLY`. It remains
+physically available, but is not an operational
+fallback for data update, development, acceptance, release creation or deployment.
+A remaining local migration staging copy outside `<MMM_WORKSPACE_ROOT>` is
+`MIGRATION_STAGING_COPY`, not canonical.
 
 ## End-to-end workflow
 
@@ -57,7 +61,7 @@ Predfin checkout or Fin copy never silently supersedes it.
 - Model package: `pkg_807d3ddbae57a52a_9aacd3beb350725b`.
 - Model status: `preprod_restricted`.
 - Production gate: `not_passed`.
-- Deployment performed by C2.5: no.
+- Deployment performed by C2.6: no.
 
 `03_Fin/CURRENT_RELEASE.json` is a relative machine-readable pointer. It may change
 only after a new release passes every Fin gate. Existing release directories are
@@ -74,7 +78,7 @@ New code and configuration must resolve files from one of these boundaries:
 - model registry lookup.
 
 New user-specific absolute-path hardcoding is prohibited. Existing historical path
-debt is inventoried evidence, not a template. C2.5 does not mass-rewrite archived
+debt is inventoried evidence, not a template. C2.6 does not mass-rewrite archived
 notebooks, old manifests or frozen model provenance.
 
 ## Git and release policy
@@ -84,7 +88,7 @@ notebooks, old manifests or frozen model provenance.
 - `03_Fin/releases/<release_id>` is immutable after PASS.
 - Old Git clones and worktrees are rollback/reference evidence only.
 - No worktree pruning, old `.git` deletion, force push or history rewrite belongs
-  to C2.5.
+  to C2.6.
 
 ## Cleanup policy
 
