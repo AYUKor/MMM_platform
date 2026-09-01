@@ -41,6 +41,7 @@ from services.auth_admin import (  # noqa: E402
     utc_iso,
     utc_now,
 )
+from tests.synthetic_model_registry import write_synthetic_model_registry  # noqa: E402
 
 
 TEST_SECRET = "phase-e-auth-admin-test-session-secret"
@@ -548,12 +549,14 @@ class AuthAdminHttpTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         root = Path(self.temporary.name)
         passport = json.loads(PASSPORT_FIXTURE.read_text(encoding="utf-8"))
+        registry_root = write_synthetic_model_registry(root / "registry", passport)
         self.application = HttpSmokeApplication(
             HttpSmokeSettings(
                 state_root=root / "state",
                 runtime_root=root / "runtime",
                 artifact_root=root / "artifacts",
                 project_root=WEB_APP_DIR.parent,
+                registry_root=registry_root,
                 auth_database_path=root / "auth.sqlite3",
                 auth_session_secret=TEST_SECRET,
                 auth_session_ttl_seconds=3_600,
