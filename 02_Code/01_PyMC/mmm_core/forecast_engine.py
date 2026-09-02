@@ -42,6 +42,10 @@ else:
     _XARRAY_IMPORT_ERROR = None
 
 from .io import ensure_dir, read_json, resolve_path, write_json
+from .forecast_geo_availability import (
+    HistoricalDenominatorResolver,
+    analog_date,
+)
 from .model_package import sha256_file
 from .model_package_reader import ModelPackage
 from .serving_semantics import (
@@ -60,7 +64,6 @@ SUPPORT_REL_TOL = 1e-9
 SUPPORT_ABS_TOL_RUB = 0.01
 BUDGET_RECONCILIATION_REL_TOL = 1e-8
 BUDGET_RECONCILIATION_ABS_TOL_RUB = 1.0
-ANALOG_DENOMINATOR_MAX_NEAREST_GAP_DAYS = 7
 
 SUPPORT_LEVEL_WITHIN = "within_support"
 SUPPORT_LEVEL_ELEVATED = "elevated_p95_p99"
@@ -254,12 +257,7 @@ def _compile_decision_policy(policy_config: dict[str, Any] | None) -> dict[str, 
 
 
 def _analog_date(dt: date, analog_year: int) -> date:
-    try:
-        return dt.replace(year=int(analog_year))
-    except ValueError:
-        if dt.month == 2 and dt.day == 29:
-            return date(int(analog_year), 2, 28)
-        raise
+    return analog_date(dt, analog_year)
 
 
 def _future_controls_analog_year(future_controls: dict[str, Any] | None) -> int | None:
@@ -811,15 +809,7 @@ class ForecastEngine:
     support_bounds: pd.DataFrame
     warm_start: pd.DataFrame
     capability: pd.DataFrame
-    _denominator_cache: dict[tuple[str, str, str, str, str], dict[str, Any]] = field(default_factory=dict, init=False, repr=False)
-    _denominator_exact: dict[tuple[str, str, str], dict[str, float]] = field(default_factory=dict, init=False, repr=False)
-    _denominator_geo: dict[tuple[str, str], dict[str, float]] = field(default_factory=dict, init=False, repr=False)
-    _denominator_segment: dict[str, dict[str, float]] = field(default_factory=dict, init=False, repr=False)
-    _denominator_geo_year: dict[tuple[str, str, int], list[tuple[date, dict[str, float]]]] = field(
-        default_factory=dict,
-        init=False,
-        repr=False,
-    )
+    _denominator_resolver: HistoricalDenominatorResolver = field(init=False, repr=False)
     _posterior_cache: dict[tuple[str, int, int], dict[str, Any]] = field(
         default_factory=dict,
         init=False,
@@ -827,48 +817,7 @@ class ForecastEngine:
     )
 
     def __post_init__(self) -> None:
-        df = self.denominators.copy()
-        df["segment"] = df["segment"].astype(str)
-        df["geo_label"] = df["geo_label"].astype(str)
-        df["date"] = df["date"].astype(str)
-        for col in ["population_k", "unique_users", "orders_cnt"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        if "market_size_tier" not in df.columns:
-            df["market_size_tier"] = ""
-
-        def _records_to_denominator_map(grouped: pd.DataFrame, key_cols: list[str]) -> dict[Any, dict[str, float]]:
-            out: dict[Any, dict[str, float]] = {}
-            for _, row in grouped.iterrows():
-                key_values = tuple(str(row[col]) for col in key_cols)
-                key: Any = key_values[0] if len(key_values) == 1 else key_values
-                out[key] = {
-                    "population_k": float(row["population_k"]) if pd.notna(row["population_k"]) else 1.0,
-                    "unique_users": float(max(row["unique_users"], 1.0)) if pd.notna(row["unique_users"]) else 1.0,
-                    "orders_cnt": float(max(row["orders_cnt"], 1.0)) if pd.notna(row["orders_cnt"]) else 1.0,
-                    "market_size_tier": str(row["market_size_tier"] or ""),
-                }
-            return out
-
-        agg = {
-            "population_k": ("population_k", "median"),
-            "unique_users": ("unique_users", "median"),
-            "orders_cnt": ("orders_cnt", "median"),
-            "market_size_tier": ("market_size_tier", _mode_or_first),
-        }
-        exact = df.groupby(["segment", "geo_label", "date"], dropna=False).agg(**agg).reset_index()
-        by_geo = df.groupby(["segment", "geo_label"], dropna=False).agg(**agg).reset_index()
-        by_segment = df.groupby(["segment"], dropna=False).agg(**agg).reset_index()
-        self._denominator_exact = _records_to_denominator_map(exact, ["segment", "geo_label", "date"])
-        self._denominator_geo = _records_to_denominator_map(by_geo, ["segment", "geo_label"])
-        self._denominator_segment = _records_to_denominator_map(by_segment, ["segment"])
-        for key, value in self._denominator_exact.items():
-            segment, geo, date_text = key
-            parsed_date = date.fromisoformat(date_text)
-            self._denominator_geo_year.setdefault((segment, geo, parsed_date.year), []).append(
-                (parsed_date, value)
-            )
-        for values in self._denominator_geo_year.values():
-            values.sort(key=lambda item: item[0])
+        self._denominator_resolver = HistoricalDenominatorResolver(self.denominators)
 
     @classmethod
     def from_run_dir(
@@ -911,77 +860,13 @@ class ForecastEngine:
         analog_year: int | None = None,
         missing_geo_policy: str = "fail",
     ) -> dict[str, Any]:
-        cache_key = (
-            str(segment),
-            str(geo),
-            dt.isoformat(),
-            str(analog_year or "previous_year"),
-            missing_geo_policy,
+        return self._denominator_resolver.resolve(
+            segment,
+            geo,
+            dt,
+            analog_year=analog_year,
+            missing_geo_policy=missing_geo_policy,
         )
-        if cache_key in self._denominator_cache:
-            return self._denominator_cache[cache_key]
-        analog = _analog_date(dt, analog_year) if analog_year is not None else _analog_date(dt, dt.year - 1)
-        exact = self._denominator_exact.get((str(segment), str(geo), analog.isoformat()))
-        analog_year_used = analog.year
-        if analog_year is not None and exact is None:
-            available_years = sorted(
-                year
-                for seg, geo_label, year in self._denominator_geo_year
-                if seg == str(segment) and geo_label == str(geo)
-            )
-            candidate_years = [int(analog_year)]
-            if missing_geo_policy == "nearest_available_year_same_geo":
-                candidate_years.extend(year for year in available_years if year != int(analog_year))
-            viable: list[tuple[int, int, int, date, dict[str, float]]] = []
-            for candidate_year in candidate_years:
-                target_date = _analog_date(dt, candidate_year)
-                candidates = self._denominator_geo_year.get(
-                    (str(segment), str(geo), candidate_year)
-                ) or []
-                if not candidates:
-                    continue
-                nearest_date, nearest_value = min(
-                    candidates,
-                    key=lambda item: abs((item[0] - target_date).days),
-                )
-                gap_days = abs((nearest_date - target_date).days)
-                if gap_days <= ANALOG_DENOMINATOR_MAX_NEAREST_GAP_DAYS:
-                    viable.append(
-                        (
-                            abs(candidate_year - int(analog_year)),
-                            gap_days,
-                            candidate_year,
-                            nearest_date,
-                            nearest_value,
-                        )
-                    )
-            if viable:
-                _, gap_days, analog_year_used, nearest_date, nearest_value = min(
-                    viable,
-                    key=lambda item: (item[0], item[1], item[2]),
-                )
-                analog = _analog_date(dt, analog_year_used)
-                exact = dict(nearest_value)
-                exact["denominator_analog_date_used"] = nearest_date.isoformat()
-                exact["denominator_fallback_gap_days"] = gap_days
-            if exact is None:
-                raise ValueError(
-                    "Configured historical analog denominator is missing; fallback would change forecast semantics. "
-                    f"segment={segment!r}, geo={geo!r}, future_date={dt.isoformat()}, "
-                    f"analog_date={analog.isoformat()}, max_nearest_gap_days={ANALOG_DENOMINATOR_MAX_NEAREST_GAP_DAYS}"
-                )
-        value = exact or self._denominator_geo.get((str(segment), str(geo))) or self._denominator_segment.get(str(segment))
-        if value is None:
-            raise ValueError(
-                f"No denominator metadata for segment={segment!r}, geo={geo!r}, date={dt.isoformat()}"
-            )
-        value = dict(value)
-        value.setdefault("denominator_analog_date_used", analog.isoformat())
-        value.setdefault("denominator_fallback_gap_days", 0)
-        value["denominator_analog_year_used"] = analog_year_used
-        value["denominator_fallback_years"] = abs(analog_year_used - int(analog_year or analog_year_used))
-        self._denominator_cache[cache_key] = value
-        return value
 
     def _x_scale(self, fit_key: str, geo: str, channel: str, fallback_tier: str = "") -> float:
         df = self.media_scales

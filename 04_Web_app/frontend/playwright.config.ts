@@ -1,8 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const localBrowserChannel = process.env.PLAYWRIGHT_CHANNEL;
+const localBrowserEngine = process.env.PLAYWRIGHT_ENGINE ?? "chromium";
 const localPort = Number(process.env.PLAYWRIGHT_PORT ?? "4173");
 const localBaseUrl = `http://127.0.0.1:${localPort}`;
+
+if (!new Set(["chromium", "webkit"]).has(localBrowserEngine)) {
+  throw new Error("PLAYWRIGHT_ENGINE must be chromium or webkit");
+}
 
 export default defineConfig({
   testDir: "./e2e",
@@ -14,7 +19,10 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    {
+    localBrowserEngine === "webkit" ? {
+      name: "webkit",
+      use: devices["Desktop Safari"],
+    } : {
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],

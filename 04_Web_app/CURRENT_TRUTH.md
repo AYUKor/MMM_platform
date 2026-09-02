@@ -2,8 +2,8 @@
 
 ## Last verified
 
-- Verification date: **2026-09-01**.
-- Mode: **C2.6 — CONTROLLED ROOT SWITCH + VERIFICATION**.
+- Verification date: **2026-09-02**.
+- Mode: **B2.2S — FORECAST GEO AVAILABILITY implementation verification**.
 - Verified against local live code, Git/GitHub state, contracts, policies,
   manifests, tests, physically present artifacts and local deployment runbooks.
 - No DWH query, model/data recalculation, server connection or deployment was
@@ -40,14 +40,13 @@ limits, not an automated media-buying or finance approval system.
 
 ## Current Git state
 
-- Fetched `origin/main` after merged PR #38:
-  `546c5dd60bfd7f62ab79a4fe6621964696f732a1` with tree
-  `e1c66f5cea72e636adb0e848a5c5d91747ca6d42`.
+- Fetched `origin/main` after user-merged PR #40:
+  `52461f6e00b4b6fe705a341d30747e0067ae3b24`.
 - Frozen Predfin/Fin application remains the earlier approved PR #37 identity:
   commit `2a6e07755f0db494a064b7db6517219325850179`, tree
   `756e7024024e3f9536d43c975feb4f90b17e2581`.
-- C2.6 documentation work is isolated in branch
-  `codex/c2-6-canonical-root`, created directly from current `origin/main`.
+- B2.2 work is isolated in branch `codex/b2-2-federal-campaign-ux`, created
+  directly from that `origin/main` identity.
 - Old Git clones/worktrees remain rollback/reference evidence. C2.6 does not prune
   or delete them.
 
@@ -202,6 +201,39 @@ serving outcomes.
 
 ## Geo
 
+Federal campaign upload in the B2.2S Test candidate uses
+`FEDERAL_GEO_ALLOCATION_V1`. Approved aliases are `РФ`, `Россия` and
+`Российская Федерация`, with outer-whitespace trimming and case-insensitive
+matching only. Expansion happens independently per federal daily source row over
+the source row's date-ready subset of active-package direction geographies;
+missing population inside that ready subset fails closed and no mean fallback
+exists.
+
+`ForecastGeoAvailabilityResolver` and `ForecastEngine` use the same pure
+denominator lookup. Required coverage is `campaign_start .. campaign_end + lmax`
+inclusive; active policy is analog year 2025, same geo and nearest observation no
+farther than 7 days. There is no extrapolation, cross-geo fill or Yakutsk special
+case. Runtime forecast denominator resolution remains fail-closed.
+
+`validation_result_v2.federal_allocation` is derived from the durable allocation
+audit and exposes only a browser-safe aggregate/direction breakdown. The
+active-package dictionary is available at
+`GET /api/v1/templates/media-plan-dictionary`. Full product semantics and test
+matrix are in `docs/integration/B2_2_FEDERAL_CAMPAIGN_UX_V1.md`.
+
+For a one-day `2026-09-01` campaign the current package regression is
+`175 / 182 / 103 / 104` ready out of declared `211 / 220 / 114 / 117`. These
+counts are test evidence, not production constants. Federal budget is conserved
+inside the ready subset; an explicit local geo outside it blocks validation before
+job creation. Full local regression, Chromium/WebKit and no-interception live
+acceptance pass on the B2.2S candidate. Native Safari 26.2 acceptance also passes:
+175 ready geographies and map points, complete budget reconciliation, allowed
+mixed `РФ + Москва`, blocked explicit Якутск before job, full result/report path,
+zero console errors and no horizontal overflow. The smoke found and regression-
+locked one duplicate mixed-plan warning in the browser projection; allocation,
+forecast and contracts were unchanged. PR #41 is eligible for Ready for review
+after green CI.
+
 - Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
   aliases.
 - Catalog version: `geo_catalog_v1_2026_07_18`, based on a GeoNames RU snapshot,
@@ -310,25 +342,28 @@ routes use session and permission gates.
     rehabilitation before reuse.
 13. Corporate governance of the private GitHub repository and branch protection
     remains unresolved.
+14. The static dictionary intentionally shows declared package support, while
+    actual calculability is date-dependent and is resolved during validation.
+    Consumer code must not treat `211 / 220 / 114 / 117` as ready counts.
 
 ## Current milestone
 
-**C2.6 — Canonical Root Verification, Truth Update and Legacy Switch.**
+**B2.2S — Forecast Geo Availability.**
 
-The four-contour workspace under `<MMM_WORKSPACE_ROOT>` is the canonical local
-workflow. The old root is represented by `<MMM_LEGACY_ROOT>`; the staging copy is
-non-canonical.
-Server deployment, production activation and C3 cleanup remain outside scope.
+The Test candidate resolves a source-row-specific date-ready universe before job
+creation, allocates federal budget only within that universe, blocks unavailable
+explicit local geographies and passes the resulting canonical geo plan into the
+unchanged calculation flow. Code-side regression and live acceptance pass; native
+Safari smoke passes and no local B2.2S acceptance gate remains. PR #41 may move
+from Draft to Ready for review after green CI.
+Predfin/Fin materialization, deployment, production activation, B2.3 and C3
+cleanup remain outside this milestone.
 
 ## Planned milestones
 
-1. **B1 — Federal Geo Allocation Audit.** Investigate how the current training and
-   serving transforms handle geo before designing support for uploaded `geo=РФ`.
-   Pre-expansion and reconciliation must be evidence-based. A mean-population
-   fallback is a future requirement to validate, not current behavior.
-2. **B2 — Federal Geo Allocation implementation/validation.** Proceed only from B1
-   evidence and carry the real change through Test, Predfin and a new Fin release.
-   This is the required post-C2.6 observation proof.
+1. **B2 post-merge promotion.** Materialize the reviewed B2.2 commit in Predfin
+   only through `PROMOTION_TO_PREDFIN.md`; Fin and deployment remain separate.
+2. **B2.3 or later work.** Not started and requires a separate task.
 3. **A — Historical Campaign Evaluation.** Future causal/research capability, not
    implemented. Preliminary estimand: marginal incremental turnover of one selected
    historical campaign while concurrent observed media remains factual. This

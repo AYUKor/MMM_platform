@@ -129,10 +129,15 @@
 .requirements li { position: relative; padding-left: 1.8rem; color: var(--text-secondary); font-size: 0.88rem; }
 .requirements li::before { content: "✓"; position: absolute; left: 0; top: -0.12rem; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent-strong); font-weight: 900; }
 .templateBlock { margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--border-default); }
+.downloadActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .templateBlock a { min-height: 44px; width: 100%; display: inline-flex; align-items: center; justify-content: center; padding: 0.65rem 0.8rem; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: var(--surface-primary); color: var(--text-primary); font-size: 0.78rem; font-weight: 750; text-align: center; text-decoration: none; transition: background-color var(--motion-fast), transform var(--motion-fast); }
 .templateBlock a:hover { background: var(--surface-hover); }
 .templateBlock a:active { transform: translateY(1px); }
 .templateBlock p { margin: 0.65rem 0 0; color: var(--text-secondary); font-size: 0.72rem; line-height: 1.45; }
+
+@media (max-width: 1180px) {
+  .downloadActions { grid-template-columns: 1fr; }
+}
 
 .loadingPanel { min-height: 310px; display: flex; align-items: center; justify-content: center; gap: var(--space-5); padding: var(--space-8); text-align: left; }
 .loadingPanel h2 { margin: 0.3rem 0 0; font-size: 1.7rem; }

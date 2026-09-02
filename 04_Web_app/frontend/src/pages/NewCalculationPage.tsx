@@ -29,6 +29,7 @@ import {
   UnsupportedCalculationProfileError,
   campaignPlanTemplateUrl,
   getCalculationProfile,
+  mediaPlanDictionaryUrl,
   type CalculationProfile,
 } from "../shared/api/new-calculation-client";
 import { getValidationViewV2 } from "../shared/api/business-semantics-client";
@@ -281,12 +282,20 @@ function UploadStep({
           <li>Нет объединенных ячеек</li>
         </ul>
         <div className={styles.templateBlock}>
-          <a
-            href={campaignPlanTemplateUrl()}
-            download="campaign-plan-template.xlsx"
-          >
-            Скачать шаблон медиаплана
-          </a>
+          <div className={styles.downloadActions}>
+            <a
+              href={campaignPlanTemplateUrl()}
+              download="campaign-plan-template.xlsx"
+            >
+              Скачать шаблон
+            </a>
+            <a
+              href={mediaPlanDictionaryUrl()}
+              download="Словарь_для_медиаплана.xlsx"
+            >
+              Скачать словарь
+            </a>
+          </div>
           <p>В шаблоне есть форматы по дням и по периоду с примером заполнения</p>
         </div>
       </aside>

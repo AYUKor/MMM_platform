@@ -59,6 +59,10 @@ ERROR_TEXTS: dict[str, str] = {
         "В текущей версии модели не найден список поддерживаемых географий для "
         "выбранного направления."
     ),
+    "NO_FORECAST_READY_GEOS": (
+        "Для выбранного периода модель не поддерживает расчет ни по одной "
+        "географии. Федеральный бюджет не распределен."
+    ),
     "SUPPORTED_GEO_NOT_IN_CATALOG": (
         "Список географий модели не согласован с географическим справочником. "
         "Расчет остановлен."
@@ -84,8 +88,8 @@ ERROR_TEXTS: dict[str, str] = {
 
 WARNING_TEXTS: dict[str, str] = {
     "FEDERAL_GEO_ALLOCATION_INFO": (
-        "Федеральный бюджет будет распределен по поддерживаемым географиям "
-        "выбранного бизнес-направления по действующей методике модели."
+        "Федеральный бюджет будет распределен между географиями, для которых "
+        "модель поддерживает расчет на выбранный период, по действующей методике модели."
     ),
     "FEDERAL_AND_LOCAL_GEO_OVERLAP": (
         "В плане одновременно указаны федеральный бюджет и отдельные локальные "
@@ -320,23 +324,22 @@ class FederalGeoAllocationContext:
                 "SUPPORTED_GEO_NOT_IN_CATALOG",
                 technical_details=f"Missing catalog labels: {sorted(missing_catalog)[:5]}",
             )
-        missing_population = (
+        invalid_or_missing_population = (
             (all_supported - set(population))
             | (invalid_population & all_supported)
             | (duplicate_population & all_supported)
         )
-        if missing_population:
-            raise FederalGeoAllocationError(
-                "FEDERAL_POPULATION_MISSING_OR_NONPOSITIVE",
-                technical_details=f"Invalid population labels: {sorted(missing_population)[:5]}",
-            )
 
         geo_by_label = {
             label: EligibleGeo(
                 geo_id=catalog[label][0],
                 geo_label=label,
                 geo_display_name=catalog[label][1],
-                population_k=population[label],
+                population_k=(
+                    math.nan
+                    if label in invalid_or_missing_population
+                    else population[label]
+                ),
             )
             for label in all_supported
         }
@@ -384,16 +387,50 @@ class FederalGeoAllocationContext:
             eligible_geo_set_checksums=checksums,
         )
 
-    def eligible_geos(self, direction: str, channel: str) -> tuple[EligibleGeo, ...]:
+    def eligible_geos(
+        self,
+        direction: str,
+        channel: str,
+        allowed_labels: Iterable[str] | None = None,
+    ) -> tuple[EligibleGeo, ...]:
         if direction not in self.eligible_by_direction:
             raise FederalGeoAllocationError("INVALID_BUSINESS_DIRECTION")
         if (direction, channel) not in self.capability_pairs:
             raise FederalGeoAllocationError(
                 "DIRECTION_CHANNEL_NOT_SUPPORTED_BY_PACKAGE"
             )
-        eligible = self.eligible_by_direction[direction]
-        if not eligible:
+        declared = self.eligible_by_direction[direction]
+        if not declared:
             raise FederalGeoAllocationError("EMPTY_SUPPORTED_GEO_SET")
+        if allowed_labels is None:
+            eligible = declared
+        else:
+            allowed = {str(value) for value in allowed_labels}
+            unknown = allowed - {geo.geo_label for geo in declared}
+            if unknown:
+                raise FederalGeoAllocationError(
+                    "PACKAGE_POINTER_OR_HASH_MISMATCH",
+                    technical_details=(
+                        "Forecast-ready geo set is outside declared package support: "
+                        f"{sorted(unknown)[:5]}"
+                    ),
+                )
+            eligible = tuple(geo for geo in declared if geo.geo_label in allowed)
+        if not eligible:
+            raise FederalGeoAllocationError("NO_FORECAST_READY_GEOS")
+        invalid_population = [
+            geo.geo_label
+            for geo in eligible
+            if not math.isfinite(geo.population_k) or geo.population_k <= 0
+        ]
+        if invalid_population:
+            raise FederalGeoAllocationError(
+                "FEDERAL_POPULATION_MISSING_OR_NONPOSITIVE",
+                technical_details=(
+                    "Invalid population labels in forecast-ready geo set: "
+                    f"{invalid_population[:5]}"
+                ),
+            )
         return eligible
 
     def audit_identity(self) -> dict[str, Any]:
@@ -425,7 +462,13 @@ class FederalGeoAllocator:
     def __init__(self, context: FederalGeoAllocationContext) -> None:
         self.context = context
 
-    def allocate(self, daily_rows: Iterable[Mapping[str, Any]]) -> FederalGeoAllocationResult:
+    def allocate(
+        self,
+        daily_rows: Iterable[Mapping[str, Any]],
+        *,
+        eligible_geo_labels_by_source_row_id: Mapping[str, Iterable[str]] | None = None,
+        eligibility_audit_by_source_row_id: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> FederalGeoAllocationResult:
         source = [dict(row) for row in daily_rows]
         seen_keys: set[tuple[str, str]] = set()
         federal_groups: set[tuple[str, str, str]] = set()
@@ -447,7 +490,18 @@ class FederalGeoAllocator:
             channel = str(row.get("channel") or "").strip()
             group = (str(row.get("date") or ""), direction, channel)
             if is_federal_geo(row.get("geo")):
-                self.context.eligible_geos(direction, channel)
+                allowed_labels = None
+                if eligible_geo_labels_by_source_row_id is not None:
+                    if source_id not in eligible_geo_labels_by_source_row_id:
+                        raise FederalGeoAllocationError(
+                            "PACKAGE_POINTER_OR_HASH_MISMATCH",
+                            technical_details=(
+                                "Forecast-ready geo set is missing for federal "
+                                f"source_row_id={source_id}"
+                            ),
+                        )
+                    allowed_labels = eligible_geo_labels_by_source_row_id[source_id]
+                self.context.eligible_geos(direction, channel, allowed_labels)
                 federal_groups.add(group)
             else:
                 label = str(row.get("geo") or "").strip()
@@ -487,7 +541,19 @@ class FederalGeoAllocator:
             if is_federal_geo(row.get("geo")):
                 federal_rows_n += 1
                 federal_source_total += spend
-                eligible = self.context.eligible_geos(direction, channel)
+                allowed_labels = (
+                    eligible_geo_labels_by_source_row_id.get(source_id)
+                    if eligible_geo_labels_by_source_row_id is not None
+                    else None
+                )
+                eligible = self.context.eligible_geos(
+                    direction,
+                    channel,
+                    allowed_labels,
+                )
+                eligibility_audit = dict(
+                    (eligibility_audit_by_source_row_id or {}).get(source_id) or {}
+                )
                 denominator = math.fsum(geo.population_k for geo in eligible)
                 if not math.isfinite(denominator) or denominator <= 0:
                     raise FederalGeoAllocationError(
@@ -506,6 +572,7 @@ class FederalGeoAllocator:
                             "population_k": geo.population_k,
                             "allocation_weight": weight,
                             "allocated_spend_rub": spend * weight,
+                            "allocation_geo_count": len(eligible),
                         }
                     )
                 allocated = math.fsum(
@@ -530,6 +597,33 @@ class FederalGeoAllocator:
                         "original_geo": common["original_geo"],
                         "source_budget_rub": spend,
                         "eligible_geo_count": len(eligible),
+                        "declared_geo_count": int(
+                            eligibility_audit.get("declared_geo_count")
+                            or len(self.context.eligible_by_direction[direction])
+                        ),
+                        "ready_geo_count": int(
+                            eligibility_audit.get("ready_geo_count") or len(eligible)
+                        ),
+                        "excluded_geo_count": int(
+                            eligibility_audit.get("excluded_geo_count") or 0
+                        ),
+                        "required_start": str(
+                            eligibility_audit.get("required_start")
+                            or row.get("source_start_date")
+                            or common["date"]
+                        ),
+                        "required_end": str(
+                            eligibility_audit.get("required_end")
+                            or row.get("source_end_date")
+                            or common["date"]
+                        ),
+                        "lmax": eligibility_audit.get("lmax"),
+                        "denominator_policy_version": str(
+                            eligibility_audit.get("denominator_policy_version") or ""
+                        ),
+                        "availability_policy_version": str(
+                            eligibility_audit.get("availability_policy_version") or ""
+                        ),
                         "allocated_total_rub": allocated,
                         "difference_rub": difference,
                         "conservation_pass": True,
@@ -615,6 +709,17 @@ class FederalGeoAllocator:
         audit = {
             "schema_version": "1.0.0",
             **self.context.audit_identity(),
+            "forecast_geo_availability": {
+                "source_rows": [
+                    {
+                        "source_row_id": source_row_id,
+                        **dict(row_audit),
+                    }
+                    for source_row_id, row_audit in sorted(
+                        (eligibility_audit_by_source_row_id or {}).items()
+                    )
+                ]
+            },
             "source_rows_n": len(source),
             "federal_source_rows_n": federal_rows_n,
             "local_source_rows_n": len(source) - federal_rows_n,

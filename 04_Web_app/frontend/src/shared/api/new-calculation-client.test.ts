@@ -5,6 +5,7 @@ import {
   UnsupportedCalculationProfileError,
   campaignPlanTemplateUrl,
   getCalculationProfile,
+  mediaPlanDictionaryUrl,
   parseCalculationProfile,
   type CalculationProfile,
 } from "./new-calculation-client";
@@ -48,6 +49,9 @@ describe("new calculation Product API client", () => {
   it("builds the template URL from the configured API boundary", () => {
     expect(campaignPlanTemplateUrl()).toBe(
       "http://127.0.0.1:8765/api/v1/templates/campaign-plan.xlsx",
+    );
+    expect(mediaPlanDictionaryUrl()).toBe(
+      "http://127.0.0.1:8765/api/v1/templates/media-plan-dictionary",
     );
   });
 

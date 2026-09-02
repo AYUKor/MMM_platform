@@ -27,6 +27,9 @@ const REVIEW_DIRECTORY = fileURLToPath(
 const GEO_REVIEW_DIRECTORY = fileURLToPath(
   new URL("../../docs/ui-review/phase-e1d-interactive-geo-maps-v1/", import.meta.url),
 );
+const FEDERAL_REVIEW_DIRECTORY = fileURLToPath(
+  new URL("../../docs/ui-review/b2-2-federal-campaign-ux/", import.meta.url),
+);
 
 const FORBIDDEN_COPY = [
   "Дополнительные заказы",
@@ -225,6 +228,7 @@ interface ApiOptions {
 
 interface ApiCalls {
   templateGets: number;
+  dictionaryGets: number;
   uploadPosts: number;
   validationPosts: number;
   validationV1Gets: number;
@@ -259,6 +263,7 @@ async function installNewCalculationRoutes(
 ): Promise<ApiCalls> {
   const calls: ApiCalls = {
     templateGets: 0,
+    dictionaryGets: 0,
     uploadPosts: 0,
     validationPosts: 0,
     validationV1Gets: 0,
@@ -288,6 +293,18 @@ async function installNewCalculationRoutes(
         body: Buffer.from("PK\u0003\u0004synthetic-template", "utf8"),
         headers: {
           "content-disposition": 'attachment; filename="campaign-plan-template.xlsx"',
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      });
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/templates/media-plan-dictionary") {
+      calls.dictionaryGets += 1;
+      await route.fulfill({
+        status: 200,
+        body: Buffer.from("PK\u0003\u0004synthetic-dictionary", "utf8"),
+        headers: {
+          "content-disposition": "attachment; filename=media-plan-dictionary.xlsx",
           "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         },
       });
@@ -387,6 +404,14 @@ async function setTheme(page: Page, theme: "dark" | "light") {
   }, theme);
 }
 
+async function expectThemeSettled(page: Page, theme: "dark" | "light") {
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  await expect.poll(
+    () => page.locator("body").evaluate((element) => getComputedStyle(element).color),
+    { message: "theme transition must finish before visual sampling" },
+  ).toBe(theme === "light" ? "rgb(9, 9, 9)" : "rgb(247, 247, 247)");
+}
+
 function buildPassedValidation(): ValidationResultV2 {
   const validation = structuredClone(buildValidationResultV2());
   validation.status = "passed";
@@ -396,6 +421,97 @@ function buildPassedValidation(): ValidationResultV2 {
     has_model_limitations: false,
     model_limitations_n: 0,
   }));
+  return validation;
+}
+
+function buildFederalValidation(mixed = false): ValidationResultV2 {
+  const validation = buildPassedValidation();
+  validation.status = mixed ? "warning" : "passed";
+  validation.file_validation.status = mixed ? "warning" : "passed";
+  validation.file_validation.warnings_n = mixed ? 1 : 0;
+  validation.federal_allocation = {
+    status: "available",
+    title: "Обнаружено федеральное размещение",
+    description: "Федеральный бюджет распределен между географиями, для которых модель поддерживает расчет на выбранный период, пропорционально численности населения.",
+    policy_version: "FEDERAL_GEO_ALLOCATION_V1",
+    package_id: "pkg_1234567890abcdef_1234567890abcdef",
+    source_rows_count: 2,
+    source_budget_rub: CONTROL_REQUESTED_BUDGET,
+    allocated_budget_rub: CONTROL_REQUESTED_BUDGET,
+    difference_rub: 0,
+    geo_count: 175,
+    declared_geo_count: 211,
+    ready_geo_count: 175,
+    excluded_geo_count: 36,
+    denominator_policy_version: "FORECAST_DENOMINATOR_V1",
+    lmax: 14,
+    required_period_start: "2026-09-01",
+    required_period_end: "2026-09-15",
+    method_display_name: "Пропорционально населению",
+    channels: [{ channel_id: "Digital_Performance", channel_display_name: "Цифровая реклама" }],
+    business_directions: ["ТС5/Онлайн"],
+    mixed_local_overlap: mixed,
+    information: [{ code: "FEDERAL_GEO_ALLOCATION_INFO", display_text: "Федеральный бюджет распределен по действующей методике модели." }],
+    warnings: mixed ? [{ code: "FEDERAL_AND_LOCAL_GEO_OVERLAP", display_text: "В плане одновременно указаны федеральный бюджет и отдельные локальные бюджеты. Локальные суммы будут добавлены поверх федерального распределения." }] : [],
+    errors: [],
+    breakdown: [{ business_direction: "ТС5/Онлайн", channels: [{ channel_id: "Digital_Performance", channel_display_name: "Цифровая реклама" }], source_rows_count: 2, source_budget_rub: CONTROL_REQUESTED_BUDGET, allocated_budget_rub: CONTROL_REQUESTED_BUDGET, difference_rub: 0, geo_count: 175, declared_geo_count: 211, ready_geo_count: 175, excluded_geo_count: 36, period_start: "2026-09-01", period_end: "2026-09-15" }],
+  };
+  return validation;
+}
+
+function buildFederalErrorValidation(): ValidationResultV2 {
+  const validation = buildPassedValidation();
+  validation.status = "failed";
+  validation.job_creation_allowed = false;
+  validation.file_validation.status = "failed";
+  validation.file_validation.blocking_errors_n = 1;
+  validation.federal_allocation = { status: "error", title: null, description: null, policy_version: null, package_id: null, source_rows_count: 0, source_budget_rub: 0, allocated_budget_rub: 0, difference_rub: 0, geo_count: null, declared_geo_count: null, ready_geo_count: null, excluded_geo_count: null, denominator_policy_version: null, lmax: null, required_period_start: null, required_period_end: null, method_display_name: null, channels: [], business_directions: [], mixed_local_overlap: false, information: [], warnings: [], errors: [{ code: "UNKNOWN_GEO_VALUE", display_text: "География «Вся Россия» не распознана. Для федерального размещения укажите ровно: «РФ», «Россия» или «Российская Федерация»." }], breakdown: [] };
+  return validation;
+}
+
+function buildFederalMultipleDirectionsValidation(): ValidationResultV2 {
+  const validation = buildFederalValidation();
+  const firstBudget = 160_000_000;
+  const secondBudget = CONTROL_REQUESTED_BUDGET - firstBudget;
+  validation.federal_allocation.geo_count = null;
+  validation.federal_allocation.declared_geo_count = null;
+  validation.federal_allocation.ready_geo_count = null;
+  validation.federal_allocation.excluded_geo_count = null;
+  validation.federal_allocation.business_directions = ["ТС5/Онлайн", "ТСХ/Онлайн"];
+  validation.federal_allocation.channels = [
+    { channel_id: "Digital_Performance", channel_display_name: "Цифровая реклама" },
+    { channel_id: "Нац_ТВ", channel_display_name: "Национальное ТВ" },
+  ];
+  validation.federal_allocation.breakdown = [
+    {
+      business_direction: "ТС5/Онлайн",
+      channels: [{ channel_id: "Digital_Performance", channel_display_name: "Цифровая реклама" }],
+      source_rows_count: 1,
+      source_budget_rub: firstBudget,
+      allocated_budget_rub: firstBudget,
+      difference_rub: 0,
+      geo_count: 175,
+      declared_geo_count: 211,
+      ready_geo_count: 175,
+      excluded_geo_count: 36,
+      period_start: "2026-09-01",
+      period_end: "2026-09-15",
+    },
+    {
+      business_direction: "ТСХ/Онлайн",
+      channels: [{ channel_id: "Нац_ТВ", channel_display_name: "Национальное ТВ" }],
+      source_rows_count: 1,
+      source_budget_rub: secondBudget,
+      allocated_budget_rub: secondBudget,
+      difference_rub: 0,
+      geo_count: 103,
+      declared_geo_count: 114,
+      ready_geo_count: 103,
+      excluded_geo_count: 11,
+      period_start: "2026-09-01",
+      period_end: "2026-09-15",
+    },
+  ];
   return validation;
 }
 
@@ -469,12 +585,14 @@ function mapLabels(page: Page) {
   return page.locator("[data-map-label]");
 }
 
-test("upload screen offers the working campaign-plan template", async ({ page }) => {
+test("upload screen offers the working template and active-package dictionary", async ({ page }) => {
   const calls = await installNewCalculationRoutes(page);
   await page.goto("/calculations/new");
   await expect(page.getByRole("heading", { name: "Новый расчет", exact: true })).toBeVisible();
-  const template = page.getByRole("link", { name: "Скачать шаблон медиаплана" });
-  await expect(template).toHaveAttribute("href", "/api/v1/templates/campaign-plan.xlsx");
+  const template = page.getByRole("link", { name: "Скачать шаблон", exact: true });
+  await expect(template).toHaveAttribute("href", /\/api\/v1\/templates\/campaign-plan\.xlsx$/);
+  const dictionary = page.getByRole("link", { name: "Скачать словарь", exact: true });
+  await expect(dictionary).toHaveAttribute("href", /\/api\/v1\/templates\/media-plan-dictionary$/);
   await expect(page.getByText(/с примером заполнения$/)).toBeVisible();
   const response = await page.evaluate(async () => {
     const value = await fetch("/api/v1/templates/campaign-plan.xlsx");
@@ -484,7 +602,16 @@ test("upload screen offers the working campaign-plan template", async ({ page })
     ok: true,
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+  const dictionaryResponse = await page.evaluate(async () => {
+    const value = await fetch("/api/v1/templates/media-plan-dictionary");
+    return { ok: value.ok, type: value.headers.get("content-type") };
+  });
+  expect(dictionaryResponse).toEqual({
+    ok: true,
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   expect(calls.templateGets).toBe(1);
+  expect(calls.dictionaryGets).toBe(1);
 });
 
 test("upload and lifecycle validation remain orchestration-only", async ({ page }) => {
@@ -500,6 +627,54 @@ test("upload and lifecycle validation remain orchestration-only", async ({ page 
   expect(calls.validationPosts).toBe(1);
   expect(calls.validationV1Gets).toBeGreaterThan(0);
   expect(calls.validationV2Gets).toBeGreaterThan(0);
+});
+
+test("federal validation is informational, reconciled and calculation-ready", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildFederalValidation() });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+  const federal = page.getByRole("heading", { name: "Обнаружено федеральное размещение" })
+    .locator("xpath=ancestor::section[1]");
+  await expect(federal).toBeVisible();
+  await expect(federal.getByText("267,8 млн ₽")).toHaveCount(2);
+  await expect(federal.getByText("175", { exact: true })).toBeVisible();
+  await expect(federal.getByText("211", { exact: true })).toBeVisible();
+  await expect(federal.getByText("36", { exact: true })).toBeVisible();
+  await expect(federal.getByText("2026-09-01 — 2026-09-15", { exact: true })).toBeVisible();
+  await expect(federal.getByText("Пропорционально населению", { exact: true })).toBeVisible();
+  await expect(federal.getByText("Исходных строк", { exact: true }).locator("..")).toContainText("2");
+  await expect(federal.getByText("Распределено полностью · 0 ₽", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Продолжить к сценариям" })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("FEDERAL_GEO_ALLOCATION_V1");
+  await expect(page.locator("body")).not.toContainText("Digital_Performance");
+});
+
+test("federal rows from multiple directions use a compact non-additive geo breakdown", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildFederalMultipleDirectionsValidation() });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+  const federal = page.getByRole("heading", { name: "Обнаружено федеральное размещение" })
+    .locator("xpath=ancestor::section[1]");
+  await expect(federal.getByText("175 географий", { exact: true })).toBeVisible();
+  await expect(federal.getByText("103 географий", { exact: true })).toBeVisible();
+  await expect(federal.getByText("211 / 175", { exact: true })).toBeVisible();
+  await expect(federal.getByText("114 / 103", { exact: true })).toBeVisible();
+  await expect(federal).not.toContainText("278 географий");
+  await expect(page.getByRole("button", { name: "Продолжить к сценариям" })).toBeVisible();
+});
+
+test("mixed federal and local geography produces one calm additive warning", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildFederalValidation(true) });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+  const message = "В плане одновременно указаны федеральный бюджет и отдельные локальные бюджеты. Локальные суммы будут добавлены поверх федерального распределения.";
+  await expect(page.getByText(message, { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Продолжить к сценариям" })).toBeVisible();
+});
+
+test("unknown federal-looking alias is a human blocking error", async ({ page }) => {
+  await installNewCalculationRoutes(page, { validationV2: buildFederalErrorValidation() });
+  await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+  await expect(page.getByRole("heading", { name: "Файл нужно исправить" })).toBeVisible();
+  await expect(page.getByText(/География «Вся Россия» не распознана/)).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /Продолжить/ })).toHaveCount(0);
 });
 
 test("validation view-v2 separates file checks from grouped model limitations", async ({ page }) => {
@@ -728,6 +903,12 @@ for (const theme of ["dark", "light"] as const) {
     await installNewCalculationRoutes(page);
     await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
     await expect(page.getByRole("heading", { name: "Проверка файла" })).toBeVisible();
+    const guidance = page.locator('[class*="limitationList"] dd').first();
+    await expect(guidance).toBeVisible();
+    await expect.poll(
+      () => guidance.evaluate((element) => getComputedStyle(element).color),
+      { message: "theme color transition must finish before contrast sampling" },
+    ).toBe(theme === "light" ? "rgb(9, 9, 9)" : "rgb(247, 247, 247)");
 
     const samples = await measureContentContrast(page, VALIDATION_CONTRAST_TARGETS);
     const coveredTargets = new Set(samples.map((sample) => sample.target));
@@ -864,4 +1045,66 @@ for (const theme of ["dark", "light"] as const) {
       });
     });
   }
+}
+
+for (const viewport of [
+  { width: 375, height: 812 },
+  { width: 1_024, height: 768 },
+]) {
+  test(`federal validation has no overflow at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await installNewCalculationRoutes(page, { validationV2: buildFederalValidation(true) });
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    await expect(page.getByRole("heading", { name: "Обнаружено федеральное размещение" })).toBeVisible();
+    await expectNoOverflow(page);
+  });
+}
+
+for (const theme of ["dark", "light"] as const) {
+  test(`b2-2-new-calculation-downloads-${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1_440, height: 900 });
+    await setTheme(page, theme);
+    await installNewCalculationRoutes(page);
+    await page.goto("/calculations/new");
+    await expectThemeSettled(page, theme);
+    await expect(page.getByRole("link", { name: "Скачать шаблон", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Скачать словарь", exact: true })).toBeVisible();
+    await expectNoOverflow(page);
+    mkdirSync(FEDERAL_REVIEW_DIRECTORY, { recursive: true });
+    await page.screenshot({ path: `${FEDERAL_REVIEW_DIRECTORY}new-calculation-downloads-${theme}.png`, fullPage: false, animations: "disabled", caret: "hide" });
+  });
+
+  for (const screenshotCase of [
+    { stem: "federal-validation", payload: buildFederalValidation(), heading: "Обнаружено федеральное размещение" },
+    { stem: "federal-mixed-local", payload: buildFederalValidation(true), heading: "Обнаружено федеральное размещение" },
+    { stem: "federal-unknown-alias", payload: buildFederalErrorValidation(), heading: "Федеральный бюджет не распределен" },
+  ] as const) {
+    test(`b2-2-${screenshotCase.stem}-${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1_440, height: 1_000 });
+      await setTheme(page, theme);
+      await installNewCalculationRoutes(page, { validationV2: screenshotCase.payload });
+      await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+      await expectThemeSettled(page, theme);
+      const heading = page.getByRole("heading", { name: screenshotCase.heading });
+      await heading.scrollIntoViewIfNeeded();
+      await expect(heading).toBeVisible();
+      await expectNoOverflow(page);
+      mkdirSync(FEDERAL_REVIEW_DIRECTORY, { recursive: true });
+      await page.screenshot({ path: `${FEDERAL_REVIEW_DIRECTORY}${screenshotCase.stem}-${theme}.png`, fullPage: false, animations: "disabled", caret: "hide" });
+    });
+  }
+
+  test(`b2-2-federal-map-${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1_440, height: 1_000 });
+    await setTheme(page, theme);
+    await installNewCalculationRoutes(page, { validationV2: buildFederalValidation() });
+    await page.goto(`/calculations/new?validationId=${TEST_VALIDATION_ID}&step=review`);
+    await expectThemeSettled(page, theme);
+    const map = page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" });
+    await map.scrollIntoViewIfNeeded();
+    await expect(mapMarkers(page)).toHaveCount(15);
+    await expectNoOverflow(page);
+    mkdirSync(FEDERAL_REVIEW_DIRECTORY, { recursive: true });
+    await page.screenshot({ path: `${FEDERAL_REVIEW_DIRECTORY}federal-map-${theme}.png`, fullPage: false, animations: "disabled", caret: "hide" });
+  });
 }

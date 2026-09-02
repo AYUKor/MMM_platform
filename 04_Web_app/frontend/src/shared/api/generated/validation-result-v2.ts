@@ -23,6 +23,46 @@ export interface ValidationResultV2 {
       display_text: string;
     }[];
   };
+  federal_allocation: {
+    status: "none" | "available" | "error";
+    title: string | null;
+    description: string | null;
+    policy_version: string | null;
+    package_id: string | null;
+    source_rows_count: number;
+    source_budget_rub: number;
+    allocated_budget_rub: number;
+    difference_rub: number;
+    geo_count: number | null;
+    declared_geo_count: number | null;
+    ready_geo_count: number | null;
+    excluded_geo_count: number | null;
+    denominator_policy_version: string | null;
+    lmax: number | null;
+    required_period_start: string | null;
+    required_period_end: string | null;
+    method_display_name: string | null;
+    channels: ChannelIdentity[];
+    business_directions: string[];
+    mixed_local_overlap: boolean;
+    information: StatusMessage[];
+    warnings: StatusMessage[];
+    errors: StatusMessage[];
+    breakdown: {
+      business_direction: string;
+      channels: ChannelIdentity[];
+      source_rows_count: number;
+      source_budget_rub: number;
+      allocated_budget_rub: number;
+      difference_rub: number;
+      geo_count: number | null;
+      declared_geo_count: number | null;
+      ready_geo_count: number | null;
+      excluded_geo_count: number | null;
+      period_start: string | null;
+      period_end: string | null;
+    }[];
+  };
   model_limitations: {
     target: "turnover";
     channel_id: string;
@@ -39,6 +79,14 @@ export interface ValidationResultV2 {
   }[];
   map_coverage: BudgetCoverage;
   geo_points: GeoPoint[];
+}
+export interface ChannelIdentity {
+  channel_id: string;
+  channel_display_name: string;
+}
+export interface StatusMessage {
+  code: string;
+  display_text: string;
 }
 export interface BudgetCoverage {
   status: "available" | "partial" | "unavailable";

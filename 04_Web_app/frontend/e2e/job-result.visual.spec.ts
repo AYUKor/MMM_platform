@@ -642,6 +642,7 @@ test.describe("Phase E.1B result semantics", () => {
         ...await measureContentContrast(page, RESULT_CONTRAST_TARGETS),
       ];
       await page.getByRole("tab", { name: "Сценарии и надежность" }).click();
+      await expect(page.getByRole("heading", { name: "Сценарии и надежность", level: 2 })).toBeVisible();
       samples.push(...await measureContentContrast(page, RESULT_CONTRAST_TARGETS));
 
       const coveredTargets = new Set(samples.map((sample) => sample.target));

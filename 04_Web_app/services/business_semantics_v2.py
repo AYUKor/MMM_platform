@@ -48,6 +48,7 @@ from mmm_core.serving_semantics import (  # noqa: E402
     SERVING_TARGET_ID,
     channel_identity,
 )
+from mmm_core.federal_geo_allocator import ERROR_TEXTS as FEDERAL_ERROR_TEXTS  # noqa: E402
 from services.job_result_view import (  # noqa: E402
     SCENARIO_COPY,
     _Evidence,
@@ -230,10 +231,266 @@ def _read_normalized_rows(path: Path | None) -> list[dict[str, str]]:
         return [dict(row) for row in csv.DictReader(handle)]
 
 
+_FEDERAL_TITLE = "Обнаружено федеральное размещение"
+_FEDERAL_DESCRIPTION = (
+    "Федеральный бюджет распределен между географиями, для которых модель "
+    "поддерживает расчет на выбранный период, пропорционально численности населения."
+)
+_FEDERAL_METHOD = "Пропорционально населению"
+
+
+def _safe_message_rows(values: Any) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for value in values or []:
+        if not isinstance(value, Mapping):
+            continue
+        code = str(value.get("code") or "").strip()
+        display_text = str(value.get("display_text") or "").strip()
+        if code and display_text and code not in {row["code"] for row in rows}:
+            rows.append({"code": code, "display_text": display_text})
+    return rows
+
+
+def _empty_federal_allocation(status: str = "none") -> dict[str, Any]:
+    return {
+        "status": status,
+        "title": _FEDERAL_TITLE if status == "available" else None,
+        "description": _FEDERAL_DESCRIPTION if status == "available" else None,
+        "policy_version": None,
+        "package_id": None,
+        "source_rows_count": 0,
+        "source_budget_rub": 0.0,
+        "allocated_budget_rub": 0.0,
+        "difference_rub": 0.0,
+        "geo_count": None,
+        "declared_geo_count": None,
+        "ready_geo_count": None,
+        "excluded_geo_count": None,
+        "denominator_policy_version": None,
+        "lmax": None,
+        "required_period_start": None,
+        "required_period_end": None,
+        "method_display_name": None,
+        "channels": [],
+        "business_directions": [],
+        "mixed_local_overlap": False,
+        "information": [],
+        "warnings": [],
+        "errors": [],
+        "breakdown": [],
+    }
+
+
+def build_federal_allocation_summary(
+    audit: Mapping[str, Any] | None,
+    *,
+    issues: Iterable[Mapping[str, Any]] = (),
+    artifact_error: bool = False,
+) -> dict[str, Any]:
+    """Project a durable audit into a browser-safe, calculation-free summary."""
+
+    federal_errors = [
+        {
+            "code": str(issue.get("code") or ""),
+            "display_text": str(issue.get("display_text") or ""),
+        }
+        for issue in issues
+        if str(issue.get("code") or "") in FEDERAL_ERROR_TEXTS
+        and str(issue.get("display_text") or "").strip()
+    ]
+    if audit is None:
+        if not artifact_error and not federal_errors:
+            return _empty_federal_allocation()
+        result = _empty_federal_allocation("error")
+        result["errors"] = federal_errors or [
+            {
+                "code": "FEDERAL_ALLOCATION_DETAILS_UNAVAILABLE",
+                "display_text": (
+                    "Сведения о федеральном распределении временно недоступны. "
+                    "Повторите проверку файла."
+                ),
+            }
+        ]
+        return result
+
+    reconciliation = [
+        dict(row)
+        for row in audit.get("source_row_reconciliation") or []
+        if isinstance(row, Mapping)
+    ]
+    if not reconciliation:
+        return _empty_federal_allocation()
+
+    source_ids = {
+        str(row.get("source_row_id") or "").strip()
+        for row in reconciliation
+        if str(row.get("source_row_id") or "").strip()
+    }
+    directions = sorted(
+        {str(row.get("business_direction") or "").strip() for row in reconciliation}
+        - {""}
+    )
+    channel_ids = sorted(
+        {str(row.get("channel") or "").strip() for row in reconciliation} - {""}
+    )
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in reconciliation:
+        grouped[
+            (
+                str(row.get("business_direction") or "").strip(),
+                str(row.get("channel") or "").strip(),
+                str(row.get("required_start") or "").strip(),
+                str(row.get("required_end") or "").strip(),
+            )
+        ].append(row)
+
+    breakdown = []
+    for direction, channel_id, period_start, period_end in sorted(grouped):
+        rows = grouped[(direction, channel_id, period_start, period_end)]
+        group_source_ids = {
+            str(row.get("source_row_id") or "").strip()
+            for row in rows
+            if str(row.get("source_row_id") or "").strip()
+        }
+        group_counts = {int(row.get("eligible_geo_count") or 0) for row in rows}
+        group_channels = [channel_id] if channel_id else []
+        declared_counts = {
+            int(row["declared_geo_count"])
+            for row in rows
+            if row.get("declared_geo_count") not in {None, ""}
+        }
+        ready_counts = {
+            int(row["ready_geo_count"])
+            for row in rows
+            if row.get("ready_geo_count") not in {None, ""}
+        }
+        excluded_counts = {
+            int(row["excluded_geo_count"])
+            for row in rows
+            if row.get("excluded_geo_count") not in {None, ""}
+        }
+        source_budget = math.fsum(float(row.get("source_budget_rub") or 0.0) for row in rows)
+        allocated_budget = math.fsum(float(row.get("allocated_total_rub") or 0.0) for row in rows)
+        breakdown.append(
+            {
+                "business_direction": direction,
+                "channels": [channel_identity(channel) for channel in group_channels],
+                "source_rows_count": len(group_source_ids),
+                "source_budget_rub": source_budget,
+                "allocated_budget_rub": allocated_budget,
+                "difference_rub": abs(source_budget - allocated_budget),
+                "geo_count": next(iter(group_counts)) if len(group_counts) == 1 else None,
+                "declared_geo_count": (
+                    next(iter(declared_counts)) if len(declared_counts) == 1 else None
+                ),
+                "ready_geo_count": (
+                    next(iter(ready_counts)) if len(ready_counts) == 1 else None
+                ),
+                "excluded_geo_count": (
+                    next(iter(excluded_counts)) if len(excluded_counts) == 1 else None
+                ),
+                "period_start": period_start or None,
+                "period_end": period_end or None,
+            }
+        )
+
+    totals = audit.get("totals") or {}
+    source_budget = float(
+        totals.get("federal_source_budget_rub")
+        if totals.get("federal_source_budget_rub") is not None
+        else math.fsum(float(row.get("source_budget_rub") or 0.0) for row in reconciliation)
+    )
+    allocated_budget = float(
+        totals.get("federal_allocated_budget_rub")
+        if totals.get("federal_allocated_budget_rub") is not None
+        else math.fsum(float(row.get("allocated_total_rub") or 0.0) for row in reconciliation)
+    )
+    warnings = _safe_message_rows(audit.get("warnings"))
+    geo_counts = {int(row.get("eligible_geo_count") or 0) for row in reconciliation}
+    declared_geo_counts = {
+        int(row["declared_geo_count"])
+        for row in reconciliation
+        if row.get("declared_geo_count") not in {None, ""}
+    }
+    ready_geo_counts = {
+        int(row["ready_geo_count"])
+        for row in reconciliation
+        if row.get("ready_geo_count") not in {None, ""}
+    }
+    excluded_geo_counts = {
+        int(row["excluded_geo_count"])
+        for row in reconciliation
+        if row.get("excluded_geo_count") not in {None, ""}
+    }
+    denominator_policy_versions = {
+        str(row.get("denominator_policy_version") or "") for row in reconciliation
+    } - {""}
+    lmax_values = {
+        int(row.get("lmax"))
+        for row in reconciliation
+        if row.get("lmax") not in {None, ""}
+    }
+    required_starts = sorted(
+        {str(row.get("required_start") or "") for row in reconciliation} - {""}
+    )
+    required_ends = sorted(
+        {str(row.get("required_end") or "") for row in reconciliation} - {""}
+    )
+    return {
+        "status": "available",
+        "title": _FEDERAL_TITLE,
+        "description": _FEDERAL_DESCRIPTION,
+        "policy_version": str(audit.get("policy_version") or ""),
+        "package_id": str(audit.get("package_id") or ""),
+        "source_rows_count": len(source_ids),
+        "source_budget_rub": source_budget,
+        "allocated_budget_rub": allocated_budget,
+        "difference_rub": abs(source_budget - allocated_budget),
+        "geo_count": (
+            next(iter(geo_counts))
+            if len(directions) == 1 and len(geo_counts) == 1
+            else None
+        ),
+        "declared_geo_count": (
+            next(iter(declared_geo_counts))
+            if len(declared_geo_counts) == 1
+            else None
+        ),
+        "ready_geo_count": (
+            next(iter(ready_geo_counts)) if len(ready_geo_counts) == 1 else None
+        ),
+        "excluded_geo_count": (
+            next(iter(excluded_geo_counts))
+            if len(excluded_geo_counts) == 1
+            else None
+        ),
+        "denominator_policy_version": (
+            next(iter(denominator_policy_versions))
+            if len(denominator_policy_versions) == 1
+            else None
+        ),
+        "lmax": next(iter(lmax_values)) if len(lmax_values) == 1 else None,
+        "required_period_start": required_starts[0] if required_starts else None,
+        "required_period_end": required_ends[-1] if required_ends else None,
+        "method_display_name": _FEDERAL_METHOD,
+        "channels": [channel_identity(channel) for channel in channel_ids],
+        "business_directions": directions,
+        "mixed_local_overlap": any(
+            row["code"] == "FEDERAL_AND_LOCAL_GEO_OVERLAP" for row in warnings
+        ),
+        "information": _safe_message_rows(audit.get("information")),
+        "warnings": warnings,
+        "errors": [],
+        "breakdown": breakdown,
+    }
+
+
 def build_validation_result_v2(
     validation: Mapping[str, Any],
     *,
     normalized_plan_path: Path | None = None,
+    federal_allocation_audit: Mapping[str, Any] | None = None,
+    federal_artifact_error: bool = False,
     catalog: CanonicalGeoCatalog | None = None,
 ) -> dict[str, Any]:
     campaigns = list(validation.get("campaigns") or [])
@@ -257,6 +514,7 @@ def build_validation_result_v2(
         for issue in warnings
         if str(issue.get("scope") or "file") != "model"
         and not list(issue.get("affected_cells") or [])
+        and str(issue.get("code") or "") != "FEDERAL_AND_LOCAL_GEO_OVERLAP"
     ]
     status_code = str((validation.get("status") or {}).get("code") or "")
     if file_blocking:
@@ -298,8 +556,8 @@ def build_validation_result_v2(
             input_names_by_geo_id[resolved_geo_id].add(
                 str(row.get("input_geo_name") or geo).strip()
             )
-    if not normalized_rows:
-        for resolution in resolutions:
+    for resolution in resolutions:
+        if not channels_by_geo_id[resolution.geo_id]:
             channels_by_geo_id[resolution.geo_id].update(channels)
 
     budget_by_geo_id: dict[str, float] = defaultdict(float)
@@ -428,6 +686,20 @@ def build_validation_result_v2(
         if str(row.get("code") or "")
         in {"FILE_STRUCTURE", "CAMPAIGN_COUNT", "BUDGET_RECONCILIATION", "DATES"}
     ]
+    seen_file_check_codes = {row["code"] for row in file_checks}
+    for issue, issue_status in [
+        *((row, "failed") for row in file_blocking),
+        *((row, "warning") for row in file_warnings),
+    ]:
+        code = str(issue.get("code") or "").strip()
+        display_text = str(issue.get("display_text") or "").strip()
+        if code in FEDERAL_ERROR_TEXTS:
+            continue
+        if code and display_text and code not in seen_file_check_codes:
+            file_checks.append(
+                {"code": code, "status": issue_status, "display_text": display_text}
+            )
+            seen_file_check_codes.add(code)
     payload = {
         "contract_name": VALIDATION_RESULT_CONTRACT,
         "schema_version": SCHEMA_VERSION,
@@ -451,6 +723,11 @@ def build_validation_result_v2(
             "warnings_n": len(file_warnings),
             "checks": file_checks,
         },
+        "federal_allocation": build_federal_allocation_summary(
+            federal_allocation_audit,
+            issues=all_issues,
+            artifact_error=federal_artifact_error,
+        ),
         "model_limitations": model_limitations,
         "map_coverage": map_coverage,
         "geo_points": geo_points,

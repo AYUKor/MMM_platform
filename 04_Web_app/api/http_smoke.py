@@ -26,7 +26,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -71,6 +71,11 @@ from services.campaign_template import (  # noqa: E402
     TEMPLATE_FILENAME,
     build_campaign_plan_template,
 )
+from services.media_plan_dictionary import (  # noqa: E402
+    DICTIONARY_FILENAME,
+    build_media_plan_dictionary,
+)
+from services.geo_catalog import load_canonical_geo_catalog  # noqa: E402
 from services.product_api_service import paginate_jobs  # noqa: E402
 from services.product_navigation import (  # noqa: E402
     ProductNavigationQueryError,
@@ -1210,10 +1215,51 @@ class HttpSmokeApplication:
             if storage_key
             else None
         )
+        federal_audit: Mapping[str, Any] | None = None
+        federal_artifact_error = False
+        try:
+            inputs = self.state.read_validation_inputs(validation_id)
+        except FileNotFoundError:
+            inputs = {}
+        federal_artifacts = inputs.get("federal_geo_allocation") or {}
+        if federal_artifacts:
+            identity = federal_artifacts.get("audit")
+            if not isinstance(identity, Mapping):
+                federal_artifact_error = True
+            else:
+                try:
+                    storage_key = str(identity.get("storage_key") or "")
+                    audit_path = _safe_child(
+                        self.settings.artifact_root,
+                        *storage_key.split("/"),
+                    )
+                    if (
+                        not storage_key
+                        or not audit_path.is_file()
+                        or audit_path.stat().st_size != int(identity.get("size_bytes") or -1)
+                        or _sha256(audit_path) != str(identity.get("sha256") or "")
+                    ):
+                        raise PermissionError("Federal audit integrity check failed")
+                    loaded_audit = _read_json(audit_path)
+                    if not isinstance(loaded_audit, Mapping):
+                        raise ValueError("Federal audit must contain an object")
+                    federal_audit = loaded_audit
+                except (OSError, ValueError, TypeError, PermissionError):
+                    federal_artifact_error = True
         return build_validation_result_v2(
             validation,
             normalized_plan_path=normalized_path,
+            federal_allocation_audit=federal_audit,
+            federal_artifact_error=federal_artifact_error,
         )
+
+    def media_plan_dictionary(self) -> bytes:
+        """Build the dictionary from the same verified package used by validation."""
+
+        if self.campaign_service is None:
+            raise RuntimeError("Campaign service is unavailable")
+        context = self.campaign_service.federal_allocation_context()
+        return build_media_plan_dictionary(context, load_canonical_geo_catalog())
 
     def calculation_history(
         self,
@@ -1624,7 +1670,10 @@ def _required_permission(method: str, path: str) -> str | None:
             "/api/v1/help/catalog",
         } or _SCHEMA_PATH_RE.fullmatch(path):
             return "help.read"
-        if path == "/api/v1/templates/campaign-plan.xlsx":
+        if path in {
+            "/api/v1/templates/campaign-plan.xlsx",
+            "/api/v1/templates/media-plan-dictionary",
+        }:
             return "calculation.create"
         if path in {"/api/v1/jobs", "/api/v1/calculations/history"}:
             return "calculation.read"
@@ -1982,9 +2031,15 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             self._common_headers()
             self.send_header("Content-Type", media_type)
             self.send_header("Content-Length", str(len(body)))
+            fallback = re.sub(r"[^A-Za-z0-9._-]+", "-", filename).strip("-")
+            if not fallback or not re.search(r"[A-Za-z0-9]", fallback):
+                fallback = "download.xlsx"
             self.send_header(
                 "Content-Disposition",
-                f"attachment; filename={json.dumps(filename)}",
+                (
+                    f'attachment; filename="{fallback}"; '
+                    f"filename*=UTF-8''{quote(filename)}"
+                ),
             )
             self.end_headers()
             self.wfile.write(body)
@@ -2649,6 +2704,26 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         "spreadsheetml.sheet"
                     ),
                     filename=TEMPLATE_FILENAME,
+                )
+                return
+            if path == "/api/v1/templates/media-plan-dictionary":
+                try:
+                    dictionary = application.media_plan_dictionary()
+                except Exception:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "MEDIA_PLAN_DICTIONARY_UNAVAILABLE",
+                        "Словарь для медиаплана временно недоступен.",
+                    )
+                    return
+                self._binary(
+                    HTTPStatus.OK,
+                    dictionary,
+                    media_type=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    ),
+                    filename=DICTIONARY_FILENAME,
                 )
                 return
             schema_match = _SCHEMA_PATH_RE.fullmatch(path)

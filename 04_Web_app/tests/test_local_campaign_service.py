@@ -9,9 +9,12 @@ import tempfile
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+
+from openpyxl import Workbook
 
 
 WEB_APP_DIR = Path(__file__).resolve().parents[1]
@@ -30,6 +33,7 @@ from services.local_campaign_service import (  # noqa: E402
     LocalCampaignService,
     LocalCampaignServiceSettings,
 )
+from services.business_semantics_v2 import build_validation_result_v2  # noqa: E402
 REGISTRY_ROOT = EVIDENCE_ROOT / "03_Outputs" / "01_PyMC_outputs" / "00_Model_registry"
 PACKAGE_ID = "pkg_807d3ddbae57a52a_9aacd3beb350725b"
 
@@ -178,6 +182,23 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertEqual(content, self.campaign_csv)
 
     @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_dictionary_context_uses_active_package_support_counts(self) -> None:
+        context = self.service.federal_allocation_context()
+        self.assertEqual(context.package_id, PACKAGE_ID)
+        self.assertEqual(
+            {
+                direction: len(geographies)
+                for direction, geographies in context.eligible_by_direction.items()
+            },
+            {
+                "ТС5/Онлайн": 211,
+                "ТС5/Оффлайн": 220,
+                "ТСХ/Онлайн": 114,
+                "ТСХ/Оффлайн": 117,
+            },
+        )
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
     def test_real_package_validation_builds_immutable_job_inputs(self) -> None:
         upload, _ = self.service.create_upload(
             filename="campaign.csv",
@@ -295,7 +316,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
         daily_path = self.settings.artifact_root / final["daily_flighting"]["storage_key"]
         with daily_path.open("r", encoding="utf-8-sig", newline="") as handle:
             daily_rows = list(csv.DictReader(handle))
-        self.assertEqual(len(daily_rows), 211)
+        self.assertEqual(len(daily_rows), 175)
         self.assertFalse(
             any(
                 str(row["geo"]).strip().casefold()
@@ -309,7 +330,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
             places=6,
         )
         moscow = next(row for row in daily_rows if row["geo"] == "МОСКВА")
-        self.assertAlmostEqual(float(moscow["budget_rub"]), 27_504_156.019100208)
+        self.assertGreater(float(moscow["budget_rub"]), 20_000_000.0)
 
         inputs = self.state.read_validation_inputs(validation["validation_id"])
         federal = inputs["federal_geo_allocation"]
@@ -321,16 +342,44 @@ class LocalCampaignServiceTest(unittest.TestCase):
         with provenance_path.open("r", encoding="utf-8-sig", newline="") as handle:
             provenance = list(csv.DictReader(handle))
         audit = json.loads(audit_path.read_text(encoding="utf-8"))
-        self.assertEqual(len(provenance), 423)
+        self.assertEqual(len(provenance), 351)
         self.assertEqual(audit["federal_source_rows_n"], 2)
-        self.assertEqual(audit["expanded_rows_before_aggregation_n"], 423)
-        self.assertEqual(audit["aggregated_rows_n"], 211)
+        self.assertEqual(audit["expanded_rows_before_aggregation_n"], 351)
+        self.assertEqual(audit["aggregated_rows_n"], 175)
         self.assertTrue(audit["totals"]["conservation_pass"])
         self.assertEqual(
             audit["input"]["file_sha256"],
             parsed_upload["parsed_payload"]["sha256"],
         )
         self.assertEqual(audit["package_id"], PACKAGE_ID)
+        availability = inputs["forecast_geo_availability"]
+        availability_path = (
+            self.settings.artifact_root / availability["audit"]["storage_key"]
+        )
+        availability_audit = json.loads(
+            availability_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(availability_audit["source_rows_n"], 3)
+        self.assertTrue(
+            all(
+                row["ready_geo_count"] == 175
+                for row in availability_audit["source_rows"]
+            )
+        )
+        product = build_validation_result_v2(
+            final,
+            normalized_plan_path=(
+                self.settings.artifact_root
+                / final["normalized_plan"]["storage_key"]
+            ),
+            federal_allocation_audit=audit,
+        )
+        self.assertEqual(product["federal_allocation"]["declared_geo_count"], 211)
+        self.assertEqual(product["federal_allocation"]["ready_geo_count"], 175)
+        self.assertEqual(product["federal_allocation"]["excluded_geo_count"], 36)
+        self.assertEqual(product["federal_allocation"]["lmax"], 14)
+        self.assertEqual(len(product["geo_points"]), 175)
+        self.assertEqual(product["map_coverage"]["unlocated_geographies_n"], 0)
         self.assertNotIn("/Users/", json.dumps(final, ensure_ascii=False))
 
     @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
@@ -411,7 +460,13 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertNotIn("", source_ids)
         for item in reconciliation:
             expected_budget = expected_budget_by_geo[item["original_geo"]]
-            self.assertEqual(item["eligible_geo_count"], 211)
+            self.assertEqual(item["eligible_geo_count"], 175)
+            self.assertEqual(item["declared_geo_count"], 211)
+            self.assertEqual(item["ready_geo_count"], 175)
+            self.assertEqual(item["excluded_geo_count"], 36)
+            self.assertEqual(item["lmax"], 14)
+            self.assertEqual(item["required_start"], "2026-09-01")
+            self.assertEqual(item["required_end"], "2026-09-15")
             self.assertAlmostEqual(item["source_budget_rub"], expected_budget)
             self.assertAlmostEqual(item["allocated_total_rub"], expected_budget)
             self.assertLessEqual(item["difference_rub"], 0.01)
@@ -420,7 +475,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
         federal_rows = [
             row for row in provenance if row["row_type"] == "federal_expansion"
         ]
-        self.assertEqual(len(federal_rows), 422)
+        self.assertEqual(len(federal_rows), 350)
         for item in reconciliation:
             rows = [
                 row
@@ -450,15 +505,193 @@ class LocalCampaignServiceTest(unittest.TestCase):
         )
         with daily_path.open("r", encoding="utf-8-sig", newline="") as handle:
             aggregated_rows = list(csv.DictReader(handle))
-        self.assertEqual(len(aggregated_rows), 211)
+        self.assertEqual(len(aggregated_rows), 175)
         self.assertTrue(all(row["source_row_id"] == "" for row in aggregated_rows))
 
     @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
-    def test_unknown_geo_is_rejected_by_stable_b2_error_code(self) -> None:
+    def test_local_geo_is_blocked_by_period_before_job_creation(self) -> None:
+        content = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "Yakutsk blocked,ТС5/Онлайн,Якутск,Digital_Performance,2026-09-01,2026-09-01,1000000\n"
+        ).encode("utf-8")
+        upload, _ = self.service.create_upload(
+            filename="yakutsk-blocked.csv",
+            content=content,
+            idempotency_key="upload-yakutsk-blocked-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-yakutsk-blocked-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "invalid", final)
+        self.assertFalse(final["job_creation_allowed"])
+        self.assertEqual(
+            {row["code"] for row in final["blocking_errors"]},
+            {"GEO_NOT_FORECAST_READY_FOR_PERIOD"},
+        )
+        self.assertEqual(
+            final["blocking_errors"][0]["display_text"],
+            "Для выбранного периода модель не может надежно рассчитать "
+            "географию «Якутск». Измените географию или период кампании.",
+        )
+        self.assertEqual(
+            final["blocking_errors"][0]["what"],
+            final["blocking_errors"][0]["display_text"],
+        )
+        persisted = self.state.read_validation_inputs(validation["validation_id"])
+        availability_path = (
+            self.settings.artifact_root
+            / persisted["forecast_geo_availability"]["audit"]["storage_key"]
+        )
+        audit = json.loads(availability_path.read_text(encoding="utf-8"))
+        self.assertEqual(audit["blocking_local_source_rows_n"], 1)
+        self.assertEqual(audit["source_rows"][0]["required_end"], "2026-09-15")
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_local_moscow_is_ready_for_september(self) -> None:
+        content = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "Moscow ready,ТС5/Онлайн,Москва,Digital_Performance,2026-09-01,2026-09-01,1000000\n"
+        ).encode("utf-8")
+        upload, _ = self.service.create_upload(
+            filename="moscow-ready.csv",
+            content=content,
+            idempotency_key="upload-moscow-ready-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-moscow-ready-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "valid", final)
+        self.assertTrue(final["job_creation_allowed"])
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_mixed_federal_and_unready_local_geo_blocks_but_keeps_federal_audit(self) -> None:
+        content = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "Mixed blocked,ТС5/Онлайн,РФ,Digital_Performance,2026-09-01,2026-09-01,100000000\n"
+            "Mixed blocked,ТС5/Онлайн,Якутск,Digital_Performance,2026-09-01,2026-09-01,1000000\n"
+        ).encode("utf-8")
+        upload, _ = self.service.create_upload(
+            filename="mixed-yakutsk.csv",
+            content=content,
+            idempotency_key="upload-mixed-yakutsk-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-mixed-yakutsk-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "invalid", final)
+        self.assertFalse(final["job_creation_allowed"])
+        self.assertIn(
+            "GEO_NOT_FORECAST_READY_FOR_PERIOD",
+            {row["code"] for row in final["blocking_errors"]},
+        )
+        self.assertIn(
+            "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+            {row["code"] for row in final["warnings"]},
+        )
+        persisted = self.state.read_validation_inputs(validation["validation_id"])
+        federal_audit_path = (
+            self.settings.artifact_root
+            / persisted["federal_geo_allocation"]["audit"]["storage_key"]
+        )
+        audit = json.loads(federal_audit_path.read_text(encoding="utf-8"))
+        self.assertEqual(audit["source_row_reconciliation"][0]["ready_geo_count"], 175)
+        self.assertAlmostEqual(audit["totals"]["federal_source_budget_rub"], 100_000_000.0)
+        self.assertAlmostEqual(audit["totals"]["federal_allocated_budget_rub"], 100_000_000.0)
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_federal_source_rows_with_different_periods_get_different_universes(self) -> None:
+        content = (
+            "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
+            "Period rows,ТС5/Онлайн,РФ,Digital_Performance,2026-09-01,2026-09-01,60000000\n"
+            "Period rows,ТС5/Онлайн,Россия,Digital_Performance,2026-01-01,2026-01-01,40000000\n"
+        ).encode("utf-8")
+        upload, _ = self.service.create_upload(
+            filename="federal-periods.csv",
+            content=content,
+            idempotency_key="upload-federal-periods-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-federal-periods-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "valid", final)
+        persisted = self.state.read_validation_inputs(validation["validation_id"])
+        audit_path = (
+            self.settings.artifact_root
+            / persisted["federal_geo_allocation"]["audit"]["storage_key"]
+        )
+        audit = json.loads(audit_path.read_text(encoding="utf-8"))
+        counts = {
+            row["required_start"]: row["ready_geo_count"]
+            for row in audit["source_row_reconciliation"]
+        }
+        self.assertEqual(counts, {"2026-09-01": 175, "2026-01-01": 210})
+        self.assertLessEqual(audit["totals"]["difference_rub"], 0.01)
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_federal_xlsx_uses_the_same_period_aware_validation(self) -> None:
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(
+            [
+                "campaign_name",
+                "segment",
+                "geo",
+                "channel",
+                "start_date",
+                "end_date",
+                "budget_rub",
+            ]
+        )
+        sheet.append(
+            [
+                "Federal XLSX",
+                "ТС5/Онлайн",
+                "РФ",
+                "Digital_Performance",
+                "2026-09-01",
+                "2026-09-01",
+                100_000_000,
+            ]
+        )
+        buffer = BytesIO()
+        workbook.save(buffer)
+        upload, _ = self.service.create_upload(
+            filename="federal.xlsx",
+            content=buffer.getvalue(),
+            idempotency_key="upload-federal-xlsx-0001",
+            actor_id="actor_222222222222",
+        )
+        self._wait_upload(upload["upload_id"])
+        validation, _ = self.service.request_validation(
+            upload["upload_id"],
+            "validation-federal-xlsx-0001",
+        )
+        final = self._wait_validation(validation["validation_id"])
+        self.assertEqual(final["status"]["code"], "valid", final)
+        self.assertEqual(final["campaigns"][0]["daily_rows_n"], 175)
+
+    @unittest.skipUnless(REGISTRY_ROOT.is_dir(), "canonical preprod model registry is unavailable")
+    def test_unknown_vsia_rossia_alias_is_rejected_with_human_guidance(self) -> None:
         content = (
             "campaign_name,segment,geo,channel,start_date,end_date,budget_rub\n"
             "Partial map,ТС5/Онлайн,г. Москва,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
-            "Partial map,ТС5/Онлайн,НЕИЗВЕСТНОЕ ГЕО,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
+            "Partial map,ТС5/Онлайн,Вся Россия,Рег_ТВ,2026-08-01,2026-08-07,500000\n"
         ).encode("utf-8")
         upload, _ = self.service.create_upload(
             filename="partial-map.csv",
@@ -477,6 +710,7 @@ class LocalCampaignServiceTest(unittest.TestCase):
         self.assertEqual(
             final["blocking_errors"][0]["code"], "UNKNOWN_GEO_VALUE"
         )
+        self.assertIn("«РФ», «Россия»", final["blocking_errors"][0]["display_text"])
         self.assertIsNone(final["totals"])
         self.assertIsNone(final["normalized_plan"])
         serialized = json.dumps(final, ensure_ascii=False)

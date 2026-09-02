@@ -4,6 +4,7 @@ import { credentialedFetch } from "./credentialed-fetch";
 
 const CALCULATION_PROFILE_PATH = "/api/v1/calculation-profile";
 const CAMPAIGN_TEMPLATE_PATH = "/api/v1/templates/campaign-plan.xlsx";
+const MEDIA_PLAN_DICTIONARY_PATH = "/api/v1/templates/media-plan-dictionary";
 const PROFILE_KEYS = [
   "contract_name",
   "schema_version",
@@ -105,4 +106,8 @@ export async function getCalculationProfile(
 
 export function campaignPlanTemplateUrl(): string {
   return endpoint(CAMPAIGN_TEMPLATE_PATH);
+}
+
+export function mediaPlanDictionaryUrl(): string {
+  return endpoint(MEDIA_PLAN_DICTIONARY_PATH);
 }

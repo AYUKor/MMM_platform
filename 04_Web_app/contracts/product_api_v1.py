@@ -203,6 +203,12 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
             "ответственному за сервис."
         ),
     },
+    "MEDIA_PLAN_DICTIONARY_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Словарь для медиаплана временно недоступен.",
+        "user_action": "Повторите скачивание позже или сообщите ответственному за инструмент.",
+    },
     "HISTORICAL_MODEL_GEO_BUDGET_UNAVAILABLE": {
         "http_status": 503,
         "retryable": True,
