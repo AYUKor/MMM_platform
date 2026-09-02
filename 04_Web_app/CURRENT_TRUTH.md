@@ -226,9 +226,13 @@ For a one-day `2026-09-01` campaign the current package regression is
 counts are test evidence, not production constants. Federal budget is conserved
 inside the ready subset; an explicit local geo outside it blocks validation before
 job creation. Full local regression, Chromium/WebKit and no-interception live
-acceptance pass on the B2.2S candidate. Native Safari remains blocked because
-Safari `Developer -> Allow remote automation` is disabled; PR #41 therefore
-remains Draft pending that smoke and green CI.
+acceptance pass on the B2.2S candidate. Native Safari 26.2 acceptance also passes:
+175 ready geographies and map points, complete budget reconciliation, allowed
+mixed `РФ + Москва`, blocked explicit Якутск before job, full result/report path,
+zero console errors and no horizontal overflow. The smoke found and regression-
+locked one duplicate mixed-plan warning in the browser projection; allocation,
+forecast and contracts were unchanged. PR #41 is eligible for Ready for review
+after green CI.
 
 - Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
   aliases.
@@ -350,7 +354,8 @@ The Test candidate resolves a source-row-specific date-ready universe before job
 creation, allocates federal budget only within that universe, blocks unavailable
 explicit local geographies and passes the resulting canonical geo plan into the
 unchanged calculation flow. Code-side regression and live acceptance pass; native
-Safari smoke is the remaining local acceptance gate, so PR #41 stays Draft.
+Safari smoke passes and no local B2.2S acceptance gate remains. PR #41 may move
+from Draft to Ready for review after green CI.
 Predfin/Fin materialization, deployment, production activation, B2.3 and C3
 cleanup remain outside this milestone.
 

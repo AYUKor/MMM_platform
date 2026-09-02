@@ -42,15 +42,17 @@ spreadsheet tooling. Подтверждены три листа, readable header
 - WebKit `Desktop Safari` full suite: 189 passed, 4 opt-in live skipped;
 - targeted федеральный Chromium и WebKit flow, light/dark, 375/1024 overflow и
   keyboard/pointer map behavior: passed;
-- native Safari: not accepted. `safaridriver /status` отвечает `ready=true`, но
-  создание browser session возвращает `session not created`, потому что Safari
-  `Developer -> Allow remote automation` выключен. Настройка не изменялась.
+- native Safari 26.2 (`21623.1.14.11.9`): passed на `1440 x 900` через
+  штатный `safaridriver`. Login/session, New Calculation, template/dictionary,
+  federal validation, campaign map, job/progress/result, media plan, report,
+  mixed plan и blocking validation пройдены. Browser console errors: 0;
+  horizontal document overflow: нет.
 
 ## Live acceptance
 
 No-interception test использует временные state/runtime/artifact directories и
-read-only active package evidence. Exact code candidate
-`bac0672fc3c2f4a26c8984ad416e6300e38f4de8` использовал package
+read-only active package evidence. Native Safari exact code candidate
+`04f4f33d6fae068b90b80c9ccc7b2154f88849f4` использовал package
 `pkg_807d3ddbae57a52a_9aacd3beb350725b` и прошел:
 
 - `ТС5/Онлайн`, `2026-09-01`: 211 declared -> 175 ready, 36 excluded,
@@ -63,14 +65,22 @@ read-only active package evidence. Exact code candidate
 - `РФ + Москва`: validation passed with one additive overlap warning;
 - `РФ + Якутск`: federal 100,000,000 RUB reconciliation remained complete, while
   the explicit Якутск row blocked job creation.
+- native Safari federal job `job_37bec034afe4a82bdd6e` succeeded: 175 ready
+  geographies, 175 map markers, `Распределено полностью · 0 ₽`, report
+  OpenXML download 26,491 bytes;
+- native Safari выявил дублирование additive overlap warning между
+  file-validation и federal-allocation блоками. Минимальное исправление
+  убирает только повторную projection; allocator, resolver, forecast,
+  contracts и расчет не менялись. Regression подтверждает ровно
+  один grouped warning и calculation-ready status.
 
 ## Regression evidence
 
-- backend/web: 204 passed, 10 skipped, 839 subtests passed;
+- backend/web: 205 passed, 10 skipped, 839 subtests passed;
 - PyMC contract suite: 90 passed, 9 skipped, 4 subtests passed;
 - frontend unit: 42 files, 508 tests passed;
 - TypeScript, ESLint, generated contract drift and production build: passed;
 - build retains the pre-existing non-blocking warning for a chunk above 500 kB.
 
-PR #41 must remain Draft until native Safari smoke passes. Required operator
-action: `Safari -> Settings -> Developer -> Allow remote automation`.
+Native Safari gate passed. PR #41 может быть переведен в Ready for
+review после зеленого CI; merge и B2.3 в этот acceptance не входят.

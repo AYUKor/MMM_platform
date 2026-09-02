@@ -628,9 +628,13 @@ outside the ready subset block; forecast retains its runtime guard.
 For `2026-09-01` current-package regression evidence is 175/182/103/104 ready
 geographies from declared 211/220/114/117. These values are not hard-coded in
 production. Full backend/frontend regression, Chromium/WebKit and real-package
-live acceptance pass. Native Safari session creation is still blocked by the
-disabled `Developer -> Allow remote automation` setting; PR #41 remains Draft
-until that smoke and CI are complete.
+live acceptance pass. Native Safari 26.2 also passes the full approved B2.2S
+scenario with 175 ready geographies/map points, full budget reconciliation,
+allowed mixed plan, blocked explicit Якутск before job, zero console errors and no
+horizontal overflow. A duplicate mixed-plan warning found by the smoke was removed
+only from its second browser projection and covered by regression; allocator,
+resolver, forecast and contracts remain unchanged. PR #41 can move to Ready for
+review after green CI.
 
 ## 21. Historical campaign evaluation — future requirement
 
@@ -748,8 +752,8 @@ through its PR and not merged by Codex.
 
 Pre- and post-rename operational smoke and path scans pass without legacy fallback.
 The current Test milestone is B2.2S Forecast Geo Availability on the existing
-B2.2 branch and Draft PR #41. Post-merge Predfin acceptance remains a separate
+B2.2 branch and PR #41. Post-merge Predfin acceptance remains a separate
 controlled operation; B2.3, Fin, deployment and C3 cleanup are not authorized.
-Code-side and no-interception live gates pass; native Safari is the remaining
-local gate because remote automation is disabled. The active model stays
-restricted and the server is unchanged.
+Code-side, no-interception live and native Safari gates pass; after green CI the
+PR is ready for review. The active model stays restricted and the server is
+unchanged.

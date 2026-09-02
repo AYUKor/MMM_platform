@@ -157,13 +157,18 @@ runtime bundle. Они являются UI fixture evidence, а не резул�
 расчёта.
 
 Полные Chromium и WebKit suites проходят по 189 tests при четырех opt-in live
-skips. Native Safari проверяется отдельно через штатный `safaridriver`; если
+skips. Native Safari проверяется отдельно через штатный `safaridriver`.
+На candidate `04f4f33d6fae068b90b80c9ccc7b2154f88849f4` native Safari 26.2
+(`21623.1.14.11.9`) прошел login/session, downloads, federal validation,
+175-point campaign map, job/progress/result/media-plan/report, mixed `РФ + Москва`
+и blocking Якутск. Console errors — 0; horizontal overflow — нет. Если
 создание session сообщает, что remote automation выключена, системные настройки
 не изменяются автоматически. Оператор включает:
 
 `Safari -> Settings -> Developer -> Allow remote automation`.
 
-До успешного native Safari smoke PR остается Draft.
+После успешного native Safari smoke и green CI PR может быть
+переведен в Ready for review.
 
 ## Post-merge Predfin materialization
 
