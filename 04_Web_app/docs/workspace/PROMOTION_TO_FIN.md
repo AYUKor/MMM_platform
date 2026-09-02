@@ -5,6 +5,7 @@
 ```text
 02_Predfin PASS
   + approved GitHub main identity
+  + reproducible production frontend/dist
   + frozen model closure
   + security gates
   + path independence
@@ -22,6 +23,7 @@ Fin materialization consumes one explicit Predfin handoff. The handoff must pin:
 - model package ID, serving status and production gate;
 - model closure file count, bytes and closure digest;
 - package-extension identities;
+- frontend production-dist identity, source commit/tree and same-origin API build;
 - panel hash and metadata;
 - accepted security, regression and path-independence evidence.
 
@@ -35,18 +37,26 @@ acceptance explicitly supersedes it.
    and model-closure digest.
 2. Target release directory does not already exist.
 3. Application snapshot matches the exact approved commit/tree and is clean.
-4. Model closure is copied physically and independently verified.
-5. Minimal immutable acceptance evidence is copied without secrets or runtime
+4. A clean production frontend build is materialized under
+   `release/MMM_platform/04_Web_app/frontend/dist`. Its manifest pins source
+   commit/tree, per-file SHA-256/bytes and the deterministic dist identity; it must
+   include `index.html`, JavaScript and CSS, use same-origin `/api`, and contain no
+   source maps, secrets or localhost API hardcodes.
+5. Model closure, registry and all package extensions are copied physically and
+   independently verified.
+6. Minimal immutable acceptance evidence is copied without secrets or runtime
    state.
-6. Release, application, model and checksum manifests are valid JSON.
-7. A transfer artifact is built only from the materialized Fin release.
-8. Transfer contains the exact application, complete registry/model closure and all
+7. Release, application, frontend, model and checksum manifests are valid JSON and
+   bind one deployable closure: application source + frontend/dist + model package
+   + registry + package extensions + manifests/checksums.
+8. A transfer artifact is built only from the materialized Fin release.
+9. Transfer contains the exact application, complete registry/model closure and all
    required extensions, with no source panel, secrets, runtime DB, logs, cache,
    venv or `node_modules`.
-9. Transfer is independently extracted and verified.
-10. Fin and extracted transfer have zero runtime, application, model-lookup and
+10. Transfer is independently extracted and verified.
+11. Fin and extracted transfer have zero runtime, application, model-lookup and
     registry path blockers.
-11. Source contours remain intact and deployment is not performed.
+12. Source contours remain intact and deployment is not performed.
 
 Only after every gate passes may `03_Fin/CURRENT_RELEASE.json` move to the new
 relative release path. The pointer is a regular JSON file, never an absolute

@@ -43,7 +43,9 @@ The renderer defaults to:
 
 | Path | Purpose |
 |---|---|
-| `/opt/x5-mmm/app` | Approved Git checkout and frontend build |
+| `/opt/x5-mmm/releases/<release_id>__deployN` | New immutable server candidate materialized from one verified Fin transfer |
+| `/opt/x5-mmm/current` | Relative pointer to the active verified release |
+| `/opt/x5-mmm/app` | Preserved legacy rollback source; never a target for a new Fin materialization |
 | `/opt/x5-mmm/venv` | Python 3.11+ serving environment |
 | `/etc/x5-mmm/research_backend.json` | Non-secret runtime configuration |
 | `/var/lib/x5-mmm/state` | Lifecycle records and idempotency indices |
@@ -105,9 +107,10 @@ The empty output folder receives:
    and venv readable/executable by that user, own `/var/lib/x5-mmm` as
    `x5mmm:x5mmm` mode `0700`, and keep `/var/backups/x5-mmm` root-owned mode
    `0700`.
-2. Checkout the approved Git commit into `/opt/x5-mmm/app`. On servers
-   without internet or GitHub access, transfer a `git archive` tarball of
-   the approved commit instead and unpack it into `/opt/x5-mmm/app`.
+2. Transfer one verified Fin archive and materialize a never-before-used
+   `/opt/x5-mmm/releases/<release_id>__deployN` with `server_release.py` as
+   specified by `docs/workspace/FIN_TO_SERVER_DEPLOYMENT_CONTRACT.md`. Do not
+   deploy from GitHub, Test, Predfin, an arbitrary checkout or `/opt/x5-mmm/app`.
 3. Create `/opt/x5-mmm/venv` with Python 3.11+ and install
    `requirements-runtime-v1.txt`. On offline servers, download the wheel set
    in advance on a connected machine
@@ -137,12 +140,19 @@ The empty output folder receives:
 8. Install the generated Nginx and systemd files, run `daemon-reload`, then
    enable the backend and timers.
 
-Before public access, execute:
+Before any `current` switch, execute the full server-candidate verification and
+production-equivalent alternate-port smoke from
+`docs/workspace/FIN_TO_SERVER_DEPLOYMENT_CONTRACT.md`. A successful `/health` and
+`/ready` pair alone is not a deployment acceptance result. The release-specific
+business-state gates, including historical geo-budget `status=available`, must also
+pass.
+
+The backend check-only command follows the `current` pointer after switch:
 
 ```bash
-/opt/x5-mmm/venv/bin/python -B /opt/x5-mmm/app/04_Web_app/backend_runtime.py \
+/opt/x5-mmm/venv/bin/python -B /opt/x5-mmm/current/04_Web_app/backend_runtime.py \
   --config /etc/x5-mmm/research_backend.json \
-  --project-root /opt/x5-mmm/app \
+  --project-root /opt/x5-mmm/current \
   --check-only
 ```
 
