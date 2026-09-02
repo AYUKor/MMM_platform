@@ -1,4 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import productionFederalOnly from "../../test/fixtures/d1r2-production-validation_b30b5467e757248ef0b1.json";
+import productionMixedLocal from "../../test/fixtures/d1r2-production-validation_38fc0ce73e4be020fc18.json";
+import { adaptValidationGeoBudget } from "../../features/geo-budget-map/geoBudgetMapModel";
+import { buildValidationResultV2 } from "../../test/businessSemanticsV2Fixtures";
+import {
+  buildD1r2AvailableMixedValidation,
+  buildD1r2UnavailableMixedValidation,
+  D1R2_MIXED_WARNING,
+} from "../../test/d1r2MixedFederalFixtures";
+import type { ValidationResultV2 } from "./generated/validation-result-v2";
 import {
   BusinessSemanticsNotFoundError,
   BusinessSemanticsNotReadyError,
@@ -118,6 +128,118 @@ function overview() { return { contract_name: "model_overview_v2", schema_versio
 afterEach(() => vi.unstubAllGlobals());
 
 describe("business semantics v2 parsers", () => {
+  it("accepts the exact D1R.2 production mixed payload and preserves backend budget truth", () => {
+    const federalOnly = parseValidationViewV2(productionFederalOnly, productionFederalOnly.validation_id);
+    const mixed = parseValidationViewV2(productionMixedLocal, productionMixedLocal.validation_id);
+    const projected = adaptValidationGeoBudget(mixed);
+
+    expect(federalOnly.job_creation_allowed).toBe(true);
+    expect(federalOnly.federal_allocation.mixed_local_overlap).toBe(false);
+    expect(federalOnly.federal_allocation.warnings).toHaveLength(0);
+    expect(mixed).toMatchObject({
+      status: "warning",
+      job_creation_allowed: true,
+      file_validation: { requested_budget_rub: 101_000_000 },
+      federal_allocation: {
+        source_budget_rub: 100_000_000,
+        allocated_budget_rub: 100_000_000,
+        mixed_local_overlap: true,
+      },
+    });
+    expect(mixed.federal_allocation.warnings).toEqual([expect.objectContaining({
+      code: "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+    })]);
+    expect(projected.requestedBudgetRub).toBe(101_000_000);
+    expect(projected.points.reduce((sum, point) => sum + point.budgetRub, 0)).toBeCloseTo(101_000_000, 6);
+  });
+  it.each([
+    ["РФ + Москва", [{ geoDisplayName: "Москва", budgetRub: 1_000_000 }]],
+    ["РФ + Казань", [{ geoDisplayName: "Казань", budgetRub: 2_000_000 }]],
+    ["РФ + Московская область", [{ geoDisplayName: "Московская область", budgetRub: 3_000_000 }]],
+    ["РФ + Москва + Казань", [{ geoDisplayName: "Москва", budgetRub: 10_000_000 }, { geoDisplayName: "Казань", budgetRub: 5_000_000 }]],
+    ["РФ + Москва + Казань + Самара", [{ geoDisplayName: "Москва", budgetRub: 10_000_000 }, { geoDisplayName: "Казань", budgetRub: 5_000_000 }, { geoDisplayName: "Самара", budgetRub: 2_000_000 }]],
+  ] as const)("accepts general mixed-plan semantics for %s with one warning", (_name, placements) => {
+    const control = productionFederalOnly as ValidationResultV2;
+    const payload = buildD1r2AvailableMixedValidation(control, placements);
+    const parsed = parseValidationViewV2(payload, payload.validation_id);
+    const projected = adaptValidationGeoBudget(parsed);
+    const explicitBudget = placements.reduce((sum, placement) => sum + placement.budgetRub, 0);
+
+    expect(parsed.job_creation_allowed).toBe(true);
+    expect(parsed.federal_allocation.mixed_local_overlap).toBe(true);
+    expect(parsed.federal_allocation.warnings).toEqual([{
+      code: "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+      display_text: D1R2_MIXED_WARNING,
+    }]);
+    expect(projected.requestedBudgetRub).toBe(100_000_000 + explicitBudget);
+    expect(projected.points.reduce((sum, point) => sum + point.budgetRub, 0))
+      .toBeCloseTo(100_000_000 + explicitBudget, 6);
+    for (const placement of placements) {
+      const controlBudget = control.geo_points.find((point) => point.geo_display_name === placement.geoDisplayName)?.budget_rub;
+      const finalBudget = parsed.geo_points.find((point) => point.geo_display_name === placement.geoDisplayName)?.budget_rub;
+      expect(finalBudget).toBeCloseTo((controlBudget ?? 0) + placement.budgetRub, 6);
+    }
+  });
+  it("preserves two federal source rows and backend-reconciled 115 million total", () => {
+    const payload = buildD1r2AvailableMixedValidation(
+      productionFederalOnly as ValidationResultV2,
+      [{ geoDisplayName: "Москва", budgetRub: 10_000_000 }, { geoDisplayName: "Казань", budgetRub: 5_000_000 }],
+      2,
+    );
+    const parsed = parseValidationViewV2(payload, payload.validation_id);
+
+    expect(parsed.file_validation).toMatchObject({ rows_n: 4, requested_budget_rub: 115_000_000 });
+    expect(parsed.federal_allocation).toMatchObject({
+      source_rows_count: 2,
+      source_budget_rub: 100_000_000,
+      allocated_budget_rub: 100_000_000,
+    });
+    expect(parsed.federal_allocation.breakdown[0].source_rows_count).toBe(2);
+    expect(parsed.geo_points.reduce((sum, point) => sum + point.budget_rub, 0)).toBeCloseTo(115_000_000, 6);
+    expect(parsed.federal_allocation.warnings).toHaveLength(1);
+  });
+  it.each([
+    ["РФ + Якутск", []],
+    ["РФ + Москва + Якутск", [{ geoDisplayName: "Москва", budgetRub: 10_000_000 }]],
+    ["РФ + несколько local geo, одна unavailable", [{ geoDisplayName: "Москва", budgetRub: 10_000_000 }, { geoDisplayName: "Казань", budgetRub: 5_000_000 }]],
+  ] as const)("accepts a normal blocking validation for %s", (_name, availablePlacements) => {
+    const payload = buildD1r2UnavailableMixedValidation(
+      productionFederalOnly as ValidationResultV2,
+      availablePlacements,
+      { geoDisplayName: "Якутск", budgetRub: 1_000_000 },
+    );
+    const parsed = parseValidationViewV2(payload, payload.validation_id);
+
+    expect(parsed.job_creation_allowed).toBe(false);
+    expect(parsed.model_limitations).toEqual(expect.arrayContaining([expect.objectContaining({
+      affected_geos: ["Якутск"],
+      severity: "blocking",
+      blocks_calculation: true,
+    })]));
+    expect(parsed.federal_allocation.status).toBe("available");
+    expect(parsed.geo_points.reduce((sum, point) => sum + point.budget_rub, 0))
+      .toBeCloseTo(parsed.file_validation.requested_budget_rub, 6);
+  });
+  it("keeps ordinary non-federal and exact federal-only responses unchanged", () => {
+    const ordinaryPayload = buildValidationResultV2();
+    const ordinary = parseValidationViewV2(ordinaryPayload, ordinaryPayload.validation_id);
+    const federal = parseValidationViewV2(productionFederalOnly, productionFederalOnly.validation_id);
+
+    expect(ordinary.federal_allocation).toMatchObject({ status: "none", mixed_local_overlap: false, warnings: [] });
+    expect(federal.federal_allocation).toMatchObject({ status: "available", mixed_local_overlap: false, warnings: [] });
+    expect(federal.job_creation_allowed).toBe(true);
+  });
+  it.each([
+    ["unknown schema version", (value: MutableRecord) => { value.schema_version = "3.0.0"; }],
+    ["missing federal allocation", (value: MutableRecord) => { delete value.federal_allocation; }],
+    ["wrong mixed_local_overlap type", (value: MutableRecord) => { (value.federal_allocation as MutableRecord).mixed_local_overlap = "true"; }],
+    ["malformed grouped warning", (value: MutableRecord) => { ((value.federal_allocation as MutableRecord).warnings as MutableRecord[])[0] = { code: "FEDERAL_AND_LOCAL_GEO_OVERLAP" }; }],
+    ["malformed allocation breakdown", (value: MutableRecord) => { (((value.federal_allocation as MutableRecord).breakdown as MutableRecord[])[0]).allocated_budget_rub = 99_000_000; }],
+  ])("keeps the exact D1R.2 production fixture fail-closed for %s", (_name, mutate) => {
+    const value = structuredClone(productionMixedLocal) as unknown as MutableRecord;
+    mutate(value);
+    expect(() => parseValidationViewV2(value, productionMixedLocal.validation_id)).toThrow(UnsupportedBusinessSemanticsContractError);
+  });
   it("accepts the full, turnover-only, six-scenario result projection", () => expect(parseJobResultViewV2(result(), JOB_ID).scenarios).toHaveLength(6));
   it.each([
     ["adds a local path", (value: MutableRecord) => { (value.limitations as MutableRecord[]).push({ code: "X", display_text: "/Users/private" }); }],

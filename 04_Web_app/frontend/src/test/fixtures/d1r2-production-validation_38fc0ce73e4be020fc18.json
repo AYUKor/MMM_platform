@@ -1,0 +1,4506 @@
+{
+  "contract_name": "validation_result_v2",
+  "schema_version": "2.0.0",
+  "validation_id": "validation_38fc0ce73e4be020fc18",
+  "status": "warning",
+  "job_creation_allowed": true,
+  "file_validation": {
+    "status": "passed",
+    "rows_n": 2,
+    "campaigns_n": 1,
+    "geographies_n": 175,
+    "channels_n": 1,
+    "requested_budget_rub": 101000000,
+    "blocking_errors_n": 0,
+    "warnings_n": 0,
+    "checks": [
+      {
+        "code": "FILE_STRUCTURE",
+        "status": "passed",
+        "display_text": "Структура файла и обязательные поля распознаны."
+      },
+      {
+        "code": "CAMPAIGN_COUNT",
+        "status": "passed",
+        "display_text": "В файле найдена ровно одна кампания."
+      },
+      {
+        "code": "BUDGET_RECONCILIATION",
+        "status": "passed",
+        "display_text": "Сумма бюджета в исходном плане совпадает с суммой после распределения по дням."
+      },
+      {
+        "code": "DATES",
+        "status": "passed",
+        "display_text": "Даты кампании распознаны и имеют корректный порядок."
+      }
+    ]
+  },
+  "federal_allocation": {
+    "status": "available",
+    "title": "Обнаружено федеральное размещение",
+    "description": "Федеральный бюджет распределен между географиями, для которых модель поддерживает расчет на выбранный период, пропорционально численности населения.",
+    "policy_version": "FEDERAL_GEO_ALLOCATION_V1",
+    "package_id": "pkg_807d3ddbae57a52a_9aacd3beb350725b",
+    "source_rows_count": 1,
+    "source_budget_rub": 100000000,
+    "allocated_budget_rub": 100000000,
+    "difference_rub": 0,
+    "geo_count": 175,
+    "declared_geo_count": 211,
+    "ready_geo_count": 175,
+    "excluded_geo_count": 36,
+    "denominator_policy_version": "FORECAST_DENOMINATOR_RESOLUTION_V1",
+    "lmax": 14,
+    "required_period_start": "2026-09-01",
+    "required_period_end": "2026-09-15",
+    "method_display_name": "Пропорционально населению",
+    "channels": [
+      {
+        "channel_id": "Digital_Performance",
+        "channel_display_name": "Цифровая реклама"
+      }
+    ],
+    "business_directions": [
+      "ТС5/Онлайн"
+    ],
+    "mixed_local_overlap": true,
+    "information": [
+      {
+        "code": "FEDERAL_GEO_ALLOCATION_INFO",
+        "display_text": "Федеральный бюджет будет распределен между географиями, для которых модель поддерживает расчет на выбранный период, по действующей методике модели."
+      }
+    ],
+    "warnings": [
+      {
+        "code": "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+        "display_text": "В плане одновременно указаны федеральный бюджет и отдельные локальные бюджеты. Локальные суммы будут добавлены поверх федерального распределения."
+      }
+    ],
+    "errors": [],
+    "breakdown": [
+      {
+        "business_direction": "ТС5/Онлайн",
+        "channels": [
+          {
+            "channel_id": "Digital_Performance",
+            "channel_display_name": "Цифровая реклама"
+          }
+        ],
+        "source_rows_count": 1,
+        "source_budget_rub": 100000000,
+        "allocated_budget_rub": 100000000,
+        "difference_rub": 0,
+        "geo_count": 175,
+        "declared_geo_count": 211,
+        "ready_geo_count": 175,
+        "excluded_geo_count": 36,
+        "period_start": "2026-09-01",
+        "period_end": "2026-09-15"
+      }
+    ]
+  },
+  "model_limitations": [
+    {
+      "target": "turnover",
+      "channel_id": "Digital_Performance",
+      "channel_display_name": "Цифровая реклама",
+      "limitation_type": "model_caution_cells",
+      "severity": "warning",
+      "allowed_use": "caution",
+      "blocks_calculation": false,
+      "what": "Строк с ограничениями по использованию оценки: 175.",
+      "why": "Для указанных сочетаний оценка разрешена только с ограничениями качества.",
+      "recommended_action": "Проверьте отмеченные строки и не используйте их как единственное основание для перераспределения бюджета.",
+      "affected_geos_n": 175,
+      "affected_geos": [
+        "Александров",
+        "Алтайский край",
+        "Апатиты",
+        "Армавир",
+        "Архангельск",
+        "Архангельская область",
+        "Астраханская область",
+        "Астрахань",
+        "Балашиха",
+        "Барнаул",
+        "Батайск",
+        "Белгород",
+        "Белгородская область",
+        "Березовский",
+        "Боровичи",
+        "Брянск",
+        "Великие Луки",
+        "Великий Новгород",
+        "Видное",
+        "Владивосток",
+        "Владимир",
+        "Волгоград",
+        "Волгоградская область",
+        "Вологда",
+        "Вологодская область",
+        "Воронеж",
+        "Воронежская область",
+        "Выборг",
+        "Вышний Волочек",
+        "Вязники",
+        "Гусь-Хрустальный",
+        "Долгопрудный",
+        "Домодедово",
+        "Екатеринбург",
+        "Забайкальский край",
+        "Иваново",
+        "Ивановская область",
+        "Ижевск",
+        "Иркутск",
+        "Иркутская область",
+        "Йошкар-Ола",
+        "Кабардино-Балкарская Республика",
+        "Казань",
+        "Калининград",
+        "Калининградская область",
+        "Калуга",
+        "Кемерово",
+        "Кемеровская область",
+        "Кинешма",
+        "Кириши",
+        "Киров",
+        "Кировск",
+        "Кировская область",
+        "Кисловодск",
+        "Ковров",
+        "Конаково",
+        "Королев",
+        "Коряжма",
+        "Кострома",
+        "Костромская область",
+        "Котлас",
+        "Красногорск",
+        "Краснодар",
+        "Краснодарский край",
+        "Красноярск",
+        "Красноярский край",
+        "Кузнецк",
+        "Курган",
+        "Курганская область",
+        "Курск",
+        "Курская область",
+        "Ленинградская область",
+        "Липецк",
+        "Липецкая область",
+        "Лобня",
+        "Магнитогорск",
+        "Майкоп",
+        "Мичуринск",
+        "Мончегорск",
+        "Москва",
+        "Московская область",
+        "Мурманск",
+        "Мурманская область",
+        "Мытищи",
+        "Набережные Челны",
+        "Нижегородская область",
+        "Нижневартовск",
+        "Нижний Тагил",
+        "Новгородская область",
+        "Новороссийск",
+        "Новосибирск",
+        "Новосибирская область",
+        "Оленегорск",
+        "Омск",
+        "Омская область",
+        "Орел",
+        "Оренбург",
+        "Оренбургская область",
+        "Орловская область",
+        "Остров",
+        "Пенза",
+        "Пензенская область",
+        "Переславль-Залесский",
+        "Пермский край",
+        "Пермь",
+        "Петрозаводск",
+        "Подольск",
+        "Псков",
+        "Псковская область",
+        "Республика Адыгея",
+        "Республика Башкортостан",
+        "Республика Бурятия",
+        "Республика Калмыкия",
+        "Республика Карелия",
+        "Республика Коми",
+        "Республика Марий Эл",
+        "Республика Мордовия",
+        "Республика Северная Осетия - Алания",
+        "Республика Татарстан",
+        "Ростов-на-Дону",
+        "Ростовская область",
+        "Рыбинск",
+        "Рязань",
+        "Самара",
+        "Самарская область",
+        "Санкт-Петербург",
+        "Саранск",
+        "Саратов",
+        "Саратовская область",
+        "Свердловская область",
+        "Северодвинск",
+        "Смоленск",
+        "Сокол",
+        "Солнечногорск",
+        "Сочи",
+        "Ставрополь",
+        "Ставропольский край",
+        "Старый Оскол",
+        "Сургут",
+        "Сыктывкар",
+        "Тамбов",
+        "Тамбовская область",
+        "Тверская область",
+        "Тверь",
+        "Тольятти",
+        "Томск",
+        "Томская область",
+        "Торжок",
+        "Тула",
+        "Тутаев",
+        "Тюменская область",
+        "Тюмень",
+        "Углич",
+        "Удмуртская Республика",
+        "Удомля",
+        "Улан-Удэ",
+        "Ульяновск",
+        "Ульяновская область",
+        "Уфа",
+        "Ухта",
+        "Хабаровск",
+        "Хабаровский край",
+        "Ханты-Мансийский автономный округ - Югра",
+        "Химки",
+        "Чебоксары",
+        "Челябинск",
+        "Челябинская область",
+        "Череповец",
+        "Чита",
+        "Чувашская Республика",
+        "Шуя",
+        "Щелково",
+        "Энгельс",
+        "Ярославль",
+        "Ярославская область"
+      ]
+    }
+  ],
+  "map_coverage": {
+    "status": "available",
+    "located_geographies_n": 175,
+    "unlocated_geographies_n": 0,
+    "unlocated_geographies": [],
+    "located_budget_rub": 101000000,
+    "unlocated_budget_rub": 0,
+    "unlocated_budget_share": 0
+  },
+  "geo_points": [
+    {
+      "geo_id": "geo_957e66011fc7614c",
+      "geo_display_name": "Александров",
+      "latitude": 56.39733,
+      "longitude": 38.71404,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_826294",
+      "region_display_name": "Владимирская область",
+      "input_geo_name": "АЛЕКСАНДРОВ",
+      "canonical_geo_id": "geo_957e66011fc7614c",
+      "canonical_geo_display_name": "Александров",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 33085.78079488588,
+      "budget_share": 0.00032758198806817705,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ef9368375b7cd433",
+      "geo_display_name": "Алтайский край",
+      "latitude": 52.60833,
+      "longitude": 82.60833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1511732",
+      "region_display_name": "Алтайский край",
+      "input_geo_name": "АЛТАЙСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_ef9368375b7cd433",
+      "canonical_geo_display_name": "Алтайский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1339974.1221928783,
+      "budget_share": 0.013267070516761171,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1a1dd82046f50b13",
+      "geo_display_name": "Апатиты",
+      "latitude": 67.58267,
+      "longitude": 33.41339,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524304",
+      "region_display_name": "Мурманская область",
+      "input_geo_name": "АПАТИТЫ",
+      "canonical_geo_id": "geo_1a1dd82046f50b13",
+      "canonical_geo_display_name": "Апатиты",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 30722.510738108318,
+      "budget_share": 0.0003041832746347358,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ad76eb61a0c4abf1",
+      "geo_display_name": "Армавир",
+      "latitude": 44.99849,
+      "longitude": 41.11472,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_542415",
+      "region_display_name": "Краснодарский край",
+      "input_geo_name": "АРМАВИР",
+      "canonical_geo_id": "geo_ad76eb61a0c4abf1",
+      "canonical_geo_display_name": "Армавир",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 112846.14521112865,
+      "budget_share": 0.0011172885664468184,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_91572a7fdf0c3bc8",
+      "geo_display_name": "Архангельск",
+      "latitude": 64.5461,
+      "longitude": 40.55183,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_581043",
+      "region_display_name": "Архангельская область",
+      "input_geo_name": "АРХАНГЕЛЬСК",
+      "canonical_geo_id": "geo_91572a7fdf0c3bc8",
+      "canonical_geo_display_name": "Архангельск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 193197.32714156577,
+      "budget_share": 0.0019128448231838194,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e1c6a5b04a684a5f",
+      "geo_display_name": "Архангельская область",
+      "latitude": 63.425,
+      "longitude": 42.31667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_581043",
+      "region_display_name": "Архангельская область",
+      "input_geo_name": "АРХАНГЕЛЬСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_e1c6a5b04a684a5f",
+      "canonical_geo_display_name": "Архангельская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 622130.8424466935,
+      "budget_share": 0.0061597113113534005,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c0f7fc02db8bce9b",
+      "geo_display_name": "Астраханская область",
+      "latitude": 47.20833,
+      "longitude": 47.425,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_580491",
+      "region_display_name": "Астраханская область",
+      "input_geo_name": "АСТРАХАНСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_c0f7fc02db8bce9b",
+      "canonical_geo_display_name": "Астраханская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 583727.7040240581,
+      "budget_share": 0.0057794822180599805,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e316c8f3c2dba674",
+      "geo_display_name": "Астрахань",
+      "latitude": 46.34968,
+      "longitude": 48.04076,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_580491",
+      "region_display_name": "Астраханская область",
+      "input_geo_name": "АСТРАХАНЬ",
+      "canonical_geo_id": "geo_e316c8f3c2dba674",
+      "canonical_geo_display_name": "Астрахань",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 296590.3921255842,
+      "budget_share": 0.002936538535896873,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_0e45d64437ef0ab3",
+      "geo_display_name": "Балашиха",
+      "latitude": 55.79479,
+      "longitude": 37.94794,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "БАЛАШИХА",
+      "canonical_geo_id": "geo_0e45d64437ef0ab3",
+      "canonical_geo_display_name": "Балашиха",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 313133.2825230271,
+      "budget_share": 0.0031003295299309613,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_8a262b9422eb5010",
+      "geo_display_name": "Барнаул",
+      "latitude": 53.36199,
+      "longitude": 83.72786,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1511732",
+      "region_display_name": "Алтайский край",
+      "input_geo_name": "БАРНАУЛ",
+      "canonical_geo_id": "geo_8a262b9422eb5010",
+      "canonical_geo_display_name": "Барнаул",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 370442.581399883,
+      "budget_share": 0.003667748330691911,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_441a51f1a1a48fa7",
+      "geo_display_name": "Батайск",
+      "latitude": 47.13746,
+      "longitude": 39.75713,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_501165",
+      "region_display_name": "Ростовская область",
+      "input_geo_name": "БАТАЙСК",
+      "canonical_geo_id": "geo_441a51f1a1a48fa7",
+      "canonical_geo_display_name": "Батайск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 77397.09435946519,
+      "budget_share": 0.0007663078649451999,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_66524d70cfd80f33",
+      "geo_display_name": "Белгород",
+      "latitude": 50.60343,
+      "longitude": 36.58091,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_578071",
+      "region_display_name": "Белгородская область",
+      "input_geo_name": "БЕЛГОРОД",
+      "canonical_geo_id": "geo_66524d70cfd80f33",
+      "canonical_geo_display_name": "Белгород",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 232191.28307839556,
+      "budget_share": 0.0022989235948355996,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_99113e492e368d1e",
+      "geo_display_name": "Белгородская область",
+      "latitude": 50.83333,
+      "longitude": 37.54167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_578071",
+      "region_display_name": "Белгородская область",
+      "input_geo_name": "БЕЛГОРОДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_99113e492e368d1e",
+      "canonical_geo_display_name": "Белгородская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 903950.796717418,
+      "budget_share": 0.008950007888291268,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_8e7b7c971d1eaa78",
+      "geo_display_name": "Березовский",
+      "latitude": 55.66951,
+      "longitude": 86.27485,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1503900",
+      "region_display_name": "Кемеровская область",
+      "input_geo_name": "БЕРЕЗОВСКИЙ",
+      "canonical_geo_id": "geo_8e7b7c971d1eaa78",
+      "canonical_geo_display_name": "Березовский",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 38993.95593682979,
+      "budget_share": 0.0003860787716517801,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_0ceaaee33b14e0a1",
+      "geo_display_name": "Боровичи",
+      "latitude": 58.39418,
+      "longitude": 33.91864,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_519324",
+      "region_display_name": "Новгородская область",
+      "input_geo_name": "БОРОВИЧИ",
+      "canonical_geo_id": "geo_0ceaaee33b14e0a1",
+      "canonical_geo_display_name": "Боровичи",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 28359.240681330757,
+      "budget_share": 0.00028078456120129465,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2f2ef7a4526bd34a",
+      "geo_display_name": "Брянск",
+      "latitude": 53.27096,
+      "longitude": 34.32143,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_571473",
+      "region_display_name": "Брянская область",
+      "input_geo_name": "БРЯНСК",
+      "canonical_geo_id": "geo_2f2ef7a4526bd34a",
+      "canonical_geo_display_name": "Брянск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 232191.28307839556,
+      "budget_share": 0.0022989235948355996,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9bb973af0c5b0b78",
+      "geo_display_name": "Великие Луки",
+      "latitude": 56.34063,
+      "longitude": 30.54377,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_504338",
+      "region_display_name": "Псковская область",
+      "input_geo_name": "ВЕЛИКИЕ ЛУКИ",
+      "canonical_geo_id": "geo_9bb973af0c5b0b78",
+      "canonical_geo_display_name": "Великие Луки",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 51401.12373491199,
+      "budget_share": 0.0005089220171773464,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1d58a46bdd0a4846",
+      "geo_display_name": "Великий Новгород",
+      "latitude": 58.52131,
+      "longitude": 31.27104,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_519324",
+      "region_display_name": "Новгородская область",
+      "input_geo_name": "ВЕЛИКИЙ НОВГОРОД",
+      "canonical_geo_id": "geo_1d58a46bdd0a4846",
+      "canonical_geo_display_name": "Великий Новгород",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 133524.75820793232,
+      "budget_share": 0.0013220273089894288,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2412d29f1964da67",
+      "geo_display_name": "Видное",
+      "latitude": 55.5523,
+      "longitude": 37.70885,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ВИДНОЕ",
+      "canonical_geo_id": "geo_2412d29f1964da67",
+      "canonical_geo_display_name": "Видное",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 46674.58362135688,
+      "budget_share": 0.00046212459031046415,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_dfda5c672fb61686",
+      "geo_display_name": "Владивосток",
+      "latitude": 43.10562,
+      "longitude": 131.87353,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2017623",
+      "region_display_name": "Приморский край",
+      "input_geo_name": "ВЛАДИВОСТОК",
+      "canonical_geo_id": "geo_dfda5c672fb61686",
+      "canonical_geo_display_name": "Владивосток",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 357444.59608760645,
+      "budget_share": 0.0035390554068079846,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_cb64426d56fd2a49",
+      "geo_display_name": "Владимир",
+      "latitude": 56.13854,
+      "longitude": 40.39976,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_826294",
+      "region_display_name": "Владимирская область",
+      "input_geo_name": "ВЛАДИМИР",
+      "canonical_geo_id": "geo_cb64426d56fd2a49",
+      "canonical_geo_display_name": "Владимир",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 203832.04239706483,
+      "budget_share": 0.0020181390336343054,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_84e5fcec31012b88",
+      "geo_display_name": "Волгоград",
+      "latitude": 48.71378,
+      "longitude": 44.4976,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472755",
+      "region_display_name": "Волгоградская область",
+      "input_geo_name": "ВОЛГОГРАД",
+      "canonical_geo_id": "geo_84e5fcec31012b88",
+      "canonical_geo_display_name": "Волгоград",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 590817.5141943907,
+      "budget_share": 0.005849678358360305,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_360bec89c52dae41",
+      "geo_display_name": "Волгоградская область",
+      "latitude": 49.61568,
+      "longitude": 44.15,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472755",
+      "region_display_name": "Волгоградская область",
+      "input_geo_name": "ВОЛГОГРАДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_360bec89c52dae41",
+      "canonical_geo_display_name": "Волгоградская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1443958.0046910911,
+      "budget_share": 0.014296613907832585,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9db51a9fcbbd555e",
+      "geo_display_name": "Вологда",
+      "latitude": 59.2239,
+      "longitude": 39.88398,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472454",
+      "region_display_name": "Вологодская область",
+      "input_geo_name": "ВОЛОГДА",
+      "canonical_geo_id": "geo_9db51a9fcbbd555e",
+      "canonical_geo_display_name": "Вологда",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 186698.3344854275,
+      "budget_share": 0.0018484983612418566,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_69a60951706b056a",
+      "geo_display_name": "Вологодская область",
+      "latitude": 59.95833,
+      "longitude": 40.50833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472454",
+      "region_display_name": "Вологодская область",
+      "input_geo_name": "ВОЛОГОДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_69a60951706b056a",
+      "canonical_geo_display_name": "Вологодская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 666442.1560112728,
+      "budget_share": 0.006598437188230424,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c5bbbb417c2f21f1",
+      "geo_display_name": "Воронеж",
+      "latitude": 51.66833,
+      "longitude": 39.19204,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472039",
+      "region_display_name": "Воронежская область",
+      "input_geo_name": "ВОРОНЕЖ",
+      "canonical_geo_id": "geo_c5bbbb417c2f21f1",
+      "canonical_geo_display_name": "Воронеж",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 625084.9300176655,
+      "budget_share": 0.006188959703145203,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d2d740a2dfa1cdf2",
+      "geo_display_name": "Воронежская область",
+      "latitude": 50.96667,
+      "longitude": 40.23333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472039",
+      "region_display_name": "Воронежская область",
+      "input_geo_name": "ВОРОНЕЖСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_d2d740a2dfa1cdf2",
+      "canonical_geo_display_name": "Воронежская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1357107.8301045157,
+      "budget_share": 0.01343671118915362,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_520151290ea3255a",
+      "geo_display_name": "Выборг",
+      "latitude": 60.70763,
+      "longitude": 28.75283,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_536199",
+      "region_display_name": "Ленинградская область",
+      "input_geo_name": "ВЫБОРГ",
+      "canonical_geo_id": "geo_520151290ea3255a",
+      "canonical_geo_display_name": "Выборг",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 45492.94859296809,
+      "budget_share": 0.0004504252335937434,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1e05d321927cf372",
+      "geo_display_name": "Вышний Волочек",
+      "latitude": 57.5888,
+      "longitude": 34.56854,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480041",
+      "region_display_name": "Тверская область",
+      "input_geo_name": "ВЫШНИЙ ВОЛОЧЕК",
+      "canonical_geo_id": "geo_1e05d321927cf372",
+      "canonical_geo_display_name": "Вышний Волочек",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 25405.153110358802,
+      "budget_share": 0.00025153616940949306,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_723bec066ed256b0",
+      "geo_display_name": "Вязники",
+      "latitude": 56.24227,
+      "longitude": 42.14911,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_826294",
+      "region_display_name": "Владимирская область",
+      "input_geo_name": "ВЯЗНИКИ",
+      "canonical_geo_id": "geo_723bec066ed256b0",
+      "canonical_geo_display_name": "Вязники",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 19496.977968414896,
+      "budget_share": 0.00019303938582589006,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_61fb685891366787",
+      "geo_display_name": "Гусь-Хрустальный",
+      "latitude": 55.61171,
+      "longitude": 40.65023,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_826294",
+      "region_display_name": "Владимирская область",
+      "input_geo_name": "ГУСЬ-ХРУСТАЛЬНЫЙ",
+      "canonical_geo_id": "geo_61fb685891366787",
+      "canonical_geo_display_name": "Гусь-Хрустальный",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 31313.328252302712,
+      "budget_share": 0.0003100329529930962,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_a7670443521246e9",
+      "geo_display_name": "Долгопрудный",
+      "latitude": 55.94958,
+      "longitude": 37.50183,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ДОЛГОПРУДНЫЙ",
+      "canonical_geo_id": "geo_a7670443521246e9",
+      "canonical_geo_display_name": "Долгопрудный",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 69125.64916074372,
+      "budget_share": 0.0006844123679281556,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_fbf9c84b011ebd56",
+      "geo_display_name": "Домодедово",
+      "latitude": 55.44223,
+      "longitude": 37.75372,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ДОМОДЕДОВО",
+      "canonical_geo_id": "geo_fbf9c84b011ebd56",
+      "canonical_geo_display_name": "Домодедово",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 82714.4519872147,
+      "budget_share": 0.0008189549701704427,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_30d57e2af9301114",
+      "geo_display_name": "Екатеринбург",
+      "latitude": 56.85733,
+      "longitude": 60.61529,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1490542",
+      "region_display_name": "Свердловская область",
+      "input_geo_name": "ЕКАТЕРИНБУРГ",
+      "canonical_geo_id": "geo_30d57e2af9301114",
+      "canonical_geo_display_name": "Екатеринбург",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 907495.7018025842,
+      "budget_share": 0.008985105958441429,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_845dcb133962087a",
+      "geo_display_name": "Забайкальский край",
+      "latitude": 52.85,
+      "longitude": 116.2,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_7779061",
+      "region_display_name": "Забайкальский край",
+      "input_geo_name": "ЗАБАЙКАЛЬСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_845dcb133962087a",
+      "canonical_geo_display_name": "Забайкальский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 584909.3390524469,
+      "budget_share": 0.005791181574776702,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_6835667d9b3fc15f",
+      "geo_display_name": "Иваново",
+      "latitude": 56.99988,
+      "longitude": 40.97257,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_555235",
+      "region_display_name": "Ивановская область",
+      "input_geo_name": "ИВАНОВО",
+      "canonical_geo_id": "geo_6835667d9b3fc15f",
+      "canonical_geo_display_name": "Иваново",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 231009.6480500068,
+      "budget_share": 0.0022872242381188792,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_3adf62e63c7fd5d5",
+      "geo_display_name": "Ивановская область",
+      "latitude": 56.99167,
+      "longitude": 41.55,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_555235",
+      "region_display_name": "Ивановская область",
+      "input_geo_name": "ИВАНОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_3adf62e63c7fd5d5",
+      "canonical_geo_display_name": "Ивановская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 555368.4633427273,
+      "budget_share": 0.005498697656858686,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_609ae2c3e4e515a0",
+      "geo_display_name": "Ижевск",
+      "latitude": 56.85225,
+      "longitude": 53.19862,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_479613",
+      "region_display_name": "Удмуртская Республика",
+      "input_geo_name": "ИЖЕВСК",
+      "canonical_geo_id": "geo_609ae2c3e4e515a0",
+      "canonical_geo_display_name": "Ижевск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 379304.8441127989,
+      "budget_share": 0.003755493506067316,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e3bf4c0631680742",
+      "geo_display_name": "Иркутск",
+      "latitude": 52.29566,
+      "longitude": 104.29076,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2023468",
+      "region_display_name": "Иркутская область",
+      "input_geo_name": "ИРКУТСК",
+      "canonical_geo_id": "geo_e3bf4c0631680742",
+      "canonical_geo_display_name": "Иркутск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 369851.7638856886,
+      "budget_share": 0.0036618986523335507,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_17fdd13e7c3490cf",
+      "geo_display_name": "Иркутская область",
+      "latitude": 57.1,
+      "longitude": 106.36667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2023468",
+      "region_display_name": "Иркутская область",
+      "input_geo_name": "ИРКУТСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_17fdd13e7c3490cf",
+      "canonical_geo_display_name": "Иркутская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1382512.9832148745,
+      "budget_share": 0.013688247358563114,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_244e457664df05ed",
+      "geo_display_name": "Йошкар-Ола",
+      "latitude": 56.63877,
+      "longitude": 47.89078,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_529352",
+      "region_display_name": "Республика Марий Эл",
+      "input_geo_name": "ЙОШКАР-ОЛА",
+      "canonical_geo_id": "geo_244e457664df05ed",
+      "canonical_geo_display_name": "Йошкар-Ола",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 161883.99888926308,
+      "budget_share": 0.0016028118701907235,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_f3bc16c2258e5d7a",
+      "geo_display_name": "Кабардино-Балкарская Республика",
+      "latitude": 43.49167,
+      "longitude": 43.40833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_554667",
+      "region_display_name": "Кабардино-Балкарская Республика",
+      "input_geo_name": "КАБАРДИНО-БАЛКАРСКАЯ РЕСПУБЛИКА",
+      "canonical_geo_id": "geo_f3bc16c2258e5d7a",
+      "canonical_geo_display_name": "Кабардино-Балкарская Республика",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 535280.6678601181,
+      "budget_share": 0.005299808592674437,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_7aafc347a167c4da",
+      "geo_display_name": "Казань",
+      "latitude": 55.78874,
+      "longitude": 49.12214,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_484048",
+      "region_display_name": "Республика Татарстан",
+      "input_geo_name": "КАЗАНЬ",
+      "canonical_geo_id": "geo_7aafc347a167c4da",
+      "canonical_geo_display_name": "Казань",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 772789.3085662631,
+      "budget_share": 0.007651379292735278,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_a1c56e2e4c4466f8",
+      "geo_display_name": "Калининград",
+      "latitude": 54.70639,
+      "longitude": 20.51102,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_554230",
+      "region_display_name": "Калининградская область",
+      "input_geo_name": "КАЛИНИНГРАД",
+      "canonical_geo_id": "geo_a1c56e2e4c4466f8",
+      "canonical_geo_display_name": "Калининград",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 289500.58195525146,
+      "budget_share": 0.002866342395596549,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9fa9947d05f9c106",
+      "geo_display_name": "Калининградская область",
+      "latitude": 54.70833,
+      "longitude": 21.45,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_554230",
+      "region_display_name": "Калининградская область",
+      "input_geo_name": "КАЛИНИНГРАДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_9fa9947d05f9c106",
+      "canonical_geo_display_name": "Калининградская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 607360.4045918337,
+      "budget_share": 0.006013469352394393,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_fa69b41c3243fefc",
+      "geo_display_name": "Калуга",
+      "latitude": 54.53063,
+      "longitude": 36.27,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_553899",
+      "region_display_name": "Калужская область",
+      "input_geo_name": "КАЛУГА",
+      "canonical_geo_id": "geo_fa69b41c3243fefc",
+      "canonical_geo_display_name": "Калуга",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 200877.95482609284,
+      "budget_share": 0.0019888906418425033,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1615d65c53e3d88a",
+      "geo_display_name": "Кемерово",
+      "latitude": 55.35417,
+      "longitude": 86.10435,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1503900",
+      "region_display_name": "Кемеровская область",
+      "input_geo_name": "КЕМЕРОВО",
+      "canonical_geo_id": "geo_1615d65c53e3d88a",
+      "canonical_geo_display_name": "Кемерово",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 326131.26783530373,
+      "budget_share": 0.0032290224538148882,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_b43f77bcf0d0291c",
+      "geo_display_name": "Кемеровская область",
+      "latitude": 54.78333,
+      "longitude": 87.20833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1503900",
+      "region_display_name": "Кемеровская область",
+      "input_geo_name": "КЕМЕРОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_b43f77bcf0d0291c",
+      "canonical_geo_display_name": "Кемеровская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1520173.4640221675,
+      "budget_share": 0.015051222416061064,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_abf1e3dc13d4e6b6",
+      "geo_display_name": "Кинешма",
+      "latitude": 57.43665,
+      "longitude": 42.12766,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_555235",
+      "region_display_name": "Ивановская область",
+      "input_geo_name": "КИНЕШМА",
+      "canonical_geo_id": "geo_abf1e3dc13d4e6b6",
+      "canonical_geo_display_name": "Кинешма",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 44902.1310787737,
+      "budget_share": 0.0004445755552353832,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_fb2194782021ba45",
+      "geo_display_name": "Кириши",
+      "latitude": 59.47417,
+      "longitude": 32.04007,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_536199",
+      "region_display_name": "Ленинградская область",
+      "input_geo_name": "КИРИШИ",
+      "canonical_geo_id": "geo_fb2194782021ba45",
+      "canonical_geo_display_name": "Кириши",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 28950.05819552515,
+      "budget_share": 0.00028663423955965496,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_5b050d7ea114dc2e",
+      "geo_display_name": "Киров",
+      "latitude": 58.59809,
+      "longitude": 49.65783,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_548389",
+      "region_display_name": "Кировская область",
+      "input_geo_name": "КИРОВ",
+      "canonical_geo_id": "geo_5b050d7ea114dc2e",
+      "canonical_geo_display_name": "Киров",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 307815.9248952776,
+      "budget_share": 0.003047682424705719,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_692c9f128b3b5f84",
+      "geo_display_name": "Кировск",
+      "latitude": 59.88002,
+      "longitude": 30.99549,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_536199",
+      "region_display_name": "Ленинградская область",
+      "input_geo_name": "КИРОВСК",
+      "canonical_geo_id": "geo_692c9f128b3b5f84",
+      "canonical_geo_display_name": "Кировск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 14770.437854859769,
+      "budget_share": 0.0001462419589590076,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c39a937a4a265d1a",
+      "geo_display_name": "Кировская область",
+      "latitude": 58.68333,
+      "longitude": 49.83333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_548389",
+      "region_display_name": "Кировская область",
+      "input_geo_name": "КИРОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_c39a937a4a265d1a",
+      "canonical_geo_display_name": "Кировская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 700709.5718345474,
+      "budget_share": 0.006937718533015321,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_8e220753930a277f",
+      "geo_display_name": "Кисловодск",
+      "latitude": 43.91333,
+      "longitude": 42.72083,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_487839",
+      "region_display_name": "Ставропольский край",
+      "input_geo_name": "КИСЛОВОДСК",
+      "canonical_geo_id": "geo_8e220753930a277f",
+      "canonical_geo_display_name": "Кисловодск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 75033.82430268763,
+      "budget_share": 0.0007429091515117587,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_43e3aae44829f95f",
+      "geo_display_name": "Ковров",
+      "latitude": 56.35752,
+      "longitude": 41.31893,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_826294",
+      "region_display_name": "Владимирская область",
+      "input_geo_name": "КОВРОВ",
+      "canonical_geo_id": "geo_43e3aae44829f95f",
+      "canonical_geo_display_name": "Ковров",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 79169.54690204836,
+      "budget_share": 0.0007838569000202807,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_81b9346d310ccb3a",
+      "geo_display_name": "Конаково",
+      "latitude": 56.70153,
+      "longitude": 36.77305,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480041",
+      "region_display_name": "Тверская область",
+      "input_geo_name": "КОНАКОВО",
+      "canonical_geo_id": "geo_81b9346d310ccb3a",
+      "canonical_geo_display_name": "Конаково",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 21860.248025192457,
+      "budget_share": 0.00021643809925933125,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_441492c9e1030bce",
+      "geo_display_name": "Королев",
+      "latitude": 55.91417,
+      "longitude": 37.82556,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "КОРОЛЕВ",
+      "canonical_geo_id": "geo_441492c9e1030bce",
+      "canonical_geo_display_name": "Королев",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 134115.57572212673,
+      "budget_share": 0.0013278769873477894,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_4bb0b2082503653a",
+      "geo_display_name": "Коряжма",
+      "latitude": 61.31242,
+      "longitude": 47.14829,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_581043",
+      "region_display_name": "Архангельская область",
+      "input_geo_name": "КОРЯЖМА",
+      "canonical_geo_id": "geo_4bb0b2082503653a",
+      "canonical_geo_display_name": "Коряжма",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 20087.795482609286,
+      "budget_share": 0.00019888906418425036,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_93400a42108562f8",
+      "geo_display_name": "Кострома",
+      "latitude": 57.76638,
+      "longitude": 40.92828,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_543871",
+      "region_display_name": "Костромская область",
+      "input_geo_name": "КОСТРОМА",
+      "canonical_geo_id": "geo_93400a42108562f8",
+      "canonical_geo_display_name": "Кострома",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 163656.45143184625,
+      "budget_share": 0.0016203609052658043,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_89a058f5b87790ec",
+      "geo_display_name": "Костромская область",
+      "latitude": 58.45833,
+      "longitude": 43.78333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_543871",
+      "region_display_name": "Костромская область",
+      "input_geo_name": "КОСТРОМСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_89a058f5b87790ec",
+      "canonical_geo_display_name": "Костромская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 359807.866144384,
+      "budget_share": 0.003562454120241426,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_3c2426b44557da90",
+      "geo_display_name": "Котлас",
+      "latitude": 61.25663,
+      "longitude": 46.6537,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_581043",
+      "region_display_name": "Архангельская область",
+      "input_geo_name": "КОТЛАС",
+      "canonical_geo_id": "geo_3c2426b44557da90",
+      "canonical_geo_display_name": "Котлас",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 33676.59830908028,
+      "budget_share": 0.0003334316664265374,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c0fb54b8d7d439bc",
+      "geo_display_name": "Красногорск",
+      "latitude": 55.81904,
+      "longitude": 37.32984,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "КРАСНОГОРСК",
+      "canonical_geo_id": "geo_c0fb54b8d7d439bc",
+      "canonical_geo_display_name": "Красногорск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 103393.06498401838,
+      "budget_share": 0.0010236937127130533,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_603847d7490bba77",
+      "geo_display_name": "Краснодар",
+      "latitude": 45.04534,
+      "longitude": 38.98178,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_542415",
+      "region_display_name": "Краснодарский край",
+      "input_geo_name": "КРАСНОДАР",
+      "canonical_geo_id": "geo_603847d7490bba77",
+      "canonical_geo_display_name": "Краснодар",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 662306.4334119121,
+      "budget_share": 0.006557489439721902,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_23aeed82014ce95e",
+      "geo_display_name": "Краснодарский край",
+      "latitude": 44.98811,
+      "longitude": 38.97675,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_542415",
+      "region_display_name": "Краснодарский край",
+      "input_geo_name": "КРАСНОДАРСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_23aeed82014ce95e",
+      "canonical_geo_display_name": "Краснодарский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 3530725.464825679,
+      "budget_share": 0.03495767786956118,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_93a89aa2fbcf50f7",
+      "geo_display_name": "Красноярск",
+      "latitude": 56.03742,
+      "longitude": 92.93136,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1502020",
+      "region_display_name": "Красноярский край",
+      "input_geo_name": "КРАСНОЯРСК",
+      "canonical_geo_id": "geo_93a89aa2fbcf50f7",
+      "canonical_geo_display_name": "Красноярск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 645763.5430144691,
+      "budget_share": 0.006393698445687813,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_6ef64f38d40f6a76",
+      "geo_display_name": "Красноярский край",
+      "latitude": 67.5,
+      "longitude": 96.03333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1502020",
+      "region_display_name": "Красноярский край",
+      "input_geo_name": "КРАСНОЯРСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_6ef64f38d40f6a76",
+      "canonical_geo_display_name": "Красноярский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1670241.1126275428,
+      "budget_share": 0.016537040719084583,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2c847ca0173b1925",
+      "geo_display_name": "Кузнецк",
+      "latitude": 53.11675,
+      "longitude": 46.60037,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_511555",
+      "region_display_name": "Пензенская область",
+      "input_geo_name": "КУЗНЕЦК",
+      "canonical_geo_id": "geo_2c847ca0173b1925",
+      "canonical_geo_display_name": "Кузнецк",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 45492.94859296809,
+      "budget_share": 0.0004504252335937434,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_8d0ec5d509e7e256",
+      "geo_display_name": "Курган",
+      "latitude": 55.44905,
+      "longitude": 65.34344,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1501312",
+      "region_display_name": "Курганская область",
+      "input_geo_name": "КУРГАН",
+      "canonical_geo_id": "geo_8d0ec5d509e7e256",
+      "canonical_geo_display_name": "Курган",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 180199.3418292892,
+      "budget_share": 0.001784151899299893,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_82e3d00fad994578",
+      "geo_display_name": "Курганская область",
+      "latitude": 55.45,
+      "longitude": 64.80833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1501312",
+      "region_display_name": "Курганская область",
+      "input_geo_name": "КУРГАНСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_82e3d00fad994578",
+      "canonical_geo_display_name": "Курганская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 458474.39101484726,
+      "budget_share": 0.004539350406087597,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_92b6cf23ae9992dc",
+      "geo_display_name": "Курск",
+      "latitude": 51.72689,
+      "longitude": 36.18457,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_538555",
+      "region_display_name": "Курская область",
+      "input_geo_name": "КУРСК",
+      "canonical_geo_id": "geo_92b6cf23ae9992dc",
+      "canonical_geo_display_name": "Курск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 268231.15144425345,
+      "budget_share": 0.002655753974695579,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_95a5bc5573fb18d5",
+      "geo_display_name": "Курская область",
+      "latitude": 51.68333,
+      "longitude": 36.1,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_538555",
+      "region_display_name": "Курская область",
+      "input_geo_name": "КУРСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_95a5bc5573fb18d5",
+      "canonical_geo_display_name": "Курская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 630993.1051596093,
+      "budget_share": 0.006247456486728805,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_a58138e94aa78713",
+      "geo_display_name": "Ленинградская область",
+      "latitude": 60.01667,
+      "longitude": 31.71667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_536199",
+      "region_display_name": "Ленинградская область",
+      "input_geo_name": "ЛЕНИНГРАДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_a58138e94aa78713",
+      "canonical_geo_display_name": "Ленинградская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1229491.2470385272,
+      "budget_share": 0.012173180663747793,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_679fcdcbff1d857e",
+      "geo_display_name": "Липецк",
+      "latitude": 52.5876,
+      "longitude": 39.55151,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_535120",
+      "region_display_name": "Липецкая область",
+      "input_geo_name": "ЛИПЕЦК",
+      "canonical_geo_id": "geo_679fcdcbff1d857e",
+      "canonical_geo_display_name": "Липецк",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 291863.85201202903,
+      "budget_share": 0.0028897411090299903,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_76c59267159b9cf1",
+      "geo_display_name": "Липецкая область",
+      "latitude": 52.64167,
+      "longitude": 39.15,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_535120",
+      "region_display_name": "Липецкая область",
+      "input_geo_name": "ЛИПЕЦКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_76c59267159b9cf1",
+      "canonical_geo_display_name": "Липецкая область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 657579.8932983569,
+      "budget_share": 0.0065106920128550185,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_aa6a3705d9ba05dd",
+      "geo_display_name": "Лобня",
+      "latitude": 56.02714,
+      "longitude": 37.46793,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ЛОБНЯ",
+      "canonical_geo_id": "geo_aa6a3705d9ba05dd",
+      "canonical_geo_display_name": "Лобня",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 54355.21130588395,
+      "budget_share": 0.0005381704089691481,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_db7fa1f7c10dbe2c",
+      "geo_display_name": "Магнитогорск",
+      "latitude": 53.39808,
+      "longitude": 59.0066,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1508290",
+      "region_display_name": "Челябинская область",
+      "input_geo_name": "МАГНИТОГОРСК",
+      "canonical_geo_id": "geo_db7fa1f7c10dbe2c",
+      "canonical_geo_display_name": "Магнитогорск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 242825.99833389462,
+      "budget_share": 0.0024042178052860854,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2db8f7f2a69e53db",
+      "geo_display_name": "Майкоп",
+      "latitude": 44.60789,
+      "longitude": 40.10242,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_584222",
+      "region_display_name": "Республика Адыгея",
+      "input_geo_name": "МАЙКОП",
+      "canonical_geo_id": "geo_2db8f7f2a69e53db",
+      "canonical_geo_display_name": "Майкоп",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 86259.35707238106,
+      "budget_share": 0.0008540530403206045,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_150933c6acf548e4",
+      "geo_display_name": "Мичуринск",
+      "latitude": 52.90761,
+      "longitude": 40.4823,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_484638",
+      "region_display_name": "Тамбовская область",
+      "input_geo_name": "МИЧУРИНСК",
+      "canonical_geo_id": "geo_150933c6acf548e4",
+      "canonical_geo_display_name": "Мичуринск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 50810.306220717604,
+      "budget_share": 0.0005030723388189861,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ded441dd9232ea01",
+      "geo_display_name": "Мончегорск",
+      "latitude": 67.93972,
+      "longitude": 32.87389,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524304",
+      "region_display_name": "Мурманская область",
+      "input_geo_name": "МОНЧЕГОРСК",
+      "canonical_geo_id": "geo_ded441dd9232ea01",
+      "canonical_geo_display_name": "Мончегорск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 21860.248025192457,
+      "budget_share": 0.00021643809925933125,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_96d8acf2128d1686",
+      "geo_display_name": "Москва",
+      "latitude": 55.75204,
+      "longitude": 37.61781,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524894",
+      "region_display_name": "Москва",
+      "input_geo_name": "Москва",
+      "canonical_geo_id": "geo_96d8acf2128d1686",
+      "canonical_geo_display_name": "Москва",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 8742072.706003297,
+      "budget_share": 0.08655517530696334,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e2491244881757a2",
+      "geo_display_name": "Московская область",
+      "latitude": 55.81363,
+      "longitude": 36.71631,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "МОСКОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_e2491244881757a2",
+      "canonical_geo_display_name": "Московская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 5036128.490992987,
+      "budget_share": 0.049862658326663235,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_47e505cb9a22cb1f",
+      "geo_display_name": "Мурманск",
+      "latitude": 68.96778,
+      "longitude": 33.09922,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524304",
+      "region_display_name": "Мурманская область",
+      "input_geo_name": "МУРМАНСК",
+      "canonical_geo_id": "geo_47e505cb9a22cb1f",
+      "canonical_geo_display_name": "Мурманск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 157748.27628990234,
+      "budget_share": 0.0015618641216822013,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_3f3864f3f1391c1f",
+      "geo_display_name": "Мурманская область",
+      "latitude": 67.80833,
+      "longitude": 34.575,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524304",
+      "region_display_name": "Мурманская область",
+      "input_geo_name": "МУРМАНСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_3f3864f3f1391c1f",
+      "canonical_geo_display_name": "Мурманская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 392893.64693926985,
+      "budget_share": 0.0038900361083096025,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ea4bfd6090011e7d",
+      "geo_display_name": "Мытищи",
+      "latitude": 55.91099,
+      "longitude": 37.72964,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "МЫТИЩИ",
+      "canonical_geo_id": "geo_ea4bfd6090011e7d",
+      "canonical_geo_display_name": "Мытищи",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 149476.83109118088,
+      "budget_share": 0.0014799686246651572,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d8ed17b732f43f57",
+      "geo_display_name": "Набережные Челны",
+      "latitude": 55.73718,
+      "longitude": 52.41961,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_484048",
+      "region_display_name": "Республика Татарстан",
+      "input_geo_name": "НАБЕРЕЖНЫЕ ЧЕЛНЫ",
+      "canonical_geo_id": "geo_d8ed17b732f43f57",
+      "canonical_geo_display_name": "Набережные Челны",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 317859.82263658225,
+      "budget_share": 0.003147126956797844,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_f34399b4da91273c",
+      "geo_display_name": "Нижегородская область",
+      "latitude": 56.31667,
+      "longitude": 44.60833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_559838",
+      "region_display_name": "Нижегородская область",
+      "input_geo_name": "НИЖЕГОРОДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_f34399b4da91273c",
+      "canonical_geo_display_name": "Нижегородская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1833897.564059389,
+      "budget_share": 0.018157401624350387,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_a20b0e6e0fac037b",
+      "geo_display_name": "Нижневартовск",
+      "latitude": 60.9344,
+      "longitude": 76.5531,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1503773",
+      "region_display_name": "Ханты-Мансийский автономный округ - Югра",
+      "input_geo_name": "НИЖНЕВАРТОВСК",
+      "canonical_geo_id": "geo_a20b0e6e0fac037b",
+      "canonical_geo_display_name": "Нижневартовск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 165428.9039744294,
+      "budget_share": 0.0016379099403408853,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_06ad7b89944f92a2",
+      "geo_display_name": "Нижний Тагил",
+      "latitude": 57.91944,
+      "longitude": 59.965,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1490542",
+      "region_display_name": "Свердловская область",
+      "input_geo_name": "НИЖНИЙ ТАГИЛ",
+      "canonical_geo_id": "geo_06ad7b89944f92a2",
+      "canonical_geo_display_name": "Нижний Тагил",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 201468.77234028725,
+      "budget_share": 0.0019947403202008637,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_f37af7616df95109",
+      "geo_display_name": "Новгородская область",
+      "latitude": 58.30833,
+      "longitude": 32.49167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_519324",
+      "region_display_name": "Новгородская область",
+      "input_geo_name": "НОВГОРОДСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_f37af7616df95109",
+      "canonical_geo_display_name": "Новгородская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 339720.0706617747,
+      "budget_share": 0.0033635650560571756,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e6eb0fa6da272e9b",
+      "geo_display_name": "Новороссийск",
+      "latitude": 44.73188,
+      "longitude": 37.76176,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_542415",
+      "region_display_name": "Краснодарский край",
+      "input_geo_name": "НОВОРОССИЙСК",
+      "canonical_geo_id": "geo_e6eb0fa6da272e9b",
+      "canonical_geo_display_name": "Новороссийск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 203241.22488287042,
+      "budget_share": 0.0020122893552759445,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ae4b572fa4c02f42",
+      "geo_display_name": "Новосибирск",
+      "latitude": 55.02259,
+      "longitude": 82.93175,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1496745",
+      "region_display_name": "Новосибирская область",
+      "input_geo_name": "НОВОСИБИРСК",
+      "canonical_geo_id": "geo_ae4b572fa4c02f42",
+      "canonical_geo_display_name": "Новосибирск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 965986.6357078288,
+      "budget_share": 0.009564224115919097,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c704aed06fb8903b",
+      "geo_display_name": "Новосибирская область",
+      "latitude": 55.275,
+      "longitude": 79.76667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1496745",
+      "region_display_name": "Новосибирская область",
+      "input_geo_name": "НОВОСИБИРСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_c704aed06fb8903b",
+      "canonical_geo_display_name": "Новосибирская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1653107.4047159054,
+      "budget_share": 0.016367400046692133,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_89551556910e5180",
+      "geo_display_name": "Оленегорск",
+      "latitude": 68.1432,
+      "longitude": 33.25287,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524304",
+      "region_display_name": "Мурманская область",
+      "input_geo_name": "ОЛЕНЕГОРСК",
+      "canonical_geo_id": "geo_89551556910e5180",
+      "canonical_geo_display_name": "Оленегорск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 10634.715255499035,
+      "budget_share": 0.0001052942104504855,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_093a1766328e66ca",
+      "geo_display_name": "Омск",
+      "latitude": 54.99244,
+      "longitude": 73.36859,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1496152",
+      "region_display_name": "Омская область",
+      "input_geo_name": "ОМСК",
+      "canonical_geo_id": "geo_093a1766328e66ca",
+      "canonical_geo_display_name": "Омск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 665260.520982884,
+      "budget_share": 0.006586737831513703,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e1f551bc52b231f4",
+      "geo_display_name": "Омская область",
+      "latitude": 56.1,
+      "longitude": 73.34167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1496152",
+      "region_display_name": "Омская область",
+      "input_geo_name": "ОМСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_e1f551bc52b231f4",
+      "canonical_geo_display_name": "Омская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1088876.6786602624,
+      "budget_share": 0.010780957214458044,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_75b1c7a1ec0c6bca",
+      "geo_display_name": "Орел",
+      "latitude": 52.96879,
+      "longitude": 36.0791,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_514801",
+      "region_display_name": "Орловская область",
+      "input_geo_name": "ОРЕЛ",
+      "canonical_geo_id": "geo_75b1c7a1ec0c6bca",
+      "canonical_geo_display_name": "Орел",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 179017.7068009004,
+      "budget_share": 0.0017724525425831723,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_181e96762afa6524",
+      "geo_display_name": "Оренбург",
+      "latitude": 51.76712,
+      "longitude": 55.09883,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_515001",
+      "region_display_name": "Оренбургская область",
+      "input_geo_name": "ОРЕНБУРГ",
+      "canonical_geo_id": "geo_181e96762afa6524",
+      "canonical_geo_display_name": "Оренбург",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 337947.61811919155,
+      "budget_share": 0.0033460160209820944,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_5626b585975ad5ce",
+      "geo_display_name": "Оренбургская область",
+      "latitude": 51.64167,
+      "longitude": 55.6,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_515001",
+      "region_display_name": "Оренбургская область",
+      "input_geo_name": "ОРЕНБУРГСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_5626b585975ad5ce",
+      "canonical_geo_display_name": "Оренбургская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1104828.7515435107,
+      "budget_share": 0.01093889853013377,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_4ddce812b8d17e01",
+      "geo_display_name": "Орловская область",
+      "latitude": 53,
+      "longitude": 36.25,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_514801",
+      "region_display_name": "Орловская область",
+      "input_geo_name": "ОРЛОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_4ddce812b8d17e01",
+      "canonical_geo_display_name": "Орловская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 410027.3548509072,
+      "budget_share": 0.0040596767807020515,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_a1c32c91e8ec8e60",
+      "geo_display_name": "Остров",
+      "latitude": 57.3438,
+      "longitude": 28.35363,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_504338",
+      "region_display_name": "Псковская область",
+      "input_geo_name": "ОСТРОВ",
+      "canonical_geo_id": "geo_a1c32c91e8ec8e60",
+      "canonical_geo_display_name": "Остров",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 11816.350283887816,
+      "budget_share": 0.0001169935671672061,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_09500abdc140c57e",
+      "geo_display_name": "Пенза",
+      "latitude": 53.19568,
+      "longitude": 45.01075,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_511555",
+      "region_display_name": "Пензенская область",
+      "input_geo_name": "ПЕНЗА",
+      "canonical_geo_id": "geo_09500abdc140c57e",
+      "canonical_geo_display_name": "Пенза",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 297181.20963977854,
+      "budget_share": 0.002942388214255233,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_19402913187c65e0",
+      "geo_display_name": "Пензенская область",
+      "latitude": 53.18333,
+      "longitude": 44.63333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_511555",
+      "region_display_name": "Пензенская область",
+      "input_geo_name": "ПЕНЗЕНСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_19402913187c65e0",
+      "canonical_geo_display_name": "Пензенская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 737340.2577145997,
+      "budget_share": 0.007300398591233661,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_f6705f8d048e2b53",
+      "geo_display_name": "Переславль-Залесский",
+      "latitude": 56.73912,
+      "longitude": 38.85966,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_468898",
+      "region_display_name": "Ярославская область",
+      "input_geo_name": "ПЕРЕСЛАВЛЬ-ЗАЛЕССКИЙ",
+      "canonical_geo_id": "geo_f6705f8d048e2b53",
+      "canonical_geo_display_name": "Переславль-Залесский",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 21860.248025192457,
+      "budget_share": 0.00021643809925933125,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ba7e7b605d51de94",
+      "geo_display_name": "Пермский край",
+      "latitude": 59,
+      "longitude": 57,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_511180",
+      "region_display_name": "Пермский край",
+      "input_geo_name": "ПЕРМСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_ba7e7b605d51de94",
+      "canonical_geo_display_name": "Пермский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1497131.5809685863,
+      "budget_share": 0.014823084960085012,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_37451e5dce8192aa",
+      "geo_display_name": "Пермь",
+      "latitude": 58.01046,
+      "longitude": 56.25017,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_511180",
+      "region_display_name": "Пермский край",
+      "input_geo_name": "ПЕРМЬ",
+      "canonical_geo_id": "geo_37451e5dce8192aa",
+      "canonical_geo_display_name": "Пермь",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 607360.4045918337,
+      "budget_share": 0.006013469352394393,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_a8cb66747ba3b026",
+      "geo_display_name": "Петрозаводск",
+      "latitude": 61.78491,
+      "longitude": 34.34691,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_552548",
+      "region_display_name": "Республика Карелия",
+      "input_geo_name": "ПЕТРОЗАВОДСК",
+      "canonical_geo_id": "geo_a8cb66747ba3b026",
+      "canonical_geo_display_name": "Петрозаводск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 160111.54634667988,
+      "budget_share": 0.0015852628351156425,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_425d8ef3221e32b8",
+      "geo_display_name": "Подольск",
+      "latitude": 55.42419,
+      "longitude": 37.55472,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ПОДОЛЬСК",
+      "canonical_geo_id": "geo_425d8ef3221e32b8",
+      "canonical_geo_display_name": "Подольск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 184335.06442864993,
+      "budget_share": 0.0018250996478084151,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_64a57807beaa1977",
+      "geo_display_name": "Псков",
+      "latitude": 57.81922,
+      "longitude": 28.33181,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_504338",
+      "region_display_name": "Псковская область",
+      "input_geo_name": "ПСКОВ",
+      "canonical_geo_id": "geo_64a57807beaa1977",
+      "canonical_geo_display_name": "Псков",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 122299.22543823888,
+      "budget_share": 0.0012108834201805829,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_5b43415568bcd9ce",
+      "geo_display_name": "Псковская область",
+      "latitude": 57.23333,
+      "longitude": 29.23333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_504338",
+      "region_display_name": "Псковская область",
+      "input_geo_name": "ПСКОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_5b43415568bcd9ce",
+      "canonical_geo_display_name": "Псковская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 345037.4282895242,
+      "budget_share": 0.003416212161282418,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_0727e7ed2632befc",
+      "geo_display_name": "Республика Адыгея",
+      "latitude": 44.625,
+      "longitude": 40.13333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_584222",
+      "region_display_name": "Республика Адыгея",
+      "input_geo_name": "РЕСПУБЛИКА АДЫГЕЯ",
+      "canonical_geo_id": "geo_0727e7ed2632befc",
+      "canonical_geo_display_name": "Республика Адыгея",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 293045.48704041785,
+      "budget_share": 0.0029014404657467115,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ca87e5cd19f69216",
+      "geo_display_name": "Республика Башкортостан",
+      "latitude": 54.26667,
+      "longitude": 56.525,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_578853",
+      "region_display_name": "Республика Башкортостан",
+      "input_geo_name": "РЕСПУБЛИКА БАШКОРТОСТАН",
+      "canonical_geo_id": "geo_ca87e5cd19f69216",
+      "canonical_geo_display_name": "Республика Башкортостан",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 2358543.5166640077,
+      "budget_share": 0.023351916006574335,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_528f8766cd1b4fae",
+      "geo_display_name": "Республика Бурятия",
+      "latitude": 52.89167,
+      "longitude": 109.11667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2050915",
+      "region_display_name": "Республика Бурятия",
+      "input_geo_name": "РЕСПУБЛИКА БУРЯТИЯ",
+      "canonical_geo_id": "geo_528f8766cd1b4fae",
+      "canonical_geo_display_name": "Республика Бурятия",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 583136.8865098637,
+      "budget_share": 0.00577363253970162,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_dd8200d841f8b809",
+      "geo_display_name": "Республика Калмыкия",
+      "latitude": 46.45,
+      "longitude": 45.31667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_553972",
+      "region_display_name": "Республика Калмыкия",
+      "input_geo_name": "РЕСПУБЛИКА КАЛМЫКИЯ",
+      "canonical_geo_id": "geo_dd8200d841f8b809",
+      "canonical_geo_display_name": "Республика Калмыкия",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 154794.18871893038,
+      "budget_share": 0.0015326157298903998,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_3150ebe5e447e018",
+      "geo_display_name": "Республика Карелия",
+      "latitude": 63.55,
+      "longitude": 33.13333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_552548",
+      "region_display_name": "Республика Карелия",
+      "input_geo_name": "РЕСПУБЛИКА КАРЕЛИЯ",
+      "canonical_geo_id": "geo_3150ebe5e447e018",
+      "canonical_geo_display_name": "Республика Карелия",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 308406.742409472,
+      "budget_share": 0.0030535321030640793,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9adf3ba9e73a727e",
+      "geo_display_name": "Республика Коми",
+      "latitude": 64.125,
+      "longitude": 54.79167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_545854",
+      "region_display_name": "Республика Коми",
+      "input_geo_name": "РЕСПУБЛИКА КОМИ",
+      "canonical_geo_id": "geo_9adf3ba9e73a727e",
+      "canonical_geo_display_name": "Республика Коми",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 437795.7780180436,
+      "budget_share": 0.004334611663544986,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_f9ca0ddcdbe5e80b",
+      "geo_display_name": "Республика Марий Эл",
+      "latitude": 56.575,
+      "longitude": 47.94167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_529352",
+      "region_display_name": "Республика Марий Эл",
+      "input_geo_name": "РЕСПУБЛИКА МАРИЙ ЭЛ",
+      "canonical_geo_id": "geo_f9ca0ddcdbe5e80b",
+      "canonical_geo_display_name": "Республика Марий Эл",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 391121.1943966867,
+      "budget_share": 0.0038724870732345217,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_0e3003c176b3a09b",
+      "geo_display_name": "Республика Мордовия",
+      "latitude": 54.225,
+      "longitude": 44.45,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_525369",
+      "region_display_name": "Республика Мордовия",
+      "input_geo_name": "РЕСПУБЛИКА МОРДОВИЯ",
+      "canonical_geo_id": "geo_0e3003c176b3a09b",
+      "canonical_geo_display_name": "Республика Мордовия",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 451975.398358709,
+      "budget_share": 0.004475003944145634,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2bb5b3c30eec3850",
+      "geo_display_name": "Республика Северная Осетия - Алания",
+      "latitude": 43,
+      "longitude": 44.25,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_519969",
+      "region_display_name": "Республика Северная Осетия - Алания",
+      "input_geo_name": "РЕСПУБЛИКА СЕВЕРНАЯ ОСЕТИЯ",
+      "canonical_geo_id": "geo_2bb5b3c30eec3850",
+      "canonical_geo_display_name": "Республика Северная Осетия - Алания",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 401165.09213799133,
+      "budget_share": 0.003971931605326647,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d83edfd6628e9afc",
+      "geo_display_name": "Республика Татарстан",
+      "latitude": 55.35,
+      "longitude": 50.91667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_484048",
+      "region_display_name": "Республика Татарстан",
+      "input_geo_name": "РЕСПУБЛИКА ТАТАРСТАН",
+      "canonical_geo_id": "geo_d83edfd6628e9afc",
+      "canonical_geo_display_name": "Республика Татарстан",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 2305960.757900707,
+      "budget_share": 0.022831294632680268,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_654946621661ed59",
+      "geo_display_name": "Ростов-на-Дону",
+      "latitude": 47.21997,
+      "longitude": 39.70769,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_501165",
+      "region_display_name": "Ростовская область",
+      "input_geo_name": "РОСТОВ-НА-ДОНУ",
+      "canonical_geo_id": "geo_654946621661ed59",
+      "canonical_geo_display_name": "Ростов-на-Дону",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 675304.4187241887,
+      "budget_share": 0.006686182363605828,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_aaf573ca2de434b2",
+      "geo_display_name": "Ростовская область",
+      "latitude": 47.74167,
+      "longitude": 41.30833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_501165",
+      "region_display_name": "Ростовская область",
+      "input_geo_name": "РОСТОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_aaf573ca2de434b2",
+      "canonical_geo_display_name": "Ростовская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 2444802.873736389,
+      "budget_share": 0.02420596904689494,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_42f79d22f4fb70a5",
+      "geo_display_name": "Рыбинск",
+      "latitude": 58.04562,
+      "longitude": 38.83811,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_468898",
+      "region_display_name": "Ярославская область",
+      "input_geo_name": "РЫБИНСК",
+      "canonical_geo_id": "geo_42f79d22f4fb70a5",
+      "canonical_geo_display_name": "Рыбинск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 101620.61244143521,
+      "budget_share": 0.0010061446776379723,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_6250113c3a735179",
+      "geo_display_name": "Рязань",
+      "latitude": 54.62696,
+      "longitude": 39.70415,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_500059",
+      "region_display_name": "Рязанская область",
+      "input_geo_name": "РЯЗАНЬ",
+      "canonical_geo_id": "geo_6250113c3a735179",
+      "canonical_geo_display_name": "Рязань",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 309588.37743786076,
+      "budget_share": 0.0030652314597807997,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2a7d6797adab975f",
+      "geo_display_name": "Самара",
+      "latitude": 53.20767,
+      "longitude": 50.13553,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_499068",
+      "region_display_name": "Самарская область",
+      "input_geo_name": "САМАРА",
+      "canonical_geo_id": "geo_2a7d6797adab975f",
+      "canonical_geo_display_name": "Самара",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 687711.5865222709,
+      "budget_share": 0.006809025609131395,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c0f79969c9badc87",
+      "geo_display_name": "Самарская область",
+      "latitude": 53.275,
+      "longitude": 50.46667,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_499068",
+      "region_display_name": "Самарская область",
+      "input_geo_name": "САМАРСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_c0f79969c9badc87",
+      "canonical_geo_display_name": "Самарская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1840396.556715527,
+      "budget_share": 0.018221748086292348,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_94835d40a52e5a3a",
+      "geo_display_name": "Санкт-Петербург",
+      "latitude": 59.93863,
+      "longitude": 30.31413,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_536203",
+      "region_display_name": "Санкт-Петербург",
+      "input_geo_name": "САНКТ-ПЕТЕРБУРГ",
+      "canonical_geo_id": "geo_94835d40a52e5a3a",
+      "canonical_geo_display_name": "Санкт-Петербург",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 3308578.079488588,
+      "budget_share": 0.032758198806817705,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_7d1b5b95bf81cf12",
+      "geo_display_name": "Саранск",
+      "latitude": 54.18485,
+      "longitude": 45.17166,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_525369",
+      "region_display_name": "Республика Мордовия",
+      "input_geo_name": "САРАНСК",
+      "canonical_geo_id": "geo_7d1b5b95bf81cf12",
+      "canonical_geo_display_name": "Саранск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 178426.88928670602,
+      "budget_share": 0.001766602864224812,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_5fa9084303383362",
+      "geo_display_name": "Саратов",
+      "latitude": 51.54048,
+      "longitude": 45.9901,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_498671",
+      "region_display_name": "Саратовская область",
+      "input_geo_name": "САРАТОВ",
+      "canonical_geo_id": "geo_5fa9084303383362",
+      "canonical_geo_display_name": "Саратов",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 477380.5514690677,
+      "budget_share": 0.004726540113555126,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_cda5a80a3b7169f4",
+      "geo_display_name": "Саратовская область",
+      "latitude": 51.5,
+      "longitude": 47,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_498671",
+      "region_display_name": "Саратовская область",
+      "input_geo_name": "САРАТОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_cda5a80a3b7169f4",
+      "canonical_geo_display_name": "Саратовская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1367151.7278458201,
+      "budget_share": 0.013536155721245743,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e6e7e70b713bacde",
+      "geo_display_name": "Свердловская область",
+      "latitude": 58.58333,
+      "longitude": 61.53333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1490542",
+      "region_display_name": "Свердловская область",
+      "input_geo_name": "СВЕРДЛОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_e6e7e70b713bacde",
+      "canonical_geo_display_name": "Свердловская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 2503293.807641634,
+      "budget_share": 0.024785087204372613,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c6774093951808be",
+      "geo_display_name": "Северодвинск",
+      "latitude": 64.55825,
+      "longitude": 39.82971,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_581043",
+      "region_display_name": "Архангельская область",
+      "input_geo_name": "СЕВЕРОДВИНСК",
+      "canonical_geo_id": "geo_c6774093951808be",
+      "canonical_geo_display_name": "Северодвинск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 99848.15989885206,
+      "budget_share": 0.0009885956425628917,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_7b998ab602a8bb85",
+      "geo_display_name": "Смоленск",
+      "latitude": 54.77826,
+      "longitude": 32.05088,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_491684",
+      "region_display_name": "Смоленская область",
+      "input_geo_name": "СМОЛЕНСК",
+      "canonical_geo_id": "geo_7b998ab602a8bb85",
+      "canonical_geo_display_name": "Смоленск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 186698.3344854275,
+      "budget_share": 0.0018484983612418566,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9ad85b7d0d60c3a8",
+      "geo_display_name": "Сокол",
+      "latitude": 59.46167,
+      "longitude": 40.12056,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472454",
+      "region_display_name": "Вологодская область",
+      "input_geo_name": "СОКОЛ",
+      "canonical_geo_id": "geo_9ad85b7d0d60c3a8",
+      "canonical_geo_display_name": "Сокол",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 20678.612996803677,
+      "budget_share": 0.00020473874254261067,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_c702f60ace70d5f2",
+      "geo_display_name": "Солнечногорск",
+      "latitude": 56.17527,
+      "longitude": 36.97082,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "СОЛНЕЧНОГОРСК",
+      "canonical_geo_id": "geo_c702f60ace70d5f2",
+      "canonical_geo_display_name": "Солнечногорск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 37221.50339424662,
+      "budget_share": 0.0003685297365766992,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2e944fce52e678a6",
+      "geo_display_name": "Сочи",
+      "latitude": 43.59699,
+      "longitude": 39.72477,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_542415",
+      "region_display_name": "Краснодарский край",
+      "input_geo_name": "СОЧИ",
+      "canonical_geo_id": "geo_2e944fce52e678a6",
+      "canonical_geo_display_name": "Сочи",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 276502.5966429749,
+      "budget_share": 0.0027376494717126225,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_b03bdf6566284376",
+      "geo_display_name": "Ставрополь",
+      "latitude": 45.03442,
+      "longitude": 41.9642,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_487839",
+      "region_display_name": "Ставропольский край",
+      "input_geo_name": "СТАВРОПОЛЬ",
+      "canonical_geo_id": "geo_b03bdf6566284376",
+      "canonical_geo_display_name": "Ставрополь",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 271185.2390152254,
+      "budget_share": 0.00268500236648738,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_6ead6cdc17609501",
+      "geo_display_name": "Ставропольский край",
+      "latitude": 44.95,
+      "longitude": 43.34167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_487839",
+      "region_display_name": "Ставропольский край",
+      "input_geo_name": "СТАВРОПОЛЬСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_6ead6cdc17609501",
+      "canonical_geo_display_name": "Ставропольский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1666105.390028182,
+      "budget_share": 0.016496092970576057,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_870a7f937ff57ad8",
+      "geo_display_name": "Старый Оскол",
+      "latitude": 51.3025,
+      "longitude": 37.84613,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_578071",
+      "region_display_name": "Белгородская область",
+      "input_geo_name": "СТАРЫЙ ОСКОЛ",
+      "canonical_geo_id": "geo_870a7f937ff57ad8",
+      "canonical_geo_display_name": "Старый Оскол",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 131161.48815115477,
+      "budget_share": 0.0012986285955559878,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_de69fcc1dc39ab66",
+      "geo_display_name": "Сургут",
+      "latitude": 61.25757,
+      "longitude": 73.41775,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1503773",
+      "region_display_name": "Ханты-Мансийский автономный округ - Югра",
+      "input_geo_name": "СУРГУТ",
+      "canonical_geo_id": "geo_de69fcc1dc39ab66",
+      "canonical_geo_display_name": "Сургут",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 234554.55313517313,
+      "budget_share": 0.002322322308269041,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_4182ea75dbfa6adf",
+      "geo_display_name": "Сыктывкар",
+      "latitude": 61.66393,
+      "longitude": 50.8163,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_545854",
+      "region_display_name": "Республика Коми",
+      "input_geo_name": "СЫКТЫВКАР",
+      "canonical_geo_id": "geo_4182ea75dbfa6adf",
+      "canonical_geo_display_name": "Сыктывкар",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 144159.47346343135,
+      "budget_share": 0.0014273215194399143,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_e10794967a6913ef",
+      "geo_display_name": "Тамбов",
+      "latitude": 52.73632,
+      "longitude": 41.44102,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_484638",
+      "region_display_name": "Тамбовская область",
+      "input_geo_name": "ТАМБОВ",
+      "canonical_geo_id": "geo_e10794967a6913ef",
+      "canonical_geo_display_name": "Тамбов",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 171927.89663056773,
+      "budget_share": 0.0017022564022828488,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1abfa315865f6827",
+      "geo_display_name": "Тамбовская область",
+      "latitude": 52.68333,
+      "longitude": 41.58333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_484638",
+      "region_display_name": "Тамбовская область",
+      "input_geo_name": "ТАМБОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_1abfa315865f6827",
+      "canonical_geo_display_name": "Тамбовская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 562458.27351306,
+      "budget_share": 0.005568893797159009,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_57f4ff5d3ee8852e",
+      "geo_display_name": "Тверская область",
+      "latitude": 57.09167,
+      "longitude": 34.70833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480041",
+      "region_display_name": "Тверская область",
+      "input_geo_name": "ТВЕРСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_57f4ff5d3ee8852e",
+      "canonical_geo_display_name": "Тверская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 702482.0243771307,
+      "budget_share": 0.006955267568090403,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_7518d7367997f3ed",
+      "geo_display_name": "Тверь",
+      "latitude": 56.85836,
+      "longitude": 35.90057,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480041",
+      "region_display_name": "Тверская область",
+      "input_geo_name": "ТВЕРЬ",
+      "canonical_geo_id": "geo_7518d7367997f3ed",
+      "canonical_geo_display_name": "Тверь",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 251097.4435326161,
+      "budget_share": 0.00248611330230313,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ca921138dd63e5b0",
+      "geo_display_name": "Тольятти",
+      "latitude": 53.5303,
+      "longitude": 49.3461,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_499068",
+      "region_display_name": "Самарская область",
+      "input_geo_name": "ТОЛЬЯТТИ",
+      "canonical_geo_id": "geo_ca921138dd63e5b0",
+      "canonical_geo_display_name": "Тольятти",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 398801.8220812138,
+      "budget_share": 0.003948532891893206,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_133cdb7dcca84543",
+      "geo_display_name": "Томск",
+      "latitude": 56.50049,
+      "longitude": 84.98216,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1489421",
+      "region_display_name": "Томская область",
+      "input_geo_name": "ТОМСК",
+      "canonical_geo_id": "geo_133cdb7dcca84543",
+      "canonical_geo_display_name": "Томск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 335584.348062414,
+      "budget_share": 0.003322617307548653,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_6ea343b71af7c34e",
+      "geo_display_name": "Томская область",
+      "latitude": 58.49167,
+      "longitude": 82.14167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1489421",
+      "region_display_name": "Томская область",
+      "input_geo_name": "ТОМСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_6ea343b71af7c34e",
+      "canonical_geo_display_name": "Томская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 634538.0102447757,
+      "budget_share": 0.0062825545568789675,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_192c939939bbebd5",
+      "geo_display_name": "Торжок",
+      "latitude": 57.0436,
+      "longitude": 34.96221,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480041",
+      "region_display_name": "Тверская область",
+      "input_geo_name": "ТОРЖОК",
+      "canonical_geo_id": "geo_192c939939bbebd5",
+      "canonical_geo_display_name": "Торжок",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 24814.335596164416,
+      "budget_share": 0.0002456864910511328,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_39bd072f033b68ee",
+      "geo_display_name": "Тула",
+      "latitude": 54.19609,
+      "longitude": 37.61822,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480508",
+      "region_display_name": "Тульская область",
+      "input_geo_name": "ТУЛА",
+      "canonical_geo_id": "geo_39bd072f033b68ee",
+      "canonical_geo_display_name": "Тула",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 272957.69155780855,
+      "budget_share": 0.002702551401562461,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d2f332559d2b8768",
+      "geo_display_name": "Тутаев",
+      "latitude": 57.87292,
+      "longitude": 39.52969,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_468898",
+      "region_display_name": "Ярославская область",
+      "input_geo_name": "ТУТАЕВ",
+      "canonical_geo_id": "geo_d2f332559d2b8768",
+      "canonical_geo_display_name": "Тутаев",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 23041.88305358124,
+      "budget_share": 0.0002281374559760519,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_5d87c0fa88acedb1",
+      "geo_display_name": "Тюменская область",
+      "latitude": 57.68333,
+      "longitude": 69.13333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1488747",
+      "region_display_name": "Тюменская область",
+      "input_geo_name": "ТЮМЕНСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_5d87c0fa88acedb1",
+      "canonical_geo_display_name": "Тюменская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 941763.1176258589,
+      "budget_share": 0.009324387303226326,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_6de565131413b901",
+      "geo_display_name": "Тюмень",
+      "latitude": 57.15222,
+      "longitude": 65.52722,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1488747",
+      "region_display_name": "Тюменская область",
+      "input_geo_name": "ТЮМЕНЬ",
+      "canonical_geo_id": "geo_6de565131413b901",
+      "canonical_geo_display_name": "Тюмень",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 500422.434522649,
+      "budget_share": 0.004954677569531178,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1d4e10a78edc1614",
+      "geo_display_name": "Углич",
+      "latitude": 57.52322,
+      "longitude": 38.32258,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_468898",
+      "region_display_name": "Ярославская область",
+      "input_geo_name": "УГЛИЧ",
+      "canonical_geo_id": "geo_1d4e10a78edc1614",
+      "canonical_geo_display_name": "Углич",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 18315.342940026116,
+      "budget_share": 0.00018134002910916947,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9cc418889ab160c9",
+      "geo_display_name": "Удмуртская Республика",
+      "latitude": 57.16667,
+      "longitude": 52.8,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_479613",
+      "region_display_name": "Удмуртская Республика",
+      "input_geo_name": "РЕСПУБЛИКА УДМУРТИЯ",
+      "canonical_geo_id": "geo_9cc418889ab160c9",
+      "canonical_geo_display_name": "Удмуртская Республика",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 864956.8407805881,
+      "budget_share": 0.008563929116639486,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d32a2da6f7fa7234",
+      "geo_display_name": "Удомля",
+      "latitude": 57.87597,
+      "longitude": 35.00702,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_480041",
+      "region_display_name": "Тверская область",
+      "input_geo_name": "УДОМЛЯ",
+      "canonical_geo_id": "geo_d32a2da6f7fa7234",
+      "canonical_geo_display_name": "Удомля",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 15361.255369054159,
+      "budget_share": 0.0001520916373173679,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_1d7333fd2a3c8715",
+      "geo_display_name": "Улан-Удэ",
+      "latitude": 51.82648,
+      "longitude": 107.59979,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2050915",
+      "region_display_name": "Республика Бурятия",
+      "input_geo_name": "УЛАН-УДЭ",
+      "canonical_geo_id": "geo_1d7333fd2a3c8715",
+      "canonical_geo_display_name": "Улан-Удэ",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 259959.70624553194,
+      "budget_share": 0.002573858477678534,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_95ccc4904baeea20",
+      "geo_display_name": "Ульяновск",
+      "latitude": 54.32824,
+      "longitude": 48.38657,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_479119",
+      "region_display_name": "Ульяновская область",
+      "input_geo_name": "УЛЬЯНОВСК",
+      "canonical_geo_id": "geo_95ccc4904baeea20",
+      "canonical_geo_display_name": "Ульяновск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 367488.49382891104,
+      "budget_share": 0.0036384999389001095,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_8d8df24c5ffbb97d",
+      "geo_display_name": "Ульяновская область",
+      "latitude": 53.89167,
+      "longitude": 47.95,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_479119",
+      "region_display_name": "Ульяновская область",
+      "input_geo_name": "УЛЬЯНОВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_8d8df24c5ffbb97d",
+      "canonical_geo_display_name": "Ульяновская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 693028.9441500204,
+      "budget_share": 0.006861672714356637,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_965336b61d1b679c",
+      "geo_display_name": "Уфа",
+      "latitude": 54.74306,
+      "longitude": 55.96779,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_578853",
+      "region_display_name": "Республика Башкортостан",
+      "input_geo_name": "УФА",
+      "canonical_geo_id": "geo_965336b61d1b679c",
+      "canonical_geo_display_name": "Уфа",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 667623.7910396615,
+      "budget_share": 0.006610136544947144,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d2c4415cd7421cea",
+      "geo_display_name": "Ухта",
+      "latitude": 63.56904,
+      "longitude": 53.69141,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_545854",
+      "region_display_name": "Республика Коми",
+      "input_geo_name": "УХТА",
+      "canonical_geo_id": "geo_d2c4415cd7421cea",
+      "canonical_geo_display_name": "Ухта",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 54355.21130588395,
+      "budget_share": 0.0005381704089691481,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_9920888cf795b8e9",
+      "geo_display_name": "Хабаровск",
+      "latitude": 48.46204,
+      "longitude": 135.0971,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2022888",
+      "region_display_name": "Хабаровский край",
+      "input_geo_name": "ХАБАРОВСК",
+      "canonical_geo_id": "geo_9920888cf795b8e9",
+      "canonical_geo_display_name": "Хабаровск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 360398.6836585784,
+      "budget_share": 0.003568303798599786,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_2bb56ca5ca40c1f7",
+      "geo_display_name": "Хабаровский край",
+      "latitude": 53,
+      "longitude": 136.45833,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_2022888",
+      "region_display_name": "Хабаровский край",
+      "input_geo_name": "ХАБАРОВСКИЙ КРАЙ",
+      "canonical_geo_id": "geo_2bb56ca5ca40c1f7",
+      "canonical_geo_display_name": "Хабаровский край",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 756837.2356830146,
+      "budget_share": 0.007493437977059551,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_108eab140138349f",
+      "geo_display_name": "Ханты-Мансийский автономный округ - Югра",
+      "latitude": 61.86667,
+      "longitude": 70.3,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1503773",
+      "region_display_name": "Ханты-Мансийский автономный округ - Югра",
+      "input_geo_name": "ХАНТЫ-МАНСИЙСКИЙ АВТОНОМНЫЙ ОКРУГ",
+      "canonical_geo_id": "geo_108eab140138349f",
+      "canonical_geo_display_name": "Ханты-Мансийский автономный округ - Югра",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 1022114.2995562961,
+      "budget_share": 0.010119943559963327,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_ff1cdaafe9cbdd42",
+      "geo_display_name": "Химки",
+      "latitude": 55.9001,
+      "longitude": 37.42848,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ХИМКИ",
+      "canonical_geo_id": "geo_ff1cdaafe9cbdd42",
+      "canonical_geo_display_name": "Химки",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 155975.82374731917,
+      "budget_share": 0.0015443150866071204,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_b25fd4fb102fd0bb",
+      "geo_display_name": "Чебоксары",
+      "latitude": 56.13218,
+      "longitude": 47.246,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_567395",
+      "region_display_name": "Чувашская Республика",
+      "input_geo_name": "ЧЕБОКСАРЫ",
+      "canonical_geo_id": "geo_b25fd4fb102fd0bb",
+      "canonical_geo_display_name": "Чебоксары",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 294227.1220688066,
+      "budget_share": 0.002913139822463432,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_5d01870a3a173190",
+      "geo_display_name": "Челябинск",
+      "latitude": 55.1611,
+      "longitude": 61.42877,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1508290",
+      "region_display_name": "Челябинская область",
+      "input_geo_name": "ЧЕЛЯБИНСК",
+      "canonical_geo_id": "geo_5d01870a3a173190",
+      "canonical_geo_display_name": "Челябинск",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 697164.6667493811,
+      "budget_share": 0.006902620462865159,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_4d36b8978c7dd983",
+      "geo_display_name": "Челябинская область",
+      "latitude": 54.45,
+      "longitude": 60.39167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_1508290",
+      "region_display_name": "Челябинская область",
+      "input_geo_name": "ЧЕЛЯБИНСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_4d36b8978c7dd983",
+      "canonical_geo_display_name": "Челябинская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 2014687.7234028724,
+      "budget_share": 0.019947403202008638,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_3c537c4cd22a8b1f",
+      "geo_display_name": "Череповец",
+      "latitude": 59.13333,
+      "longitude": 37.9,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_472454",
+      "region_display_name": "Вологодская область",
+      "input_geo_name": "ЧЕРЕПОВЕЦ",
+      "canonical_geo_id": "geo_3c537c4cd22a8b1f",
+      "canonical_geo_display_name": "Череповец",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 177245.25425831723,
+      "budget_share": 0.0017549035075080915,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_3a3c9a16bd3f4347",
+      "geo_display_name": "Чита",
+      "latitude": 52.04311,
+      "longitude": 113.49171,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_7779061",
+      "region_display_name": "Забайкальский край",
+      "input_geo_name": "ЧИТА",
+      "canonical_geo_id": "geo_3a3c9a16bd3f4347",
+      "canonical_geo_display_name": "Чита",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 200877.95482609284,
+      "budget_share": 0.0019888906418425033,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_d21f368556678496",
+      "geo_display_name": "Чувашская Республика",
+      "latitude": 55.49167,
+      "longitude": 47.08333,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_567395",
+      "region_display_name": "Чувашская Республика",
+      "input_geo_name": "РЕСПУБЛИКА ЧУВАШИЯ",
+      "canonical_geo_id": "geo_d21f368556678496",
+      "canonical_geo_display_name": "Чувашская Республика",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 685939.1339796877,
+      "budget_share": 0.006791476574056314,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_27c6321193c78661",
+      "geo_display_name": "Шуя",
+      "latitude": 56.84864,
+      "longitude": 41.3869,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_555235",
+      "region_display_name": "Ивановская область",
+      "input_geo_name": "ШУЯ",
+      "canonical_geo_id": "geo_27c6321193c78661",
+      "canonical_geo_display_name": "Шуя",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 31904.145766497102,
+      "budget_share": 0.00031588263135145643,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_b894719643de2741",
+      "geo_display_name": "Щелково",
+      "latitude": 55.92497,
+      "longitude": 37.97218,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_524925",
+      "region_display_name": "Московская область",
+      "input_geo_name": "ЩЕЛКОВО",
+      "canonical_geo_id": "geo_b894719643de2741",
+      "canonical_geo_display_name": "Щелково",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 79169.54690204836,
+      "budget_share": 0.0007838569000202807,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_79524caf0e86edf3",
+      "geo_display_name": "Энгельс",
+      "latitude": 51.48389,
+      "longitude": 46.10528,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_498671",
+      "region_display_name": "Саратовская область",
+      "input_geo_name": "ЭНГЕЛЬС",
+      "canonical_geo_id": "geo_79524caf0e86edf3",
+      "canonical_geo_display_name": "Энгельс",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 132933.94069373794,
+      "budget_share": 0.0013161776306310686,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_212302479b4c065e",
+      "geo_display_name": "Ярославль",
+      "latitude": 57.62987,
+      "longitude": 39.87368,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_468898",
+      "region_display_name": "Ярославская область",
+      "input_geo_name": "ЯРОСЛАВЛЬ",
+      "canonical_geo_id": "geo_212302479b4c065e",
+      "canonical_geo_display_name": "Ярославль",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 337356.80060499714,
+      "budget_share": 0.003340166342623734,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    },
+    {
+      "geo_id": "geo_4f53b0ec17d55e63",
+      "geo_display_name": "Ярославская область",
+      "latitude": 57.86667,
+      "longitude": 39.14167,
+      "coordinates_status": "canonical",
+      "region_id": "region_geonames_468898",
+      "region_display_name": "Ярославская область",
+      "input_geo_name": "ЯРОСЛАВСКАЯ ОБЛАСТЬ",
+      "canonical_geo_id": "geo_4f53b0ec17d55e63",
+      "canonical_geo_display_name": "Ярославская область",
+      "normalization_status": "canonical",
+      "normalization_rule": "canonical_name",
+      "budget_rub": 718434.0972603792,
+      "budget_share": 0.007113208883766131,
+      "channels": [
+        {
+          "channel_id": "Digital_Performance",
+          "channel_display_name": "Цифровая реклама"
+        }
+      ],
+      "has_model_limitations": true,
+      "model_limitations_n": 1
+    }
+  ]
+}

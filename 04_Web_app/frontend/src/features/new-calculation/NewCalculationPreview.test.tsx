@@ -1,7 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { ValidationPreview } from "../../entities/lifecycle/types";
+import productionMixedLocal from "../../test/fixtures/d1r2-production-validation_38fc0ce73e4be020fc18.json";
 import { buildValidationResultV2 } from "../../test/businessSemanticsV2Fixtures";
+import { parseValidationViewV2 } from "../../shared/api/business-semantics-client";
 import { BusinessValidationReview, CampaignPreviewVisuals, ValidationChecks } from "./NewCalculationPreview";
 
 const preview: ValidationPreview = {
@@ -60,6 +62,21 @@ const preview: ValidationPreview = {
 };
 
 describe("new calculation preview", () => {
+  it("renders the exact D1R.2 production mixed response with one grouped warning", () => {
+    const validation = parseValidationViewV2(
+      productionMixedLocal,
+      productionMixedLocal.validation_id,
+    );
+    const { container } = render(<BusinessValidationReview validation={validation} />);
+    const warning = "В плане одновременно указаны федеральный бюджет и отдельные локальные бюджеты. Локальные суммы будут добавлены поверх федерального распределения.";
+
+    expect(screen.getAllByText(warning, { exact: true })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Кампания готова к расчету" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Обнаружено федеральное размещение" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "175 географий сохранены" })).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-map-marker]")).toHaveLength(175);
+    expect(container.textContent).not.toContain("Данные результата имеют неподдерживаемый формат.");
+  });
   it("renders only backend-provided checks and hides raw codes", () => {
     render(<ValidationChecks checks={preview.checks} />);
 
