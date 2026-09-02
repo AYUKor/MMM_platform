@@ -347,6 +347,60 @@ def _result_payload() -> dict:
 
 
 class BusinessSemanticsV2Test(unittest.TestCase):
+    def test_mixed_overlap_warning_is_rendered_only_in_federal_projection(self) -> None:
+        warning_text = (
+            "В плане одновременно указаны федеральный бюджет и отдельные "
+            "локальные бюджеты. Локальные суммы будут добавлены поверх "
+            "федерального распределения."
+        )
+        validation = _validation_payload()
+        validation["warnings"].append(
+            {
+                "code": "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+                "severity": "warning",
+                "scope": "campaign",
+                "display_text": warning_text,
+                "affected_cells": [],
+            }
+        )
+        audit = _federal_audit(
+            [
+                {
+                    "source_row_id": "row_a",
+                    "date": "2026-09-01",
+                    "business_direction": "ТС5/Онлайн",
+                    "channel": "Digital_Performance",
+                    "original_geo": "РФ",
+                    "source_budget_rub": 100.0,
+                    "eligible_geo_count": 175,
+                    "allocated_total_rub": 100.0,
+                    "difference_rub": 0.0,
+                }
+            ]
+        )
+        audit["warnings"] = [
+            {
+                "code": "FEDERAL_AND_LOCAL_GEO_OVERLAP",
+                "display_text": warning_text,
+            }
+        ]
+
+        payload = build_validation_result_v2(
+            validation,
+            federal_allocation_audit=audit,
+        )
+
+        self.assertEqual(payload["file_validation"]["status"], "passed")
+        self.assertEqual(payload["file_validation"]["warnings_n"], 0)
+        self.assertEqual(
+            [item["code"] for item in payload["federal_allocation"]["warnings"]],
+            ["FEDERAL_AND_LOCAL_GEO_OVERLAP"],
+        )
+        self.assertEqual(
+            json.dumps(payload, ensure_ascii=False).count(warning_text),
+            1,
+        )
+
     def test_federal_projection_counts_original_rows_and_reconciles_budget(self) -> None:
         audit = _federal_audit([
             {"source_row_id": "row_a", "date": "2026-09-01", "business_direction": "ТС5/Онлайн", "channel": "Digital_Performance", "original_geo": "РФ", "source_budget_rub": 60.0, "eligible_geo_count": 211, "allocated_total_rub": 60.0, "difference_rub": 0.0},

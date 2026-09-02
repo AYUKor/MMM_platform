@@ -514,6 +514,7 @@ def build_validation_result_v2(
         for issue in warnings
         if str(issue.get("scope") or "file") != "model"
         and not list(issue.get("affected_cells") or [])
+        and str(issue.get("code") or "") != "FEDERAL_AND_LOCAL_GEO_OVERLAP"
     ]
     status_code = str((validation.get("status") or {}).get("code") or "")
     if file_blocking:
