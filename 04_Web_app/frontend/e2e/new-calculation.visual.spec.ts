@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type {
   ArtifactIdentity,
@@ -14,8 +14,22 @@ import {
   TEST_GEOS,
   TEST_VALIDATION_ID,
 } from "../src/test/businessSemanticsV2Fixtures";
+import {
+  buildD1r2AvailableMixedValidation,
+  buildD1r2UnavailableMixedValidation,
+  D1R2_MIXED_WARNING,
+} from "../src/test/d1r2MixedFederalFixtures";
 import { installAuthenticatedAdminSession } from "./support/auth";
 import { measureContentContrast, type ContrastTarget } from "./support/contrast";
+
+const productionFederalOnly = JSON.parse(readFileSync(
+  fileURLToPath(new URL("../src/test/fixtures/d1r2-production-validation_b30b5467e757248ef0b1.json", import.meta.url)),
+  "utf8",
+)) as ValidationResultV2;
+const productionMixedLocal = JSON.parse(readFileSync(
+  fileURLToPath(new URL("../src/test/fixtures/d1r2-production-validation_38fc0ce73e4be020fc18.json", import.meta.url)),
+  "utf8",
+)) as ValidationResultV2;
 
 const UPLOAD_ID = "upload_eeeeeeeeeeeeeeeeeeee";
 const JOB_ID = "job_dddddddddddddddddddd";
@@ -276,6 +290,16 @@ async function installNewCalculationRoutes(
   const upload = structuredClone(options.upload ?? parsedUpload);
   const legacyValidation = structuredClone(options.validationV1 ?? validationV1);
   const businessValidation = structuredClone(options.validationV2 ?? buildValidationResultV2());
+  const validationId = typeof (businessValidation as { validation_id?: unknown }).validation_id === "string"
+    ? (businessValidation as { validation_id: string }).validation_id
+    : TEST_VALIDATION_ID;
+  legacyValidation.validation_id = validationId;
+  const runningValidation = { ...runningValidationV1, validation_id: validationId };
+  const job = {
+    ...queuedJob,
+    validation_id: validationId,
+    idempotency_key: `job:${validationId}`,
+  };
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -321,15 +345,15 @@ async function installNewCalculationRoutes(
     }
     if (method === "POST" && path === `/api/v1/uploads/${UPLOAD_ID}/validations`) {
       calls.validationPosts += 1;
-      await fulfill(route, 202, runningValidationV1);
+      await fulfill(route, 202, runningValidation);
       return;
     }
-    if (method === "GET" && path === `/api/v1/validations/${TEST_VALIDATION_ID}`) {
+    if (method === "GET" && path === `/api/v1/validations/${validationId}`) {
       calls.validationV1Gets += 1;
       await fulfill(route, 200, legacyValidation);
       return;
     }
-    if (method === "GET" && path === `/api/v1/validations/${TEST_VALIDATION_ID}/view-v2`) {
+    if (method === "GET" && path === `/api/v1/validations/${validationId}/view-v2`) {
       calls.validationV2Gets += 1;
       const status = options.validationViewStatus ?? 200;
       await fulfill(
@@ -353,9 +377,9 @@ async function installNewCalculationRoutes(
       } : errorPayload("PROFILE_UNAVAILABLE", "Параметры поиска временно недоступны."));
       return;
     }
-    if (method === "POST" && path === `/api/v1/validations/${TEST_VALIDATION_ID}/jobs`) {
+    if (method === "POST" && path === `/api/v1/validations/${validationId}/jobs`) {
       calls.jobPosts += 1;
-      await fulfill(route, 202, queuedJob);
+      await fulfill(route, 202, job);
       return;
     }
     if (
@@ -668,6 +692,70 @@ test("mixed federal and local geography produces one calm additive warning", asy
   await expect(page.getByText(message, { exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Продолжить к сценариям" })).toBeVisible();
 });
+
+const d1r2BrowserCases: readonly {
+  name: string;
+  payload: ValidationResultV2;
+  state: "federal" | "mixed" | "blocked" | "ordinary";
+  mapMarkers: number;
+}[] = [
+  { name: "РФ", payload: productionFederalOnly, state: "federal", mapMarkers: 175 },
+  { name: "РФ + Москва exact production", payload: productionMixedLocal, state: "mixed", mapMarkers: 175 },
+  {
+    name: "РФ + Казань",
+    payload: buildD1r2AvailableMixedValidation(productionFederalOnly, [{ geoDisplayName: "Казань", budgetRub: 2_000_000 }]),
+    state: "mixed",
+    mapMarkers: 175,
+  },
+  {
+    name: "РФ + Московская область",
+    payload: buildD1r2AvailableMixedValidation(productionFederalOnly, [{ geoDisplayName: "Московская область", budgetRub: 3_000_000 }]),
+    state: "mixed",
+    mapMarkers: 175,
+  },
+  {
+    name: "РФ + Москва + Казань",
+    payload: buildD1r2AvailableMixedValidation(productionFederalOnly, [{ geoDisplayName: "Москва", budgetRub: 10_000_000 }, { geoDisplayName: "Казань", budgetRub: 5_000_000 }]),
+    state: "mixed",
+    mapMarkers: 175,
+  },
+  {
+    name: "РФ + unavailable geo",
+    payload: buildD1r2UnavailableMixedValidation(productionFederalOnly, [], { geoDisplayName: "Якутск", budgetRub: 1_000_000 }),
+    state: "blocked",
+    mapMarkers: 175,
+  },
+  { name: "ordinary non-federal campaign", payload: buildPassedValidation(), state: "ordinary", mapMarkers: 15 },
+];
+
+for (const browserCase of d1r2BrowserCases) {
+  test(`D1R2 mixed-plan browser matrix: ${browserCase.name}`, async ({ page }) => {
+    await installNewCalculationRoutes(page, { validationV2: browserCase.payload });
+    await page.goto(`/calculations/new?validationId=${browserCase.payload.validation_id}&step=review`);
+
+    await expect(page.getByText("Данные результата имеют неподдерживаемый формат.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Карта рекламного бюджета текущей кампании" })
+      .locator("[data-map-marker]")).toHaveCount(browserCase.mapMarkers);
+
+    if (browserCase.state === "mixed") {
+      await expect(page.getByText(D1R2_MIXED_WARNING, { exact: true })).toHaveCount(1);
+      await expect(page.getByRole("heading", { name: "Кампания готова к расчету" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Обнаружено федеральное размещение" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Продолжить с ограничениями" })).toBeVisible();
+    } else if (browserCase.state === "blocked") {
+      await expect(page.getByRole("heading", { name: "Расчет ограничен возможностями модели" })).toBeVisible();
+      await expect(page.getByText(/География «Якутск» недоступна для расчета/)).toHaveCount(1);
+      await expect(page.getByRole("button", { name: /Продолжить/ })).toHaveCount(0);
+    } else {
+      await expect(page.getByText(D1R2_MIXED_WARNING, { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Продолжить/ })).toBeVisible();
+      if (browserCase.state === "ordinary") {
+        await expect(page.getByRole("heading", { name: "Обнаружено федеральное размещение" })).toHaveCount(0);
+      }
+    }
+    await expectNoOverflow(page);
+  });
+}
 
 test("unknown federal-looking alias is a human blocking error", async ({ page }) => {
   await installNewCalculationRoutes(page, { validationV2: buildFederalErrorValidation() });
