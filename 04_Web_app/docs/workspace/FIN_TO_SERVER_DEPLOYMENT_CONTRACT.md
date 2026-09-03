@@ -2,7 +2,7 @@
 
 ## Boundary
 
-The only permitted local source for a future corporate-server deployment is the
+The only permitted local source for a corporate-server deployment is the
 verified transfer artifact of one immutable Fin release:
 
 ```text
@@ -147,11 +147,25 @@ changed only after the full materialization verification, production-equivalent
 preflight and all release-specific business-state gates pass. Any failure leaves
 the current production release unchanged.
 
+Activation then requires a final zero-work drain, fresh verified persistent-state
+backup, atomic relative-symlink switch, backend restart, health/readiness,
+origin/external/browser frontend asset identity and release-specific product
+acceptance. `index.html` must revalidate; hashed JavaScript/CSS may remain immutable.
+After complete PASS, write and seal the release-local `SERVER_RELEASE.json` as
+root-owned read-only evidence. Do not mutate the immutable Fin manifest to reflect
+the later server state. The full joined process is in
+`END_TO_END_CHANGE_LIFECYCLE.md`.
+
 ## Authorization and observation
 
 Deployment requires a separate explicit milestone covering transfer, service
 changes, health/browser verification and rollback. C2.5 performs none of those
 actions and does not assert current live-server HEAD or health.
+
+D1R5 is the first live proof of this contract: on 2026-09-03 it accepted deploy5
+for Fin release
+`release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c`, while preserving
+the separate restricted model status and all persistent state.
 
 The current Fin application is approved, while its model remains
 `preprod_restricted` with `production_gate = not_passed`. Deployment approval must

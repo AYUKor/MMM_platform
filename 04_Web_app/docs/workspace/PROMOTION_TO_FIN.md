@@ -68,5 +68,7 @@ symlink.
   deployable.
 - `model.serving_status = preprod_restricted` remains an explicit restriction.
 - `model.production_gate = not_passed` remains separate from Fin approval.
-- `deployment.deployed = false` until a separately authorized server milestone
-  actually runs and verifies deployment.
+- Fin-side `deployment.deployed = false` records that deployment had not occurred
+  when the immutable Fin release was sealed. It is not rewritten in place after a
+  later deployment; live acceptance is recorded by the release-local
+  `SERVER_RELEASE.json` and append-only deployment evidence.
