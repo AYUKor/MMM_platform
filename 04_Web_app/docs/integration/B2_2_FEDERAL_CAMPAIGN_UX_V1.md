@@ -139,6 +139,37 @@ result/media plan и проверяет report download. В том же live acc
 локального Якутска, полный расчет локальной Москвы, разрешенный `РФ + Москва` и
 блокирующий explicit Якутск в `РФ + Якутск`.
 
+### Binding live validation evidence
+
+Live acceptance не может классифицировать generic DOM-сообщение как backend или
+parser defect без доказанной связи с конкретным response. Для каждого validation
+case `b2-2-federal-campaign.live.spec.ts` теперь фиксирует следующую цепочку до
+DOM assertions:
+
+```text
+validation_id
+  -> exact GET /api/v1/validations/<validation_id>/view-v2 URL
+  -> HTTP status
+  -> raw response bytes + SHA-256
+  -> parseValidationViewV2
+  -> adaptValidationGeoBudget
+  -> browser route validationId
+  -> named DOM assertions
+```
+
+Evidence attachment не содержит raw body, cookies или credentials: сохраняются
+только identity, размер, SHA-256, безопасные response headers и компактный итог
+parser/projection. Playwright trace, screenshot и browser console/page errors
+сохраняются при failure. Несовпадение response `validation_id` и route
+`validationId` является самостоятельным `browser_route` FAIL до чтения DOM.
+
+Exact reconstructed D1R4-C payload
+`validation_1f1be143ce746638c5da` закреплен как test-only semantic object на базе
+уже reviewed D1R2 fixture и обязан проходить parser/projection regression с
+`211 / 175 / 36`, 100 млн RUB и 175 map points. Новый production response body
+в Git не копируется. Это не изменяет application runtime и не требует нового
+Fin release.
+
 ## Browser и visual evidence
 
 Fixture E2E покрывает light/dark screenshots, 375px и 1024x768 без horizontal
