@@ -7,10 +7,32 @@ continue MMM Platform work without relying on old chats. It explains why the
 system exists, how its current pieces fit together, which design decisions are
 intentional, where the evidence lives and what is still unresolved.
 
-For a terse statement of facts as of 2026-09-02, read `CURRENT_TRUTH.md`. This
+For a terse statement of facts as of 2026-09-03, read `CURRENT_TRUTH.md`. This
 document adds architecture, decision history and continuation rules; it should not
 be treated as stronger evidence than live code, contracts, Git or verified
 artifacts.
+
+## 1.1 Current D1R5 operational handoff
+
+D1R5 completed the first accepted immutable release switch for the federal
+campaign functionality. Live `/opt/x5-mmm/current` points to
+`releases/release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c__deploy5`.
+The deployed runtime identity is commit
+`9355c6c8fdaf9d715434848ec306670e944ff263`, tree
+`d8f69aa5c47a1cbacca1aee6c94aaab85f841a31`; later merged PRs #43 and #44 are
+test-only and do not change that identity.
+
+Materialization, 63/63 model closure, 5/5 extensions, alternate-port historical
+preflight, state backup, atomic switch, health/readiness, target frontend assets,
+full federal flow, four mixed cases, blocking Yakutsk, an ordinary full job,
+existing auth/history/report and `/hub/` all passed. The backend was unavailable
+for approximately 6.43 seconds; nginx and JupyterHub were not restarted. The
+release-local `SERVER_RELEASE.json` is sealed `root:root 0444` with status
+`accepted`. Observation is active and cleanup is not authorized.
+
+The application deployment does not upgrade the model: package
+`pkg_807d3ddbae57a52a_9aacd3beb350725b` remains
+`preprod_restricted / production_gate=not_passed`.
 
 ## 2. Project purpose and business problem
 
@@ -435,9 +457,9 @@ and permission-checked.
 
 ## 15. Deployment and server workflow
 
-### 15.1 Documented topology
+### 15.1 Live-verified topology
 
-Last accepted operational documentation is dated 2026-07-23. It records:
+D1R5 live verification on 2026-09-03 confirmed:
 
 - primary URL `https://mmm.x5.ru`, with `.internal` reserved as fallback;
 - nginx HTTPS/static frontend and same-origin reverse proxy;
@@ -447,39 +469,41 @@ Last accepted operational documentation is dated 2026-07-23. It records:
 - health, backup and retention services/timers;
 - separate application, auth/runtime state and artifact locations.
 
-C0 did not connect to the server. Treat all of the above as **documented
-operational**, not **live verified on 2026-08-31**.
+- the relative server pointer `/opt/x5-mmm/current` selects immutable releases;
+- application systemd and nginx paths follow `current`, while persistent state and
+  server configuration remain shared;
+- external `/health=ok`, `/ready=ready`, historical 220/220, frontend identity and
+  `/hub/` routing pass.
+
+C0 did not connect to the server, which remains true for that historical audit; it
+must not override the later D1R5 live evidence.
 
 ### 15.2 Application release flow
 
-The intended release sequence is:
+The accepted release sequence is:
 
 1. accept code locally and merge the reviewed PR into GitHub `main`;
 2. build frontend with an empty API base for same-origin requests;
-3. create an offline Git transfer from the accepted `main` state;
-4. transfer through the approved corporate route;
-5. update server Git under the service account;
-6. replace the verified frontend `dist`;
-7. restart only the explicitly approved services;
-8. check backend health, browser flow, artifact hashes and reconciliation.
+3. materialize an immutable Fin release and verified transfer artifact;
+4. transfer through the approved corporate route and verify exact checksums;
+5. create a new immutable `<release_id>__deployN` candidate through the reviewed
+   `server_release.py`;
+6. run production-equivalent alternate-port and business-state preflight;
+7. drain work, back up persistent state and atomically switch `current`;
+8. restart backend only and verify health, frontend identity, browser flow,
+   artifacts, reconciliation and rollback readiness.
 
 Application code and model package are different deployables. The model transfer
 must verify its pointer, manifest, package fingerprint and panel lineage while
 remaining panel-free.
 
-### 15.3 Evidence caveat
+### 15.3 Current deployment evidence
 
-The current runbook documents an offline-bundle process, and the narrative handoff
-states that it was used through PR #35. However, the inspected PR #35 helper script
-assumes a prepared remote/bundle and does not itself create or upload one; inspected
-local bundle snapshots do not independently establish a complete fresh PR #35
-transfer. Therefore:
-
-- accepted topology and offline flow: documented;
-- exact currently deployed HEAD: not live verified in C0;
-- fully reusable self-contained transfer automation: incomplete/requires audit.
-
-Do not “fix” this by connecting to or changing the server in an unrelated task.
+The older PR #35 script remains incomplete historical evidence, but D1R5 no longer
+depends on that inference. The accepted Fin bundle, transfer SHA, corrected tracked
+materializer, deploy5 checks, live commit/tree, frontend hashes, product flows and
+release manifest were verified directly. Future deployments must repeat the same
+identity chain rather than infer success from the old helper.
 
 ### 15.4 Stale deployment documents
 
@@ -590,8 +614,9 @@ C2 migration and physical-root switch are complete through C2.6:
 └── 03_Fin/     # immutable deployable releases
 ```
 
-Current release is
-`release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642`. The application is approved;
+Current Fin release is
+`release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c`; current server
+candidate is the corresponding `__deploy5`. The application is approved and live;
 the model remains `preprod_restricted` with `production_gate = not_passed`.
 
 Development starts in Test, candidate acceptance occurs in Predfin, and each Fin
@@ -599,8 +624,9 @@ change creates a new `releases/<release_id>` directory. `CURRENT_RELEASE.json` m
 switch only after PASS. The exact contracts are under
 `04_Web_app/docs/workspace/`.
 
-C3 cleanup is not authorized. The observation period must include one real B1/B2
-Federal Geo Allocation cycle through all four contours and a new Fin release.
+C3 cleanup is not authorized. D1R5 supplied the first real Federal Geo Allocation
+cycle through all four contours and a new Fin/server release; observation of real
+user calculations now remains open.
 
 ## 20. Federal geo allocation
 
@@ -627,14 +653,11 @@ outside the ready subset block; forecast retains its runtime guard.
 
 For `2026-09-01` current-package regression evidence is 175/182/103/104 ready
 geographies from declared 211/220/114/117. These values are not hard-coded in
-production. Full backend/frontend regression, Chromium/WebKit and real-package
-live acceptance pass. Native Safari 26.2 also passes the full approved B2.2S
-scenario with 175 ready geographies/map points, full budget reconciliation,
-allowed mixed plan, blocked explicit Якутск before job, zero console errors and no
-horizontal overflow. A duplicate mixed-plan warning found by the smoke was removed
-only from its second browser projection and covered by regression; allocator,
-resolver, forecast and contracts remain unchanged. PR #41 can move to Ready for
-review after green CI.
+production. D1R5 live deployment acceptance additionally passed a full 100 million
+RUB federal job with 175 ready geographies/map points, full budget reconciliation,
+expanded media plan and report; four mixed cases; and a blocking explicit Yakutsk
+case before job creation. Acceptance-harness fixes in merged test-only PRs #43 and
+#44 did not change allocator, resolver, forecast, frontend runtime or Fin identity.
 
 ## 21. Historical campaign evaluation — future requirement
 
@@ -657,19 +680,16 @@ design are approved.
 
 ## 22. Next milestones
 
-1. **B2.2 review and post-merge Predfin acceptance** — use the exact reviewed
-   commit and workspace promotion gates; Codex must not merge the PR.
-2. **B2.3 or later federal work** — do not start without a separate task.
-3. **A — Historical Campaign Evaluation methodology** — establish identification
+1. **D1R5 observation** — monitor real validations/jobs/reports, health and the
+   pre-existing retention-service failure; do not change the release or clean up.
+2. **A — Historical Campaign Evaluation methodology** — establish identification
    and validation before product work.
-4. **Model production gate** — separate future milestone for sealed OOT evidence and
+3. **Model production gate** — separate future milestone for sealed OOT evidence and
    activation decision.
-5. **Deployment milestone** — use only a verified Fin transfer artifact and do not
-   change the server unless explicitly authorized.
-6. **C3 cleanup review** — only after a successful observation release; exact
+4. **C3 cleanup review** — only after a successful observation release; exact
    destructive targets still require separate approval.
 
-Do not start any of these automatically after C2.6.
+Do not start any of these automatically after D1R5.
 
 ## 23. Verification references and safe commands
 
@@ -741,19 +761,15 @@ on the old outcome.
 - End meaningful work with changed files, verification, known limitations, blockers
   and the next explicitly approved action.
 
-## 25. B2.2 handoff state
+## 25. D1R5 handoff state
 
-C2 relocation and legacy-root switch are complete. The B2.2 branch starts from
-`origin/main@52461f6e00b4b6fe705a341d30747e0067ae3b24`, the user-merged PR #40
-identity. Frozen Predfin/Fin remains at application commit
-`2a6e07755f0db494a064b7db6517219325850179` and the same restricted model
-identity. B2.2 is isolated in `codex/b2-2-federal-campaign-ux`; it must be reviewed
-through its PR and not merged by Codex.
+The federal feature is deployed through deploy5 and observation has started.
+`origin/main@b0d91d3936435d1fb849c957add20a1a4ec31f83` includes the user-merged
+test-only acceptance updates, while the immutable live runtime remains commit
+`9355c6c8fdaf9d715434848ec306670e944ff263`. Legacy, deploy1-deploy4,
+`/opt/x5-mmm/app`, staging, transfer evidence and backups remain preserved.
 
-Pre- and post-rename operational smoke and path scans pass without legacy fallback.
-The current Test milestone is B2.2S Forecast Geo Availability on the existing
-B2.2 branch and PR #41. Post-merge Predfin acceptance remains a separate
-controlled operation; B2.3, Fin, deployment and C3 cleanup are not authorized.
-Code-side, no-interception live and native Safari gates pass; after green CI the
-PR is ready for review. The active model stays restricted and the server is
-unchanged.
+No current acceptance blocker remains for the federal application feature. The
+model's sealed OOT/production gate remains a separate real limitation. The next
+product task named by the owner is Historical Campaign Evaluation; do not begin it,
+model-gate work or cleanup automatically.

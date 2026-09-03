@@ -2,14 +2,13 @@
 
 ## Last verified
 
-- Verification date: **2026-09-02**.
-- Mode: **B2.2S — FORECAST GEO AVAILABILITY implementation verification**.
-- Verified against local live code, Git/GitHub state, contracts, policies,
-  manifests, tests, physically present artifacts and local deployment runbooks.
-- No DWH query, model/data recalculation, server connection or deployment was
-  performed.
-- Server facts below are explicitly labelled as documented status; they were not
-  live-verified or changed during C2.6.
+- Verification date: **2026-09-03**.
+- Mode: **D1R5 — accepted federal functionality live deployment and observation**.
+- Verified against local code, Git/GitHub state, Fin manifests and transfer
+  checksums, server materialization evidence, live server identity, HTTP/browser
+  acceptance and persisted product state.
+- No DWH query, model/data recalculation, model-status change, persistent-state
+  migration, JupyterHub restart or external infrastructure change was performed.
 
 ## Product status
 
@@ -40,15 +39,17 @@ limits, not an automated media-buying or finance approval system.
 
 ## Current Git state
 
-- Fetched `origin/main` after user-merged PR #40:
-  `52461f6e00b4b6fe705a341d30747e0067ae3b24`.
-- Frozen Predfin/Fin application remains the earlier approved PR #37 identity:
-  commit `2a6e07755f0db494a064b7db6517219325850179`, tree
-  `756e7024024e3f9536d43c975feb4f90b17e2581`.
-- B2.2 work is isolated in branch `codex/b2-2-federal-campaign-ux`, created
-  directly from that `origin/main` identity.
-- Old Git clones/worktrees remain rollback/reference evidence. C2.6 does not prune
-  or delete them.
+- Fetched `origin/main` after user-merged test-only PR #44:
+  `b0d91d3936435d1fb849c957add20a1a4ec31f83`.
+- The accepted and deployed application runtime remains commit
+  `9355c6c8fdaf9d715434848ec306670e944ff263`, tree
+  `d8f69aa5c47a1cbacca1aee6c94aaab85f841a31`.
+- PRs #43 and #44 changed tests/acceptance tooling only and did not create a new
+  runtime application or Fin identity.
+- D1R5 lifecycle documentation is isolated in
+  `codex/d1r5-end-to-end-lifecycle` from the current `origin/main`.
+- Old Git clones/worktrees remain rollback/reference evidence and were not pruned
+  or deleted.
 
 ## Canonical local workspace
 
@@ -63,16 +64,17 @@ application blockers and no legacy fallback. Historical/provenance/evidence path
 records remain factual history and are not mass-rewritten in C2.6.
 
 Current Fin release:
-`release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642`. Its application is approved;
-its model remains `preprod_restricted` with `production_gate = not_passed`.
+`release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c`. Its application
+and frontend closure are approved and deployed; its model remains
+`preprod_restricted` with `production_gate = not_passed`.
 
 ## Deployment
 
 The accepted deployment flow is:
 
 `accepted local code -> GitHub main -> Predfin acceptance -> immutable Fin release
--> verified Fin transfer artifact -> corporate server Git/static dist/model install
--> backend/UI health and hash checks`.
+-> verified Fin transfer artifact -> immutable server candidate materialization
+-> atomic current switch -> backend/UI health, identity and business-flow checks`.
 
 - Frontend production build uses `VITE_API_BASE_URL=""` and same-origin `/api`.
 - The corporate server is documented as having no outbound GitHub access; offline
@@ -82,29 +84,38 @@ The accepted deployment flow is:
 - The only permitted local deployment source is the verified transfer artifact of
   a selected Fin release. Test, Predfin and the legacy workspace are not deployment
   sources.
-- `01_Test/research/legacy_reference/server-deploy/deploy-frontend-pr35.sh`
-  is a release-specific script, not a
-  complete reusable transfer pipeline: it assumes the required bundle/remote state
-  is already available. Local bundle snapshots inspected during C0 do not by
-  themselves prove a fresh PR #35 transfer. This deployment evidence gap remains.
+- Server candidates are created only through the reviewed
+  `04_Web_app/deployment/server_release.py` from the verified Fin transfer; every
+  attempt receives a new `<release_id>__deployN` identity.
+- D1R5 proved the complete transfer, materialization, alternate-port preflight,
+  atomic switch, rollback readiness, frontend delivery identity and product
+  acceptance path for deploy5.
 
 ## Server status
 
-**Documented operational status, last accepted 2026-07-23; not live-verified in
-C2.6:**
+**Live verified during D1R5 on 2026-09-03:**
 
 - Primary product URL: `https://mmm.x5.ru`.
-- Reserved fallback name: `mmm.x5.internal`.
-- Nginx terminates HTTPS and serves the frontend; backend systemd service
-  `x5-mmm-backend` listens on loopback `127.0.0.1:8765`.
-- JupyterHub is exposed by the same nginx under `/hub/` and listens on loopback.
-- Documented acceptance included browser calculation flow, exact reconciliation,
-  health checks, backups and retention timers.
-
-Local onboarding and historical DevOps documents still contain stale `.internal`,
-manual-hosts, CA, firewall or certificate wording. Current runbook evidence makes
-`.ru` the primary documented URL, but employee reachability was not independently
-checked on 2026-09-01.
+- `/opt/x5-mmm/current` is the relative symlink
+  `releases/release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c__deploy5`.
+- Backend process CWD resolves to that exact immutable deploy5 directory and serves
+  commit `9355c6c8...`, tree `d8f69aa5...` and package
+  `pkg_807d3ddbae57a52a_9aacd3beb350725b`.
+- External `/health` is `ok`; external `/ready` is `ready`; the historical endpoint
+  is available with 220/220 geographies and exact total
+  8,687,024,294.654741 RUB.
+- Nginx serves target `index.html`, `index-Bz99Cbil.js` and
+  `index-DmSMKp-y.css` through `current`; external bytes and clean-browser assets
+  match the Fin manifest. Nginx was not restarted or reloaded in D1R5.
+- JupyterHub remains a separate active `x5-jupyterhub.service`; `/hub/` reaches its
+  login route. It was not restarted.
+- Backend switch downtime was approximately 6.43 seconds. Auth, existing history,
+  an old result and an old report remained readable.
+- Release-local `SERVER_RELEASE.json` is sealed as `root:root`, mode `0444`, status
+  `accepted`, SHA-256
+  `a9f590447c12b47aab5dde323075f4e227a92ab8ac302089ff3a1029a16a1544`.
+- External DNS, FIP/load balancer, firewall, corporate proxy/VPN and TLS are
+  existing infrastructure and were not changed.
 
 ## Model
 
@@ -225,14 +236,12 @@ For a one-day `2026-09-01` campaign the current package regression is
 `175 / 182 / 103 / 104` ready out of declared `211 / 220 / 114 / 117`. These
 counts are test evidence, not production constants. Federal budget is conserved
 inside the ready subset; an explicit local geo outside it blocks validation before
-job creation. Full local regression, Chromium/WebKit and no-interception live
-acceptance pass on the B2.2S candidate. Native Safari 26.2 acceptance also passes:
-175 ready geographies and map points, complete budget reconciliation, allowed
-mixed `РФ + Москва`, blocked explicit Якутск before job, full result/report path,
-zero console errors and no horizontal overflow. The smoke found and regression-
-locked one duplicate mixed-plan warning in the browser projection; allocation,
-forecast and contracts were unchanged. PR #41 is eligible for Ready for review
-after green CI.
+job creation. D1R5 live acceptance passed a full federal 100 million RUB job with
+211 declared, 175 ready and 36 period-excluded geographies, exact budget
+reconciliation, 175 map points, result, expanded media plan and report. Four mixed
+federal/local cases passed with exactly one grouped warning and job creation
+allowed; `РФ + Якутск` blocked before job creation. The accepted parser and
+allocation/forecast contracts were unchanged by the later test-only harness fixes.
 
 - Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
   aliases.
@@ -329,10 +338,12 @@ routes use session and permission gates.
    recorded 168 passing web tests and 10 expected skips; C2.3S reconfirmed the
    post-merge regression state.
 7. No daily media plan and no generally available separate working media-plan XLSX.
-8. Server live health/reachability and deployed HEAD were not checked in C2.6.
-9. C2.4 produced and independently verified a self-contained release-content
-   transfer artifact. Server dependency provisioning and the operational update
-   sequence still require the accepted runbook and separate authorization.
+8. Live server health, release identity and product acceptance passed in D1R5.
+   This does not change the model production gate.
+9. The `x5-mmm-retention.service` last observed invocation was already failed
+   before the D1R5 switch, while its timer remained active/waiting. Its cause was
+   not inspected in this deployment and belongs in observation, not in a runtime
+   release hotfix.
 10. `PROJECT_BRIEF.md`, `OPEN_DECISIONS.md`, onboarding and older DevOps notes retain
     stale deployment/map wording outside the three-file C0 edit scope.
 11. Application Git and model/data artifacts have separate lineage and transfer
@@ -348,28 +359,24 @@ routes use session and permission gates.
 
 ## Current milestone
 
-**B2.2S — Forecast Geo Availability.**
+**D1R5 — FEDERAL_FEATURE_DEPLOYED; observation active.**
 
-The Test candidate resolves a source-row-specific date-ready universe before job
-creation, allocates federal budget only within that universe, blocks unavailable
-explicit local geographies and passes the resulting canonical geo plan into the
-unchanged calculation flow. Code-side regression and live acceptance pass; native
-Safari smoke passes and no local B2.2S acceptance gate remains. PR #41 may move
-from Draft to Ready for review after green CI.
-Predfin/Fin materialization, deployment, production activation, B2.3 and C3
-cleanup remain outside this milestone.
+The accepted federal functionality is live through deploy5. Full federal,
+mixed-validation, blocking-geo and ordinary-regression acceptance passed. The
+application release is deployed, while model status remains
+`preprod_restricted / production_gate=not_passed`. Cleanup is not authorized.
 
 ## Planned milestones
 
-1. **B2 post-merge promotion.** Materialize the reviewed B2.2 commit in Predfin
-   only through `PROMOTION_TO_PREDFIN.md`; Fin and deployment remain separate.
-2. **B2.3 or later work.** Not started and requires a separate task.
-3. **A — Historical Campaign Evaluation.** Future causal/research capability, not
+1. **D1R5 observation.** Monitor real user validations, jobs, reports, service
+   health and the pre-existing retention-service failure without changing release
+   identity or starting cleanup.
+2. **A — Historical Campaign Evaluation.** Future causal/research capability, not
    implemented. Preliminary estimand: marginal incremental turnover of one selected
    historical campaign while concurrent observed media remains factual. This
    estimand requires explicit assumptions, identification design and validation
    before productization.
-4. **Model production gate.** A separate future milestone for sealed OOT evidence
+3. **Model production gate.** A separate future milestone for sealed OOT evidence
    and explicit activation decision.
-5. **C3 cleanup.** Not authorized until the B1/B2 observation cycle completes and a
+4. **C3 cleanup.** Not authorized until the observation cycle completes and a
    separate destructive-action review approves exact targets.

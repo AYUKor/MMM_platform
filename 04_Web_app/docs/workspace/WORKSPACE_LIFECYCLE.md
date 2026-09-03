@@ -5,8 +5,9 @@
 This document defines the canonical local workflow at `<MMM_WORKSPACE_ROOT>`. This
 placeholder identifies the local root containing `00_Data/`, `01_Test/`,
 `02_Predfin/` and `03_Fin/`. The workflow changes local roles and promotion rules
-only. It does not deploy to the corporate server,
-activate a production model, run OOT validation or authorize C3 cleanup.
+only; following this document does not by itself authorize a corporate deployment,
+activate a production model, run OOT validation or authorize C3 cleanup. The joined
+idea-to-server process is defined in `END_TO_END_CHANGE_LIFECYCLE.md`.
 
 All paths below are relative to the local workspace root. New code and config must
 not embed a user-specific absolute path.
@@ -55,13 +56,15 @@ Predfin checkout or Fin copy never silently supersedes it.
 
 ## Current release
 
-- Release ID: `release_2a6e07755f0d_807d3ddbae57_ed8a6c6c7642`.
-- Application commit: `2a6e07755f0db494a064b7db6517219325850179`.
-- Application tree: `756e7024024e3f9536d43c975feb4f90b17e2581`.
+- Release ID: `release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c`.
+- Application commit: `9355c6c8fdaf9d715434848ec306670e944ff263`.
+- Application tree: `d8f69aa5c47a1cbacca1aee6c94aaab85f841a31`.
 - Model package: `pkg_807d3ddbae57a52a_9aacd3beb350725b`.
 - Model status: `preprod_restricted`.
 - Production gate: `not_passed`.
-- Deployment performed by C2.6: no.
+- Live server candidate:
+  `release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c__deploy5`.
+- Deployment status: D1R5 accepted on 2026-09-03; observation active.
 
 `03_Fin/CURRENT_RELEASE.json` is a relative machine-readable pointer. It may change
 only after a new release passes every Fin gate. Existing release directories are
