@@ -200,6 +200,11 @@ def build_settings(
         project_root=project_root,
         python_executable=python_executable,
         registry_root=_project_path(project_root, paths.get("registry_root"), "paths.registry_root"),
+        historical_datasets_root=(
+            _project_path(project_root, paths["historical_datasets_root"], "paths.historical_datasets_root")
+            if paths.get("historical_datasets_root") else None
+        ),
+        historical_dataset_id=config.get("historical_campaigns", {}).get("dataset_id"),
         registry_channel=str(model.get("registry_channel") or "preprod"),
         expected_package_id=str(model.get("expected_package_id") or ""),
         model_verification_mode=str(

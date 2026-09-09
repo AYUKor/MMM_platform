@@ -34,6 +34,8 @@ DEFAULT_PROJECT_ROOT = WEB_APP_DIR.parent
 if str(WEB_APP_DIR) not in sys.path:
     sys.path.insert(0, str(WEB_APP_DIR))
 
+from services.historical_campaign_dataset import HistoricalDatasetStore, HistoricalDatasetError
+
 from adapters.result_overview_adapter import build_result_overview  # noqa: E402
 from contracts.application_lifecycle_v1 import (  # noqa: E402
     APPLICATION_ERROR_CONTRACT,
@@ -168,6 +170,7 @@ _ADMIN_USER_PATH_RE = re.compile(
     r"^/api/v1/admin/users/(?P<user_id>usr_[0-9a-f]{24})(?:/(?P<action>disable|enable|sessions/revoke))?$"
 )
 _CONTRACT_SCHEMA_FILES = {
+    "historical-campaigns-v1": WEB_APP_DIR / "contracts" / "historical_campaigns_v1.schema.json",
     "application-lifecycle-v1": WEB_APP_DIR / "contracts" / "application_lifecycle_v1.schema.json",
     "decision-result-v1": WEB_APP_DIR / "contracts" / "decision_result_v1.schema.json",
     "result-overview-v1": WEB_APP_DIR / "contracts" / "result_overview_v1.schema.json",
@@ -259,6 +262,8 @@ class HttpSmokeSettings:
     artifact_root: Path
     project_root: Path = DEFAULT_PROJECT_ROOT
     python_executable: Path = Path(sys.executable)
+    historical_datasets_root: Path | None = None
+    historical_dataset_id: str | None = None
     registry_root: Path | None = None
     registry_channel: str = "preprod"
     expected_package_id: str | None = None
@@ -894,6 +899,7 @@ class HttpSmokeApplication:
     ) -> None:
         settings.validate()
         self.settings = settings
+        self.historical = HistoricalDatasetStore(settings.historical_datasets_root, settings.historical_dataset_id, settings.expected_package_id)
         settings.runtime_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         settings.artifact_root.expanduser().resolve().mkdir(parents=True, exist_ok=True)
         self.state = LocalApiState(settings.state_root)
@@ -1651,6 +1657,8 @@ def _required_permission(method: str, path: str) -> str | None:
         if job and job.group("resource") == "cancel":
             return "calculation.cancel"
     if method == "GET":
+        if path == "/api/v1/historical-campaigns" or path.startswith("/api/v1/historical-campaigns/"):
+            return "report.download" if path.endswith("/report.xlsx") else "calculation.read"
         if path in {"/api/v1/workspace/home", "/api/v1/workspace/geo-budget"}:
             return "workspace.read"
         if path in {
@@ -2514,6 +2522,24 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
             request_url = urlsplit(self.path)
             path = request_url.path
             if not self._prepare_request("GET", path):
+                return
+            if path == "/api/v1/historical-campaigns" or path.startswith("/api/v1/historical-campaigns/"):
+                try:
+                    suffix = path.removeprefix("/api/v1/historical-campaigns").strip("/")
+                    parts = suffix.split("/") if suffix else []
+                    if len(parts) > 2:
+                        raise HistoricalDatasetError("QUERY_INVALID")
+                    key = parts[0] if parts else None
+                    resource_name = parts[1] if len(parts) == 2 else "card" if key else "registry"
+                    payload = application.historical.read(parse_qs(request_url.query, keep_blank_values=True), key, resource_name)
+                    if resource_name == "report.xlsx":
+                        self._binary(HTTPStatus.OK, payload,
+                                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                     filename="Историческая кампания.xlsx")
+                    else:
+                        self._json(HTTPStatus.OK, payload)
+                except HistoricalDatasetError as exc:
+                    self._error(HTTPStatus(exc.status), exc.code, exc.display_text)
                 return
             if path == "/health":
                 self._json(

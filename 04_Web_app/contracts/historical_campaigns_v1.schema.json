@@ -1,0 +1,603 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "historical_campaigns_v1.schema.json",
+  "title": "HistoricalCampaignsV1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/registry"
+    },
+    {
+      "$ref": "#/$defs/card"
+    },
+    {
+      "$ref": "#/$defs/daily"
+    },
+    {
+      "$ref": "#/$defs/media"
+    }
+  ],
+  "$defs": {
+    "quantiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "p10",
+        "p50",
+        "p90"
+      ],
+      "properties": {
+        "p10": {
+          "type": "number"
+        },
+        "p50": {
+          "type": "number"
+        },
+        "p90": {
+          "type": "number"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rto",
+        "roas",
+        "during",
+        "after",
+        "draws"
+      ],
+      "properties": {
+        "rto": {
+          "$ref": "#/$defs/quantiles"
+        },
+        "roas": {
+          "$ref": "#/$defs/quantiles"
+        },
+        "during": {
+          "$ref": "#/$defs/quantiles"
+        },
+        "after": {
+          "$ref": "#/$defs/quantiles"
+        },
+        "draws": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_key",
+        "source_group_id",
+        "campaign_name",
+        "segment",
+        "start_date",
+        "end_date",
+        "evaluation_end",
+        "model_package_id",
+        "method_version",
+        "status_text",
+        "business_campaign_id",
+        "declared_windows",
+        "source_budget_rub",
+        "allocated_budget_rub",
+        "panel_budget_rub",
+        "evaluated_budget_rub",
+        "has_federal_rows",
+        "geographies_count",
+        "result",
+        "identity_status",
+        "coverage_status",
+        "result_status",
+        "identity_reasons",
+        "coverage_reasons",
+        "reason_texts",
+        "limitations",
+        "tail_days",
+        "historical_geographies"
+      ],
+      "properties": {
+        "campaign_key": {
+          "type": "string"
+        },
+        "source_group_id": {
+          "type": "string"
+        },
+        "campaign_name": {
+          "type": "string"
+        },
+        "segment": {
+          "type": "string"
+        },
+        "start_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evaluation_end": {
+          "type": "string"
+        },
+        "model_package_id": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "status_text": {
+          "type": "string"
+        },
+        "business_campaign_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "declared_windows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source_budget_rub": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allocated_budget_rub": {
+          "type": "number"
+        },
+        "panel_budget_rub": {
+          "type": "number"
+        },
+        "evaluated_budget_rub": {
+          "type": "number"
+        },
+        "has_federal_rows": {
+          "type": "boolean"
+        },
+        "geographies_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "identity_status": {
+          "enum": [
+            "confirmed",
+            "needs_review"
+          ]
+        },
+        "coverage_status": {
+          "enum": [
+            "full",
+            "unavailable"
+          ]
+        },
+        "result_status": {
+          "enum": [
+            "pending",
+            "calculated",
+            "unavailable",
+            "error"
+          ]
+        },
+        "identity_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coverage_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason_texts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tail_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "historical_geographies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dailyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "period",
+        "rto"
+      ],
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date"
+        },
+        "period": {
+          "enum": [
+            "Размещение",
+            "После завершения"
+          ]
+        },
+        "rto": {
+          "$ref": "#/$defs/quantiles"
+        }
+      }
+    },
+    "planRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "geography",
+        "media_channel",
+        "spend_rub"
+      ],
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "geography": {
+          "type": "string"
+        },
+        "media_channel": {
+          "type": "string"
+        },
+        "spend_rub": {
+          "type": "number"
+        }
+      }
+    },
+    "geoChannel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "geography",
+        "media_channel",
+        "rto"
+      ],
+      "properties": {
+        "geography": {
+          "type": "string"
+        },
+        "media_channel": {
+          "type": "string"
+        },
+        "rto": {
+          "$ref": "#/$defs/quantiles"
+        }
+      }
+    },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "dataset_id",
+        "model_package_id",
+        "method_version",
+        "matches_active_model",
+        "resource",
+        "blocks"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "model_package_id": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "matches_active_model": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource": {
+          "const": "registry"
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "segment",
+              "total",
+              "offset",
+              "limit",
+              "items",
+              "direction_name"
+            ],
+            "properties": {
+              "segment": {
+                "type": "string"
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/campaign"
+                }
+              },
+              "direction_name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "dataset_id",
+        "model_package_id",
+        "method_version",
+        "matches_active_model",
+        "resource",
+        "campaign"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "model_package_id": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "matches_active_model": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource": {
+          "const": "card"
+        },
+        "campaign": {
+          "$ref": "#/$defs/campaign"
+        }
+      }
+    },
+    "daily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "dataset_id",
+        "model_package_id",
+        "method_version",
+        "matches_active_model",
+        "resource",
+        "campaign_key",
+        "items"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "model_package_id": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "matches_active_model": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource": {
+          "const": "daily"
+        },
+        "campaign_key": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dailyItem"
+          }
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "dataset_id",
+        "model_package_id",
+        "method_version",
+        "matches_active_model",
+        "resource",
+        "campaign_key",
+        "plan",
+        "geo_channel_totals",
+        "geography_totals",
+        "channel_totals"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "dataset_id": {
+          "type": "string"
+        },
+        "model_package_id": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "matches_active_model": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resource": {
+          "const": "media"
+        },
+        "campaign_key": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/planRow"
+          }
+        },
+        "geo_channel_totals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/geoChannel"
+          }
+        },
+        "geography_totals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "geography",
+              "spend_rub",
+              "rto"
+            ],
+            "properties": {
+              "geography": {
+                "type": "string"
+              },
+              "spend_rub": {
+                "type": "number"
+              },
+              "rto": {
+                "$ref": "#/$defs/quantiles"
+              }
+            }
+          }
+        },
+        "channel_totals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "media_channel",
+              "spend_rub",
+              "rto"
+            ],
+            "properties": {
+              "media_channel": {
+                "type": "string"
+              },
+              "spend_rub": {
+                "type": "number"
+              },
+              "rto": {
+                "$ref": "#/$defs/quantiles"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
