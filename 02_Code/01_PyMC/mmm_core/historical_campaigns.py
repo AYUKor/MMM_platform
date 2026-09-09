@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 METHOD_VERSION = "historical-paired-media-v1"
+ELIGIBILITY_VERSION = "historical-eligibility-v2"
 KEYS = ["date", "geo_label", "network", "channel"]
 
 def assert_close(actual: Any, expected: Any, label: str,
@@ -124,11 +125,20 @@ def assess_campaign(row: pd.Series, spend: pd.DataFrame, frame: pd.DataFrame,
     missing_budget = float(matched.loc[matched._merge.ne("both"), "spend_rub"].sum())
     covered = float(matched.loc[matched._merge.eq("both") & matched.media_channel.isin(supported), "spend_rub"].sum())
     geos = sorted(selected.geo_label.unique().tolist())
-    expected = pd.date_range(pre, tail)
     calendar_gaps = []
+    prehistory_gaps = []
+    geo_effect_windows = []
     for geo in geos:
-        dates = pd.DatetimeIndex(frame.loc[frame.geo_label.eq(geo) & frame.date.between(pre, tail), "date"])
+        geo_spend = selected[selected.geo_label.eq(geo)]
+        first, last = geo_spend.date.min(), geo_spend.date.max()
+        local_tail = last + pd.Timedelta(days=lag)
+        dates = pd.DatetimeIndex(frame.loc[frame.geo_label.eq(geo), "date"])
+        expected = pd.date_range(first, local_tail)
         missing = expected.difference(dates)
+        pre_missing = pd.date_range(first - pd.Timedelta(days=lag), first - pd.Timedelta(days=1)).difference(dates)
+        if len(pre_missing):
+            prehistory_gaps.append({'geo_label': geo, 'missing_dates': pre_missing.strftime('%Y-%m-%d').tolist()})
+        geo_effect_windows.append({'geo_label': geo, 'start': str(first.date()), 'end': str(local_tail.date())})
         if len(missing):
             calendar_gaps.append({"geo_label": geo, "missing_dates": missing.strftime("%Y-%m-%d").tolist()})
     source = float(row.source_budget_rub)
@@ -139,17 +149,32 @@ def assess_campaign(row: pd.Series, spend: pd.DataFrame, frame: pd.DataFrame,
     if abs(source - allocated) > 0.01: reasons.append("ALLOCATION_INCOMPLETE")
     if abs(source - panel_budget) > 0.01: reasons.append("PANEL_BUDGET_INCOMPLETE")
     if abs(source - covered) > 0.01: reasons.append("MODEL_BUDGET_INCOMPLETE")
-    if unsupported_budget != 0: reasons.append("CHANNEL_NOT_IN_TURNOVER_FIT")
+    if unsupported_budget != 0: reasons.append("PARTIAL_CHANNEL_COVERAGE")
     if calendar_gaps: reasons.append("FROZEN_CALENDAR_INCOMPLETE")
+    if any(geo not in transform['geos'] for geo in geos): reasons.append('PARTIAL_GEO_COVERAGE')
     return {"campaign_key": row.campaign_key, "segment": row.segment, "campaign_name": row.campaign_name,
             "eligible": not reasons, "reasons": reasons, "source_budget_rub": source,
             "has_federal_rows": bool(row.has_federal_rows),
             "allocated_budget_rub": allocated, "panel_budget_rub": panel_budget,
             "covered_budget_rub": covered, "unmatched_model_budget_rub": missing_budget,
             "unsupported_channel_budget_rub": unsupported_budget, "geographies_n": len(geos),
-            "geographies": geos, "calendar_gaps": calendar_gaps,
+            "geographies": geos, "calendar_gaps": calendar_gaps, "prehistory_gaps": prehistory_gaps,
+            "geo_effect_windows": geo_effect_windows,
             "prehistory_start": str(pre.date()), "evaluation_start": str(start.date()),
             "placement_end": str(end.date()), "evaluation_end": str(tail.date()), "l_max": lag}
+
+def placement_mask(row: pd.Series, dates: pd.DatetimeIndex) -> np.ndarray:
+    """Use actual source placement bounds, retaining declared windows separately."""
+    windows = row.get('actual_placement_windows')
+    if windows is None:
+        declared = json.loads(row.source_declared_windows) if 'source_declared_windows' in row else []
+        windows = declared if len(declared) > 1 else [f'{pd.Timestamp(row.start_date).date()} / {pd.Timestamp(row.end_date).date()}']
+    mask = np.zeros(len(dates), dtype=bool)
+    for window in windows:
+        first, last = map(pd.Timestamp, window.split(' / '))
+        mask |= (dates >= max(first, pd.Timestamp(row.start_date))) & (dates <= min(last, pd.Timestamp(row.end_date)))
+    return mask
+
 
 def evaluate_campaign(row: pd.Series, selected: pd.DataFrame, frame: pd.DataFrame,
                       transform: dict, draws: dict, chunk_size: int = 512) -> tuple:
@@ -227,7 +252,7 @@ def evaluate_campaign(row: pd.Series, selected: pd.DataFrame, frame: pd.DataFram
                 daily[sl, output_positions] += diff[:, ix]
                 cell_draws[sl] = diff[:, ix].sum(axis=1)
             geo_channel.append((geo, media_channel, cell_draws))
-    during_mask = dates <= end
+    during_mask = placement_mask(row, dates)
     during, after = daily[:, during_mask].sum(axis=1), daily[:, ~during_mask].sum(axis=1)
     total = daily.sum(axis=1)
     checks["during_plus_after_max_abs"] = assert_close(during + after, total, "during+after=total", 1e-5)
@@ -266,6 +291,7 @@ class HistoricalContext:
     transforms: dict
     draws: dict
     config: dict
+    identity_evidence: dict | None = None
 
     def verify(self) -> None:
         for role, item in self.spec['files'].items():
@@ -359,10 +385,53 @@ class HistoricalContext:
             raise ValueError('Duplicate allocated spend cells')
         if not np.isfinite(ctx.spend.spend_rub).all() or ctx.spend.spend_rub.lt(0).any():
             raise ValueError('Corrupt allocated spend')
+        if 'identity_rows' in paths:
+            identity_rows = pd.read_parquet(paths['identity_rows'])
+            ctx.identity_evidence = prove_campaign_identity(identity_rows, ctx.registry)
         return ctx
 
 
-def campaign_state(row: pd.Series, assessment: dict, config: dict) -> dict:
+def prove_campaign_identity(source: pd.DataFrame, registry: pd.DataFrame) -> dict:
+    """Confirm waves only through a shared, fully populated, exclusive source token.
+
+    UTM placement qualifiers after `|` do not identify a different campaign.
+    No fuzzy name matching, gap threshold, or partial-row evidence is accepted.
+    """
+    data = source.copy()
+    data['token'] = data.utm_campaign.fillna('').astype(str).str.split('|', regex=False).str[0].str.strip()
+    ownership = data[data.token.ne('')].groupby(['segment', 'token']).campaign_key.nunique()
+    proof = {}
+    for key, rows in data.groupby('campaign_key'):
+        record = registry[registry.campaign_key.eq(key)]
+        if len(record) != 1:
+            raise ValueError('Identity evidence contains unknown campaign')
+        row = record.iloc[0]
+        if len(rows) != int(row.source_row_count) or abs(float(rows.budget.sum()) - row.source_budget_rub) > .01:
+            raise ValueError('Identity evidence does not cover whole source group')
+        if rows.source_file_sha256.nunique() != 1 or rows.source_file_sha256.iloc[0] != row.source_file_sha256:
+            raise ValueError('Identity evidence source version differs')
+        if rows.segment.nunique() != 1 or rows.segment.iloc[0] != row.segment:
+            raise ValueError('Identity evidence crosses direction')
+        if rows.campaign_id_for_audit.nunique() != 1 or str(rows.campaign_id_for_audit.iloc[0]) != str(row.campaign_id):
+            raise ValueError('Identity evidence crosses source identifier')
+        if rows.token.eq('').any() or rows.token.nunique() != 1:
+            continue
+        token = rows.token.iloc[0]
+        if ownership.loc[(row.segment, token)] != 1:
+            continue
+        if (rows.date.lt(rows.declared_start_date) | rows.date.gt(rows.declared_end_date)).any():
+            continue
+        windows = sorted({f'{a.date()} / {b.date()}' for a, b in rows[['declared_start_date', 'declared_end_date']].itertuples(index=False, name=None)})
+        if windows != sorted(json.loads(row.source_declared_windows)):
+            raise ValueError('Identity evidence periods differ')
+        actual_windows = sorted({f'{g.date.min().date()} / {g.date.max().date()}'
+                                 for _, g in rows.groupby(['declared_start_date', 'declared_end_date'])})
+        proof[key] = {'actual_placement_windows': actual_windows, 'kind': 'exclusive_full_source_utm_campaign', 'token': token,
+                      'source_sha256': row.source_file_sha256, 'rows': len(rows), 'declared_windows': windows}
+    return proof
+
+
+def campaign_state(row: pd.Series, assessment: dict, config: dict, identity_evidence: dict | None = None) -> dict:
     """Keep business identity independent of model coverage and result readiness."""
     windows = json.loads(row.source_declared_windows)
     confirmed = len(windows) == 1 and int(row.source_declared_window_count) == 1
@@ -375,17 +444,17 @@ def campaign_state(row: pd.Series, assessment: dict, config: dict) -> dict:
         except (ValueError, TypeError, AttributeError):
             confirmed = False
             identity_reason = 'INVALID_DECLARED_WINDOW'
+    if not confirmed and identity_evidence and row.campaign_key in identity_evidence:
+        confirmed = True
     reasons = list(assessment['reasons'])
     start, end = pd.Timestamp(row.start_date), pd.Timestamp(row.end_date)
     train_start, train_end = pd.Timestamp(config['train_start']), pd.Timestamp(config['train_end'])
     if start > train_end:
-        reasons.append('AFTER_TRAINING')
+        reasons.append('OUT_OF_TRAINING_WINDOW')
     elif end > train_end:
-        reasons.append('CROSSES_TRAINING_END')
+        reasons.append('OUT_OF_TRAINING_WINDOW')
     if start < train_start:
         reasons.append('BEFORE_TRAINING')
-    if pd.Timestamp(assessment['prehistory_start']) < train_start:
-        reasons.append('PREHISTORY_UNAVAILABLE')
     if pd.Timestamp(assessment['evaluation_end']) > train_end:
         reasons.append('TAIL_UNAVAILABLE')
     return {'identity_status': 'confirmed' if confirmed else 'needs_review',

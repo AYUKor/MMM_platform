@@ -1620,8 +1620,16 @@ def _multipart_file(content_type: str, body: bytes) -> tuple[str, bytes]:
     return filename, content
 
 
+def _canonical_historical_path(path: str) -> str:
+    """Authorization and dispatch must agree on trailing slashes."""
+    if path.startswith('/api/v1/historical-campaigns/'):
+        return path.rstrip('/')
+    return path
+
+
 def _required_permission(method: str, path: str) -> str | None:
     """Central route policy; ``None`` marks the deliberately public surface."""
+    path = _canonical_historical_path(path)
 
     if path in {"/health", "/ready"}:
         return None
@@ -2520,7 +2528,7 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
 
         def do_GET(self) -> None:  # noqa: N802
             request_url = urlsplit(self.path)
-            path = request_url.path
+            path = _canonical_historical_path(request_url.path)
             if not self._prepare_request("GET", path):
                 return
             if path == "/api/v1/historical-campaigns" or path.startswith("/api/v1/historical-campaigns/"):

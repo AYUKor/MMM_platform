@@ -103,7 +103,7 @@ class HistoricalCalculationTest(unittest.TestCase):
         self.assertEqual((state['identity_status'],state['coverage_status'],state['result_status']),('needs_review','full','unavailable'))
         ctx.config['train_end']='2025-01-04'
         state=campaign_state(row,a,ctx.config)
-        self.assertIn('CROSSES_TRAINING_END',state['coverage_reasons'])
+        self.assertIn('OUT_OF_TRAINING_WINDOW',state['coverage_reasons'])
         self.assertIn('TAIL_UNAVAILABLE',state['coverage_reasons'])
 
     def test_mandatory_inputs_never_skip_missing_or_changed_file(self):
@@ -115,6 +115,58 @@ class HistoricalCalculationTest(unittest.TestCase):
             p.unlink()
             with self.assertRaises(ValueError):ctx.verify()
             with self.assertRaises(ValueError):HistoricalContext.load({'files':{}},{},Path(temp))
+
+    def test_model_origin_does_not_require_invented_pretraining_days(self):
+        ctx=synthetic_context();row=ctx.registry.iloc[0].copy();fit=next(iter(ctx.frames))
+        row['start_date']=pd.Timestamp('2025-01-01');row['end_date']=pd.Timestamp('2025-01-02')
+        row['source_declared_windows']='["2025-01-01 / 2025-01-02"]'
+        spend=ctx.spend.copy();spend['date']=pd.date_range('2025-01-01',periods=2)
+        a=assess_campaign(row,spend,ctx.frames[fit],ctx.transforms[fit])
+        self.assertTrue(a['eligible']);self.assertTrue(a['prehistory_gaps'])
+        self.assertEqual(campaign_state(row,a,ctx.config)['result_status'],'pending')
+        result,*_=evaluate_campaign(row,spend,ctx.frames[fit],ctx.transforms[fit],ctx.draws[fit])
+        self.assertTrue(np.isfinite(result).all())
+        # Common unknown background cannot be assumed to cancel after saturation.
+        x=np.array([3.,3.,3.,3.]);alt=np.array([3.,3.,2.,3.]);args=(np.array([.5]),np.array([1.]),np.array([1.]),np.ones(4),1.,2)
+        known=independent_response(x,*args)-independent_response(alt,*args)
+        dropped=independent_response(x[2:],args[0],args[1],args[2],np.ones(2),1.,2)-independent_response(alt[2:],args[0],args[1],args[2],np.ones(2),1.,2)
+        self.assertGreater(abs(known[0,2]-dropped[0,0]),.001)
+
+    def test_multiwave_identity_requires_all_rows_and_exclusive_token(self):
+        from mmm_core.historical_campaigns import prove_campaign_identity
+        ctx=synthetic_context();row=ctx.registry.iloc[0].copy()
+        row['source_declared_windows']='["2025-01-04 / 2025-01-04", "2025-01-05 / 2025-01-05"]';row['source_declared_window_count']=2
+        row['source_row_count']=2;row['source_file_sha256']='a'*64
+        source=pd.DataFrame({'campaign_key':['synthetic_a']*2,'campaign_id_for_audit':['a']*2,'segment':[DIRECTIONS[0]]*2,
+            'utm_campaign':['tracking-campaign|format_a','tracking-campaign|format_b'],'budget':[10.,10.],
+            'source_file_sha256':['a'*64]*2,'date':pd.to_datetime(['2025-01-04','2025-01-05']),
+            'declared_start_date':pd.to_datetime(['2025-01-04','2025-01-05']),'declared_end_date':pd.to_datetime(['2025-01-04','2025-01-05'])})
+        registry=pd.DataFrame([row]);proof=prove_campaign_identity(source,registry)
+        fit=next(iter(ctx.frames));a=assess_campaign(row,ctx.spend,ctx.frames[fit],ctx.transforms[fit])
+        self.assertEqual(campaign_state(row,a,ctx.config,proof)['identity_status'],'confirmed')
+        self.assertEqual(campaign_state(row,a,ctx.config)['identity_status'],'needs_review')
+        source.loc[0,'utm_campaign']=''
+        self.assertFalse(prove_campaign_identity(source,registry))
+        source.loc[0,'utm_campaign']='other-campaign'
+        self.assertFalse(prove_campaign_identity(source,registry))
+
+    def test_declared_end_does_not_mislabel_actual_postplacement_days(self):
+        from mmm_core.historical_campaigns import placement_mask
+        row=synthetic_context().registry.iloc[0].copy()
+        row['source_declared_windows']='["2025-01-04 / 2025-01-12"]'
+        dates=pd.date_range('2025-01-04','2025-01-08')
+        np.testing.assert_array_equal(placement_mask(row,dates),[True,True,False,False,False])
+
+    def test_multiwave_removes_all_spend_and_aggregates_interwave_carryover(self):
+        ctx=synthetic_context();row=ctx.registry.iloc[0].copy();fit=next(iter(ctx.frames))
+        row['start_date']=pd.Timestamp('2025-01-04');row['end_date']=pd.Timestamp('2025-01-08')
+        row['source_declared_windows']='["2025-01-04 / 2025-01-04", "2025-01-08 / 2025-01-08"]'
+        spend=ctx.spend.copy();spend['date']=pd.to_datetime(['2025-01-04','2025-01-08'])
+        daily,dates,geo,during,after,checks=evaluate_campaign(row,spend,ctx.frames[fit],ctx.transforms[fit],ctx.draws[fit])
+        mask=dates.isin(spend.date)
+        np.testing.assert_allclose(during,daily[:,mask].sum(axis=1))
+        np.testing.assert_allclose(during+after,daily.sum(axis=1))
+        self.assertTrue((daily[:,1]>0).all())
 
     def test_physically_complete_inputs_and_each_mandatory_file(self):
         from tests.synthetic_historical_inputs import write_inputs
@@ -249,6 +301,22 @@ class HistoricalHttpTest(unittest.TestCase):
     def setUp(self):
         navigation_http.ProductNavigationHttpTest.setUp(self)
         self.application.historical=synthetic_dataset(Path(self.temporary.name)/'history')
+
+    def test_report_trailing_slash_cannot_bypass_download_permission(self):
+        from dataclasses import replace
+        provider=self.application.auth.identity_provider;original=provider.resolve_session
+        def view_only(token, *, request_id):
+            resolution=original(token,request_id=request_id)
+            return replace(resolution,context=replace(resolution.context,permissions=('calculation.read',)))
+        with patch.object(provider,'resolve_session',side_effect=view_only):
+            self.assertEqual(self.request('/api/v1/historical-campaigns/synthetic_a/')[0],200)
+            for suffix in ['report.xlsx','report.xlsx/','report.xlsx///']:
+                self.assertEqual(self.request('/api/v1/historical-campaigns/synthetic_a/'+suffix)[0],403)
+        import urllib.request
+        for suffix in ['report.xlsx','report.xlsx/']:
+            req=urllib.request.Request(self.base_url+'/api/v1/historical-campaigns/synthetic_a/'+suffix,headers={'Cookie':self.session_cookie})
+            with urllib.request.urlopen(req) as response:
+                self.assertEqual(response.status,200);self.assertTrue(response.read().startswith(b'PK'))
 
     def test_historical_routes_use_saved_results(self):
         for path in ['', '/synthetic_a','/synthetic_a/daily','/synthetic_a/media']:

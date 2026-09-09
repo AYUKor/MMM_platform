@@ -16,8 +16,8 @@ sys.path.insert(0, str(WEB))
 sys.path.insert(0, str(WEB.parent / '02_Code' / '01_PyMC'))
 import numpy as np
 import pandas as pd
-from mmm_core.historical_campaigns import (HistoricalContext, METHOD_VERSION, assess_campaign,
-                                          campaign_state, evaluate_campaign, sha256)
+from mmm_core.historical_campaigns import (HistoricalContext, METHOD_VERSION, ELIGIBILITY_VERSION, assess_campaign,
+                                          campaign_state, evaluate_campaign, placement_mask, sha256)
 from services.historical_campaign_dataset import DIRECTIONS, REASONS, valid_id
 from services.historical_campaign_report import export_report, METHOD_TEXT
 
@@ -82,7 +82,7 @@ def run(args) -> dict:
         key, fit = row.campaign_key, row.segment + '::turnover_per_user'
         selected = grouped.get(key, context.spend.iloc[:0])
         a = assess_campaign(row, selected, context.frames[fit], context.transforms[fit])
-        state = campaign_state(row, a, context.config)
+        state = campaign_state(row, a, context.config, context.identity_evidence)
         card = {'campaign_key': key, 'source_group_id': str(row.campaign_id),
                 'business_campaign_id': key if state['identity_status'] == 'confirmed' else None,
                 'campaign_name': str(row.campaign_name), 'segment': row.segment,
@@ -97,9 +97,14 @@ def run(args) -> dict:
         card['status_text'] = ('Готово к расчёту' if state['result_status'] == 'pending' else
                                'Нужно уточнить объединение периодов' if state['identity_status'] == 'needs_review' else 'Расчёт недоступен')
         card['reason_texts'] = [REASONS[r] for r in state['identity_reasons'] + state['coverage_reasons']]
-        card['limitations'] = METHOD_TEXT
+        card['limitations'] = list(METHOD_TEXT)
+        if a.get('prehistory_gaps'):
+            card['limitations'].append('До первого расхода используется точная сохранённая история и начальное состояние модели. Дополнительная предыстория не восстанавливается.')
+        if int(row.source_declared_window_count) > 1 and state['identity_status'] == 'confirmed':
+            card['limitations'].append('Несколько периодов связаны единой эксклюзивной меткой кампании во всех строках источника. Эффект после размещения включает хвосты между волнами.')
         rows[key], assessments[key] = card, a
     write_json(root / 'private/assessments.json', assessments)
+    write_json(root / 'private/identity_evidence.json', context.identity_evidence or {})
     golden_keys = list(spec.get('goldens', {}))
     eligible = sorted([k for k, v in rows.items() if v['result_status'] == 'pending'],
                       key=lambda k: (golden_keys.index(k) if k in golden_keys else len(golden_keys), k))
@@ -114,6 +119,10 @@ def run(args) -> dict:
         tick = time.perf_counter()
         row = context.registry[context.registry.campaign_key.eq(key)].iloc[0]
         fit = row.segment + '::turnover_per_user'
+        evidence = (context.identity_evidence or {}).get(key)
+        if evidence:
+            row = row.copy()
+            row['actual_placement_windows'] = evidence['actual_placement_windows']
         private = root / 'private' / key
         serving = root / 'serving' / key
         private.mkdir(parents=True, exist_ok=True)
@@ -139,7 +148,8 @@ def run(args) -> dict:
                                 pairs=context.draws[fit]['pairs'], during=during, after=after,
                                 geo=np.asarray([v[0] for v in geo_channel]), media=np.asarray([v[1] for v in geo_channel]),
                                 geo_channel=np.asarray([v[2] for v in geo_channel]))
-            daily_rows = [{'date': d.strftime('%Y-%m-%d'), 'period': 'Размещение' if d <= row.end_date else 'После завершения',
+            placement_days = placement_mask(row, dates)
+            daily_rows = [{'date': d.strftime('%Y-%m-%d'), 'period': 'Размещение' if placement_days[i] else 'После завершения',
                            'rto': quantiles(daily[:, i])} for i, d in enumerate(dates)]
             plan = grouped[key].groupby(['date', 'geo_label', 'media_channel'], as_index=False).spend_rub.sum()
             plan['date'] = plan.date.dt.strftime('%Y-%m-%d')
@@ -193,7 +203,7 @@ def run(args) -> dict:
         manifest = {'schema_version': '1.0.0', 'dataset_id': args.dataset_id, 'acceptance': 'passed',
                     'model_package_id': spec['model_package_id'], 'package_fingerprint': spec['package_fingerprint'],
                     'panel_sha256': spec['files']['panel']['sha256'], 'method_version': METHOD_VERSION,
-                    'run_id': args.dataset_id, 'input_files': spec['files'],
+                    'eligibility_version': ELIGIBILITY_VERSION, 'run_id': args.dataset_id, 'input_files': spec['files'],
                     'runtime_versions': {name: importlib.metadata.version(name) for name in ['numpy', 'pandas', 'xarray', 'openpyxl']},
                     'private_files': seal_files(root, [p for p in (root / 'private').rglob('*') if p.is_file()]),
                     **identity, 'counts': counts, 'files': seal_files(root, [p for p in (root / 'serving').rglob('*') if p.is_file()])}
