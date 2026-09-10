@@ -47,6 +47,10 @@ from services.job_result_view import (  # noqa: E402
     ResultProjectionStateError,
 )
 from tests.synthetic_model_registry import write_synthetic_model_registry  # noqa: E402
+from tests.test_business_semantics_v2 import (  # noqa: E402
+    _multi_channel_federal_audit,
+    _validation_payload,
+)
 
 
 LIFECYCLE_FIXTURE = WEB_APP_DIR / "tests" / "fixtures" / "application_lifecycle_v1_happy_path_synthetic.json"
@@ -129,6 +133,50 @@ class _FailingRunner:
 
 
 class HttpSmokeV1Test(unittest.TestCase):
+    def test_validation_view_serves_multiple_federal_channels_and_guards_audit(self) -> None:
+        validation = _validation_payload()
+        validation["validation_id"] = self.validation.validation_id
+        path = self.artifact_root / "federal-audit.json"
+        path.write_text(json.dumps(_multi_channel_federal_audit()), encoding="utf-8")
+        inputs = {"federal_geo_allocation": {"audit": {
+            "storage_key": path.name,
+            "size_bytes": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }}}
+        with patch.object(self.application.state, "read_validation", return_value=validation), patch.object(
+            self.application.state, "read_validation_inputs", return_value=inputs,
+        ):
+            status, payload, _ = self._request(
+                "GET", f"/api/v1/validations/{self.validation.validation_id}/view-v2",
+            )
+            self.assertEqual(status, 200, payload)
+            self.assertTrue(payload["job_creation_allowed"])
+            self.assertEqual(payload["federal_allocation"]["business_directions"], ["ТС5/Онлайн"])
+            self.assertEqual(len(payload["federal_allocation"]["breakdown"]), 3)
+
+            inconsistent = _multi_channel_federal_audit()
+            inconsistent["totals"]["federal_source_budget_rub"] += 1
+            inconsistent["totals"]["federal_allocated_budget_rub"] += 1
+            path.write_text(json.dumps(inconsistent), encoding="utf-8")
+            inputs["federal_geo_allocation"]["audit"].update(
+                size_bytes=path.stat().st_size,
+                sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+            )
+            status, payload, _ = self._request(
+                "GET", f"/api/v1/validations/{self.validation.validation_id}/view-v2",
+            )
+            self.assertEqual(status, 409, payload)
+            self.assertEqual(payload["error"]["code"], "VALIDATION_VIEW_INCONSISTENT")
+
+            # Direction deduplication must not weaken persisted-audit integrity.
+            path.write_text("{}", encoding="utf-8")
+            status, payload, _ = self._request(
+                "GET", f"/api/v1/validations/{self.validation.validation_id}/view-v2",
+            )
+            self.assertEqual(status, 200, payload)
+            self.assertEqual(payload["federal_allocation"]["status"], "error")
+            self.assertEqual(payload["federal_allocation"]["errors"][0]["code"], "FEDERAL_ALLOCATION_DETAILS_UNAVAILABLE")
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         root = Path(self.temporary.name)

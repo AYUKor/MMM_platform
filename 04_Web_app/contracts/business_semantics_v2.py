@@ -568,7 +568,9 @@ def validate_validation_result_v2(payload: Mapping[str, Any]) -> Mapping[str, An
             abs(breakdown_source - source_budget) > 1e-6
             or abs(breakdown_allocated - allocated_budget) > 1e-6
             or breakdown_rows != source_rows_count
-            or breakdown_directions != directions
+            # Details have direction x channel x period grain; the public
+            # direction catalog contains each direction only once.
+            or sorted(set(breakdown_directions)) != directions
         ):
             raise BusinessSemanticsContractError(
                 "Federal allocation breakdown does not reconcile with totals"

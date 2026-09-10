@@ -75,6 +75,33 @@ def _schema_valid(schema: dict, payload: dict) -> None:
     Draft202012Validator(schema).validate(payload)
 
 
+def _multi_channel_federal_audit() -> dict:
+    """Three federal channels in one direction, with fractional synthetic budgets."""
+    return _federal_audit([
+        {
+            "source_row_id": f"row_{index}",
+            "date": "2026-09-01",
+            "business_direction": "ТС5/Онлайн",
+            "channel": channel,
+            "original_geo": "РФ",
+            "source_budget_rub": budget,
+            "allocated_total_rub": budget,
+            "difference_rub": 0.0,
+            "eligible_geo_count": 175,
+            "declared_geo_count": 211,
+            "ready_geo_count": 175,
+            "excluded_geo_count": 36,
+            "required_start": "2026-09-01",
+            "required_end": "2026-09-15",
+            "lmax": 14,
+            "denominator_policy_version": "FORECAST_DENOMINATOR_RESOLUTION_V1",
+        }
+        for index, (channel, budget) in enumerate([
+            ("Нац_ТВ", 60.125), ("Радио", 20.25), ("Digital_Performance", 19.625),
+        ])
+    ])
+
+
 def _validation_payload() -> dict:
     equal = REQUESTED_BUDGET / len(GEOS)
     budget_rows = [
@@ -465,6 +492,58 @@ class BusinessSemanticsV2Test(unittest.TestCase):
         self.assertEqual(summary["required_period_start"], "2026-09-01")
         self.assertEqual(summary["required_period_end"], "2026-09-15")
         self.assertEqual(summary["breakdown"][0]["period_end"], "2026-09-15")
+
+    def test_federal_full_validation_accepts_channels_and_periods_per_direction(self) -> None:
+        for variant in ("multiple_channels", "multiple_periods", "multiple_directions"):
+            with self.subTest(variant=variant):
+                audit = _multi_channel_federal_audit()
+                rows = audit["source_row_reconciliation"]
+                if variant == "multiple_periods":
+                    for index, row in enumerate(rows):
+                        row["channel"] = "Digital_Performance"
+                        row["required_start"] = f"2026-09-{index + 1:02d}"
+                        row["required_end"] = f"2026-09-{index + 15:02d}"
+                elif variant == "multiple_directions":
+                    rows[-1]["business_direction"] = "ТСХ/Онлайн"
+                payload = build_validation_result_v2(
+                    _validation_payload(), federal_allocation_audit=audit,
+                )
+                _schema_valid(load_validation_result_v2_schema(), payload)
+                self.assertTrue(payload["job_creation_allowed"])
+                federal = payload["federal_allocation"]
+                self.assertEqual(len(federal["breakdown"]), 3)
+                self.assertEqual(federal["source_rows_count"], 3)
+                self.assertEqual(federal["source_budget_rub"], 100.0)
+                self.assertEqual(federal["allocated_budget_rub"], 100.0)
+                self.assertEqual(federal["difference_rub"], 0.0)
+                self.assertEqual(
+                    sorted({row["business_direction"] for row in federal["breakdown"]}),
+                    federal["business_directions"],
+                )
+
+    def test_federal_repeated_directions_still_reject_inconsistent_details(self) -> None:
+        valid = build_validation_result_v2(
+            _validation_payload(), federal_allocation_audit=_multi_channel_federal_audit(),
+        )
+        for variant in ("missing_direction", "extra_direction", "duplicate_direction", "row_count", "budget", "duplicate_detail"):
+            with self.subTest(variant=variant):
+                payload = copy.deepcopy(valid)
+                federal = payload["federal_allocation"]
+                if variant == "missing_direction":
+                    federal["business_directions"] = []
+                elif variant == "extra_direction":
+                    federal["business_directions"].append("ТСХ/Онлайн")
+                elif variant == "duplicate_direction":
+                    federal["business_directions"].append("ТС5/Онлайн")
+                elif variant == "row_count":
+                    federal["breakdown"][0]["source_rows_count"] += 1
+                elif variant == "budget":
+                    federal["breakdown"][0]["source_budget_rub"] += 1
+                    federal["breakdown"][0]["allocated_budget_rub"] += 1
+                else:
+                    federal["breakdown"].append(copy.deepcopy(federal["breakdown"][0]))
+                with self.assertRaises(BusinessSemanticsContractError):
+                    validate_validation_result_v2(payload)
 
     def test_federal_projection_has_none_and_safe_error_states(self) -> None:
         self.assertEqual(build_federal_allocation_summary(None)["status"], "none")
