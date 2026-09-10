@@ -843,7 +843,16 @@ class ExecutionWorker:
             campaigns_total,
             "campaigns",
         )
-        if phase == "candidate_generation":
+        if phase == "posterior_scoring":
+            current = _safe_counter(payload.get("blocks_completed"))
+            total = _safe_counter(payload.get("blocks_total"))
+            self._emit_progress(
+                job.job_id, stage="final_scoring", phase=phase, state="running",
+                display_text="Модель оценивает отобранные планы по географиям",
+                percent=self._last_percent,
+                counters=_counter_tuple("scoring_blocks", current, total, "geo_allocations"),
+            )
+        elif phase == "candidate_generation":
             self._emit_progress(
                 job.job_id,
                 stage="benchmarks",

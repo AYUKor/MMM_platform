@@ -206,6 +206,42 @@ class JobProgressViewV1Test(unittest.TestCase):
         self.assertIsNone(payload["stages"][3]["progress"])
         self.assertIn("1 536", payload["stages"][5]["display_text"])
 
+    def test_completed_search_advances_even_below_attempt_limit(self) -> None:
+        events = copy.deepcopy(self.fixture["progress_events"][:3])
+        events[-1]["phase"] = "adaptive_search_complete"
+        events[-1]["counters"][0]["current"] = 1961
+        payload = self._build("running", progress=events)
+        self.assertEqual(payload["current_stage_id"], "P07")
+        self.assertEqual(payload["stages"][5]["status"], "completed")
+        self.assertEqual(payload["scenario6"]["status"], "completed")
+        self.assertEqual(payload["scenario6"]["attempts_checked"], 1961)
+        self.assertEqual(payload["stages"][6]["started_at_utc"], events[-1]["emitted_at_utc"])
+        # Persisted events from older workers must also advance correctly.
+        scoring = copy.deepcopy(events[-1])
+        scoring.update(progress_event_id="progress_555555555555", sequence=6,
+                       emitted_at_utc="2026-07-15T08:01:30Z", stage="forecast",
+                       phase="search_scoring", counters=[])
+        after = self._build("running", progress=[*events, scoring])
+        self.assertEqual(after["current_stage_id"], "P07")
+        self.assertEqual(after["stages"][6]["started_at_utc"], events[-1]["emitted_at_utc"])
+
+    def test_posterior_progress_reports_real_blocks_and_resets_between_passes(self) -> None:
+        events = copy.deepcopy(self.fixture["progress_events"][:3])
+        events[-1]["phase"] = "adaptive_search_complete"
+        for index, current in enumerate([10, 20, 0, 10]):
+            event = copy.deepcopy(events[-1])
+            event.update(progress_event_id=f"progress_{index + 6:012d}", sequence=6+index,
+                         emitted_at_utc=f"2026-07-15T08:01:{30+index:02d}Z",
+                         stage="final_scoring", phase="posterior_scoring",
+                         counters=[{"name":"scoring_blocks","current":current,
+                                    "total":40,"unit":"geo_allocations"}])
+            events.append(event)
+            payload = self._build("running", progress=events)
+            self.assertEqual(payload["current_stage_id"], "P07")
+            self.assertEqual(payload["stages"][6]["progress"],
+                             {"current":current,"total":40,"unit":"гео × план"})
+            job_progress_view_from_dict(payload)
+
     def test_completed_projection_requires_result_and_report_publication(self) -> None:
         payload = self._build(
             "succeeded",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from dataclasses import replace
 from typing import Any
 
 from contracts.application_lifecycle_v1 import (
@@ -251,7 +252,11 @@ def _scenario6_status(
         return "unavailable"
     if any(error.stage == "scenario6" for error in errors):
         return "failed"
-    if any(event.stage in {"final_scoring", "report"} for event in events):
+    if any(
+        event.stage in {"final_scoring", "report"}
+        or event.phase == "adaptive_search_complete"
+        for event in events
+    ):
         return "completed"
     if any(event.stage == "scenario6" for event in events):
         return (
@@ -290,9 +295,9 @@ def _current_order(job: DecisionJobV1, events: Sequence[ProgressEventV1]) -> int
             current = max(current, 3)
         elif event.stage == "scenario6":
             scenario6_seen = True
-            current = max(current, 6)
+            current = max(current, 7 if event.phase == "adaptive_search_complete" else 6)
         elif event.stage == "forecast":
-            current = max(current, 6 if scenario6_seen else 3)
+            current = max(current, 7 if event.phase == "search_scoring" else (6 if scenario6_seen else 3))
         elif event.stage == "final_scoring":
             current = max(current, 7)
         elif event.stage == "report":
@@ -314,7 +319,12 @@ def _stage_boundaries(
         {"benchmarks", "forecast", "scenario6", "final_scoring", "report"},
     )
     scenario6 = _first_event_time(events, {"scenario6"})
-    final_scoring = _first_event_time(events, {"final_scoring"})
+    final_scoring = next(
+        (event.emitted_at_utc for event in events if
+         event.stage == "final_scoring" or
+         event.phase in {"adaptive_search_complete", "search_scoring"}),
+        None,
+    )
     report = _first_event_time(events, {"report"})
     boundaries: dict[int, str | None] = {
         1: job.queued_at_utc,
@@ -581,6 +591,14 @@ def build_job_progress_view(
         attempt_budget,
         failure_stage_id,
     )
+    scoring_current, scoring_total = _counter_value(events, "scoring_blocks")
+    if current_order == 7 and scoring_current is not None:
+        stages = tuple(
+            replace(stage, progress=StageProgress(
+                current=scoring_current, total=scoring_total, unit="гео × план",
+            )) if stage.stage_id == "P07" else stage
+            for stage in stages
+        )
 
     if job.status.code == "queued":
         queue_position_known = queue_position is not None

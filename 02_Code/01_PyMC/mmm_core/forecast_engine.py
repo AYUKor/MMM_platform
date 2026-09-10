@@ -816,6 +816,35 @@ class ForecastEngine:
         repr=False,
     )
 
+    _metadata_indices: dict[tuple[str, tuple[str, ...]], dict[Any, Any]] = field(
+        default_factory=dict, init=False, repr=False,
+    )
+
+    _source_plan: pd.DataFrame | None = field(default=None, init=False, repr=False)
+    _source_plan_index: dict[Any, Any] = field(default_factory=dict, init=False, repr=False)
+
+    def _source_cell_rows(self, plan: pd.DataFrame, cell: pd.Series) -> pd.DataFrame:
+        """Reuse row positions within the current immutable campaign flighting."""
+        columns = ("campaign_name", "segment", "geo", "channel")
+        if self._source_plan is not plan:
+            self._source_plan_index = plan.groupby(list(columns), sort=False, observed=True).indices
+            self._source_plan = plan
+        positions = self._source_plan_index.get(tuple(cell[column] for column in columns))
+        return plan.iloc[positions] if positions is not None else plan.iloc[:0]
+
+    def _metadata_rows(
+        self, name: str, columns: tuple[str, ...], values: tuple[str, ...],
+    ) -> pd.DataFrame:
+        """Index immutable serving metadata once, retaining source row order."""
+        frame = getattr(self, name)
+        key = (name, columns)
+        if key not in self._metadata_indices:
+            self._metadata_indices[key] = frame.groupby(
+                list(columns), sort=False, observed=True,
+            ).indices
+        positions = self._metadata_indices[key].get(values)
+        return frame.iloc[positions] if positions is not None else frame.iloc[:0]
+
     def __post_init__(self) -> None:
         self._denominator_resolver = HistoricalDenominatorResolver(self.denominators)
 
@@ -869,12 +898,11 @@ class ForecastEngine:
         )
 
     def _x_scale(self, fit_key: str, geo: str, channel: str, fallback_tier: str = "") -> float:
-        df = self.media_scales
-        rows = df[(df["fit_key"] == fit_key) & (df["geo_label"] == geo) & (df["channel"] == channel)]
+        rows = self._metadata_rows("media_scales", ("fit_key", "geo_label", "channel"), (fit_key, geo, channel))
         if rows.empty and fallback_tier:
-            rows = df[(df["fit_key"] == fit_key) & (df["market_size_tier"] == fallback_tier) & (df["channel"] == channel)]
+            rows = self._metadata_rows("media_scales", ("fit_key", "market_size_tier", "channel"), (fit_key, fallback_tier, channel))
         if rows.empty:
-            rows = df[(df["fit_key"] == fit_key) & (df["channel"] == channel)]
+            rows = self._metadata_rows("media_scales", ("fit_key", "channel"), (fit_key, channel))
         if rows.empty:
             return 1.0
         return float(np.nanmedian(rows["x_scale"].astype(float)))
@@ -886,11 +914,9 @@ class ForecastEngine:
         channel: str,
         daily_spend_values: np.ndarray,
     ) -> SupportAssessment:
-        rows = self.support_bounds[
-            (self.support_bounds["fit_key"] == fit_key)
-            & (self.support_bounds["geo_label"] == geo)
-            & (self.support_bounds["channel"] == channel)
-        ]
+        rows = self._metadata_rows(
+            "support_bounds", ("fit_key", "geo_label", "channel"), (fit_key, geo, channel),
+        )
         flags: list[str] = []
         max_future = float(np.nanmax(daily_spend_values)) if len(daily_spend_values) else 0.0
         if rows.empty:
@@ -948,11 +974,9 @@ class ForecastEngine:
         return self._support_assessment(fit_key, geo, channel, daily_spend_values).flags_text
 
     def _warm_start_for(self, fit_key: str, geo: str, channel: str, start: date, l_max: int) -> np.ndarray | None:
-        rows = self.warm_start[
-            (self.warm_start["fit_key"] == fit_key)
-            & (self.warm_start["geo_label"] == geo)
-            & (self.warm_start["channel"] == channel)
-        ].copy()
+        rows = self._metadata_rows(
+            "warm_start", ("fit_key", "geo_label", "channel"), (fit_key, geo, channel),
+        ).copy()
         if rows.empty:
             return None
         as_of = pd.to_datetime(rows["as_of_date"], errors="coerce").dt.date.max()
@@ -1049,13 +1073,30 @@ class ForecastEngine:
             for fit_key, fit_meta in (self.metadata.get("fits") or {}).items()
             if target_filter is None or str(fit_meta.get("target")) in target_filter
         ]
+        scoring_progress = progress_context in {"optimizer_search", "optimizer_finalists"}
+        scored_blocks = 0
+        total_blocks = sum(
+            len(plan[(plan["segment"] == meta["segment"]) & plan["geo"].isin(meta["geos"])]
+                [["campaign_name", "geo"]].drop_duplicates())
+            for _, meta in fit_items
+        ) if scoring_progress else 0
+
+        def emit_scoring_progress() -> None:
+            print(json.dumps({
+                "event": "optimizer_progress", "phase": "posterior_scoring",
+                "scoring_pass": progress_context,
+                "blocks_completed": scored_blocks, "blocks_total": total_blocks,
+            }, ensure_ascii=False), flush=True)
+
+        if scoring_progress:
+            emit_scoring_progress()
         for fit_pos, (fit_key, fit_meta) in enumerate(fit_items, start=1):
             segment = fit_meta["segment"]
             target = fit_meta["target"]
             seg_plan = plan[plan["segment"] == segment].copy()
             if seg_plan.empty:
                 continue
-            if progress_context:
+            if progress_context and not scoring_progress:
                 print(
                     json.dumps(
                         {
@@ -1226,6 +1267,10 @@ class ForecastEngine:
                             "_effect_unit_weight": unit_weight_total,
                         }
                         result_rows.append(row_out)
+                    if scoring_progress:
+                        scored_blocks += 1
+                        if scored_blocks % 10 == 0 or scored_blocks == total_blocks:
+                            emit_scoring_progress()
         detail_internal = pd.DataFrame(result_rows)
         summary = summarize_forecast_detail(detail_internal)
         detail = detail_internal.drop(
@@ -1852,13 +1897,11 @@ def _annotate_scenario_semantics(
 def _make_candidate_daily(cell_budget: pd.DataFrame, source_plan: pd.DataFrame, candidate_name: str) -> list[dict[str, Any]]:
     """Scale each source cell's observed daily profile to its candidate total."""
     rows: list[dict[str, Any]] = []
+    columns = ("campaign_name", "segment", "geo", "channel")
+    source_index = source_plan.groupby(list(columns), sort=False, observed=True).indices
     for _, cell in cell_budget.iterrows():
-        base = source_plan[
-            (source_plan["campaign_name"] == cell["campaign_name"])
-            & (source_plan["segment"] == cell["segment"])
-            & (source_plan["geo"] == cell["geo"])
-            & (source_plan["channel"] == cell["channel"])
-        ]
+        positions = source_index.get(tuple(cell[column] for column in columns))
+        base = source_plan.iloc[positions] if positions is not None else source_plan.iloc[:0]
         if base.empty:
             continue
         by_date = (
@@ -1918,12 +1961,10 @@ def _support_cap_rub_for_cell(
     limit: str = "p95",
 ) -> float:
     """Return a total-budget cap consistent with the cell's daily profile."""
-    rows = engine.support_bounds[
-        (engine.support_bounds["segment"] == cell["segment"])
-        & (engine.support_bounds["channel"] == cell["channel"])
-        & (engine.support_bounds["geo_label"] == cell["geo"])
-        & (engine.support_bounds["target"] == "turnover_per_user")
-    ]
+    rows = engine._metadata_rows(
+        "support_bounds", ("segment", "channel", "geo_label", "target"),
+        (cell["segment"], cell["channel"], cell["geo"], "turnover_per_user"),
+    )
     if rows.empty:
         return 0.0
     row = rows.iloc[0]
@@ -1942,12 +1983,7 @@ def _support_cap_rub_for_cell(
     if daily_limit <= 0:
         return 0.0
 
-    base = source_plan[
-        (source_plan["campaign_name"] == cell["campaign_name"])
-        & (source_plan["segment"] == cell["segment"])
-        & (source_plan["geo"] == cell["geo"])
-        & (source_plan["channel"] == cell["channel"])
-    ].copy()
+    base = engine._source_cell_rows(source_plan, cell).copy()
     if base.empty:
         return daily_limit
     by_date = base.groupby("date", dropna=False)["budget_rub"].sum().astype(float)
@@ -2065,12 +2101,7 @@ def _candidate_policy_bounds(
     upper: list[float] = []
     policies: list[str] = []
     for _, cell in cells.iterrows():
-        source = source_plan[
-            (source_plan["campaign_name"] == cell["campaign_name"])
-            & (source_plan["segment"] == cell["segment"])
-            & (source_plan["geo"] == cell["geo"])
-            & (source_plan["channel"] == cell["channel"])
-        ]
+        source = engine._source_cell_rows(source_plan, cell)
         current = float(pd.to_numeric(source["budget_rub"], errors="coerce").fillna(0.0).sum())
         capability = engine._capability_row(str(cell["segment"]), "turnover_per_user", str(cell["channel"]))
         policy = str(capability.get("optimizer_use") or "blocked")
@@ -3839,6 +3870,7 @@ def run_optimizer_from_flighting(
             n_samples=search_samples,
             seed=seed,
             include_carryover_days=True,
+            progress_context="optimizer_search",
             analog_year=analog_year,
             analog_missing_geo_policy=analog_missing_geo_policy,
             independent_scenarios=True,
@@ -4005,6 +4037,7 @@ def run_optimizer_from_flighting(
             n_samples=final_samples,
             seed=final_seed,
             include_carryover_days=True,
+            progress_context="optimizer_finalists",
             analog_year=analog_year,
             analog_missing_geo_policy=analog_missing_geo_policy,
             independent_scenarios=True,
