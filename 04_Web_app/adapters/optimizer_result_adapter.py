@@ -80,6 +80,8 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
     },
     "optimizer_status": {
         "Автоматический план доступен": "best_safe_available",
+        # Availability and support/quality caveats are separate contract fields.
+        "Автоматический план доступен с оговоркой": "best_safe_available",
         "Лучший безопасный S6 рассчитан": "best_safe_available",
         "Частичный безопасный план": "partial_safe_available",
         "Безопасный автоматический план не найден": "no_safe_candidate",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import ast
 import hashlib
 import json
 import os
@@ -21,6 +22,7 @@ if str(WEB_APP_DIR) not in sys.path:
 from adapters.optimizer_result_adapter import (  # noqa: E402
     OptimizerResultAdapterError,
     _status,
+    _scenario_from_row,
     build_decision_result,
 )
 
@@ -132,6 +134,39 @@ class DecisionResultV1ContractTest(unittest.TestCase):
         self.assertEqual(status.code, "no_safe_candidate")
         support = _status("cell_support_status", "Между p99 и robust upper")
         self.assertEqual(support.code, "above_p99_within_robust_upper")
+
+    def test_report_optimizer_status_vocabulary_is_covered(self) -> None:
+        source = WEB_APP_DIR.parent / "02_Code/02_Budget_optimizer/marketer_report.py"
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        producer = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                        and node.name == "_optimizer_status")
+        statuses = [node.value.value for node in ast.walk(producer)
+                    if isinstance(node, ast.Return) and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, str)]
+        self.assertGreaterEqual(len(statuses), 5)
+        for display in statuses:
+            with self.subTest(display=display):
+                self.assertEqual(_status("optimizer_status", display).display_text, display)
+
+    def test_available_plan_caveat_keeps_support_and_uncertainty(self) -> None:
+        row = {
+            "scenario_no": "S06", "scenario_name": "S6",
+            "optimizer_status": "Автоматический план доступен с оговоркой",
+            "calculation_status": "Рассчитано",
+            "cell_support_status": "Между p99 и robust upper",
+            "strong_support_warnings_n": "2",
+            "quality_status": "Повышенная неопределенность",
+            "quality_explanation": "Есть превышения p99",
+            "rto_p10_mln": "1", "rto_p50_mln": "2", "rto_p90_mln": "3",
+        }
+        scenario = _scenario_from_row(row)
+        self.assertEqual(scenario.optimizer_status.code, "best_safe_available")
+        self.assertEqual(scenario.optimizer_status.display_text, row["optimizer_status"])
+        self.assertEqual(scenario.cell_support_status.code, "above_p99_within_robust_upper")
+        self.assertEqual(scenario.support.strong_warnings, 2)
+        self.assertEqual(scenario.quality.status.code, "elevated_uncertainty")
+        self.assertEqual(scenario.quality.explanation, row["quality_explanation"])
+        self.assertEqual(scenario.metrics.incremental_turnover.p50, 2_000_000)
 
     @unittest.skipUnless(RUN_17.is_dir(), "canonical optimizer run 17 is unavailable")
     def test_run_17_maps_gate_block_and_partial_coverage(self) -> None:

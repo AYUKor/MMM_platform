@@ -9,6 +9,7 @@ name: Web app contracts
       - "02_Code/01_PyMC/configs/historical_geo_budget_spend_columns_v1.json"
       - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
       - "02_Code/01_PyMC/tests/test_model_registry.py"
+      - "02_Code/01_PyMC/tests/test_forecast_metadata_index.py"
       - "02_Code/01_PyMC/tests/test_historical_geo_budget.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
       - "02_Code/03_AC_forecast/ac_forecast.py"
@@ -23,6 +24,7 @@ name: Web app contracts
       - "02_Code/01_PyMC/configs/historical_geo_budget_spend_columns_v1.json"
       - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
       - "02_Code/01_PyMC/tests/test_model_registry.py"
+      - "02_Code/01_PyMC/tests/test_forecast_metadata_index.py"
       - "02_Code/01_PyMC/tests/test_historical_geo_budget.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
       - "02_Code/03_AC_forecast/ac_forecast.py"
@@ -58,6 +60,9 @@ jobs:
 
       - name: Run model registry serving-mode tests
         run: python -B -m unittest 02_Code/01_PyMC/tests/test_model_registry.py -v
+
+      - name: Run forecast metadata lookup regression tests
+        run: python -B -m unittest discover -s 02_Code/01_PyMC/tests -p test_forecast_metadata_index.py -v
 
       - name: Run historical geo-budget artifact tests
         run: python -B -m unittest 02_Code/01_PyMC/tests/test_historical_geo_budget.py -v
