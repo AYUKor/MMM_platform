@@ -10,8 +10,11 @@ name: Web app contracts
       - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
       - "02_Code/01_PyMC/tests/test_model_registry.py"
       - "02_Code/01_PyMC/tests/test_forecast_metadata_index.py"
+      - "02_Code/01_PyMC/tests/test_optimizer_infeasible_orchestration.py"
+      - "02_Code/01_PyMC/tests/test_marketer_report_roas_denominator.py"
       - "02_Code/01_PyMC/tests/test_historical_geo_budget.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
+      - "02_Code/02_Budget_optimizer/marketer_report.py"
       - "02_Code/03_AC_forecast/ac_forecast.py"
       - ".github/workflows/webapp-contracts.yml"
   push:
@@ -25,8 +28,11 @@ name: Web app contracts
       - "02_Code/01_PyMC/mmm_core/forecast_engine.py"
       - "02_Code/01_PyMC/tests/test_model_registry.py"
       - "02_Code/01_PyMC/tests/test_forecast_metadata_index.py"
+      - "02_Code/01_PyMC/tests/test_optimizer_infeasible_orchestration.py"
+      - "02_Code/01_PyMC/tests/test_marketer_report_roas_denominator.py"
       - "02_Code/01_PyMC/tests/test_historical_geo_budget.py"
       - "02_Code/02_Budget_optimizer/budget_optimizer.py"
+      - "02_Code/02_Budget_optimizer/marketer_report.py"
       - "02_Code/03_AC_forecast/ac_forecast.py"
       - ".github/workflows/webapp-contracts.yml"
 
@@ -63,6 +69,12 @@ jobs:
 
       - name: Run forecast metadata lookup regression tests
         run: python -B -m unittest discover -s 02_Code/01_PyMC/tests -p test_forecast_metadata_index.py -v
+
+      - name: Run infeasible optimizer orchestration regression tests
+        run: python -B -m unittest discover -s 02_Code/01_PyMC/tests -p test_optimizer_infeasible_orchestration.py -v
+
+      - name: Run report ROAS denominator regression tests
+        run: python -B -m unittest discover -s 02_Code/01_PyMC/tests -p test_marketer_report_roas_denominator.py -v
 
       - name: Run historical geo-budget artifact tests
         run: python -B -m unittest 02_Code/01_PyMC/tests/test_historical_geo_budget.py -v
