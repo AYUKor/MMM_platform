@@ -1172,6 +1172,17 @@ def _allocation_change_summary(allocation: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _primary_roas_p50(row: pd.Series, *, legacy_field: str) -> Any:
+    """Select an existing ROAS estimate using its declared budget denominator."""
+    metric = {
+        "allocated_budget": "roas_allocated_budget_p50",
+        "requested_budget": "roas_requested_budget_p50",
+    }.get(row.get("roas_denominator_kind"))
+    if metric is not None and pd.notna(row.get(metric, np.nan)):
+        return row[metric]
+    return row.get(legacy_field, np.nan)
+
+
 def _build_decision_pool(
     scenario_results: pd.DataFrame,
     scenario6: pd.DataFrame,
@@ -1198,10 +1209,7 @@ def _build_decision_pool(
                 "rto_p10_mln": r.get("rto_p10_mln", np.nan),
                 "rto_p50_mln": r.get("rto_p50_mln", np.nan),
                 "rto_p90_mln": r.get("rto_p90_mln", np.nan),
-                "roas_p50": r.get(
-                    "roas_requested_budget_p50",
-                    r.get("rto_roas_p50", np.nan),
-                ),
+                "roas_p50": _primary_roas_p50(r, legacy_field="rto_roas_p50"),
                 "roas_allocated_budget_p10": r.get("roas_allocated_budget_p10", np.nan),
                 "roas_allocated_budget_p50": r.get("roas_allocated_budget_p50", np.nan),
                 "roas_allocated_budget_p90": r.get("roas_allocated_budget_p90", np.nan),
@@ -1255,7 +1263,7 @@ def _build_decision_pool(
                     "rto_p10_mln": r.get("rto_p10_mln", np.nan),
                     "rto_p50_mln": r.get("rto_p50_mln", np.nan),
                     "rto_p90_mln": r.get("rto_p90_mln", np.nan),
-                    "roas_p50": r.get("roas_p50", np.nan),
+                    "roas_p50": _primary_roas_p50(r, legacy_field="roas_p50"),
                     "roas_allocated_budget_p10": r.get("roas_allocated_budget_p10", np.nan),
                     "roas_allocated_budget_p50": r.get("roas_allocated_budget_p50", np.nan),
                     "roas_allocated_budget_p90": r.get("roas_allocated_budget_p90", np.nan),
@@ -2182,6 +2190,7 @@ def _write_dynamic_workbook(
                 "p50": reliable.get("rto_p50_mln"),
                 "p90": reliable.get("rto_p90_mln"),
                 "ROAS p50": reliable.get("roas_p50"),
+                "Бюджет в знаменателе ROAS, млн руб.": _million(reliable.get("roas_denominator_budget_rub", np.nan)),
                 "Надежность": reliable.get("reliability_label"),
                 "Почему": reliable.get("quality_explanation"),
             }
@@ -2198,6 +2207,7 @@ def _write_dynamic_workbook(
                     "p50": s6.get("rto_p50_mln"),
                     "p90": s6.get("rto_p90_mln"),
                     "ROAS p50": s6.get("roas_p50"),
+                    "Бюджет в знаменателе ROAS, млн руб.": _million(s6.get("roas_denominator_budget_rub", np.nan)),
                     "Надежность": s6.get("reliability_label"),
                     "Почему": s6.get("materiality_status"),
                 }
@@ -2212,6 +2222,7 @@ def _write_dynamic_workbook(
                 "p50": rec.get("rto_p50_mln"),
                 "p90": rec.get("rto_p90_mln"),
                 "ROAS p50": rec.get("roas_p50"),
+                "Бюджет в знаменателе ROAS, млн руб.": _million(rec.get("roas_denominator_budget_rub", np.nan)),
                 "Надежность": rec.get("reliability_label"),
                 "Почему": rec.get("allocation_decision"),
             }
@@ -2222,6 +2233,9 @@ def _write_dynamic_workbook(
             start_row=next_row,
             title="Главный вывод",
         )
+        campaign_pool["roas_denominator_budget_mln_rub"] = pd.to_numeric(
+            campaign_pool["roas_denominator_budget_rub"], errors="coerce"
+        ) / 1_000_000.0
         scenario_table = campaign_pool[
             [
                 "scenario_no",
@@ -2232,6 +2246,7 @@ def _write_dynamic_workbook(
                 "rto_p50_mln",
                 "rto_p90_mln",
                 "roas_p50",
+                "roas_denominator_budget_mln_rub",
                 "paired_delta_p50",
                 "paired_probability_gt_zero",
                 "moved_budget_mln_rub",
@@ -2250,6 +2265,7 @@ def _write_dynamic_workbook(
                 "rto_p50_mln": "РТО p50, млн руб.",
                 "rto_p90_mln": "РТО p90, млн руб.",
                 "roas_p50": "ROAS p50",
+                "roas_denominator_budget_mln_rub": "Бюджет в знаменателе ROAS, млн руб.",
                 "paired_delta_p50": "Δ p50 к S01, млн руб.",
                 "paired_probability_gt_zero": "P(Δ > 0)",
                 "moved_budget_mln_rub": "Перемещено, млн руб.",
