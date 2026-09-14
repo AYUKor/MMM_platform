@@ -3759,12 +3759,15 @@ def run_optimizer_from_flighting(
 
         n_cells = len(cells)
         precheck_rejections: list[dict[str, Any]] = []
-        _, _, campaign_policies = _candidate_policy_bounds(
-            cells,
-            plan,
-            engine,
-            support_limit="robust_upper",
-        )
+        # Count permitted budget moves without requiring S6 feasibility here.
+        # Support conflicts are handled by S6's guarded generator below; they
+        # must not abort the uploaded-plan forecasts or S5's partial plan.
+        campaign_policies = [
+            str(engine._capability_row(
+                str(cell["segment"]), "turnover_per_user", str(cell["channel"]),
+            ).get("optimizer_use") or "blocked")
+            for _, cell in cells.iterrows()
+        ]
         modifiable_cells_n = sum(policy in {"optimize", "no_increase"} for policy in campaign_policies)
         scenario6_has_degrees_of_freedom = "optimize" in campaign_policies and modifiable_cells_n >= 2
         if scenario6_enabled and not scenario6_has_degrees_of_freedom:
