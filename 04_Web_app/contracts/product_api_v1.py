@@ -44,6 +44,12 @@ class ProductApiContractError(ValueError):
 
 
 HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
+    "HISTORICAL_QUERY_INVALID": {"http_status": 422, "retryable": False, "display_text": "Некорректные параметры запроса.", "user_action": "Проверьте запрос или обратитесь к администратору."},
+    "HISTORICAL_NOT_FOUND": {"http_status": 404, "retryable": False, "display_text": "Кампания не найдена.", "user_action": "Проверьте запрос или обратитесь к администратору."},
+    "HISTORICAL_VERSION_UNAVAILABLE": {"http_status": 404, "retryable": False, "display_text": "Версия исторических результатов недоступна.", "user_action": "Проверьте запрос или обратитесь к администратору."},
+    "HISTORICAL_DATASET_CORRUPT": {"http_status": 409, "retryable": False, "display_text": "Целостность исторических результатов не подтверждена.", "user_action": "Проверьте запрос или обратитесь к администратору."},
+    "HISTORICAL_RESULT_UNAVAILABLE": {"http_status": 409, "retryable": False, "display_text": "Для этой кампании расчёт недоступен.", "user_action": "Проверьте запрос или обратитесь к администратору."},
+
     "ADMIN_LAST_ADMIN_PROTECTED": {
         "http_status": 409,
         "retryable": False,
