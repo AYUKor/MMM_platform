@@ -22,6 +22,27 @@ versioned panel
 Training, MCMC, posterior generation and model recalculation are allowed only in an
 explicit Test milestone. Predfin and Fin do not retrain.
 
+## Test-contour stages
+
+Inside the Test contour a research run moves through explicit stages; finishing one
+never starts the next:
+
+```text
+prepare -> fit -> review fit diagnostics -> package -> validation (OOT, response replay)
+  -> replay -> registry and promotion gates
+```
+
+- `fit` ends at `fit_complete`. It does not build the model package.
+- `package` is the first package/export of a completed fit
+  (`02_pymc_model.py --mode package`). It is technical: it does not accept, validate
+  or promote a model.
+- `validation` writes OOT and response-replay verdicts bound to the package
+  fingerprint, so it refuses to write them before the package exists.
+- `replay` rebuilds the package with those verdicts and refreshes its gates and
+  blockers.
+- Registry registration and promotion stay separate gates (below). CLI details are in
+  `02_Code/01_PyMC/mmm_core/README.md`.
+
 ## Research and serving packages
 
 Research evidence and serving semantics are distinct:

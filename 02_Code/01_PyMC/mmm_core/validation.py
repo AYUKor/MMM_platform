@@ -437,18 +437,31 @@ def classify_oot_metrics(metrics: dict[str, Any]) -> str:
     return "caution" if caution else "diagnostic"
 
 
-def build_validation_binding(run_dir: str | Path, extra_files: Iterable[str | Path]) -> dict[str, Any]:
+def require_package_fingerprint(run_dir: str | Path) -> str:
+    """Validation verdicts bind to the model package fingerprint; without a package there is nothing to bind to."""
+    from .model_package_reader import ModelPackageError
+
     run_dir = resolve_path(run_dir)
     manifest = read_json(run_dir / "model_manifest.json", {}) or {}
+    fingerprint = manifest.get("package_input_fingerprint")
+    if not fingerprint:
+        raise ModelPackageError(
+            f"Validation verdicts bind to the model package, but {run_dir} has no model_manifest.json with a "
+            "package_input_fingerprint. Build the package first: 02_pymc_model.py --mode package --run-dir <run_dir>."
+        )
+    return str(fingerprint)
+
+
+def build_validation_binding(run_dir: str | Path, extra_files: Iterable[str | Path]) -> dict[str, Any]:
+    run_dir = resolve_path(run_dir)
+    package_input_fingerprint = require_package_fingerprint(run_dir)
     run_config = read_json(run_dir / "run_config.json", {}) or {}
     panel_path = resolve_path(run_config.get("panel_path")) if run_config.get("panel_path") else None
     files = [resolve_path(path) for path in extra_files]
     binding = {
         "run_dir": str(run_dir),
-        "package_input_fingerprint": manifest.get("package_input_fingerprint"),
-        "model_manifest_sha256": sha256_file(run_dir / "model_manifest.json")
-        if (run_dir / "model_manifest.json").exists()
-        else None,
+        "package_input_fingerprint": package_input_fingerprint,
+        "model_manifest_sha256": sha256_file(run_dir / "model_manifest.json"),
         "run_config_sha256": sha256_file(run_dir / "run_config.json"),
         "panel_sha256": sha256_file(panel_path) if panel_path and panel_path.exists() else None,
         "fit_code_sha256": run_config.get("fit_code_sha256"),
@@ -469,6 +482,8 @@ def run_predictive_oot(
     write: bool = False,
 ) -> dict[str, Any]:
     run_dir = resolve_path(run_dir)
+    if write:
+        require_package_fingerprint(run_dir)
     panel_path = resolve_path(panel_path)
     coverage_manifest_path = resolve_path(coverage_manifest_path)
     split_manifest = validate_oot_split(split)
@@ -841,6 +856,7 @@ def run_independent_historical_response_replay(
 ) -> dict[str, Any]:
     """Generate and compare two independent historical channel-response producers."""
     run_dir = resolve_path(run_dir)
+    require_package_fingerprint(run_dir)
     config = read_json(run_dir / "run_config.json", {}) or {}
     fit_keys = list(config.get("expected_fit_keys") or [])
     if len(fit_keys) != expected_fits:

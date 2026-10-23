@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from mmm_core.io import project_root
-from mmm_core.model import orchestrate_guarded_fit, run_model_refresh
+from mmm_core.model import DEFAULT_PACKAGE_POLICY, orchestrate_guarded_fit, run_model_refresh
 
 
 DEFAULT_RUN_DIR = (
@@ -24,15 +24,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--mode",
         default="validate",
-        choices=["validate", "replay", "fit"],
-        help="validate = read-only; replay = rebuild metadata/package; fit = guarded fresh sampling.",
+        choices=["validate", "replay", "fit", "package"],
+        help=(
+            "validate = read-only; replay = rebuild metadata/package of a run that already has a package; "
+            "fit = guarded fresh sampling, stops at fit_complete unless --package auto; "
+            "package = first package/export of a completed fit run, no sampling."
+        ),
     )
     parser.add_argument(
         "--panel",
         default=None,
         help="Optional panel assertion. Replay rejects a path different from run_config.json.",
     )
-    parser.add_argument("--no-write", action="store_true", help="Do not persist replay artifacts.")
+    parser.add_argument(
+        "--no-write",
+        action="store_true",
+        help="Do not persist replay artifacts; with --mode package only check the preconditions.",
+    )
     parser.add_argument("--fit-config", default=DEFAULT_FIT_CONFIG, help="Fit YAML contract used by --mode fit.")
     parser.add_argument(
         "--fit-profile",
@@ -44,6 +52,15 @@ def parse_args() -> argparse.Namespace:
         "--prepare-only",
         action="store_true",
         help="Build all 12 deterministic fit contracts without sampling.",
+    )
+    parser.add_argument(
+        "--package",
+        choices=["skip", "auto"],
+        default=None,
+        help=(
+            "Package policy for --mode fit. skip (default): stop at fit_complete and build the package later "
+            "with --mode package. auto: build the package and export design metadata right after fit_complete."
+        ),
     )
     parser.add_argument("--resume", action="store_true", help="Resume only hash-matching completed fit contracts.")
     parser.add_argument(
@@ -73,6 +90,11 @@ def resolve(path: str | None) -> Path | None:
 
 def main() -> None:
     args = parse_args()
+    if args.package is not None and args.mode != "fit":
+        raise ValueError("--package applies to --mode fit only; use --mode package for the package stage")
+    if args.mode == "package" and args.run_dir is None:
+        raise ValueError("--run-dir is required for --mode package")
+    package_policy = args.package or DEFAULT_PACKAGE_POLICY
     run_dir = resolve(args.run_dir or (None if args.mode == "fit" else DEFAULT_RUN_DIR))
     panel_path = resolve(args.panel)
     fit_config = resolve(args.fit_config)
@@ -97,6 +119,7 @@ def main() -> None:
             stall_minutes=args.job_stall_minutes,
             timeout_hours=args.job_timeout_hours,
             poll_seconds=args.job_poll_seconds,
+            package=package_policy,
         )
         print(json.dumps(card, ensure_ascii=False, indent=2))
         return
@@ -110,6 +133,7 @@ def main() -> None:
         prepare_only=args.prepare_only,
         resume=args.resume,
         only_fits=args.only_fit,
+        package=package_policy,
     )
     print(json.dumps(card, ensure_ascii=False, indent=2))
 
