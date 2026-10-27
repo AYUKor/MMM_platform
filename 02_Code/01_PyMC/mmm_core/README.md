@@ -53,6 +53,12 @@ thresholds and gates are unchanged.
 The package stage is technical: it does not accept, OOT-validate or promote a model.
 Before this boundary `--mode fit` always built the package after the last fit; pass `--package auto` for that.
 
+A refit on a longer window of an already OOT-validated specification can inherit that OOT instead of repeating it:
+`03_model_validation.py --mode inherit-oot --run-dir <refit> --source-run-dir <validated run> --decision <owner
+decision> [--write-verdict]`. The conditions (owner decision, same specification, same twelve fits, runtime
+acceptance or pinned exceptions, passed replay) are checked by code; see "OOT inheritance for a refit" in
+`04_Web_app/docs/workspace/MODEL_LIFECYCLE.md`.
+
 ## Forecast Engine Audit
 
 `forecast_engine_audit.py` checks whether a completed model run folder is ready for the posterior forecast/optimizer engine. It does not run PyMC and does not calculate campaign effects. It validates:

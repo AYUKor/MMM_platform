@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .io import project_root, read_json, resolve_path, write_json
-from .model_package import sha256_file
+from .model_package import OOT_BASIS_INHERITED, inherited_oot_issues_for_run_dir, sha256_file
 from .model_package_reader import ModelPackage
 
 
@@ -356,6 +356,10 @@ def _assert_production_eligible(registration: dict[str, Any]) -> None:
         binding = evidence.get("binding") or {}
         if binding.get("package_input_fingerprint") != registration.get("package_input_fingerprint"):
             raise ValueError(f"{name} evidence is not bound to the registered package fingerprint")
+    if oot.get("evidence_basis") == OOT_BASIS_INHERITED:
+        issues = inherited_oot_issues_for_run_dir(run_dir, oot, str(registration.get("package_input_fingerprint") or ""))
+        if issues:
+            raise ValueError("Inherited OOT evidence violates the OOT inheritance policy: " + ", ".join(issues))
 
 
 def _event_payload(

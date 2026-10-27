@@ -15,7 +15,17 @@ import pandas as pd
 
 from .fit import _make_geo_lagged_tensor_np, _safe_fit_key
 from .io import read_json, resolve_path, write_json
-from .model_package import sha256_file
+from .model_package import (
+    OOT_BASIS_INHERITED,
+    OOT_INHERITANCE_POLICY,
+    OOT_INHERITANCE_POLICY_VERSION,
+    evaluate_oot_inheritance,
+    index_rows,
+    inheritance_source_snapshot,
+    load_csv,
+    sha256_file,
+    sha256_json,
+)
 from .media_history import LAG_MODE, bound_media_history, scaled_history_lags
 
 
@@ -674,6 +684,89 @@ def run_predictive_oot(
         verdict["binding"] = binding
         verdict["package_input_fingerprint"] = binding.get("package_input_fingerprint")
         write_json(run_dir / "oot_validation.json", verdict)
+    return verdict
+
+
+def run_inherited_oot_validation(
+    run_dir: str | Path,
+    source_run_dir: str | Path,
+    decision_path: str | Path,
+    *,
+    write: bool = False,
+) -> dict[str, Any]:
+    """Issue oot_validation.json for a refit under oot_inheritance_policy v1.
+
+    The verdict of a sealed OOT run on ``source_run_dir`` is carried over to ``run_dir`` only when the owner's
+    decision file pins both runs and every condition in ``evaluate_oot_inheritance`` holds. Nothing is scored
+    here: the refit has no independent out-of-time period, and the file says so through ``evidence_basis``.
+    """
+    run_dir = resolve_path(run_dir)
+    source_run_dir = resolve_path(source_run_dir)
+    decision_path = resolve_path(decision_path)
+    fingerprint = require_package_fingerprint(run_dir)
+    target_path = run_dir / "oot_validation.json"
+    if write and target_path.exists():
+        raise FileExistsError(f"{target_path} already exists; validation results are never overwritten")
+    decision = read_json(decision_path, {}) or {}
+    source_path = source_run_dir / "oot_validation.json"
+    source_oot = read_json(source_path, {}) or {}
+    source_config = read_json(source_run_dir / "run_config.json", {}) or {}
+    target_config = read_json(run_dir / "run_config.json", {}) or {}
+    source = inheritance_source_snapshot(source_oot, sha256_file(source_path) or "", source_config, source_run_dir)
+    issues: list[str] = []
+    if source["run_config_sha256"] != sha256_file(source_run_dir / "run_config.json"):
+        issues.append("SOURCE_CONFIG_IS_NOT_THE_VALIDATED_ONE")
+    panel_path = resolve_path(target_config["panel_path"]) if target_config.get("panel_path") else None
+    evaluation = evaluate_oot_inheritance(
+        decision,
+        source,
+        target_config,
+        target_panel_sha256=sha256_file(panel_path) if panel_path else None,
+        target_run_config_sha256=sha256_file(run_dir / "run_config.json"),
+        target_fingerprint=fingerprint,
+        diagnostics_by_fit=index_rows(load_csv(run_dir / "diagnostics_summary.csv"), "fit_key"),
+        expected_fit_keys=list(target_config.get("expected_fit_keys") or []),
+        replay_validation=read_json(run_dir / "historical_replay_validation.json", {}) or {},
+    )
+    issues.extend(evaluation["issues"])
+    eligible = not issues
+    verdict: dict[str, Any] = {
+        "schema_version": VALIDATION_SCHEMA_VERSION,
+        "status": "passed" if eligible else "inheritance_conditions_not_met",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "activation_eligible": eligible,
+        "evidence_basis": OOT_BASIS_INHERITED,
+        "split": {
+            "evidence_role": OOT_BASIS_INHERITED,
+            "development_seen": False,
+            "activation_evidence_allowed": eligible,
+            "train_end": target_config.get("train_end"),
+            "inherited_oot_start": source["oot_start"],
+            "inherited_oot_end": source["oot_end"],
+        },
+        "fits_n": len(target_config.get("expected_fit_keys") or []),
+        "inheritance": {
+            "policy": {"name": OOT_INHERITANCE_POLICY, "version": OOT_INHERITANCE_POLICY_VERSION},
+            "decision": {
+                "path": str(decision_path),
+                "file_sha256": sha256_file(decision_path),
+                "content_sha256": sha256_json(decision),
+                "content": decision,
+            },
+            "source": source,
+            "checks": evaluation["checks"],
+            "accepted_exceptions_applied": evaluation["accepted_exceptions_applied"],
+            "issues": issues,
+        },
+    }
+    if write and not eligible:
+        raise ValueError(f"OOT inheritance conditions not met: {', '.join(issues)}")
+    if eligible:
+        binding = build_validation_binding(run_dir, [decision_path, source_path])
+        verdict["binding"] = binding
+        verdict["package_input_fingerprint"] = binding.get("package_input_fingerprint")
+    if write:
+        write_json(target_path, verdict)
     return verdict
 
 

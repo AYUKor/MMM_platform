@@ -1,4 +1,4 @@
-"""CLI for predictive OOT and independent historical-response replay validation."""
+"""CLI for predictive OOT, inherited OOT and independent historical-response replay validation."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from mmm_core.validation import (
     OOTSplit,
     run_historical_response_replay_validation,
     run_independent_historical_response_replay,
+    run_inherited_oot_validation,
     run_predictive_oot,
 )
 
@@ -24,10 +25,12 @@ def resolve(path: str | None) -> Path | None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate an immutable X5 MMM run.")
-    parser.add_argument("--mode", required=True, choices=["oot", "response-replay"])
+    parser.add_argument("--mode", required=True, choices=["oot", "inherit-oot", "response-replay"])
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--write-verdict", action="store_true", help="Persist validation artifacts in the run folder.")
     parser.add_argument("--panel")
+    parser.add_argument("--source-run-dir", help="inherit-oot: run folder that holds the sealed OOT verdict to inherit.")
+    parser.add_argument("--decision", help="inherit-oot: owner decision file (final_model_admission_decision_v1).")
     parser.add_argument("--oot-start")
     parser.add_argument("--oot-end")
     parser.add_argument("--coverage-manifest")
@@ -73,6 +76,12 @@ def main() -> None:
             seed=args.seed,
             write=args.write_verdict,
         )
+    elif args.mode == "inherit-oot":
+        source_run_dir = resolve(args.source_run_dir)
+        decision = resolve(args.decision)
+        if source_run_dir is None or decision is None:
+            raise ValueError("inherit-oot requires --source-run-dir and --decision")
+        result = run_inherited_oot_validation(run_dir, source_run_dir, decision, write=args.write_verdict)
     else:
         reference = resolve(args.reference)
         replayed = resolve(args.replayed)

@@ -218,6 +218,295 @@ def fit_runtime_provenance_issues(run_dir: Path, run_config: dict[str, Any]) -> 
     return sorted(set(issues))
 
 
+# OOT inheritance (policy v1). A refit may reuse the sealed OOT verdict of an earlier fit of the same
+# specification only through an owner decision file, and only when this code finds every condition true.
+OOT_INHERITANCE_POLICY = "oot_inheritance_policy"
+OOT_INHERITANCE_POLICY_VERSION = "1"
+OOT_BASIS_INHERITED = "inherited_from_validated_refit"
+ADMISSION_DECISION_SCHEMA = "final_model_admission_decision_v1"
+INHERITANCE_RUNTIME_LIMITS = {"rhat_max": 1.05, "ess_per_draw_min": 0.10, "divergences_max": 5}
+# Run-config leaves that may differ between the validated fit and the inheriting fit: data window, panel and
+# media-ledger identity, run labels and the sampler profile. Every other leaf must be identical.
+INHERITANCE_ALLOWED_SPEC_DIFFERENCES = (
+    "/cfg/chains", "/cfg/draws", "/cfg/tune", "/cfg/decay_grid_step",
+    "/config_path", "/config_sha256", "/mode", "/run_label", "/run_variant",
+    "/panel_path", "/panel_sha256", "/media_history/path", "/media_history/sha256",
+    "/train_end", "/holdout_start", "/holdout_end", "/training_audit",
+)
+INHERITANCE_SET_VALUED_SPEC_KEYS = ("/spend_active_base", "/spend_active_model_universe")
+
+
+def _flatten_leaves(value: Any, prefix: str = "") -> dict[str, Any]:
+    if isinstance(value, dict) and value:
+        leaves: dict[str, Any] = {}
+        for key, item in value.items():
+            leaves.update(_flatten_leaves(item, f"{prefix}/{key}"))
+        return leaves
+    return {prefix: value}
+
+
+def inheritance_spec_identity(run_config: dict[str, Any]) -> dict[str, Any]:
+    """Run-config leaves that define the model specification, without the allowed window and profile differences."""
+    identity: dict[str, Any] = {}
+    for key, value in _flatten_leaves(run_config).items():
+        if any(key == allowed or key.startswith(allowed + "/") for allowed in INHERITANCE_ALLOWED_SPEC_DIFFERENCES):
+            continue
+        if key in INHERITANCE_SET_VALUED_SPEC_KEYS and isinstance(value, list):
+            value = sorted(str(item) for item in value)
+        identity[key] = value
+    return identity
+
+
+def inheritance_source_snapshot(
+    oot_validation: dict[str, Any],
+    oot_validation_sha256: str,
+    source_config: dict[str, Any],
+    source_run_dir: Path,
+) -> dict[str, Any]:
+    """Facts about the validated source fit that the policy needs; embedded in the inherited OOT file."""
+    split = oot_validation.get("split") or {}
+    identity = inheritance_spec_identity(source_config)
+    return {
+        "run_dir": str(source_run_dir),
+        "oot_validation_sha256": oot_validation_sha256,
+        "status": oot_validation.get("status"),
+        "activation_eligible": oot_validation.get("activation_eligible"),
+        "evidence_basis": oot_validation.get("evidence_basis"),
+        "evidence_role": split.get("evidence_role"),
+        "development_seen": split.get("development_seen"),
+        "turnover_required_pass": oot_validation.get("turnover_required_pass"),
+        "full_turnover_geo_coverage": oot_validation.get("full_turnover_geo_coverage"),
+        "quality_counts": oot_validation.get("quality_counts"),
+        "package_input_fingerprint": oot_validation.get("package_input_fingerprint"),
+        "train_end": split.get("train_end"),
+        "oot_start": split.get("oot_start"),
+        "oot_end": split.get("oot_end"),
+        "run_config_sha256": (oot_validation.get("binding") or {}).get("run_config_sha256"),
+        "expected_fit_keys": sorted(str(key) for key in source_config.get("expected_fit_keys") or []),
+        "spec_identity": identity,
+        "spec_identity_sha256": sha256_json(identity),
+    }
+
+
+def _ess_per_draw(row: dict[str, Any]) -> float | None:
+    try:
+        return float(row.get("ess_per_draw"))
+    except (TypeError, ValueError):
+        return None
+
+
+def evaluate_oot_inheritance(
+    decision: dict[str, Any],
+    source: dict[str, Any],
+    target_config: dict[str, Any],
+    *,
+    target_panel_sha256: str | None,
+    target_run_config_sha256: str | None,
+    target_fingerprint: str,
+    diagnostics_by_fit: dict[tuple[str, ...], dict[str, Any]],
+    expected_fit_keys: list[str],
+    replay_validation: dict[str, Any],
+) -> dict[str, Any]:
+    """Check every inheritance condition. Returns the full check table and the failed condition codes."""
+    checks: list[dict[str, Any]] = []
+
+    def check(code: str, ok: bool, detail: Any = None) -> None:
+        checks.append({"code": code, "passed": bool(ok), "detail": detail})
+
+    messages = decision.get("owner_messages")
+    check(
+        "DECISION_APPROVED_BY_OWNER",
+        decision.get("schema") == ADMISSION_DECISION_SCHEMA
+        and decision.get("status") == "approved"
+        and bool(decision.get("decided_by"))
+        and isinstance(messages, list)
+        and bool(messages)
+        and all(isinstance(m, dict) and m.get("id") and m.get("text") for m in messages),
+    )
+    policy = decision.get("policy") or {}
+    check(
+        "DECISION_POLICY_VERSION",
+        policy.get("name") == OOT_INHERITANCE_POLICY and str(policy.get("version")) == OOT_INHERITANCE_POLICY_VERSION,
+        policy,
+    )
+    pinned_source = decision.get("source") or {}
+    check(
+        "DECISION_PINS_SOURCE_OOT",
+        bool(source.get("oot_validation_sha256"))
+        and pinned_source.get("oot_validation_sha256") == source.get("oot_validation_sha256")
+        and pinned_source.get("package_input_fingerprint") == source.get("package_input_fingerprint"),
+    )
+    check(
+        "SOURCE_OOT_SEALED_AND_PASSED",
+        source.get("status") == "passed"
+        and source.get("activation_eligible") is True
+        and source.get("evidence_role") == "sealed_activation_oot"
+        and source.get("development_seen") is False
+        and source.get("turnover_required_pass") is True
+        and source.get("full_turnover_geo_coverage") is True
+        and source.get("evidence_basis") != OOT_BASIS_INHERITED,
+        {key: source.get(key) for key in ("status", "activation_eligible", "evidence_role", "development_seen", "evidence_basis")},
+    )
+    pinned_target = decision.get("target") or {}
+    check(
+        "DECISION_PINS_TARGET",
+        bool(target_panel_sha256)
+        and pinned_target.get("panel_sha256") == target_panel_sha256
+        and bool(target_run_config_sha256)
+        and pinned_target.get("run_config_sha256") == target_run_config_sha256
+        and pinned_target.get("train_end") == target_config.get("train_end"),
+    )
+    target_identity = inheritance_spec_identity(target_config)
+    source_identity = source.get("spec_identity") or {}
+    differing = sorted(
+        key for key in set(target_identity) | set(source_identity) if target_identity.get(key) != source_identity.get(key)
+    )
+    check("SAME_SPECIFICATION", not differing and bool(source_identity), differing)
+    check(
+        "TRAINING_WINDOW_EXTENDS_SOURCE",
+        bool(source.get("train_end")) and str(target_config.get("train_end") or "") > str(source.get("train_end")),
+        {"source_train_end": source.get("train_end"), "target_train_end": target_config.get("train_end")},
+    )
+    fit_keys = sorted(str(key) for key in expected_fit_keys)
+    check(
+        "SAME_TWELVE_FITS",
+        len(fit_keys) == 12 and fit_keys == list(source.get("expected_fit_keys") or [])
+        and all((key,) in diagnostics_by_fit for key in fit_keys),
+        len(fit_keys),
+    )
+
+    exceptions = [e for e in decision.get("accepted_exceptions") or [] if isinstance(e, dict)]
+    applied: list[dict[str, Any]] = []
+    uncovered: list[dict[str, Any]] = []
+    limits = INHERITANCE_RUNTIME_LIMITS
+    for fit_key in fit_keys:
+        row = diagnostics_by_fit.get((fit_key,)) or {}
+        ess = _ess_per_draw(row)
+        observed = {
+            "rhat_max": _to_float(row.get("rhat_max")),
+            "ess_per_draw": ess,
+            "n_divergences": _to_float(row.get("n_divergences")),
+        }
+        violated = []
+        if observed["rhat_max"] is None or observed["rhat_max"] > limits["rhat_max"]:
+            violated.append(("rhat_max", observed["rhat_max"], limits["rhat_max"]))
+        if ess is None or ess < limits["ess_per_draw_min"]:
+            violated.append(("ess_per_draw", ess, limits["ess_per_draw_min"]))
+        if observed["n_divergences"] is None or observed["n_divergences"] > limits["divergences_max"]:
+            violated.append(("n_divergences", observed["n_divergences"], limits["divergences_max"]))
+        for metric, value, threshold in violated:
+            match = next(
+                (
+                    e for e in exceptions
+                    if e.get("fit_key") == fit_key and e.get("metric") == metric and value is not None
+                    and isinstance(e.get("observed"), (int, float))
+                    and abs(float(e["observed"]) - value) <= 1e-6 * max(abs(value), 1.0)
+                    and e.get("threshold") == threshold
+                    and e.get("accepted_by") and e.get("message_id")
+                ),
+                None,
+            )
+            record = {"fit_key": fit_key, "metric": metric, "observed": value, "threshold": threshold}
+            (applied if match else uncovered).append(record)
+    check("RUNTIME_ACCEPTANCE_OR_ACCEPTED_EXCEPTION", not uncovered, {"uncovered": uncovered, "accepted": applied})
+    check(
+        "NO_TUNING_AFTER_SOURCE_OOT_ATTESTED",
+        (decision.get("conditions") or {}).get("no_tuning_after_may_quality_seen") is True,
+    )
+    check(
+        "REPLAY_PASSED_AND_BOUND",
+        replay_validation.get("status") == "passed"
+        and replay_validation.get("package_input_fingerprint") == target_fingerprint,
+    )
+    check("POST_RELEASE_MONITORING_RECORDED", bool((decision.get("monitoring") or {}).get("post_release_oot")))
+    return {
+        "issues": [item["code"] for item in checks if not item["passed"]],
+        "checks": checks,
+        "accepted_exceptions_applied": applied,
+        "spec_differences": differing,
+    }
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def inherited_oot_issues(
+    oot_validation: dict[str, Any],
+    *,
+    target_config: dict[str, Any],
+    target_panel_sha256: str | None,
+    target_run_config_sha256: str | None,
+    target_fingerprint: str,
+    diagnostics_by_fit: dict[tuple[str, ...], dict[str, Any]],
+    expected_fit_keys: list[str],
+    replay_validation: dict[str, Any],
+) -> list[str]:
+    """Re-check an inherited OOT file against its own embedded decision and the current run. Empty means valid."""
+    inheritance = oot_validation.get("inheritance")
+    if oot_validation.get("evidence_basis") != OOT_BASIS_INHERITED or not isinstance(inheritance, dict):
+        return ["INHERITANCE_RECORD_MISSING"]
+    policy = inheritance.get("policy") or {}
+    if policy.get("name") != OOT_INHERITANCE_POLICY or str(policy.get("version")) != OOT_INHERITANCE_POLICY_VERSION:
+        return ["INHERITANCE_POLICY_VERSION_MISMATCH"]
+    decision_block = inheritance.get("decision") or {}
+    decision = decision_block.get("content")
+    if not isinstance(decision, dict) or sha256_json(decision) != decision_block.get("content_sha256"):
+        return ["INHERITANCE_DECISION_HASH_MISMATCH"]
+    source = inheritance.get("source")
+    if not isinstance(source, dict) or sha256_json(source.get("spec_identity")) != source.get("spec_identity_sha256"):
+        return ["INHERITANCE_SOURCE_SNAPSHOT_INVALID"]
+    issues = evaluate_oot_inheritance(
+        decision,
+        source,
+        target_config,
+        target_panel_sha256=target_panel_sha256,
+        target_run_config_sha256=target_run_config_sha256,
+        target_fingerprint=target_fingerprint,
+        diagnostics_by_fit=diagnostics_by_fit,
+        expected_fit_keys=expected_fit_keys,
+        replay_validation=replay_validation,
+    )["issues"]
+    source_dir = Path(str(source.get("run_dir") or ""))
+    if source.get("run_dir") and (source_dir / "oot_validation.json").is_file():
+        # Where the validated run folder is reachable, the embedded snapshot must equal what its files say now.
+        source_oot_path = source_dir / "oot_validation.json"
+        rebuilt = inheritance_source_snapshot(
+            load_json(source_oot_path, default={}) or {},
+            sha256_file(source_oot_path) or "",
+            load_json(source_dir / "run_config.json", default={}) or {},
+            source_dir,
+        )
+        if rebuilt != source:
+            issues.append("INHERITANCE_SOURCE_DIFFERS_FROM_SOURCE_FILES")
+    if (oot_validation.get("binding") or {}).get("package_input_fingerprint") != target_fingerprint:
+        issues.append("INHERITANCE_BINDING_MISMATCH")
+    if oot_validation.get("package_input_fingerprint") != target_fingerprint:
+        issues.append("INHERITANCE_FINGERPRINT_MISMATCH")
+    return sorted(set(issues))
+
+
+def inherited_oot_issues_for_run_dir(
+    run_dir: Path, oot_validation: dict[str, Any], package_input_fingerprint: str
+) -> list[str]:
+    """Same check as the package builder, reading everything from a finished run folder."""
+    config = load_json(run_dir / "run_config.json", default={}) or {}
+    panel_raw = config.get("panel_path")
+    return inherited_oot_issues(
+        oot_validation,
+        target_config=config,
+        target_panel_sha256=sha256_file(resolve(panel_raw)) if panel_raw else None,
+        target_run_config_sha256=sha256_file(run_dir / "run_config.json"),
+        target_fingerprint=package_input_fingerprint,
+        diagnostics_by_fit=index_rows(load_csv(run_dir / "diagnostics_summary.csv"), "fit_key"),
+        expected_fit_keys=list(config.get("expected_fit_keys") or []),
+        replay_validation=load_json(run_dir / "historical_replay_validation.json", default={}) or {},
+    )
+
+
 def load_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default
@@ -1055,6 +1344,7 @@ def build_package(
             production_blockers.append("MISSING_OR_STALE_PANEL_PROMOTION_APPROVAL")
     oot_validation = load_json(run_dir / "oot_validation.json", default={}) or {}
     replay_validation = load_json(run_dir / "historical_replay_validation.json", default={}) or {}
+    oot_basis: dict[str, Any] = {"evidence_basis": "none"}
     if (
         not isinstance(oot_validation, dict)
         or oot_validation.get("status") != "passed"
@@ -1063,6 +1353,30 @@ def build_package(
         production_blockers.append("MISSING_OR_FAILED_OOT_VALIDATION")
     elif oot_validation.get("package_input_fingerprint") != package_input_fingerprint:
         production_blockers.append("STALE_OR_UNBOUND_OOT_VALIDATION")
+    elif oot_validation.get("evidence_basis") == OOT_BASIS_INHERITED:
+        inheritance = oot_validation.get("inheritance") or {}
+        inheritance_issues = inherited_oot_issues(
+            oot_validation,
+            target_config=config,
+            target_panel_sha256=sha256_file(resolve(config["panel_path"])) if config.get("panel_path") else None,
+            target_run_config_sha256=sha256_file(run_config_path),
+            target_fingerprint=package_input_fingerprint,
+            diagnostics_by_fit=diagnostics_by_fit,
+            expected_fit_keys=list(config.get("expected_fit_keys") or []),
+            replay_validation=replay_validation if isinstance(replay_validation, dict) else {},
+        )
+        oot_basis = {
+            "evidence_basis": OOT_BASIS_INHERITED,
+            "policy": inheritance.get("policy"),
+            "decision_sha256": (inheritance.get("decision") or {}).get("content_sha256"),
+            "source_package_input_fingerprint": (inheritance.get("source") or {}).get("package_input_fingerprint"),
+            "source_oot_validation_sha256": (inheritance.get("source") or {}).get("oot_validation_sha256"),
+            "issues": inheritance_issues,
+        }
+        if inheritance_issues:
+            production_blockers.append("INVALID_INHERITED_OOT_VALIDATION")
+    else:
+        oot_basis = {"evidence_basis": "sealed_oot"}
     if not isinstance(replay_validation, dict) or replay_validation.get("status") != "passed":
         production_blockers.append("MISSING_OR_FAILED_HISTORICAL_REPLAY")
     elif replay_validation.get("package_input_fingerprint") != package_input_fingerprint:
@@ -1075,6 +1389,7 @@ def build_package(
         "package_stage": package_stage,
         "activation_status": activation_status,
         "production_blockers": production_blockers,
+        "oot_basis": oot_basis,
         "gate_policy_version": gate_policy["schema_version"],
         "run_dir": str(run_dir),
         "output_dir": str(output_dir),

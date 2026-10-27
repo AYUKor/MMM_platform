@@ -25,7 +25,14 @@ Fin materialization consumes one explicit Predfin handoff. The handoff must pin:
 - package-extension identities;
 - frontend production-dist identity, source commit/tree and same-origin API build;
 - panel hash and metadata;
+- the OOT evidence basis recorded in the package manifest (`oot_basis`); for
+  `inherited_from_validated_refit` the handoff pins the policy version, the owner
+  decision SHA-256 and the validated OOT identity (see `MODEL_LIFECYCLE.md`);
 - accepted security, regression and path-independence evidence.
+
+The approved application commit must contain `model_package.py`,
+`forecast_engine.py` and `validation.py` byte-identical to the code the package was
+built with, because the package fingerprint binds them and the runtime recomputes it.
 
 “Latest” is not a valid source identity. If GitHub `main` advances after the
 freeze, the Fin release still uses the pinned approved commit unless a new Predfin
