@@ -31,6 +31,7 @@ from contracts.product_api_v1 import (  # noqa: E402
     build_job_list_payload,
     validate_model_passport,
 )
+from mmm_core.model_package import OOT_BASIS_INHERITED  # noqa: E402
 from mmm_core.model_package_reader import ModelPackage  # noqa: E402
 
 
@@ -59,6 +60,23 @@ def _recorded_package_dir(resolved: Mapping[str, Any], project_root: Path) -> Pa
         raise ValueError("Registry registration has no run_dir")
     path = Path(raw).expanduser()
     return (path if path.is_absolute() else project_root / path).resolve()
+
+
+def _oot_is_inherited(manifest: Mapping[str, Any]) -> bool:
+    """True when the package passed OOT only through the inheritance policy, not through its own sealed OOT."""
+    basis = manifest.get("oot_basis")
+    return isinstance(basis, Mapping) and basis.get("evidence_basis") == OOT_BASIS_INHERITED
+
+
+def _inherited_oot_text(oot_evidence: Mapping[str, Any]) -> str:
+    source = (oot_evidence.get("inheritance") or {}).get("source") or {}
+    start, end, train_end = source.get("oot_start"), source.get("oot_end"), source.get("train_end")
+    where = f" (проверка {start} - {end}, обучение до {train_end})" if start and end and train_end else ""
+    return (
+        f"OOT-проверка унаследована от предыдущей версии модели{where}. "
+        "У этой версии нет собственной независимой проверки на новых данных; контроль на следующих "
+        "фактических данных запланирован."
+    )
 
 
 def _evidence_status(package_dir: Path, manifest: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -115,7 +133,9 @@ def _evidence_status(package_dir: Path, manifest: Mapping[str, Any]) -> tuple[di
         "generated_at_utc": oot_evidence.get("generated_at_utc"),
         "reason_code": oot_reason,
         "display_text": (
-            "Независимая OOT-валидация пройдена."
+            _inherited_oot_text(oot_evidence)
+            if oot_status == "passed" and _oot_is_inherited(manifest)
+            else "Независимая OOT-валидация пройдена."
             if oot_status == "passed"
             else "Sealed OOT выполнен, но не прошел обязательные проверки."
             if oot_status == "failed"
@@ -295,6 +315,8 @@ def build_model_passport(
                     if oot["status"] == "failed"
                     else "sealed_oot_pending"
                     if oot["status"] == "unavailable"
+                    else "sealed_oot_inherited"
+                    if _oot_is_inherited(manifest)
                     else "sealed_oot_passed"
                 ),
                 "display_text": oot["display_text"],
