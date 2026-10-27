@@ -42,7 +42,9 @@ Registry pointer, registration и package inventory проверяются су�
 
 ## Population и формула
 
-Иммутабельный application snapshot `04_Web_app/data/federal_geo_allocation/geo_reference_v2.csv` является byte-for-byte копией canonical source с SHA-256 `dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043`. Путь и ожидаемый SHA задаются backend config; runtime не обращается к соседним Test/Predfin/Fin contour.
+Иммутабельный application snapshot `04_Web_app/data/federal_geo_allocation/geo_reference_v3.csv` является byte-for-byte копией canonical source `00_Data/prepared/03_2025_2026Q2_third_pass/04_panel_20261021/geo_reference_q2_ready.csv` с SHA-256 `b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b`. Путь и ожидаемый SHA задаются backend config; runtime не обращается к соседним Test/Predfin/Fin contour.
+
+Состав snapshot v3: 223 географии, то есть 220 строк прежнего snapshot `geo_reference_v2.csv` (во всех 30 общих колонках значения не изменены) плюс три географии, вошедшие в roster Q2: `БАБУШКИН`, `ГЕЛЕНДЖИК`, `ЯМАЛО-НЕНЕЦКИЙ АВТОНОМНЫЙ ОКРУГ`. Для них население взято из Росстата 2025 (муниципальные образования, `г Бабушкин` 4 209, `г Геленджик` 80 534, Ямало-Ненецкий автономный округ 523 105 человек); `n_stores` для них imputed по решению владельца, это помечено новой колонкой `n_stores_imputed`. Аллокатор читает только `geo_label` и `population_k`. Предыдущий snapshot `geo_reference_v2.csv` (SHA-256 `dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043`) сохранён без изменений как историческая точка; regression-тест проверяет, что v3 не меняет ни одной прежней строки. `.gitignore` скрывает `*.csv`, поэтому v3, как и v2, добавлен в Git принудительно (`git add -f`). Колонка `population_source_file` в v3 несёт те же пути к файлам Росстата, что и в v2, потому что файл не редактируется после копирования из canonical source.
 
 Для каждой федеральной дневной source row:
 

@@ -47,6 +47,7 @@ from .forecast_geo_availability import (
     analog_date,
 )
 from .model_package import sha256_file
+from .media_history import LAG_MODE, bound_media_history, scaled_history_lags
 from .model_package_reader import ModelPackage
 from .serving_semantics import (
     SERVING_CORE_TARGET,
@@ -624,6 +625,12 @@ def export_fit_design_metadata(run_dir: str | Path, *, force: bool = True) -> di
     panel = load_model_panel(run_dir)
     train_end = str(config.get("train_end") or "")
     l_max = int((config.get("cfg") or {}).get("l_max") or 14)
+    history = None
+    if config.get('lag_mode') == LAG_MODE:
+        source_panel = pd.read_parquet(resolve_path(config['panel_path']))
+        source_panel['date'] = pd.to_datetime(source_panel.date)
+        history_start = (pd.Timestamp(config['train_start']) - pd.Timedelta(days=l_max)).isoformat()
+        history = bound_media_history(config, source_panel, history_start, train_end)
 
     fit_meta: dict[str, Any] = {}
     media_scale_rows: list[dict[str, Any]] = []
@@ -727,7 +734,17 @@ def export_fit_design_metadata(run_dir: str | Path, *, force: bool = True) -> di
                         "daily_spend_max_rub": float(np.max(nz)) if len(nz) else 0.0,
                         "pct_nonzero_rows": float((vals > 0).mean() * 100) if len(vals) else 0.0,
                     })
-        warm = _build_lag_tail(X_scaled, geo_idx, geos, channels, l_max, train_end)
+        if history is None:
+            warm = _build_lag_tail(X_scaled, geo_idx, geos, channels, l_max, train_end)
+        else:
+            query = seg.groupby('geo_label', as_index=False).first().set_index('geo_label').loc[geos].reset_index()
+            query['date'] = pd.Timestamp(train_end)
+            tail = scaled_history_lags(query, history, spend_active, geos, x_scale_geo, l_max - 1)
+            warm = [{'geo_label': geo, 'channel': name, 'lag': lag,
+                     'scaled_spend': float(tail[lag - 1, g, m]), 'as_of_date': train_end,
+                     'source': 'calendar_training_tail'}
+                    for g, geo in enumerate(geos) for m, name in enumerate(channels)
+                    for lag in range(1, l_max + 1)]
         for row in warm:
             row.update({"fit_key": fit_key, "segment": segment, "target": target})
             warm_rows.append(row)
@@ -1294,6 +1311,9 @@ def build_historical_forecast_replay_rows(
         raise RuntimeError(f"xarray is required for historical response replay: {_XARRAY_IMPORT_ERROR!r}")
     panel_frame = panel.copy()
     panel_frame["date"] = pd.to_datetime(panel_frame["date"])
+    config = read_json(engine.run_dir / 'run_config.json', {}) or {}
+    history_start = (pd.Timestamp(config.get('train_start') or panel_frame.date.min()) - pd.Timedelta(days=int((config.get('cfg') or {}).get('l_max', 14)))).isoformat()
+    history = bound_media_history(config, panel_frame, history_start, config.get('train_end') or panel_frame.date.max())
     index_frame = row_index.copy()
     index_frame["date"] = pd.to_datetime(index_frame["date"])
     keys = ["date", "geo_label", "network", "channel"]
@@ -1346,7 +1366,19 @@ def build_historical_forecast_replay_rows(
                     tier = str(_mode_or_first(geo_rows["market_size_tier"]))
                     x_scale = engine._x_scale(fit_key, str(geo), channel_name, tier)
                     x_scaled = (geo_rows[spend_column].to_numpy(float) / population) / max(x_scale, 1e-8)
-                    adstock = _normalized_adstock_draw_matrix(x_scaled, alpha_values, l_max)
+                    if transform.get('lag_mode') == LAG_MODE:
+                        if history is None:
+                            raise ValueError('Serving replay requires bound calendar media history')
+                        net, ch = geo_rows[['network', 'channel']].iloc[0]
+                        source = history[history.geo_label.eq(geo) & history.network.eq(net) & history.channel.eq(ch)]
+                        calendar = pd.date_range(min(pd.Timestamp(history_start), geo_rows.date.min()), geo_rows.date.max())
+                        series = source.set_index('date')[spend_column].reindex(calendar, fill_value=0.0)
+                        # Независимый serving kernel на полном ежедневном ряде.
+                        daily_scaled = series.to_numpy(float) / max(float(np.median(population)), 1e-3) / max(x_scale, 1e-8)
+                        daily_adstock = _normalized_adstock_draw_matrix(daily_scaled, alpha_values, l_max)
+                        adstock = daily_adstock[:, calendar.get_indexer(geo_rows.date)]
+                    else:
+                        adstock = _normalized_adstock_draw_matrix(x_scaled, alpha_values, l_max)
                     saturation = np.tanh(lam_values[:, None] * adstock / 2.0)
                     beta_values: list[float] = []
                     for _, _, beta_draw in posterior_draws:

@@ -22,6 +22,33 @@ versioned panel
 Training, MCMC, posterior generation and model recalculation are allowed only in an
 explicit Test milestone. Predfin and Fin do not retrain.
 
+## Test-contour stages
+
+Inside the Test contour a research run moves through explicit stages; finishing one
+never starts the next:
+
+```text
+prepare -> fit -> review fit diagnostics -> package -> validation (OOT, response replay)
+  -> manifest rebuild -> registry and promotion gates
+```
+
+- `fit` ends at `fit_complete`. It does not build the model package.
+- `package` is the first package/export of a completed fit
+  (`02_pymc_model.py --mode package`). It is technical: it does not accept, validate
+  or promote a model.
+- `validation` writes OOT and response-replay verdicts bound to the package
+  fingerprint, so it refuses to write them before the package exists.
+- the manifest rebuild (`python 02_Code/01_PyMC/mmm_core/model_package.py --run-dir <run> --write`)
+  recompiles the gates and blockers with those verdicts. It reads the files as they are
+  and exports nothing, so the package fingerprint, and every verdict bound to it, stays
+  valid. Do not use `02_pymc_model.py --mode replay` for this step: on a guarded-fit
+  package it re-exports `fit_design_metadata.json` with a new `generated_at_utc`, that
+  file is part of the fingerprint, and every verdict becomes
+  `STALE_OR_UNBOUND_OOT_VALIDATION` / `STALE_OR_UNBOUND_HISTORICAL_REPLAY` (seen when
+  the Q2 final model B was first released).
+- Registry registration and promotion stay separate gates (below). CLI details are in
+  `02_Code/01_PyMC/mmm_core/README.md`.
+
 ## Research and serving packages
 
 Research evidence and serving semantics are distinct:
@@ -65,3 +92,52 @@ model has passed the separate production gate.
 Production activation requires its own evidence and explicit decision. Missing or
 failed OOT keeps the current package restricted even when application, transfer and
 runtime checks pass.
+
+## OOT inheritance for a refit (policy v1)
+
+A refit of the same specification on a longer window has no out-of-time period of its
+own. It may reuse the sealed OOT verdict of the earlier fit only through
+`oot_inheritance_policy` version 1, and only when the owner's decision file
+(`final_model_admission_decision_v1`) pins both runs and the code finds every condition
+true. Nothing is scored again, thresholds and gates do not change, and the verdict file
+says so: `evidence_basis = inherited_from_validated_refit`.
+
+`03_model_validation.py --mode inherit-oot --run-dir <refit> --source-run-dir <validated> --decision <file> --write-verdict`
+issues `oot_validation.json` bound to the refit's package fingerprint. It refuses to
+overwrite an existing verdict and writes nothing when a condition fails. Conditions
+(`model_package.evaluate_oot_inheritance`):
+
+- the decision is approved by the owner, quotes the owner's message, names policy
+  version 1 and pins the validated OOT file (SHA-256 and package fingerprint) and the
+  refit (panel SHA-256, `run_config.json` SHA-256, training end);
+- the validated OOT is sealed (`sealed_activation_oot`, `development_seen = false`),
+  `passed`, `activation_eligible`, with turnover required pass and full turnover geo
+  coverage, and is not itself inherited;
+- the refit has the same specification: every `run_config.json` leaf is identical
+  except the training window, panel and media-ledger identity, run labels and the
+  sampler profile (draws, tune, chains, decay grid step); channel sets are compared as
+  sets; the refit window extends the validated one;
+- the same twelve fits, each with R-hat at most 1.05, ESS per draw at least 0.10 and at
+  most 5 divergences. A violation is allowed only through an `accepted_exceptions` entry
+  of the decision pinned to that fit, metric, threshold and observed value;
+- the decision attests that nothing was tuned after the validated OOT quality was seen,
+  and records the post-release monitoring plan;
+- the historical replay of the refit has passed and is bound to the same fingerprint.
+
+The package builder and the registry (`_assert_production_eligible`) re-run these
+checks against the embedded decision, and, where the validated run folder is still
+reachable, against its files. A failed check is the production blocker
+`INVALID_INHERITED_OOT_VALIDATION`. The manifest records `oot_basis` with the policy
+version, decision SHA-256 and the validated OOT identity. The independent sealed OOT of
+the refit remains possible only on data after its training window; the decision's
+monitoring plan names that check.
+
+## Code bound to a package
+
+The package fingerprint includes the SHA-256 of `model_package.py`,
+`forecast_engine.py` and `validation.py`, and `ModelPackage.from_run_dir` recomputes it
+(hash validation is on by default). A package therefore only loads under exactly the
+code it was built with: any later change to those three files makes the package stale
+and requires a rebuilt package and new replay and OOT evidence. Merge a
+release branch exactly as the package was built and do not touch these files until the
+release is in Fin.

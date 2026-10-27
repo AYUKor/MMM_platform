@@ -264,6 +264,81 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertEqual(payload["validation"]["sealed_oot"]["status"], "failed")
         self.assertEqual(payload["caveats"][-1]["code"], "sealed_oot_failed")
 
+    def _passed_oot_passport(self, *, inherited: bool) -> dict:
+        fingerprint = "c" * 64
+        manifest = {
+            "package_input_fingerprint": fingerprint,
+            "package_schema_version": "0.4.0",
+            "gate_policy_version": "1.2.0",
+            "train_start": "2025-01-01",
+            "train_end": "2026-06-30",
+            "holdout_start": "2026-07-01",
+            "holdout_end": "2026-07-31",
+            "artifact_status": {"oot_validation_passed": True},
+            "production_blockers": [],
+        }
+        oot = {"status": "passed", "generated_at_utc": "2026-10-27T15:00:00+00:00"}
+        if inherited:
+            manifest["oot_basis"] = {"evidence_basis": "inherited_from_validated_refit"}
+            oot["evidence_basis"] = "inherited_from_validated_refit"
+            oot["inheritance"] = {
+                "source": {"oot_start": "2026-05-01", "oot_end": "2026-05-31", "train_end": "2026-04-30"}
+            }
+        else:
+            manifest["oot_basis"] = {"evidence_basis": "sealed_oot"}
+        package = SimpleNamespace(
+            manifest=manifest,
+            capability_rows=[
+                {
+                    "segment": "ТС5/Онлайн",
+                    "channel": "Рег_ТВ",
+                    "target": "turnover_per_user",
+                    "allowed_use": "primary",
+                    "forecast_use": "allowed",
+                    "optimizer_use": "optimize",
+                    "objective_role": "primary_objective",
+                    "marketer_message": "Основной KPI разрешен.",
+                }
+            ],
+            support_rows=[{"scope": "geo", "geo_label": "МОСКВА"}],
+            segments=["ТС5/Онлайн"],
+            package_stage="posterior_ready",
+            activation_status="production_ready",
+            model_run_id="synthetic_run",
+        )
+        resolved = {
+            "channel": "production",
+            "event_id": "event_synthetic",
+            "package_id": "pkg_1111111111111111_2222222222222222",
+            "registration": {"run_dir": "03_Outputs/model", "package_input_fingerprint": fingerprint},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            _write_json(Path(temporary) / "03_Outputs" / "model" / "oot_validation.json", oot)
+            with patch(
+                "services.product_api_service.ModelPackage.from_run_dir", autospec=True, return_value=package
+            ):
+                return build_model_passport(
+                    resolved, project_root=Path(temporary), deployment_profile="local_development"
+                )
+
+    def test_passport_labels_inherited_oot_instead_of_calling_it_independent(self) -> None:
+        sealed = self._passed_oot_passport(inherited=False)
+        self.assertEqual(sealed["validation"]["sealed_oot"]["status"], "passed")
+        self.assertEqual(
+            sealed["validation"]["sealed_oot"]["display_text"], "Независимая OOT-валидация пройдена."
+        )
+        self.assertEqual(sealed["caveats"][-1]["code"], "sealed_oot_passed")
+
+        inherited = self._passed_oot_passport(inherited=True)
+        evidence = inherited["validation"]["sealed_oot"]
+        self.assertEqual(evidence["status"], "passed")
+        self.assertIn("унаследована", evidence["display_text"])
+        self.assertIn("2026-05-01 - 2026-05-31", evidence["display_text"])
+        self.assertIn("обучение до 2026-04-30", evidence["display_text"])
+        self.assertNotIn("Независимая OOT-валидация пройдена", evidence["display_text"])
+        self.assertEqual(inherited["caveats"][-1]["code"], "sealed_oot_inherited")
+        self.assertEqual(inherited["caveats"][-1]["display_text"], evidence["display_text"])
+
 
 class RuntimeRetentionTest(unittest.TestCase):
     def setUp(self) -> None:

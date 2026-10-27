@@ -145,6 +145,8 @@ class OOTContractTests(unittest.TestCase):
                 "spend_Радио": 10.0,
                 "ruonia_change": 0.1,
                 "turnover_per_user": 1000.0,
+                "turnover_per_user_observed": 1000.0,
+                "turnover_per_user_observed_valid": True,
                 "orders_cnt": 100,
                 "unique_users": 90,
             }
@@ -169,7 +171,7 @@ class OOTContractTests(unittest.TestCase):
         self.assertNotIn("unique_users", snapshot.columns)
         self.assertIn("turnover_per_user", outcomes.columns)
 
-    def test_unknown_geos_are_filtered_only_for_development_seen_shadow(self) -> None:
+    def test_unknown_geos_are_explicitly_reported_for_known_geo_evaluation(self) -> None:
         dates = pd.date_range("2026-03-07", "2026-04-20", freq="D")
         panel = pd.concat(
             [
@@ -184,6 +186,8 @@ class OOTContractTests(unittest.TestCase):
                         "spend_Радио": 10.0,
                         "ruonia_change": 0.1,
                         "turnover_per_user": 1000.0,
+                        "turnover_per_user_observed": 1000.0,
+                        "turnover_per_user_observed_valid": True,
                     }
                 )
                 for geo in ["KNOWN", "NEW"]
@@ -201,8 +205,10 @@ class OOTContractTests(unittest.TestCase):
             oot_start="2026-03-21",
             oot_end="2026-04-20",
         )
-        with self.assertRaisesRegex(ValueError, "unknown geos"):
-            build_oot_feature_snapshot(panel, transform, sealed)
+        sealed_snapshot, _ = build_oot_feature_snapshot(panel, transform, sealed)
+        self.assertEqual(sealed_snapshot.attrs['geo_coverage']['unknown_geo_rows'], 31)
+        self.assertFalse(sealed_snapshot.attrs['geo_coverage']['development_only_filter_applied'])
+        self.assertTrue(validate_oot_split(sealed)['activation_evidence_allowed'])
 
         snapshot, outcomes = build_oot_feature_snapshot(
             panel,

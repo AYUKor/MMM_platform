@@ -28,6 +28,39 @@ The builder supports partial runs: if only `run_config.json` exists, the package
 is marked `config_only_or_partial`; once posterior/diagnostic artifacts appear,
 rerunning the builder upgrades the package to `posterior_ready`.
 
+## Fit → package stage boundary
+
+A guarded fit ends at `fit_complete`: posteriors, `fit_execution_card.json` and the post-fit evidence
+(`diagnostics_summary.csv`, `adequacy.json`, `roas_all_fits.csv`, `channel_reliability.csv`,
+`target_effects_all_fits.csv`, `prior_posterior_contraction.csv`). The model package (`model_manifest.json`,
+`capability_matrix.csv`, ...), the exported design metadata (`fit_design_metadata.json`, ...) and
+`model_fit_card.json` belong to the separate package/export stage, so fit diagnostics can be reviewed before
+any package exists.
+
+| Command | Result |
+|---|---|
+| `02_pymc_model.py --mode fit ...` | Default `--package skip`: stops at `fit_complete`; the printed card has `package_created: false` and `next_stage`. |
+| `02_pymc_model.py --mode fit --package auto ...` | Single shot as before the boundary: package, design metadata and `model_fit_card.json` right after `fit_complete`. |
+| `02_pymc_model.py --mode fit --orchestrate ...` | Same policy for every isolated fit job (`--package` is passed explicitly). Completion needs a `fit_complete` `fit_execution_card.json` of this run identity (`skip`) or `model_fit_card.json` (`auto`); `fit_orchestrator_status.json` records `package_policy` and `package_created`. |
+| `02_pymc_model.py --mode package --run-dir <run>` | Package/export stage of a completed fit; never samples. Refuses an incomplete fit, a missing or tampered posterior, missing post-fit evidence and an existing package; `--no-write` only checks these preconditions. Writes the same `model_fit_card.json` as `--package auto` (`package_policy: stage`). |
+| `02_pymc_model.py --mode replay --run-dir <run>` | Rebuilds an existing package and re-exports its design metadata (new `generated_at_utc`). It needs a package, so it cannot create the first one. On a guarded-fit package the exported `fit_design_metadata.json` is part of the package fingerprint, so replay changes the fingerprint and every verdict written before it stops matching (`STALE_OR_UNBOUND_*`). Do not run it after validation. |
+| `mmm_core/model_package.py --run-dir <run> --write` | Manifest rebuild: recompiles `model_manifest.json`, the capability matrix and the gate files from the files as they are. Exports nothing, so the fingerprint stays and verdicts written for it are picked up. This is the step after validation. |
+
+Order for a new run: prepare → fit → review fit diagnostics → package → validation (`03_model_validation.py`) →
+manifest rebuild (`mmm_core/model_package.py --run-dir <run> --write`) to refresh the package gates and blockers →
+registry and promotion, which stay separate gates.
+Validation verdicts bind to the package fingerprint, so `03_model_validation.py` refuses to write a verdict (OOT
+with `--write-verdict`, response replay) until `model_manifest.json` exists, and points at `--mode package`;
+thresholds and gates are unchanged.
+The package stage is technical: it does not accept, OOT-validate or promote a model.
+Before this boundary `--mode fit` always built the package after the last fit; pass `--package auto` for that.
+
+A refit on a longer window of an already OOT-validated specification can inherit that OOT instead of repeating it:
+`03_model_validation.py --mode inherit-oot --run-dir <refit> --source-run-dir <validated run> --decision <owner
+decision> [--write-verdict]`. The conditions (owner decision, same specification, same twelve fits, runtime
+acceptance or pinned exceptions, passed replay) are checked by code; see "OOT inheritance for a refit" in
+`04_Web_app/docs/workspace/MODEL_LIFECYCLE.md`.
+
 ## Forecast Engine Audit
 
 `forecast_engine_audit.py` checks whether a completed model run folder is ready for the posterior forecast/optimizer engine. It does not run PyMC and does not calculate campaign effects. It validates:

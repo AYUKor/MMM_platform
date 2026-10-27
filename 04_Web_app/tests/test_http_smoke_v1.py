@@ -555,8 +555,8 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(geo_catalog["contract_name"], "geo_catalog_v1")
         self.assertEqual(geo_catalog["status"], "available")
-        self.assertEqual(geo_catalog["geographies_n"], 220)
-        self.assertEqual(geo_catalog["coverage"]["located_geographies_n"], 220)
+        self.assertEqual(geo_catalog["geographies_n"], 223)
+        self.assertEqual(geo_catalog["coverage"]["located_geographies_n"], 223)
         self.assertEqual(geo_catalog["coordinates_license"], "CC BY 4.0")
 
         status, geo_budget, _ = self._request(

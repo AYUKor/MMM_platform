@@ -40,16 +40,29 @@ from mmm_core.model_package_reader import ModelPackage  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "federal_geo_allocation_v1"
 POPULATION_PATH = (
-    WEB_APP_DIR / "data" / "federal_geo_allocation" / "geo_reference_v2.csv"
+    WEB_APP_DIR / "data" / "federal_geo_allocation" / "geo_reference_v3.csv"
 )
 CATALOG_PATH = WEB_APP_DIR / "data" / "geo_catalog" / "geo_catalog_v1.csv"
 POPULATION_SHA256 = (
-    "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+    "b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b"
 )
 CATALOG_SHA256 = (
-    "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
+    "a25547d2582c2000465f5fbbad7c4e7ecd20fb6c9311b745699764f62b6bed61"
 )
 PACKAGE_ID = "pkg_807d3ddbae57a52a_9aacd3beb350725b"
+# The v2 reference (220 geographies) stays in the repository as the point the first
+# production package was released against; v3 only adds the Q2 geographies.
+POPULATION_V2_PATH = (
+    WEB_APP_DIR / "data" / "federal_geo_allocation" / "geo_reference_v2.csv"
+)
+POPULATION_V2_SHA256 = (
+    "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+)
+Q2_ADDED_GEOGRAPHIES = (
+    "БАБУШКИН",
+    "ГЕЛЕНДЖИК",
+    "ЯМАЛО-НЕНЕЦКИЙ АВТОНОМНЫЙ ОКРУГ",
+)
 
 
 def _json(name: str) -> dict:
@@ -674,6 +687,64 @@ class FederalContextLoaderTest(unittest.TestCase):
         with self.assertRaises(FederalGeoAllocationError) as caught:
             self._load(package, inventory)
         self.assertEqual(caught.exception.code, "SUPPORTED_GEO_NOT_IN_CATALOG")
+
+    def _add_q2_geographies_to_offline_direction(self) -> None:
+        offline = next(
+            direction
+            for direction in self.snapshot["directions"]
+            if direction["business_direction"] == "ТС5/Оффлайн"
+        )
+        offline["supported_geographies"] = [
+            *offline["supported_geographies"],
+            *({"geo_label": label} for label in Q2_ADDED_GEOGRAPHIES),
+        ]
+
+    def test_package_with_the_q2_geographies_loads_and_conserves_the_budget(self) -> None:
+        self._add_q2_geographies_to_offline_direction()
+        package, inventory = self._package()
+        context = self._load(package, inventory)
+        eligible = context.eligible_by_direction["ТС5/Оффлайн"]
+        self.assertEqual(len(eligible), 223)
+        by_label = {geo.geo_label: geo for geo in eligible}
+        for label in Q2_ADDED_GEOGRAPHIES:
+            with self.subTest(geo=label):
+                self.assertGreater(by_label[label].population_k, 0)
+        result = FederalGeoAllocator(context).allocate(
+            [_row(direction="ТС5/Оффлайн")]
+        )
+        self.assertEqual(len(result.aggregated_rows), 223)
+        self.assertLessEqual(
+            result.audit["totals"]["difference_rub"], CONSERVATION_TOLERANCE_RUB
+        )
+
+    def test_population_reference_v2_cannot_serve_the_q2_geographies(self) -> None:
+        """The reason geo_reference_v3 exists: v2 has no population for the new cities."""
+
+        self._add_q2_geographies_to_offline_direction()
+        package, inventory = self._package()
+        context = self._load(
+            package,
+            inventory,
+            population_path=POPULATION_V2_PATH,
+            population_sha256=POPULATION_V2_SHA256,
+        )
+        with self.assertRaises(FederalGeoAllocationError) as caught:
+            FederalGeoAllocator(context).allocate([_row(direction="ТС5/Оффлайн")])
+        self.assertEqual(
+            caught.exception.code,
+            "FEDERAL_POPULATION_MISSING_OR_NONPOSITIVE",
+        )
+
+    def test_population_reference_v3_only_adds_the_q2_geographies_to_v2(self) -> None:
+        self.assertEqual(sha256_file(POPULATION_V2_PATH), POPULATION_V2_SHA256)
+        v2_rows = _csv_rows(POPULATION_V2_PATH)
+        v3_rows = _csv_rows(POPULATION_PATH)
+        v2 = {row["geo_label"]: row["population_k"] for row in v2_rows}
+        v3 = {row["geo_label"]: row["population_k"] for row in v3_rows}
+        self.assertEqual((len(v2_rows), len(v2)), (220, 220))
+        self.assertEqual((len(v3_rows), len(v3)), (223, 223))
+        self.assertEqual(set(v3) - set(v2), set(Q2_ADDED_GEOGRAPHIES))
+        self.assertEqual({label: v3[label] for label in v2}, v2)
 
 
 class FederalGeoAllocationEntrypointTest(unittest.TestCase):

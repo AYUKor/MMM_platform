@@ -35,12 +35,12 @@ does not call a geocoder, aggregate job history or infer a location.
 |---|---|
 | Catalog path | `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` |
 | Alias path | `04_Web_app/data/geo_catalog/geo_aliases_v1.csv` |
-| Catalog version | `geo_catalog_v1_2026_07_18` |
-| Canonical geographies | 220 |
-| Alias rows | 402 |
+| Catalog version | `geo_catalog_v1_2026_10_27` (first revision `geo_catalog_v1_2026_07_18`: 220 geographies, 402 aliases) |
+| Canonical geographies | 223 |
+| Alias rows | 408 |
 | Coordinate system | WGS84 point latitude/longitude |
-| Coordinate source | GeoNames Russia dump `RU.zip`, 2026-07-18 |
-| Snapshot SHA-256 | `e900a407f811b53a1bf51612fe6f1a809af275e43a02b85f63c7bfddd75e4035` |
+| Coordinate source | GeoNames Russia dump `RU.zip`, 2026-10-27 |
+| Snapshot SHA-256 | `07b78bbd84a1906cdf5be77f50451011e896c6c653dd9e37aedf916823c48b2e` (first revision: `e900a407f811b53a1bf51612fe6f1a809af275e43a02b85f63c7bfddd75e4035`, all 220 records re-verified identical) |
 | License | Creative Commons Attribution 4.0 |
 | Review status | `reviewed_static` |
 

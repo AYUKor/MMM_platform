@@ -338,14 +338,14 @@ not an allowed fallback for v2 business KPIs.
 
 ### 11.1 Canonical geo policy
 
-The catalog in `04_Web_app/data/geo_catalog/` contains 220 canonical geographies,
-all with WGS84 coordinates, plus 402 explicit aliases. Its version is
-`geo_catalog_v1_2026_07_18`; source attribution is a GeoNames RU snapshot under CC
-BY 4.0.
+The catalog in `04_Web_app/data/geo_catalog/` contains 223 canonical geographies,
+all with WGS84 coordinates, plus 408 explicit aliases. Its version is
+`geo_catalog_v1_2026_10_27` (the first revision `geo_catalog_v1_2026_07_18` held
+220 geographies); source attribution is a GeoNames RU snapshot under CC BY 4.0.
 
 Normalization is explicit. There is no runtime geocoder, fuzzy matching, external
 map API or nearest-point guess. The active turnover-serving guard requires full
-220/220 coverage and fails closed.
+coverage of the serving package roster and fails closed.
 
 The frontend renders points over a locally bundled Natural Earth outline with a
 fixed Albers projection. Coordinates describe canonical points, not administrative

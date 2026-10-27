@@ -2,6 +2,7 @@
 
 Fresh sampling is executed through the hash-bound fit contract in ``fit.py``;
 saved runs can then be validated or replayed without changing their posterior.
+A fit stops at ``fit_complete``; package/export is the separate ``package_completed_fit`` stage.
 """
 
 from __future__ import annotations
@@ -38,6 +39,17 @@ REQUIRED_REPLAY_EVIDENCE = [
     "target_effects_all_fits.csv",
     "prior_posterior_contraction.csv",
 ]
+# Fit -> package boundary: "skip" stops a completed fit before any package/export (default);
+# "auto" keeps the former single-shot behaviour. The package stage itself is package_completed_fit.
+PACKAGE_POLICIES = ("skip", "auto")
+DEFAULT_PACKAGE_POLICY = "skip"
+MODEL_FIT_CARD = "model_fit_card.json"
+
+
+def _check_package_policy(package: str) -> str:
+    if package not in PACKAGE_POLICIES:
+        raise ValueError(f"Unsupported package policy {package!r}; expected one of {list(PACKAGE_POLICIES)}")
+    return package
 
 
 def _safe_fit_key(fit_key: str) -> str:
@@ -119,8 +131,10 @@ def orchestrate_guarded_fit(
     stall_minutes: float = 20.0,
     timeout_hours: float = 8.0,
     poll_seconds: float = 60.0,
+    package: str = DEFAULT_PACKAGE_POLICY,
 ) -> dict[str, Any]:
     """Run each immutable fit in an isolated process with retry and stall protection."""
+    _check_package_policy(package)
     run_dir = resolve_path(run_dir)
     fit_config = resolve_path(fit_config)
     identity = read_json(run_dir / "run_identity.json") or {}
@@ -157,6 +171,8 @@ def orchestrate_guarded_fit(
         "stall_minutes": stall_minutes,
         "timeout_hours": timeout_hours,
         "poll_seconds": poll_seconds,
+        "package_policy": package,
+        "package_created": False,
         "expected_fit_keys": fit_keys,
         "completed_fit_keys": [],
         "current_fit_key": None,
@@ -204,6 +220,8 @@ def orchestrate_guarded_fit(
                     "--resume",
                     "--only-fit",
                     fit_key,
+                    "--package",
+                    package,
                 ]
                 if fit_profile:
                     command.extend(["--fit-profile", fit_profile])
@@ -279,8 +297,16 @@ def orchestrate_guarded_fit(
         completed = [fit_key for fit_key in fit_keys if _cached_fit_is_valid(run_dir, fit_key)]
         if completed != fit_keys:
             raise RuntimeError(f"Orchestrator ended with incomplete fit set: {len(completed)}/{len(fit_keys)}")
-        if not (run_dir / "model_fit_card.json").exists():
-            raise RuntimeError("All posteriors exist but final model package card is missing")
+        if package == "auto":
+            if not (run_dir / MODEL_FIT_CARD).exists():
+                raise RuntimeError("All posteriors exist but final model package card is missing")
+        else:
+            fit_card = read_json(run_dir / "fit_execution_card.json") or {}
+            if (
+                fit_card.get("status") != "fit_complete"
+                or fit_card.get("run_identity_sha256") != identity.get("run_identity_sha256")
+            ):
+                raise RuntimeError("All posteriors exist but fit_execution_card.json is not fit_complete for this run")
         persist(
             "orchestrator_completed",
             status="complete",
@@ -288,6 +314,7 @@ def orchestrate_guarded_fit(
             current_fit_key=None,
             current_attempt=None,
             current_pid=None,
+            package_created=(run_dir / MODEL_FIT_CARD).exists(),
         )
         return status
     except Exception as exc:
@@ -429,6 +456,71 @@ def replay_existing_model_run(
     return card
 
 
+def _build_and_validate_package(run_dir: Path, panel_override: str | Path | None) -> dict[str, Any]:
+    """Package/export stage body: package, design metadata, package rebuilt with their hashes, validation.
+
+    The first build is required: export_fit_design_metadata reads the posterior_ready package, and the
+    final package fingerprint has to include the hashes of the exported metadata.
+    """
+    write_package_artifacts(run_dir, build_package(run_dir, run_dir))
+    metadata_card = export_fit_design_metadata(run_dir)
+    package_outputs = write_package_artifacts(run_dir, build_package(run_dir, run_dir))
+    validated = validate_existing_model_run(run_dir, panel_override=panel_override)
+    return {
+        "package_outputs": package_outputs,
+        "fit_design_metadata": metadata_card,
+        "validated_package": validated,
+    }
+
+
+def package_completed_fit(
+    run_dir: str | Path,
+    *,
+    panel_override: str | Path | None = None,
+    write: bool = True,
+) -> dict[str, Any]:
+    """Package/export stage: first package of a completed fit run. Never samples and never overwrites."""
+    run_dir = resolve_path(run_dir)
+    identity = read_json(run_dir / "run_identity.json") or {}
+    fit_keys = list(identity.get("expected_fit_keys") or [])
+    if not fit_keys:
+        raise ValueError(f"Guarded run has no expected_fit_keys: {run_dir}")
+    fit_card = read_json(run_dir / "fit_execution_card.json") or {}
+    if fit_card.get("status") != "fit_complete":
+        raise ValueError(f"Fit stage is not complete: fit_execution_card status={fit_card.get('status')!r} in {run_dir}")
+    if fit_card.get("run_identity_sha256") != identity.get("run_identity_sha256"):
+        raise ValueError(f"fit_execution_card.json belongs to a different run identity: {run_dir}")
+    missing_fits = [fit_key for fit_key in fit_keys if not _cached_fit_is_valid(run_dir, fit_key)]
+    if missing_fits:
+        raise ValueError(f"Posterior is missing for {len(missing_fits)} expected fits: {missing_fits}")
+    missing_evidence = [name for name in REQUIRED_REPLAY_EVIDENCE if not (run_dir / name).exists()]
+    if missing_evidence:
+        raise ValueError(f"Post-fit evidence is missing: {missing_evidence}")
+    existing = [name for name in ("model_manifest.json", MODEL_FIT_CARD) if (run_dir / name).exists()]
+    if existing:
+        raise FileExistsError(
+            f"Package artifacts already exist ({existing}); the package stage never overwrites. "
+            "Use --mode replay to rebuild an existing package."
+        )
+    if not write:
+        return {
+            "status": "package_preconditions_ok",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "run_dir": str(run_dir),
+            "run_identity_sha256": identity.get("run_identity_sha256"),
+            "expected_fits_n": len(fit_keys),
+            "package_created": False,
+        }
+    card = {
+        **fit_card,
+        **_build_and_validate_package(run_dir, panel_override),
+        "package_created": True,
+        "package_policy": "stage",
+    }
+    write_json(run_dir / MODEL_FIT_CARD, card)
+    return card
+
+
 def run_model_refresh(
     run_dir: str | Path,
     *,
@@ -440,12 +532,17 @@ def run_model_refresh(
     prepare_only: bool = False,
     resume: bool = False,
     only_fits: list[str] | None = None,
+    package: str = DEFAULT_PACKAGE_POLICY,
 ) -> dict[str, Any]:
+    """Run one lifecycle stage. A completed fit builds the package only with package="auto"."""
     if mode == "validate":
         return validate_existing_model_run(run_dir, panel_override=panel_override)
     if mode == "replay":
         return replay_existing_model_run(run_dir, panel_override=panel_override, write=write)
+    if mode == "package":
+        return package_completed_fit(run_dir, panel_override=panel_override, write=write)
     if mode == "fit":
+        _check_package_policy(package)
         if not write:
             raise ValueError("--no-write is incompatible with guarded fit; use --prepare-only for no sampling")
         if fit_config is None:
@@ -465,16 +562,19 @@ def run_model_refresh(
             return fit_card
 
         run_dir = resolve_path(run_dir)
-        package_outputs = write_package_artifacts(run_dir, build_package(run_dir, run_dir))
-        metadata_card = export_fit_design_metadata(run_dir)
-        package_outputs = write_package_artifacts(run_dir, build_package(run_dir, run_dir))
-        validated = validate_existing_model_run(run_dir, panel_override=panel_override)
+        if package == "skip":
+            return {
+                **fit_card,
+                "package_created": False,
+                "package_policy": "skip",
+                "next_stage": f"02_pymc_model.py --mode package --run-dir {run_dir}",
+            }
         card = {
             **fit_card,
-            "package_outputs": package_outputs,
-            "fit_design_metadata": metadata_card,
-            "validated_package": validated,
+            **_build_and_validate_package(run_dir, panel_override),
+            "package_created": True,
+            "package_policy": "auto",
         }
-        write_json(run_dir / "model_fit_card.json", card)
+        write_json(run_dir / MODEL_FIT_CARD, card)
         return card
     raise ValueError(f"Unsupported model refresh mode: {mode}")
