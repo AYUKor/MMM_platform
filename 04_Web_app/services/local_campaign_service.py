@@ -109,13 +109,13 @@ CALCULATION_SOURCE_PATHS = (
     "04_Web_app/worker",
 )
 FEDERAL_POPULATION_PATH = (
-    WEB_APP_DIR / "data" / "federal_geo_allocation" / "geo_reference_v2.csv"
+    WEB_APP_DIR / "data" / "federal_geo_allocation" / "geo_reference_v3.csv"
 )
 FEDERAL_POPULATION_SHA256 = (
-    "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+    "b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b"
 )
 GEO_CATALOG_SHA256 = (
-    "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
+    "a25547d2582c2000465f5fbbad7c4e7ecd20fb6c9311b745699764f62b6bed61"
 )
 
 

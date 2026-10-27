@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -62,6 +63,14 @@ CONTROL_GEOS = (
 )
 CONTROL_CHANNELS = ("Digital_Performance", "OOH_Total", "Радио")
 CONTROL_BUDGET_RUB = 267_818_706.0
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "federal_geo_allocation_v1"
+# Geographies that entered the model roster with the Q2 refresh (model B) and were
+# added to the catalog on top of the 220 geographies served by the previous package.
+Q2_ADDED_GEOGRAPHIES = (
+    "БАБУШКИН",
+    "ГЕЛЕНДЖИК",
+    "ЯМАЛО-НЕНЕЦКИЙ АВТОНОМНЫЙ ОКРУГ",
+)
 
 
 def _validation(
@@ -108,7 +117,7 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
 
     def test_static_catalog_is_complete_deterministic_and_reviewed(self) -> None:
         entries = self.catalog.entries
-        self.assertEqual(len(entries), 220)
+        self.assertEqual(len(entries), 223)
         self.assertEqual(len({row["geo_id"] for row in entries}), len(entries))
         self.assertEqual(
             len({row["geo_normalized_name"] for row in entries}), len(entries)
@@ -364,10 +373,69 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
     def test_active_serving_coverage_guard_fails_closed(self) -> None:
         active = [row["geo_normalized_name"] for row in self.catalog.entries]
         coverage = assert_active_serving_geo_coverage(active, self.catalog)
-        self.assertEqual(coverage["active_serving_geographies_n"], 220)
-        self.assertEqual(coverage["covered_geographies_n"], 220)
+        self.assertEqual(coverage["active_serving_geographies_n"], 223)
+        self.assertEqual(coverage["covered_geographies_n"], 223)
         with self.assertRaisesRegex(GeoCatalogError, "missing canonical coordinates"):
             assert_active_serving_geo_coverage([*active, "НЕИЗВЕСТНОЕ ГЕО"], self.catalog)
+
+    def test_catalog_still_covers_previously_served_geographies_with_stable_ids(self) -> None:
+        snapshot = json.loads(
+            (FIXTURES / "B2_0_SUPPORTED_GEO_SNAPSHOT.json").read_text(encoding="utf-8")
+        )
+        previous = {
+            geo["geo_label"]: geo["geo_id"]
+            for direction in snapshot["directions"]
+            for geo in direction["supported_geographies"]
+        }
+        self.assertEqual(len(previous), 220)
+        catalog_ids = {
+            row["geo_normalized_name"]: row["geo_id"] for row in self.catalog.entries
+        }
+        self.assertEqual({label: catalog_ids.get(label) for label in previous}, previous)
+        self.assertEqual(
+            sorted(set(catalog_ids) - set(previous)), sorted(Q2_ADDED_GEOGRAPHIES)
+        )
+
+    def test_q2_additions_are_canonical_geonames_records_in_the_expected_places(self) -> None:
+        expected = {
+            "БАБУШКИН": ("2027276", "city", "Республика Бурятия", (51.0, 52.5), (105.0, 107.0)),
+            "ГЕЛЕНДЖИК": ("561667", "city", "Краснодарский край", (44.0, 45.0), (37.5, 38.5)),
+            "ЯМАЛО-НЕНЕЦКИЙ АВТОНОМНЫЙ ОКРУГ": (
+                "1486462",
+                "region",
+                "Ямало-Ненецкий автономный округ",
+                (62.0, 72.0),
+                (60.0, 90.0),
+            ),
+        }
+        entries = {row["geo_normalized_name"]: row for row in self.catalog.entries}
+        for label, (record_id, geo_type, region, latitudes, longitudes) in expected.items():
+            with self.subTest(label=label):
+                row = entries[label]
+                self.assertEqual(row["coordinates_source_record_id"], record_id)
+                self.assertEqual(row["geo_type"], geo_type)
+                self.assertEqual(row["region_display_name"], region)
+                self.assertTrue(latitudes[0] <= row["latitude"] <= latitudes[1])
+                self.assertTrue(longitudes[0] <= row["longitude"] <= longitudes[1])
+                resolution = self.catalog.resolve(label)
+                self.assertEqual(resolution.normalization_status, "canonical")
+                self.assertEqual(resolution.coordinates_status, "canonical")
+        self.assertEqual(
+            self.catalog.resolve("г. Геленджик").geo_id, entries["ГЕЛЕНДЖИК"]["geo_id"]
+        )
+        self.assertEqual(
+            self.catalog.resolve("Ямало Ненецкий автономный округ").geo_id,
+            entries["ЯМАЛО-НЕНЕЦКИЙ АВТОНОМНЫЙ ОКРУГ"]["geo_id"],
+        )
+        region_ids: dict[str, set[str]] = {}
+        for row in entries.values():
+            region_ids.setdefault(row["region_display_name"], set()).add(row["region_id"])
+        self.assertEqual(region_ids["Краснодарский край"], {"region_geonames_542415"})
+        self.assertEqual(region_ids["Республика Бурятия"], {"region_geonames_2050915"})
+        self.assertEqual(
+            len({(row["latitude"], row["longitude"]) for row in entries.values()}),
+            len(entries),
+        )
 
     def test_control_campaign_keeps_all_15_geographies_and_budget(self) -> None:
         payload = build_validation_result_v2(_validation(), catalog=self.catalog)
@@ -474,8 +542,8 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
         payload = build_geo_catalog(catalog=self.catalog)
         self.assertEqual(payload["catalog_version"], GEO_CATALOG_VERSION)
         self.assertEqual(payload["status"], "available")
-        self.assertEqual(payload["geographies_n"], 220)
-        self.assertEqual(payload["coverage"]["located_geographies_n"], 220)
+        self.assertEqual(payload["geographies_n"], 223)
+        self.assertEqual(payload["coverage"]["located_geographies_n"], 223)
 
 
 if __name__ == "__main__":

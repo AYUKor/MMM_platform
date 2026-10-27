@@ -218,16 +218,16 @@ def build_settings(
         federal_population_path=_project_path(
             project_root,
             paths.get("federal_population_path")
-            or "04_Web_app/data/federal_geo_allocation/geo_reference_v2.csv",
+            or "04_Web_app/data/federal_geo_allocation/geo_reference_v3.csv",
             "paths.federal_population_path",
         ),
         federal_population_sha256=str(
             model.get("federal_population_sha256")
-            or "dcda497e151969506f9d65e6e8d294852a21aa92f066667efecb61ac41636043"
+            or "b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b"
         ),
         geo_catalog_sha256=str(
             model.get("geo_catalog_sha256")
-            or "097b1db2891184ae4a11577ee0e33696eda48e21917d339a07d330e055bedeab"
+            or "a25547d2582c2000465f5fbbad7c4e7ecd20fb6c9311b745699764f62b6bed61"
         ),
         timeout_seconds=_positive_number(
             worker.get("timeout_seconds", 7200),

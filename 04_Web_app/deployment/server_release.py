@@ -892,7 +892,7 @@ def production_equivalent_preflight(
             ),
             "federal_population_path": str(
                 current
-                / "04_Web_app/data/federal_geo_allocation/geo_reference_v2.csv"
+                / "04_Web_app/data/federal_geo_allocation/geo_reference_v3.csv"
             ),
         }
         config["model"] = {
