@@ -25,6 +25,7 @@ from mmm_core.model_package import (
     inherited_oot_issues_for_run_dir,
     sha256_file,
     sha256_json,
+    write_package_artifacts,
 )
 from mmm_core.validation import run_inherited_oot_validation
 
@@ -141,6 +142,10 @@ class Fixture:
         write_json(self.decision_path, decision)
         return decision
 
+    def diagnostics_rows(self) -> list[dict]:
+        with (self.target / "diagnostics_summary.csv").open(encoding="utf-8", newline="") as handle:
+            return list(csv.DictReader(handle))
+
     def evaluate(self, decision: dict | None = None, *, config: dict | None = None, diagnostics: dict | None = None,
                  replay: dict | None = None, source: dict | None = None, fit_keys: list[str] | None = None) -> dict:
         target_config = config or json.loads((self.target / "run_config.json").read_text(encoding="utf-8"))
@@ -156,8 +161,7 @@ class Fixture:
             target_panel_sha256=sha256_file(self.panel),
             target_run_config_sha256=sha256_file(self.target / "run_config.json"),
             target_fingerprint=self.fingerprint,
-            diagnostics_by_fit=diagnostics if diagnostics is not None else index_rows(
-                csv.DictReader((self.target / "diagnostics_summary.csv").open(encoding="utf-8")), "fit_key"),
+            diagnostics_by_fit=diagnostics if diagnostics is not None else index_rows(self.diagnostics_rows(), "fit_key"),
             expected_fit_keys=fit_keys if fit_keys is not None else list(target_config["expected_fit_keys"]),
             replay_validation=replay if replay is not None else {"status": "passed",
                                                                  "package_input_fingerprint": self.fingerprint},
@@ -409,6 +413,36 @@ class IssuanceAndVerificationTests(unittest.TestCase):
         write_json(self.fx.target / "oot_validation.json", tampered)
         with self.assertRaisesRegex(ValueError, "INHERITANCE_POLICY_VERSION_MISMATCH"):
             model_registry._assert_production_eligible(registration)
+
+    def test_manifest_rebuild_keeps_verdicts_bound_but_a_design_metadata_reexport_does_not(self) -> None:
+        """Why the lifecycle refreshes the manifest with model_package.py and not with `--mode replay`.
+
+        `replay` re-exports fit_design_metadata.json (a new generated_at_utc); the file is hashed into the fingerprint of a
+        guarded-fit package, so every verdict written for the earlier fingerprint becomes stale.
+        """
+        target = self.fx.target
+        write_json(target / "fit_design_metadata.json", {"generated_at_utc": "2026-10-27T14:48:00+00:00", "fits": {}})
+        built = build_package(target, target)
+        fingerprint = built[0]["package_input_fingerprint"]
+        write_package_artifacts(target, built)
+        write_json(target / "historical_replay_validation.json",
+                   {"status": "passed", "package_input_fingerprint": fingerprint,
+                    "binding": {"package_input_fingerprint": fingerprint}})
+        self.fx.issue()
+
+        def verdict_blockers(manifest: dict) -> list[str]:
+            return [code for code in manifest["production_blockers"] if "OOT" in code or "REPLAY" in code]
+
+        rebuilt = build_package(target, target)[0]
+        self.assertEqual(rebuilt["package_input_fingerprint"], fingerprint)
+        self.assertEqual(verdict_blockers(rebuilt), [])
+        self.assertEqual(rebuilt["oot_basis"]["evidence_basis"], OOT_BASIS_INHERITED)
+
+        write_json(target / "fit_design_metadata.json", {"generated_at_utc": "2026-10-27T14:59:46+00:00", "fits": {}})
+        reexported = build_package(target, target)[0]
+        self.assertNotEqual(reexported["package_input_fingerprint"], fingerprint)
+        self.assertEqual(sorted(verdict_blockers(reexported)),
+                         ["STALE_OR_UNBOUND_HISTORICAL_REPLAY", "STALE_OR_UNBOUND_OOT_VALIDATION"])
 
     def test_independent_sealed_oot_files_are_unaffected(self) -> None:
         write_json(self.fx.target / "oot_validation.json", {

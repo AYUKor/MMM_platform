@@ -29,7 +29,7 @@ never starts the next:
 
 ```text
 prepare -> fit -> review fit diagnostics -> package -> validation (OOT, response replay)
-  -> replay -> registry and promotion gates
+  -> manifest rebuild -> registry and promotion gates
 ```
 
 - `fit` ends at `fit_complete`. It does not build the model package.
@@ -38,8 +38,14 @@ prepare -> fit -> review fit diagnostics -> package -> validation (OOT, response
   or promote a model.
 - `validation` writes OOT and response-replay verdicts bound to the package
   fingerprint, so it refuses to write them before the package exists.
-- `replay` rebuilds the package with those verdicts and refreshes its gates and
-  blockers.
+- the manifest rebuild (`python 02_Code/01_PyMC/mmm_core/model_package.py --run-dir <run> --write`)
+  recompiles the gates and blockers with those verdicts. It reads the files as they are
+  and exports nothing, so the package fingerprint, and every verdict bound to it, stays
+  valid. Do not use `02_pymc_model.py --mode replay` for this step: on a guarded-fit
+  package it re-exports `fit_design_metadata.json` with a new `generated_at_utc`, that
+  file is part of the fingerprint, and every verdict becomes
+  `STALE_OR_UNBOUND_OOT_VALIDATION` / `STALE_OR_UNBOUND_HISTORICAL_REPLAY` (seen when
+  the Q2 final model B was first released).
 - Registry registration and promotion stay separate gates (below). CLI details are in
   `02_Code/01_PyMC/mmm_core/README.md`.
 
@@ -132,6 +138,6 @@ The package fingerprint includes the SHA-256 of `model_package.py`,
 `forecast_engine.py` and `validation.py`, and `ModelPackage.from_run_dir` recomputes it
 (hash validation is on by default). A package therefore only loads under exactly the
 code it was built with: any later change to those three files makes the package stale
-and requires a rebuild (`--mode replay`) and new replay and OOT evidence. Merge a
+and requires a rebuilt package and new replay and OOT evidence. Merge a
 release branch exactly as the package was built and do not touch these files until the
 release is in Fin.

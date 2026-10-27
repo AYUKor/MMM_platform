@@ -43,10 +43,12 @@ any package exists.
 | `02_pymc_model.py --mode fit --package auto ...` | Single shot as before the boundary: package, design metadata and `model_fit_card.json` right after `fit_complete`. |
 | `02_pymc_model.py --mode fit --orchestrate ...` | Same policy for every isolated fit job (`--package` is passed explicitly). Completion needs a `fit_complete` `fit_execution_card.json` of this run identity (`skip`) or `model_fit_card.json` (`auto`); `fit_orchestrator_status.json` records `package_policy` and `package_created`. |
 | `02_pymc_model.py --mode package --run-dir <run>` | Package/export stage of a completed fit; never samples. Refuses an incomplete fit, a missing or tampered posterior, missing post-fit evidence and an existing package; `--no-write` only checks these preconditions. Writes the same `model_fit_card.json` as `--package auto` (`package_policy: stage`). |
-| `02_pymc_model.py --mode replay --run-dir <run>` | Rebuilds an existing package, e.g. after validation verdicts were written. It needs a package, so it cannot create the first one. |
+| `02_pymc_model.py --mode replay --run-dir <run>` | Rebuilds an existing package and re-exports its design metadata (new `generated_at_utc`). It needs a package, so it cannot create the first one. On a guarded-fit package the exported `fit_design_metadata.json` is part of the package fingerprint, so replay changes the fingerprint and every verdict written before it stops matching (`STALE_OR_UNBOUND_*`). Do not run it after validation. |
+| `mmm_core/model_package.py --run-dir <run> --write` | Manifest rebuild: recompiles `model_manifest.json`, the capability matrix and the gate files from the files as they are. Exports nothing, so the fingerprint stays and verdicts written for it are picked up. This is the step after validation. |
 
 Order for a new run: prepare → fit → review fit diagnostics → package → validation (`03_model_validation.py`) →
-`replay` to refresh the package gates and blockers → registry and promotion, which stay separate gates.
+manifest rebuild (`mmm_core/model_package.py --run-dir <run> --write`) to refresh the package gates and blockers →
+registry and promotion, which stay separate gates.
 Validation verdicts bind to the package fingerprint, so `03_model_validation.py` refuses to write a verdict (OOT
 with `--write-verdict`, response replay) until `model_manifest.json` exists, and points at `--mode package`;
 thresholds and gates are unchanged.
