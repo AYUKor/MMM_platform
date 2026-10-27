@@ -16,6 +16,7 @@ import pandas as pd
 from .fit import _make_geo_lagged_tensor_np, _safe_fit_key
 from .io import read_json, resolve_path, write_json
 from .model_package import sha256_file
+from .media_history import LAG_MODE, bound_media_history, scaled_history_lags
 
 
 VALIDATION_SCHEMA_VERSION = "1.0.0"
@@ -228,6 +229,9 @@ def build_oot_feature_snapshot(
     network, channel = segment.split("/", 1)
     frame = panel.copy()
     frame["date"] = pd.to_datetime(frame["date"])
+    keys = ['date', 'geo_label', 'network', 'channel']
+    if frame[keys].isna().any().any() or frame.duplicated(keys).any():
+        raise ValueError('OOT panel has null or duplicate model keys')
     pre_roll_start = pd.Timestamp(split.oot_start) - pd.Timedelta(days=split.pre_roll_days)
     end = pd.Timestamp(split.oot_end)
     segment_rows = frame[
@@ -239,11 +243,10 @@ def build_oot_feature_snapshot(
         raise ValueError(f"No OOT rows for {transform['fit_key']}")
     frozen_geos = set(transform["geos"])
     unknown_mask = ~segment_rows["geo_label"].astype(str).isin(frozen_geos)
-    unknown_geos = sorted(segment_rows.loc[unknown_mask, "geo_label"].astype(str).unique())
-    if unknown_geos:
-        if not split.development_seen:
-            raise ValueError(f"OOT contains unknown geos for frozen fit {transform['fit_key']}: {unknown_geos}")
-        segment_rows = segment_rows.loc[~unknown_mask].copy()
+    unknown_pre_roll_geos = sorted(segment_rows.loc[unknown_mask & segment_rows.date.lt(split.oot_start), 'geo_label'].astype(str).unique())
+    unknown_rows = segment_rows.loc[unknown_mask & segment_rows.date.between(split.oot_start, split.oot_end), keys].copy()
+    unknown_geos = sorted(unknown_rows.geo_label.astype(str).unique())
+    segment_rows = segment_rows.loc[~unknown_mask].copy()
     scored_rows_all = int(
         frame[
             frame["network"].eq(network)
@@ -280,9 +283,20 @@ def build_oot_feature_snapshot(
         "scored_rows_all": scored_rows_all,
         "scored_rows_known": scored_rows_known,
         "known_geo_row_coverage": scored_rows_known / max(scored_rows_all, 1),
-        "development_only_filter_applied": bool(unknown_geos),
+        "development_only_filter_applied": bool(unknown_geos and split.development_seen),
+        "unknown_pre_roll_geos": unknown_pre_roll_geos,
+        "evaluation_population": 'frozen_train_geos_only',
+        "unknown_geo_rows": int(len(unknown_rows)),
+        "excluded_observations": unknown_rows.assign(date=unknown_rows.date.dt.strftime('%Y-%m-%d'),
+                                                       reason='geo_not_in_frozen_training_fit').to_dict('records'),
     }
-    outcomes = segment_rows[["date", "geo_label", target]].copy()
+    observed, valid = target + '_observed', target + '_observed_valid'
+    if observed not in segment_rows or valid not in segment_rows:
+        raise ValueError(f'Observed OOT provenance required: {observed}, {valid}')
+    if segment_rows[valid].isna().any() or not segment_rows[valid].isin([True, False]).all():
+        raise ValueError(f'Invalid OOT observed-valid mask: {valid}')
+    outcomes = segment_rows[['date', 'geo_label', observed, valid]].rename(columns={observed: target, valid: 'observed_valid'}).copy()
+    outcomes['observed_valid'] = outcomes.observed_valid.astype(bool) & np.isfinite(outcomes[target]) & outcomes[target].gt(0)
     outcomes = outcomes[outcomes["date"].between(split.oot_start, split.oot_end, inclusive="both")]
     outcomes = outcomes.sort_values(["geo_label", "date"]).reset_index(drop=True)
     if len(outcomes) != int(snapshot["date"].between(split.oot_start, split.oot_end, inclusive="both").sum()):
@@ -297,6 +311,7 @@ def _score_fit_snapshot(
     split: OOTSplit,
     *,
     seed: int,
+    media_history: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, np.ndarray]:
     geos = list(transform["geos"])
     channels = list(transform["spend_active"])
@@ -312,7 +327,12 @@ def _score_fit_snapshot(
     spend_pc = spend_raw / population[:, None]
     x_scale_geo = np.asarray(transform["x_scale_geo"], dtype=float)
     x_scaled = spend_pc / np.maximum(x_scale_geo[geo_idx_values], 1e-8)
-    x_lagged = _make_geo_lagged_tensor_np(x_scaled, geo_idx_values, int(transform["l_max"]))
+    if transform.get('lag_mode') == LAG_MODE:
+        if media_history is None:
+            raise ValueError('Calendar OOT requires bound complete media history')
+        x_lagged = scaled_history_lags(frame, media_history, channels, geos, x_scale_geo, int(transform['l_max']))
+    else:
+        x_lagged = _make_geo_lagged_tensor_np(x_scaled, geo_idx_values, int(transform["l_max"]))
     if controls:
         control_raw = frame[controls].to_numpy(float)
         control_scaled = (
@@ -392,9 +412,20 @@ def evaluate_predictive_oot(
     *,
     target: str,
 ) -> dict[str, float | int | str]:
-    merged = predictions.merge(outcomes, on=["date", "geo_label"], how="left", validate="one_to_one")
-    if merged[target].isna().any() or len(merged) != len(predictions):
-        raise ValueError("OOT outcome join lost or duplicated rows")
+    if len(predictions) != len(draw_matrix) or not np.isfinite(draw_matrix).all():
+        raise ValueError('OOT predictions and draw rows disagree or contain nonfinite values')
+    prediction_rows = predictions.reset_index(drop=True).assign(_prediction_row=np.arange(len(predictions)))
+    merged = prediction_rows.merge(outcomes, on=["date", "geo_label"], how="left", validate="one_to_one", indicator=True)
+    if not merged['_merge'].eq('both').all():
+        raise ValueError('OOT outcome join lost rows; explicit observed-valid records are required')
+    valid = np.isfinite(merged[target])
+    if 'observed_valid' in merged:
+        valid &= merged.observed_valid.fillna(False).astype(bool)
+    total_rows = len(merged)
+    merged = merged.loc[valid].copy()
+    if merged.empty:
+        raise ValueError('No valid observed OOT outcomes for metrics')
+    draw_matrix = draw_matrix[merged['_prediction_row'].to_numpy(int)]
     actual = merged[target].to_numpy(float)
     point = merged["mean"].to_numpy(float)
     train = training_outcomes.sort_values(["geo_label", "date"]).copy()
@@ -409,6 +440,10 @@ def evaluate_predictive_oot(
     naive_mae = float(np.mean(np.abs(actual - naive.to_numpy(float))))
     return {
         "rows": int(len(merged)),
+        "scored_days": int(pd.to_datetime(merged.date).nunique()),
+        "prediction_rows": total_rows,
+        "excluded_invalid_observed_rows": total_rows - len(merged),
+        "outcome_row_coverage": len(merged) / max(total_rows, 1),
         "target": target,
         "mae": float(np.mean(np.abs(actual - point))),
         "mase": float(np.mean(np.abs(actual - point)) / naive_scale),
@@ -527,6 +562,8 @@ def run_predictive_oot(
     prediction_frames: list[pd.DataFrame] = []
     feature_frames: list[pd.DataFrame] = []
     prediction_hashes: dict[str, str] = {}
+    history = bound_media_history(config, panel, split_manifest['pre_roll_start'], split.oot_end)
+    coverage_rows: list[dict[str, Any]] = []
     for fit_index, fit_key in enumerate(fit_keys):
         transform = _load_transform(run_dir, fit_key)
         snapshot, outcomes = build_oot_feature_snapshot(panel, transform, split)
@@ -537,6 +574,7 @@ def run_predictive_oot(
             posterior,
             split,
             seed=seed + 1000 + fit_index,
+            media_history=history,
         )
         prediction_hashes[fit_key] = _canonical_hash(predictions.to_dict("records"))
         target = fit_key.split("::", 1)[1]
@@ -554,8 +592,15 @@ def run_predictive_oot(
             training_outcomes,
             target=target,
         )
+        if metrics['scored_days'] < split.min_scored_days:
+            raise ValueError(f'Insufficient observed OOT days for {fit_key}: {metrics["scored_days"]} < {split.min_scored_days}')
         verdict = classify_oot_metrics(metrics)
         geo_coverage = snapshot.attrs.get("geo_coverage") or {}
+        for row in geo_coverage.get('excluded_observations', []):
+            coverage_rows.append({'fit_key': fit_key, **row})
+        for row in outcomes.loc[~outcomes.observed_valid, ['date', 'geo_label']].to_dict('records'):
+            row['date'] = pd.Timestamp(row['date']).date().isoformat()
+            coverage_rows.append({'fit_key': fit_key, **row, 'reason': 'invalid_or_missing_observed_target'})
         metric_rows.append(
             {
                 "fit_key": fit_key,
@@ -573,10 +618,13 @@ def run_predictive_oot(
     metrics_frame = pd.DataFrame(metric_rows)
     turnover = metrics_frame[metrics_frame["target"].eq("turnover_per_user")]
     turnover_required_pass = len(turnover) == 4 and turnover["quality_status"].isin(["primary", "caution"]).all()
-    activation_eligible = bool(split_manifest["activation_evidence_allowed"] and turnover_required_pass)
+    full_turnover_geo_coverage = bool(turnover['unknown_geos_excluded_n'].eq(0).all())
+    activation_eligible = bool(split_manifest["activation_evidence_allowed"] and turnover_required_pass and full_turnover_geo_coverage)
     status = (
         "passed"
         if activation_eligible
+        else 'partial_coverage_not_activation_evidence'
+        if turnover_required_pass and not full_turnover_geo_coverage
         else "shadow_passed_not_activation_evidence"
         if split.development_seen and turnover_required_pass
         else "failed"
@@ -591,6 +639,8 @@ def run_predictive_oot(
         "split": split_manifest,
         "fits_n": int(len(metrics_frame)),
         "turnover_required_pass": bool(turnover_required_pass),
+        "full_turnover_geo_coverage": full_turnover_geo_coverage,
+        "excluded_observations": coverage_rows,
         "quality_counts": metrics_frame["quality_status"].value_counts().to_dict(),
         "geo_coverage": {
             row["fit_key"]: {
@@ -609,6 +659,7 @@ def run_predictive_oot(
         features_all.to_parquet(output_dir / "feature_snapshot_without_targets.parquet", index=False)
         predictions_all.to_parquet(output_dir / "predictions_before_outcome_join.parquet", index=False)
         metrics_frame.to_csv(output_dir / "metrics.csv", index=False)
+        pd.DataFrame(coverage_rows, columns=['fit_key', 'date', 'geo_label', 'network', 'channel', 'reason']).to_csv(output_dir / 'excluded_observations.csv', index=False)
         binding = build_validation_binding(
             run_dir,
             [
@@ -616,6 +667,7 @@ def run_predictive_oot(
                 output_dir / "feature_snapshot_without_targets.parquet",
                 output_dir / "predictions_before_outcome_join.parquet",
                 output_dir / "metrics.csv",
+                output_dir / 'excluded_observations.csv',
                 coverage_manifest_path,
             ],
         )
@@ -689,6 +741,9 @@ def build_model_side_historical_replay_rows(
     run_dir = resolve_path(run_dir)
     panel_frame = panel.copy()
     panel_frame["date"] = pd.to_datetime(panel_frame["date"])
+    config = read_json(run_dir / 'run_config.json', {}) or {}
+    start = (pd.Timestamp(config.get('train_start') or panel_frame.date.min()) - pd.Timedelta(days=int((config.get('cfg') or {}).get('l_max', 14)))).isoformat()
+    history = bound_media_history(config, panel_frame, start, config.get('train_end') or panel_frame.date.max())
     index_frame = row_index.copy()
     index_frame["date"] = pd.to_datetime(index_frame["date"])
     keys = ["date", "geo_label", "network", "channel"]
@@ -717,7 +772,12 @@ def build_model_side_historical_replay_rows(
         spend_raw = frame[spend_columns].to_numpy(float)
         x_scale_geo = np.asarray(transform["x_scale_geo"], dtype=float)
         x_scaled = (spend_raw / population[:, None]) / np.maximum(x_scale_geo[geo_idx_values], 1e-8)
-        x_lagged = _make_geo_lagged_tensor_np(x_scaled, geo_idx_values, int(transform["l_max"]))
+        if transform.get('lag_mode') == LAG_MODE:
+            if history is None:
+                raise ValueError('Historical replay requires bound calendar media history')
+            x_lagged = scaled_history_lags(frame, history, spend_columns, geos, x_scale_geo, int(transform['l_max']))
+        else:
+            x_lagged = _make_geo_lagged_tensor_np(x_scaled, geo_idx_values, int(transform["l_max"]))
         tier_by_geo = np.asarray(transform["geo_tier_idx"], dtype=int)
         obs_tier = tier_by_geo[geo_idx_values]
         target = fit_key.split("::", 1)[1]

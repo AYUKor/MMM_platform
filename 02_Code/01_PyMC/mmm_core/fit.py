@@ -27,11 +27,12 @@ from linearmodels.panel import PanelOLS
 
 from .io import load_config, project_root, resolve_path, write_json
 from .model_package import sha256_file
+from .media_history import LAG_MODE, calendar_lags, load_media_history, scaled_history_lags
 
 log = logging.getLogger("mmm_fit")
 
 FIT_CONTRACT_SCHEMA_VERSION = "1.0.0"
-FIT_RUNTIME_VERSION = "1.1.0"
+FIT_RUNTIME_VERSION = "1.2.0"
 CONTRACTION_SCHEMA_VERSION = "2.0.0"
 RANDOM_SEED = 42
 EXPECTED_TARGETS = ["turnover_per_user", "orders_per_user", "avg_basket"]
@@ -172,6 +173,7 @@ MEDIA_GROUPING_CONFIG = DEFAULT_MEDIA_GROUPING_CONFIG
 MEDIA_GROUPING_ENABLED = True
 MEDIA_GROUP_INPUTS_BY_SEGMENT: dict[str, set[str]] = {}
 panel = pd.DataFrame()
+MEDIA_HISTORY = pd.DataFrame()
 
 
 @dataclass(frozen=True)
@@ -190,6 +192,7 @@ class GuardedFitSpec:
     thin_sample_threshold: int
     vif_threshold: float
     fixed_lambda_channels_by_fit: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    media_history_path: Path | None = None
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -288,16 +291,26 @@ def geometric_adstock(x, decay):
         out[t] = x[t] + decay * out[t-1]
     return out
 
-def adstock_panel_inplace(df_seg, spend_col, decay):
+def adstock_panel_inplace(df_seg, spend_col, decay, media_history=None):
     df_seg = df_seg.sort_values(["geo_label","date"]).copy()
-    df_seg[spend_col + "_ads"] = (df_seg.groupby("geo_label")[spend_col]
-                                   .transform(lambda s: geometric_adstock(s.values, decay)))
+    history = df_seg if media_history is None else media_history
+    output = pd.Series(index=df_seg.index, dtype=float)
+    for geo, rows in df_seg.groupby('geo_label'):
+        source = history[history.geo_label.eq(geo)].sort_values('date')
+        if source.date.duplicated().any():
+            raise ValueError('Duplicate geo/date in empirical-prior media history')
+        start = rows.date.min() if source.empty else min(source.date.min(), rows.date.min())
+        calendar = pd.date_range(start, rows.date.max())
+        daily = source.set_index('date')[spend_col].reindex(calendar, fill_value=0.0)
+        ads = pd.Series(geometric_adstock(daily.to_numpy(float), decay), index=calendar)
+        output.loc[rows.index] = ads.reindex(rows.date).to_numpy()
+    df_seg[spend_col + "_ads"] = output
     return df_seg
 
-def grid_search_adstock_fe(panel_seg, target, spend_col, ctrl_cols, decay_grid, min_obs=200):
+def grid_search_adstock_fe(panel_seg, target, spend_col, ctrl_cols, decay_grid, min_obs=200, media_history=None):
     best = {"ssr": np.inf, "decay": 0.3, "beta": 0.0, "se": np.nan}
     for decay in decay_grid:
-        df_a = adstock_panel_inplace(panel_seg, spend_col, decay)
+        df_a = adstock_panel_inplace(panel_seg, spend_col, decay, media_history)
         x_cols = [spend_col + "_ads"] + [c for c in ctrl_cols if c in df_a.columns and df_a[c].std() > 0]
         sub = df_a[[target, "geo_label", "date"] + x_cols].dropna()
         if len(sub) < min_obs:
@@ -317,13 +330,14 @@ def grid_search_adstock_fe(panel_seg, target, spend_col, ctrl_cols, decay_grid, 
             continue
     return best["decay"], best["beta"], best["se"]
 
-def make_geo_lagged_tensor(X, geo_idx, l_max):
+def make_geo_lagged_tensor(X, geo_idx, l_max, dates=None):
     """Build lag tensor with adstock reset at geo boundaries.
 
-    Shape: (lag, obs, channel). Rows are sorted by geo/date, but every geo gets
-    its own lag history. This prevents the last day of one region from leaking
-    into the first day of the next region.
+    Dated calls use calendar days. The undated branch is retained only for
+    explicit legacy artifacts and contiguous-array parity tests.
     """
+    if dates is not None:
+        return calendar_lags(X, geo_idx, dates, l_max)
     X = np.asarray(X, dtype=float)
     geo_idx = np.asarray(geo_idx)
     n_obs, n_media = X.shape
@@ -731,7 +745,7 @@ def _scaled_fallback_prior(target, channel_family, candidate_infos, failure_sour
     }
 
 def build_single_target_data(panel_df, network, channel, target, spend_cols, ctrl_cols,
-                             priors_dict, l_max):
+                             priors_dict, l_max, media_history=None):
     """Prepare scaled arrays for one (segment × target) PyMC fit.
 
     Main modeling choices:
@@ -828,7 +842,10 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
                 m,
             ]
             x_scale_geo[g, m] = float(np.median(same_tier)) if len(same_tier) else float(x_scale_global[m])
-    X_lagged = make_geo_lagged_tensor(X_spend_scaled, geo_idx, l_max)
+    if media_history is None:
+        X_lagged = make_geo_lagged_tensor(X_spend_scaled, geo_idx, l_max, dates=seg.date)
+    else:
+        X_lagged = scaled_history_lags(seg, media_history, spend_active, geos, x_scale_geo, l_max)
 
     if target == "orders_per_user":
         y_offset = float(Y_raw.mean())
@@ -1132,6 +1149,7 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
     return seg, coords, {
         "X_spend": X_spend_scaled,
         "X_lagged": X_lagged,
+        "lag_mode": LAG_MODE,
         "X_ctrl": X_ctrl_scaled,
         "Y": Y_scaled,
         "y_scale": y_scale, "y_offset": y_offset, "y_scaling": y_scaling,
@@ -1430,8 +1448,10 @@ def _normalize_only_fits(only_fits):
             normalized.add(f"{network}/{channel}::{target}")
     return normalized
 
-def _make_geo_lagged_tensor_np(X, geo_idx, l_max):
+def _make_geo_lagged_tensor_np(X, geo_idx, l_max, dates=None):
     """Numpy version of geo-reset lag tensor for post-fit calculations."""
+    if dates is not None:
+        return calendar_lags(X, geo_idx, dates, l_max)
     X = np.asarray(X, dtype=float)
     geo_idx = np.asarray(geo_idx)
     n_obs, n_media = X.shape
@@ -1458,6 +1478,17 @@ def _x_ads_sat_np(data, alpha, lam, X=None):
         x_lagged = data.get("X_lagged")
         if x_lagged is None:
             x_lagged = _make_geo_lagged_tensor_np(data["X_spend"], data["geo_idx"], l_max)
+    elif data.get('lag_mode') == LAG_MODE:
+        # mROAS меняет весь канал, включая расходы в дни без outcomes.
+        base = data['X_spend']
+        ratios = np.ones(base.shape[1])
+        for m in range(base.shape[1]):
+            nonzero = np.flatnonzero(base[:, m])
+            if len(nonzero):
+                ratios[m] = X[nonzero[0], m] / base[nonzero[0], m]
+            if not np.allclose(X[:, m], base[:, m] * ratios[m]):
+                raise ValueError('Calendar mROAS expects a channel-wide proportional perturbation')
+        x_lagged = data['X_lagged'] * ratios[None, None, :]
     else:
         x_lagged = _make_geo_lagged_tensor_np(X, data["geo_idx"], l_max)
     weights = alpha[None, :] ** np.arange(l_max + 1)[:, None]
@@ -1821,6 +1852,7 @@ def load_guarded_fit_spec(
         thin_sample_threshold=int(config.get("thin_sample_threshold", 50)),
         vif_threshold=float(config.get("vif_threshold", 7.0)),
         fixed_lambda_channels_by_fit=fixed_lambda_channels_by_fit,
+        media_history_path=resolve_path(config['media_history_path']) if config.get('media_history_path') else None,
     )
 
 
@@ -1923,15 +1955,52 @@ def _rebuild_media_groups(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, 
     return out, grouped_inputs_by_segment
 
 
+def media_history_binding(spec: GuardedFitSpec) -> dict[str, Any]:
+    return {
+        'lag_mode': LAG_MODE,
+        'path': str(spec.media_history_path) if spec.media_history_path else None,
+        'sha256': sha256_file(spec.media_history_path) if spec.media_history_path else None,
+        'calendar_code_sha256': sha256_file(Path(__file__).with_name('media_history.py')),
+    }
+
+
+def prepare_media_history(full: pd.DataFrame, spec: GuardedFitSpec) -> pd.DataFrame:
+    """Сохранить экспозиции до anomaly/thin фильтров, не добавляя outcomes."""
+    start = (pd.Timestamp(spec.train_start) - pd.Timedelta(days=int(spec.profile['l_max']))).isoformat()
+    raw_spend = [c for c in full if c.startswith('spend_') and not c.endswith('_pc') and c not in DERIVED_MEDIA_GROUP_COLS]
+    if spec.media_history_path is None:
+        if 'dataset_split' in full and full.date.max() >= pd.Timestamp('2026-06-01'):
+            raise ValueError('Q2 panel requires media_history_path: target-only panel cannot recover missing-day exposure')
+        history = full[full.date.between(start, spec.train_end)][['date', 'geo_label', 'network', 'channel'] + raw_spend].copy()
+    else:
+        history = load_media_history(spec.media_history_path, start, spec.train_end, MEDIA_GROUPING_CONFIG)
+        for column in raw_spend:
+            if column not in history:
+                if full[column].gt(0).any():
+                    raise ValueError(f'Media ledger lacks nonzero panel channel: {column}')
+                history[column] = 0.0
+        # Сверяем расходы на всех доступных target-ключах, включая anomaly-дни.
+        reference = full[full.date.between(start, spec.train_end)][['date', 'geo_label', 'network', 'channel'] + raw_spend]
+        joined = reference.merge(history[['date', 'geo_label', 'network', 'channel'] + raw_spend],
+                                 on=['date', 'geo_label', 'network', 'channel'], how='left',
+                                 validate='one_to_one', suffixes=('_panel', '_ledger'))
+        for column in raw_spend:
+            if not np.allclose(joined[column + '_panel'], joined[column + '_ledger'].fillna(0), rtol=1e-10, atol=1e-5):
+                raise ValueError(f'Media ledger disagrees with panel: {column}')
+    history, _ = _rebuild_media_groups(history)
+    return history
+
+
 def _prepare_training_panel(
     spec: GuardedFitSpec,
 ) -> tuple[pd.DataFrame, list[str], list[str], dict[str, Any]]:
-    global panel, SPEND_ACTIVE_BASE, MEDIA_GROUP_INPUTS_BY_SEGMENT
+    global panel, SPEND_ACTIVE_BASE, MEDIA_GROUP_INPUTS_BY_SEGMENT, MEDIA_HISTORY
     if not spec.panel_path.exists():
         raise FileNotFoundError(f"Fit panel does not exist: {spec.panel_path}")
     full = pd.read_parquet(spec.panel_path)
     full["date"] = pd.to_datetime(full["date"])
     preflight = _validate_panel_frame(full, spec)
+    MEDIA_HISTORY = prepare_media_history(full, spec)
     train = full[full["date"].between(spec.train_start, spec.train_end, inclusive="both")].copy()
 
     anomaly_columns = [column for column in train.columns if column.endswith("_anomaly_flag")]
@@ -2040,6 +2109,7 @@ def _build_empirical_priors(
                     spend_column,
                     controls,
                     decay_grid,
+                    media_history=MEDIA_HISTORY[MEDIA_HISTORY.network.eq(network) & MEDIA_HISTORY.channel.eq(channel)],
                 )
                 priors[segment][target][spend_column] = {
                     "decay": round(float(decay), 3),
@@ -2104,6 +2174,7 @@ def _fit_contract_payload(
         "config_path": str(spec.config_path),
         "config_sha256": sha256_file(spec.config_path),
         "fit_code_sha256": sha256_file(Path(__file__).resolve()),
+        "media_history": media_history_binding(spec),
         "empirical_priors_sha256": empirical_priors_sha256,
         "train_start": spec.train_start,
         "train_end": spec.train_end,
@@ -2174,6 +2245,7 @@ def _run_identity(spec: GuardedFitSpec) -> dict[str, Any]:
         "config_path": str(spec.config_path),
         "config_sha256": sha256_file(spec.config_path),
         "fit_code_sha256": sha256_file(Path(__file__).resolve()),
+        "media_history": media_history_binding(spec),
         "mode": spec.mode,
         "train_start": spec.train_start,
         "train_end": spec.train_end,
@@ -2218,6 +2290,8 @@ def _run_config_payload(
         "run_variant": spec.run_dir.name.removeprefix(f"{spec.mode}_"),
         "panel_path": str(spec.panel_path),
         "panel_sha256": sha256_file(spec.panel_path),
+        "lag_mode": LAG_MODE,
+        "media_history": media_history_binding(spec),
         "train_start": spec.train_start,
         "train_end": spec.train_end,
         "holdout_start": spec.holdout_start,
@@ -2309,6 +2383,7 @@ def _prepare_one_fit(
         controls,
         priors,
         l_max=int(spec.profile["l_max"]),
+        media_history=MEDIA_HISTORY,
     )
     if data is None:
         raise ValueError(f"Fit design is unavailable or degenerate: {fit_key}")
@@ -2360,6 +2435,8 @@ def _prepare_one_fit(
         "y_offset": float(data["y_offset"]),
         "y_scaling": data["y_scaling"],
         "l_max": int(data["l_max"]),
+        "lag_mode": LAG_MODE,
+        "media_history": media_history_binding(spec),
         "beta_structure": data["beta_structure"],
         "baseline_structure": data["baseline_structure"],
         "error_structure": data["error_structure"],
