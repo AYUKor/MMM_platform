@@ -218,3 +218,6 @@ coverage/
 /04_Web_app/**/postgres_data/
 /04_Web_app/**/redis-data/
 /04_Web_app/**/redis_data/
+
+# Private historical campaign datasets are materialized separately from source.
+04_Web_app/data/historical_campaigns/

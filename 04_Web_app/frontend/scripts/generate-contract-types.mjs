@@ -5,6 +5,7 @@ import { compile } from "json-schema-to-typescript";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const contracts = [
+  { schema: "historical_campaigns_v1.schema.json", typeName: "HistoricalCampaignsV1", output: "historical-campaigns-v1.ts" },
   {
     schema: "decision_result_v1.schema.json",
     typeName: "DecisionResultV1",

@@ -2,12 +2,315 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.11.0",
+    "version": "1.12.0",
     "description": "Versioned HTTP boundary for local pilot authentication, administration, campaign upload, validation, asynchronous calculation jobs, browser-safe progress, results, product navigation, model information, help and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
   "security": [{"sessionCookie": []}],
   "paths": {
+    "/api/v1/historical-campaigns": {
+    "get": {
+      "operationId": "getHistoricalCampaignRegistry",
+      "summary": "Saved historical campaign registry",
+      "description": "Read-only. Requires calculation.read. No calculation or active-model switch.",
+      "parameters": [
+        {
+          "name": "dataset_id",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          },
+          "description": "Immutable historical dataset version; defaults to configured version"
+        },
+        {
+          "name": "q",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "sort",
+          "in": "query",
+          "schema": {
+            "enum": [
+              "start_date",
+              "end_date",
+              "source_budget_rub",
+              "campaign_name"
+            ]
+          }
+        },
+        {
+          "name": "order",
+          "in": "query",
+          "schema": {
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          }
+        },
+        {
+          "name": "offset",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        {
+          "name": "limit",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Saved result",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "historical_campaigns_v1.schema.json#/$defs/registry"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "403": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "404": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "409": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "422": {
+          "$ref": "#/components/responses/ApiError"
+        }
+      }
+    }
+  },
+  "/api/v1/historical-campaigns/{campaign_key}": {
+    "get": {
+      "operationId": "getHistoricalCampaignCard",
+      "summary": "Saved historical campaign card",
+      "description": "Read-only. Requires calculation.read. No calculation or active-model switch.",
+      "parameters": [
+        {
+          "name": "dataset_id",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          },
+          "description": "Immutable historical dataset version; defaults to configured version"
+        },
+        {
+          "name": "campaign_key",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Saved result",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "historical_campaigns_v1.schema.json#/$defs/card"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "403": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "404": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "409": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "422": {
+          "$ref": "#/components/responses/ApiError"
+        }
+      }
+    }
+  },
+  "/api/v1/historical-campaigns/{campaign_key}/daily": {
+    "get": {
+      "operationId": "getHistoricalCampaignDaily",
+      "summary": "Saved historical campaign daily",
+      "description": "Read-only. Requires calculation.read. No calculation or active-model switch.",
+      "parameters": [
+        {
+          "name": "dataset_id",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          },
+          "description": "Immutable historical dataset version; defaults to configured version"
+        },
+        {
+          "name": "campaign_key",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Saved result",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "historical_campaigns_v1.schema.json#/$defs/daily"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "403": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "404": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "409": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "422": {
+          "$ref": "#/components/responses/ApiError"
+        }
+      }
+    }
+  },
+  "/api/v1/historical-campaigns/{campaign_key}/media": {
+    "get": {
+      "operationId": "getHistoricalCampaignMedia",
+      "summary": "Saved historical campaign media",
+      "description": "Read-only. Requires calculation.read. No calculation or active-model switch.",
+      "parameters": [
+        {
+          "name": "dataset_id",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          },
+          "description": "Immutable historical dataset version; defaults to configured version"
+        },
+        {
+          "name": "campaign_key",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Saved result",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "historical_campaigns_v1.schema.json#/$defs/media"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "403": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "404": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "409": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "422": {
+          "$ref": "#/components/responses/ApiError"
+        }
+      }
+    }
+  },
+  "/api/v1/historical-campaigns/{campaign_key}/report.xlsx": {
+    "get": {
+      "operationId": "getHistoricalCampaignReport",
+      "summary": "Saved historical campaign report.xlsx",
+      "description": "Read-only. Requires report.download. No calculation or active-model switch.",
+      "parameters": [
+        {
+          "name": "dataset_id",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          },
+          "description": "Immutable historical dataset version; defaults to configured version"
+        },
+        {
+          "name": "campaign_key",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$"
+          }
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Saved result",
+          "content": {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "401": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "403": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "404": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "409": {
+          "$ref": "#/components/responses/ApiError"
+        },
+        "422": {
+          "$ref": "#/components/responses/ApiError"
+        }
+      }
+    }
+  },
     "/health": {
       "get": {"security": [], "operationId": "getHealth", "responses": {"200": {"description": "Process liveness"}}}
     },
