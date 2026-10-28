@@ -18,6 +18,7 @@ from contracts.product_api_v1 import (  # noqa: E402
     build_calculation_profile_payload,
     ProductApiContractError,
     build_error_catalog_payload,
+    lineage_is_production_ready,
     load_openapi_document,
     load_product_api_schema,
     validate_error_catalog,
@@ -110,7 +111,7 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/api/v1/templates/media-plan-dictionary", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.11.0")
+        self.assertEqual(document["info"]["version"], "1.12.0")
         self.assertIn("/api/v1/auth/register", document["paths"])
         for schema_name in (
             "JobResultViewV2",
@@ -264,7 +265,15 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertEqual(payload["validation"]["sealed_oot"]["status"], "failed")
         self.assertEqual(payload["caveats"][-1]["code"], "sealed_oot_failed")
 
-    def _passed_oot_passport(self, *, inherited: bool) -> dict:
+    def _passed_oot_passport(
+        self,
+        *,
+        inherited: bool,
+        replay_passed: bool = False,
+        oot_passed: bool = True,
+        activation_status: str = "production_ready",
+        blockers: tuple[str, ...] = (),
+    ) -> dict:
         fingerprint = "c" * 64
         manifest = {
             "package_input_fingerprint": fingerprint,
@@ -274,8 +283,8 @@ class ProductApiContractTest(unittest.TestCase):
             "train_end": "2026-06-30",
             "holdout_start": "2026-07-01",
             "holdout_end": "2026-07-31",
-            "artifact_status": {"oot_validation_passed": True},
-            "production_blockers": [],
+            "artifact_status": {"oot_validation_passed": oot_passed},
+            "production_blockers": list(blockers),
         }
         oot = {"status": "passed", "generated_at_utc": "2026-10-27T15:00:00+00:00"}
         if inherited:
@@ -303,7 +312,7 @@ class ProductApiContractTest(unittest.TestCase):
             support_rows=[{"scope": "geo", "geo_label": "МОСКВА"}],
             segments=["ТС5/Онлайн"],
             package_stage="posterior_ready",
-            activation_status="production_ready",
+            activation_status=activation_status,
             model_run_id="synthetic_run",
         )
         resolved = {
@@ -314,6 +323,11 @@ class ProductApiContractTest(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary:
             _write_json(Path(temporary) / "03_Outputs" / "model" / "oot_validation.json", oot)
+            if replay_passed:
+                _write_json(
+                    Path(temporary) / "03_Outputs" / "model" / "historical_replay_validation.json",
+                    {"status": "passed", "generated_at_utc": "2026-10-27T15:00:00+00:00"},
+                )
             with patch(
                 "services.product_api_service.ModelPackage.from_run_dir", autospec=True, return_value=package
             ):
@@ -338,6 +352,105 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertNotIn("Независимая OOT-валидация пройдена", evidence["display_text"])
         self.assertEqual(inherited["caveats"][-1]["code"], "sealed_oot_inherited")
         self.assertEqual(inherited["caveats"][-1]["display_text"], evidence["display_text"])
+
+    def test_passport_claims_production_only_from_its_own_verified_record(self) -> None:
+        for inherited in (True, False):
+            with self.subTest(inherited=inherited):
+                passport = self._passed_oot_passport(inherited=inherited, replay_passed=True)
+                validate_model_passport(passport)
+                self.assertIs(passport["serving"]["production_claim_allowed"], True)
+                self.assertEqual(passport["serving"]["display_name"], "MMM-модель")
+                codes = [item["code"] for item in passport["caveats"]]
+                self.assertNotIn("research_model", codes)
+                self.assertIn("allocation_only", codes)
+                self.assertEqual(passport["serving"]["decision_scope"], "forecast_and_allocation_only")
+                try:
+                    import jsonschema
+                except ImportError:
+                    self.skipTest("jsonschema is optional in the source-only runtime")
+                jsonschema.Draft202012Validator(load_product_api_schema()).validate(passport)
+
+        # Inherited evidence stays labelled as inherited even for a production model.
+        inherited_passport = self._passed_oot_passport(inherited=True, replay_passed=True)
+        self.assertEqual(inherited_passport["caveats"][-1]["code"], "sealed_oot_inherited")
+
+    def test_passport_stays_restricted_when_any_part_of_the_record_is_missing(self) -> None:
+        cases = {
+            "historical replay missing": {"replay_passed": False},
+            "OOT not passed": {"replay_passed": True, "oot_passed": False},
+            "restricted activation status": {
+                "replay_passed": True,
+                "activation_status": "preprod_restricted",
+            },
+            "unknown activation status": {"replay_passed": True, "activation_status": "unreviewed"},
+            "open production blocker": {
+                "replay_passed": True,
+                "blockers": ("MISSING_OR_FAILED_OOT_VALIDATION",),
+            },
+        }
+        for name, options in cases.items():
+            with self.subTest(case=name):
+                passport = self._passed_oot_passport(inherited=True, **options)
+                validate_model_passport(passport)
+                self.assertIs(passport["serving"]["production_claim_allowed"], False)
+                self.assertEqual(passport["serving"]["display_name"], "Исследовательская MMM-модель")
+                self.assertEqual(passport["caveats"][0]["code"], "research_model")
+
+    def test_passport_validation_rejects_a_claim_its_record_does_not_support(self) -> None:
+        def tamper_replay(payload: dict) -> None:
+            payload["validation"]["historical_replay"]["status"] = "unavailable"
+
+        def tamper_oot(payload: dict) -> None:
+            payload["validation"]["sealed_oot"]["status"] = "failed"
+
+        def tamper_blockers(payload: dict) -> None:
+            payload["validation"]["production_blockers"] = [
+                {"code": "MISSING_OR_FAILED_OOT_VALIDATION", "display_text": "Нужна проверка."}
+            ]
+
+        def tamper_activation(payload: dict) -> None:
+            payload["package"]["activation_status"] = "preprod_restricted"
+
+        def tamper_stage(payload: dict) -> None:
+            payload["package"]["package_stage"] = "draft"
+
+        def tamper_origin(payload: dict) -> None:
+            payload["record_origin"] = "synthetic_fixture"
+
+        for name, tamper in {
+            "replay": tamper_replay,
+            "oot": tamper_oot,
+            "blockers": tamper_blockers,
+            "activation": tamper_activation,
+            "stage": tamper_stage,
+            "origin": tamper_origin,
+        }.items():
+            with self.subTest(tampered=name):
+                payload = self._passed_oot_passport(inherited=True, replay_passed=True)
+                validate_model_passport(payload)
+                tamper(payload)
+                with self.assertRaisesRegex(ProductApiContractError, "cannot claim production"):
+                    validate_model_passport(payload)
+
+        for bad in ("true", 1, None):
+            with self.subTest(non_boolean=bad):
+                payload = self._passed_oot_passport(inherited=True, replay_passed=True)
+                payload["serving"]["production_claim_allowed"] = bad
+                with self.assertRaisesRegex(ProductApiContractError, "must be boolean"):
+                    validate_model_passport(payload)
+
+    def test_production_label_rule_is_the_same_for_passport_and_result_lineage(self) -> None:
+        self.assertTrue(lineage_is_production_ready("production_ready", []))
+        self.assertTrue(lineage_is_production_ready("production_ready", ()))
+        for status, blockers in (
+            ("preprod_restricted", []),
+            ("production_ready", ["MISSING_OR_FAILED_OOT_VALIDATION"]),
+            ("production_ready", None),
+            ("", []),
+            (None, []),
+        ):
+            with self.subTest(status=status, blockers=blockers):
+                self.assertFalse(lineage_is_production_ready(status, blockers))
 
 
 class RuntimeRetentionTest(unittest.TestCase):

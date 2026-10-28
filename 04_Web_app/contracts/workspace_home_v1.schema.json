@@ -182,7 +182,8 @@
         "training_period",
         "supported_scope",
         "description",
-        "details_path"
+        "details_path",
+        "production_claim_allowed"
       ],
       "properties": {
         "status": {
@@ -218,7 +219,8 @@
           ]
         },
         "description": { "$ref": "#/$defs/nonEmptyText" },
-        "details_path": { "$ref": "#/$defs/internalPath" }
+        "details_path": { "$ref": "#/$defs/internalPath" },
+        "production_claim_allowed": { "type": "boolean" }
       }
     },
     "quickAction": {

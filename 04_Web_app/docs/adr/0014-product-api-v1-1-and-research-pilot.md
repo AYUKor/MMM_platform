@@ -1,6 +1,6 @@
 # ADR 0014: Product API v1.1 And Research Pilot
 
-- Status: Accepted
+- Status: Accepted; the `production_claim_allowed=false` statement is amended by ADR 0026
 - Date: 2026-07-15
 - Scope: browser contract, model passport, readiness, research deployment profile and local retention
 
@@ -51,8 +51,11 @@ package artifacts. It exposes:
 
 Target grain is mandatory. A diagnostic `orders_per_user` row must not make a
 primary `turnover_per_user` row appear diagnostic. The passport states
-`production_claim_allowed=false`; `preprod_restricted` is never relabeled as
-production-ready.
+`production_claim_allowed=false` for package A; `preprod_restricted` is never
+relabeled as production-ready. ADR 0026 replaces the constant with a flag
+derived from the package's own verified record, so a package that is
+production-ready by its own record is shown as such and every other record keeps
+`false`.
 
 ### Deployment Profiles
 

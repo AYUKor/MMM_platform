@@ -30,12 +30,15 @@ from contracts.business_semantics_v2 import (  # noqa: E402
     load_validation_result_v2_schema,
     load_workspace_geo_budget_v1_schema,
     validate_job_result_view_v2,
+    validate_model_overview_v2,
+    validate_model_passport_v2,
     validate_validation_result_v2,
 )
 from mmm_core.serving_semantics import (  # noqa: E402
     channel_display_name,
 )
 from services.business_semantics_v2 import (  # noqa: E402
+    _model_review_limitation,
     build_federal_allocation_summary,
     build_geo_catalog,
     build_model_overview_v2,
@@ -812,6 +815,109 @@ class BusinessSemanticsV2Test(unittest.TestCase):
         self.assertNotIn("orders_per_user", serialized)
         self.assertNotIn("avg_basket", serialized)
         self.assertNotIn("orders_diagnostic_only", serialized)
+
+    def _production_passport_v1(self) -> dict:
+        passport_v1 = json.loads(
+            (FIXTURE_DIR / "model_passport_v1_synthetic.json").read_text(encoding="utf-8")
+        )
+        passport_v1["record_origin"] = "verified_model_package"
+        passport_v1["serving"].update(
+            {"display_name": "MMM-модель", "production_claim_allowed": True}
+        )
+        passport_v1["package"]["activation_status"] = "production_ready"
+        passport_v1["coverage"]["segments"] = [f"segment_{index}" for index in range(4)]
+        passport_v1["coverage"]["targets"] = [
+            {"target": target} for target in ("turnover_per_user", "orders_per_user", "avg_basket")
+        ]
+        passport_v1["validation"]["sealed_oot"] = {
+            "status": "passed",
+            "generated_at_utc": "2026-10-27T15:00:00+00:00",
+            "reason_code": None,
+            "display_text": "Независимая OOT-валидация пройдена.",
+        }
+        passport_v1["validation"]["production_blockers"] = []
+        passport_v1["caveats"] = [
+            {
+                "code": "allocation_only",
+                "display_text": "Система рекомендует распределение бюджета, но не принимает решение запускать или отменять кампанию.",
+            }
+        ]
+        return passport_v1
+
+    def test_model_contracts_carry_the_production_claim_only_with_its_record(self) -> None:
+        passport = build_model_passport_v2(self._production_passport_v1())
+        self.assertIs(passport["serving"]["production_claim_allowed"], True)
+        _schema_valid(load_model_passport_v2_schema(), passport)
+        overview = build_model_overview_v2(
+            {"limitations": [{"code": "allocation_only", "display_text": "Система рекомендует только распределение бюджета."}]},
+            passport,
+        )
+        self.assertIs(overview["serving"]["production_claim_allowed"], True)
+        _schema_valid(load_model_overview_v2_schema(), overview)
+
+        # A restricted record keeps the claim off in both projections.
+        restricted_v1 = json.loads(
+            (FIXTURE_DIR / "model_passport_v1_synthetic.json").read_text(encoding="utf-8")
+        )
+        restricted = build_model_passport_v2(restricted_v1)
+        self.assertIs(restricted["serving"]["production_claim_allowed"], False)
+        restricted_overview = build_model_overview_v2(
+            {"limitations": [{"code": "allocation_only", "display_text": "Система рекомендует только распределение бюджета."}]},
+            restricted,
+        )
+        self.assertIs(restricted_overview["serving"]["production_claim_allowed"], False)
+
+        # The claim cannot be set while the record underneath says otherwise.
+        for name, mutate_passport, mutate_overview in (
+            (
+                "replay",
+                lambda value: value["validation"]["historical_replay"].update(status="failed"),
+                lambda value: value["summary"]["historical_replay"].update(status="failed"),
+            ),
+            (
+                "oot",
+                lambda value: value["validation"]["sealed_oot"].update(status="unavailable"),
+                lambda value: value["summary"]["sealed_oot"].update(status="unavailable"),
+            ),
+            (
+                "activation",
+                lambda value: value["package"].update(activation_status="preprod_restricted"),
+                lambda value: value["summary"].update(activation_status="preprod_restricted"),
+            ),
+            (
+                "stage",
+                lambda value: value["package"].update(package_stage="draft"),
+                lambda value: value["summary"].update(package_status="draft"),
+            ),
+        ):
+            with self.subTest(tampered=name):
+                tampered_passport = copy.deepcopy(passport)
+                mutate_passport(tampered_passport)
+                with self.assertRaisesRegex(BusinessSemanticsContractError, "production-ready verified record"):
+                    validate_model_passport_v2(tampered_passport)
+                tampered_overview = copy.deepcopy(overview)
+                mutate_overview(tampered_overview)
+                with self.assertRaisesRegex(BusinessSemanticsContractError, "production-ready verified record"):
+                    validate_model_overview_v2(tampered_overview)
+
+        for bad in ("true", 1, None):
+            with self.subTest(non_boolean=bad):
+                broken = copy.deepcopy(passport)
+                broken["serving"]["production_claim_allowed"] = bad
+                with self.assertRaisesRegex(BusinessSemanticsContractError, "must be boolean"):
+                    validate_model_passport_v2(broken)
+
+    def test_result_limitation_follows_the_models_own_recorded_status(self) -> None:
+        ready = _model_review_limitation({"activation_status": "production_ready", "production_blockers": []})
+        self.assertEqual(ready["code"], "business_review_required")
+        self.assertNotIn("исследовательск", ready["display_text"].casefold())
+        for model in (
+            {},
+            {"activation_status": "preprod_restricted", "production_blockers": []},
+            {"activation_status": "production_ready", "production_blockers": ["MISSING_OR_FAILED_OOT_VALIDATION"]},
+        ):
+            with self.subTest(model=model):
+                self.assertEqual(_model_review_limitation(model)["code"], "research_model")
 
     def test_result_contract_enforces_s1_s5_s6_and_roas_denominators(self) -> None:
         payload = _result_payload()

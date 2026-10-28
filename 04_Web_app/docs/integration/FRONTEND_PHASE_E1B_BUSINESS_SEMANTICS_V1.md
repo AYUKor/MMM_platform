@@ -262,4 +262,4 @@ screenshots они по-прежнему допустимы только с badg
 3. Approved canonical coordinates отсутствуют; карта unavailable.
 4. Daily media plan и channel/date matrix недоступны.
 5. S6 infeasible не имеет KPI или медиаплана по определению.
-6. Model package остается research/preprod; production claim не разрешен.
+6. Model package остается research/preprod, пока его собственная запись не допускает production; ярлык задает `serving.production_claim_allowed` (ADR 0026).

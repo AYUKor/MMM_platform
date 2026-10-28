@@ -20,6 +20,9 @@ describe("Model Passport browser copy", () => {
     expect(getDeploymentProfileCopy("research_pilot").label).toContain("Исследовательский");
     expect(getCalculationCopy(true).description).toContain("research-контуре");
     expect(getCalculationCopy(true).description).not.toContain("Проверенный пакет");
+    expect(getCalculationCopy(true, true).label).toBe("Расчеты доступны");
+    expect(getCalculationCopy(true, true).description).not.toContain("research");
+    expect(getCalculationCopy(false, true).description).not.toContain("research");
     expect(getRecordOriginCopy("synthetic_fixture").label).toBe("Демонстрационные данные");
   });
 

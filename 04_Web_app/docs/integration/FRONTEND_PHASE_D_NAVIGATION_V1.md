@@ -110,7 +110,7 @@ limitations, versions и published artifacts.
 - quality score, versions и artifacts не дополняются frontend constants;
 - unavailable active model сохраняет model facts как `null`;
 - пустая `versions[]` показывает honest empty state;
-- research/preprod и allocation-only limitations выводятся из contract;
+- research/preprod (пока запись модели не допускает production, `production_claim_allowed`) и allocation-only limitations выводятся из contract;
 - рекомендация не интерпретируется как решение запускать кампанию.
 
 ## Справка

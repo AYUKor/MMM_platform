@@ -21,6 +21,12 @@ production model**: it is `preprod_restricted` because sealed OOT validation is
 missing or failed. The product is therefore decision support under explicit risk
 limits, not an automated media-buying or finance approval system.
 
+Since ADR 0026 the portal labels a package by its own verified record: a
+`production_ready` package with no blockers whose replay and OOT passed is shown
+as ready for production, and every other record keeps the restricted label. The
+statements in this file describe the package deployed at the verification date
+(A, `preprod_restricted`); refresh them when a different package is deployed.
+
 ## Repository
 
 - Canonical local workspace root: `<MMM_WORKSPACE_ROOT>`.

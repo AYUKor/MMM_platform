@@ -19,7 +19,7 @@ export interface Serving {
   active_serving_models_n: 4;
   research_models_in_package_n: 12;
   calculation_allowed: boolean;
-  production_claim_allowed: false;
+  production_claim_allowed: boolean;
 }
 export interface Summary {
   training_period: Period;

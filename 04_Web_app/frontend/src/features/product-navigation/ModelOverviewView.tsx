@@ -41,7 +41,8 @@ function packageStatusLabel(value: string | null): string {
   return "Статус требует проверки";
 }
 
-function activationStatusLabel(value: string | null): string {
+function activationStatusLabel(value: string | null, productionClaim: boolean): string {
+  if (productionClaim && value === "production_ready") return "Готова к production";
   if (value === "preprod_restricted") return "Исследовательский / preprod";
   if (value === null) return "Нет данных";
   return "Статус требует проверки";
@@ -68,6 +69,7 @@ export function ModelOverviewView({
   onRefresh,
 }: ModelOverviewViewProps) {
   const serving = passport.serving;
+  const production = serving.production_claim_allowed;
   const ready = serving.calculation_allowed && overview.summary.calculation_allowed;
   const constraints = [
     ...passport.validation.production_blockers.map((item) => ({
@@ -132,7 +134,7 @@ export function ModelOverviewView({
           <div><dt>Основной показатель</dt><dd>Дополнительный оборот</dd></div>
           <div><dt>Serving-показателей</dt><dd>{formatInteger(serving.serving_targets_n)}</dd></div>
           <div><dt>Активных serving-моделей</dt><dd>{formatInteger(serving.active_serving_models_n)}</dd></div>
-          <div><dt>Исследовательских моделей в пакете</dt><dd>{formatInteger(serving.research_models_in_package_n)}</dd></div>
+          <div><dt>{production ? "Моделей в пакете" : "Исследовательских моделей в пакете"}</dt><dd>{formatInteger(serving.research_models_in_package_n)}</dd></div>
         </dl>
       </section>
 
@@ -142,7 +144,7 @@ export function ModelOverviewView({
             <span className={styles.eyebrow}>Состояние пакета</span>
             <h2 id="model-state-title">Готовность и проверка</h2>
           </div>
-          <span>Research / preprod</span>
+          <span>{production ? "Готова к production" : "Research / preprod"}</span>
         </div>
         <dl className={styles.modelStateGrid}>
           <div>
@@ -153,7 +155,7 @@ export function ModelOverviewView({
           <div>
             <dt>Статус пакета</dt>
             <dd>{packageStatusLabel(overview.summary.package_status)}</dd>
-            <small>{activationStatusLabel(overview.summary.activation_status)}</small>
+            <small>{activationStatusLabel(overview.summary.activation_status, production)}</small>
           </div>
           <div>
             <dt>Historical replay</dt>
@@ -172,8 +174,8 @@ export function ModelOverviewView({
           </div>
           <div>
             <dt>Production-статус</dt>
-            <dd>Research / preprod</dd>
-            <small>Production-утверждение не разрешено</small>
+            <dd>{production ? "Готова к production" : "Research / preprod"}</dd>
+            <small>{production ? "В записи модели нет блокировок" : "Production-утверждение не разрешено"}</small>
           </div>
         </dl>
       </section>

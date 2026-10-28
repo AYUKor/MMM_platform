@@ -22,9 +22,11 @@ import {
   getScenarioMediaPlanV2,
   getValidationViewV2,
   getWorkspaceGeoBudget,
+  parseActiveModelPassportV2,
   parseGeoCatalog,
   parseHistoricalModelGeoBudget,
   parseJobResultViewV2,
+  parseModelOverviewV2,
   parseScenarioMediaPlanV2,
   parseValidationViewV2,
   parseWorkspaceGeoBudget,
@@ -331,4 +333,62 @@ describe("business semantics v2 getters", () => {
   it("maps stable server coordinates and does not expose the raw payload", async () => { stub({ error: { code: "RESOURCE_NOT_READY", display_text: "private", retryable: true, user_action: "private" } }, 404); await expect(getJobResultViewV2(JOB_ID, undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsNotReadyError); stub({ error: { code: "NOT_FOUND", display_text: "private", retryable: false, user_action: "private" } }, 404); await expect(getGeoCatalog(undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsNotFoundError); stub({ error: { code: "X", display_text: "private", retryable: true, user_action: "private" } }, 503); await expect(getGeoCatalog(undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsUnavailableError); });
   it("validates query before issuing a request", async () => { await expect(getScenarioMediaPlanV2(JOB_ID, { scenarioId: "S06", page: 0 }, parseJobResultViewV2(result(), JOB_ID), undefined, BASE)).rejects.toBeInstanceOf(BusinessSemanticsQueryError); });
   it("uses the specified malformed-result message", async () => { stub({ contract_name: "job_result_view_v2" }); const error = await getJobResultViewV2(JOB_ID, undefined, BASE).catch((item) => item); expect(error).toBeInstanceOf(UnsupportedBusinessSemanticsContractError); expect((error as Error).message).toBe("Данные результата имеют неподдерживаемый формат."); });
+});
+
+describe("business semantics v2 production claim", () => {
+  const passedOot = { status: "passed", generated_at_utc: "2026-10-27T15:00:00+00:00", reason_code: null, display_text: "Проверка засчитана." };
+  function productionPassport(): MutableRecord {
+    const value = passport() as unknown as MutableRecord;
+    value.record_origin = "verified_model_package";
+    (value.serving as MutableRecord).production_claim_allowed = true;
+    Object.assign(value.package as MutableRecord, { package_stage: "posterior_ready", activation_status: "production_ready" });
+    (value.validation as MutableRecord).sealed_oot = { ...passedOot };
+    return value;
+  }
+  function productionOverview(): MutableRecord {
+    const value = overview() as unknown as MutableRecord;
+    (value.serving as MutableRecord).production_claim_allowed = true;
+    Object.assign(value.summary as MutableRecord, { package_status: "posterior_ready", activation_status: "production_ready", sealed_oot: { ...passedOot } });
+    return value;
+  }
+
+  it("keeps a restricted record restricted and accepts a production-ready one", () => {
+    expect(parseActiveModelPassportV2(passport()).serving.production_claim_allowed).toBe(false);
+    expect(parseModelOverviewV2(overview()).serving.production_claim_allowed).toBe(false);
+    expect(parseActiveModelPassportV2(productionPassport()).serving.production_claim_allowed).toBe(true);
+    expect(parseModelOverviewV2(productionOverview()).serving.production_claim_allowed).toBe(true);
+  });
+
+  it.each([
+    ["historical replay did not pass", (value: MutableRecord) => { ((value.validation as MutableRecord).historical_replay as MutableRecord).status = "unavailable"; }],
+    ["the OOT check did not pass", (value: MutableRecord) => { ((value.validation as MutableRecord).sealed_oot as MutableRecord).status = "unavailable"; }],
+    ["a production blocker is open", (value: MutableRecord) => { (value.validation as MutableRecord).production_blockers = [{ code: "OPEN", display_text: "Нужна проверка." }]; }],
+    ["the activation status is restricted", (value: MutableRecord) => { (value.package as MutableRecord).activation_status = "preprod_restricted"; }],
+    ["the package is not posterior-ready", (value: MutableRecord) => { (value.package as MutableRecord).package_stage = "draft"; }],
+    ["the record is a synthetic fixture", (value: MutableRecord) => { value.record_origin = "synthetic_fixture"; }],
+  ])("rejects a passport that claims production while %s", (_name, mutate) => {
+    const value = productionPassport();
+    mutate(value);
+    expect(() => parseActiveModelPassportV2(value)).toThrow(UnsupportedBusinessSemanticsContractError);
+  });
+
+  it.each([
+    ["historical replay did not pass", (value: MutableRecord) => { ((value.summary as MutableRecord).historical_replay as MutableRecord).status = "failed"; }],
+    ["the OOT check did not pass", (value: MutableRecord) => { ((value.summary as MutableRecord).sealed_oot as MutableRecord).status = "unavailable"; }],
+    ["the activation status is restricted", (value: MutableRecord) => { (value.summary as MutableRecord).activation_status = "preprod_restricted"; }],
+    ["the package is not posterior-ready", (value: MutableRecord) => { (value.summary as MutableRecord).package_status = "draft"; }],
+  ])("rejects an overview that claims production while %s", (_name, mutate) => {
+    const value = productionOverview();
+    mutate(value);
+    expect(() => parseModelOverviewV2(value)).toThrow(UnsupportedBusinessSemanticsContractError);
+  });
+
+  it.each(["true", 1, null])("rejects a non-boolean production claim %s", (claim) => {
+    const passportValue = productionPassport();
+    (passportValue.serving as MutableRecord).production_claim_allowed = claim;
+    expect(() => parseActiveModelPassportV2(passportValue)).toThrow(UnsupportedBusinessSemanticsContractError);
+    const overviewValue = productionOverview();
+    (overviewValue.serving as MutableRecord).production_claim_allowed = claim;
+    expect(() => parseModelOverviewV2(overviewValue)).toThrow(UnsupportedBusinessSemanticsContractError);
+  });
 });

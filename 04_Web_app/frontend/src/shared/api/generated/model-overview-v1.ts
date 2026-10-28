@@ -45,6 +45,7 @@ export interface ActiveModel {
   training_period: Period | null;
   supported_scope: SupportedScope | null;
   description: NonEmptyText;
+  production_claim_allowed: boolean;
 }
 export interface Period {
   start_date: string;

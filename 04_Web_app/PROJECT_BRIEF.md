@@ -93,7 +93,9 @@ auditable error instead of leaving stale `running` state.
 The owner-approved current product scope is `research_pilot` and
 `allocation_only`. Missing sealed OOT does not block research calculations,
 but the package remains `preprod_restricted` and cannot be described as
-production-ready. No launch/cancel business verdict is produced.
+production-ready. A package whose own verified record is production-ready is
+labelled so (ADR 0026); every other record keeps the restricted label. No
+launch/cancel business verdict is produced.
 
 ## User Journey
 

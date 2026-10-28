@@ -302,9 +302,14 @@ def validate_workspace_home_payload(payload: Mapping[str, Any]) -> dict[str, Any
             "supported_scope",
             "description",
             "details_path",
+            "production_claim_allowed",
         },
     )
     model_status = _status(model["status"], "model.status", MODEL_STATUSES)
+    if not isinstance(model["production_claim_allowed"], bool):
+        raise WorkspaceHomeContractError("model.production_claim_allowed must be boolean")
+    if model["production_claim_allowed"] and model_status != "available":
+        raise WorkspaceHomeContractError("Unavailable model summary cannot claim production")
     for key in ("model_id", "display_name", "version"):
         _text(model[key], f"model.{key}", nullable=True)
     _timestamp(model["published_at_utc"], "model.published_at_utc", nullable=True)

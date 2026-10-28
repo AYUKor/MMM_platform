@@ -50,6 +50,7 @@ from contracts.decision_result_v1 import (  # noqa: E402
     SupportSummary,
     WarningItem,
 )
+from contracts.product_api_v1 import lineage_is_production_ready  # noqa: E402
 
 
 class OptimizerResultAdapterError(RuntimeError):
@@ -939,6 +940,38 @@ def _build_artifacts(
     return tuple(artifacts)
 
 
+def _model_root_warnings(run_card: dict[str, Any]) -> list[WarningItem]:
+    """Model-level notices of one result, driven by the model's own recorded status.
+
+    A model whose record is ``production_ready`` with no blockers needs no
+    restriction notice; every other status, including a missing one, keeps it.
+    """
+
+    blockers = list(run_card.get("model_production_blockers") or [])
+    warnings: list[WarningItem] = []
+    if not lineage_is_production_ready(run_card.get("model_activation_status"), blockers):
+        warnings.append(
+            WarningItem(
+                code="model_preprod_restricted",
+                severity="caution",
+                display_text=(
+                    "Расчет выполнен preprod-моделью. Production activation ожидает обязательную OOT-валидацию."
+                ),
+                scope="model",
+            )
+        )
+    for blocker in blockers:
+        warnings.append(
+            WarningItem(
+                code=str(blocker).lower(),
+                severity="caution",
+                display_text=f"Production blocker модели: {blocker}.",
+                scope="model",
+            )
+        )
+    return warnings
+
+
 def build_decision_result(
     optimizer_output_dir: Path | str,
     *,
@@ -1020,25 +1053,7 @@ def build_decision_result(
         storage_prefix,
     )
     business_snapshot = (run_card.get("objective") or {}).get("business_threshold_policy_snapshot") or {}
-    root_warnings = [
-        WarningItem(
-            code="model_preprod_restricted",
-            severity="caution",
-            display_text=(
-                "Расчет выполнен preprod-моделью. Production activation ожидает обязательную OOT-валидацию."
-            ),
-            scope="model",
-        )
-    ]
-    for blocker in run_card.get("model_production_blockers") or []:
-        root_warnings.append(
-            WarningItem(
-                code=str(blocker).lower(),
-                severity="caution",
-                display_text=f"Production blocker модели: {blocker}.",
-                scope="model",
-            )
-        )
+    root_warnings = _model_root_warnings(run_card)
 
     adapter_sha256 = _sha256(Path(__file__).resolve())
     resolved_job_id = job_id or _opaque_id("job", run_id)

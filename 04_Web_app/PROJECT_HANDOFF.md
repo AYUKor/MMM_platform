@@ -517,7 +517,8 @@ latest runbook plus live code and mark discrepancies rather than copying them.
 
 1. **Turnover-only serving.** Twelve research fits remain, but only four turnover
    fits drive application forecasts and optimizer decisions.
-2. **Restricted status is explicit.** No sealed OOT means no production claim.
+2. **Restricted status is explicit.** No sealed OOT means no production claim; the
+   label follows the package's own verified record (ADR 0026).
 3. **Incremental, not full turnover.** The product reports modeled incremental media
    contribution versus a no-campaign counterfactual.
 4. **One public S5.** Internal support variants do not become multiple confusing

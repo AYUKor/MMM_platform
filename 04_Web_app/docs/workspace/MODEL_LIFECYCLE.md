@@ -4,7 +4,9 @@
 
 The current package is `pkg_807d3ddbae57a52a_9aacd3beb350725b`. It remains
 `preprod_restricted`; `production_gate = not_passed`. C2.5 does not change either
-status and does not create a production registry pointer.
+status and does not create a production registry pointer. This section describes
+the deployed package A; the portal label for any package follows that package's
+own verified record (ADR 0026).
 
 ## Lifecycle
 

@@ -210,7 +210,7 @@ export function HomeView({
                 <div><dt>Основной показатель</dt><dd>Дополнительный оборот</dd></div>
                 <div><dt>Период обучения</dt><dd>{periodLabel(home.model.training_period)}</dd></div>
                 <div><dt>Географий</dt><dd>{formatInteger(home.model.supported_scope?.geographies_n ?? null)}</dd></div>
-                <div><dt>Режим</dt><dd>Research / preprod</dd></div>
+                <div><dt>Режим</dt><dd>{home.model.production_claim_allowed ? "Production" : "Research / preprod"}</dd></div>
               </dl>
             </>
           ) : (

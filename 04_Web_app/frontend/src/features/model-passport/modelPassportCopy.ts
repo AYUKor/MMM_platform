@@ -92,17 +92,29 @@ export function getDeploymentProfileCopy(
   };
 }
 
-export function getCalculationCopy(calculationAllowed: boolean): PassportCopy {
-  return calculationAllowed
+export function getCalculationCopy(
+  calculationAllowed: boolean,
+  productionClaim = false,
+): PassportCopy {
+  if (!calculationAllowed) {
+    return {
+      label: "Расчеты недоступны",
+      description: productionClaim
+        ? "Текущий пакет не разрешает запуск расчетов."
+        : "Текущий пакет не разрешает запуск research-расчетов.",
+      tone: "danger",
+    };
+  }
+  return productionClaim
     ? {
-        label: "Research-расчеты доступны",
-        description: "По данным паспорта доступны forecast и распределение бюджета в research-контуре.",
+        label: "Расчеты доступны",
+        description: "По данным паспорта доступны forecast и распределение бюджета.",
         tone: "accent",
       }
     : {
-        label: "Расчеты недоступны",
-        description: "Текущий пакет не разрешает запуск research-расчетов.",
-        tone: "danger",
+        label: "Research-расчеты доступны",
+        description: "По данным паспорта доступны forecast и распределение бюджета в research-контуре.",
+        tone: "accent",
       };
 }
 

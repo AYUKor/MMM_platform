@@ -477,6 +477,9 @@ def _model_summary(model_overview: Mapping[str, Any]) -> dict[str, Any]:
         raise ProductNavigationStateError("Model overview has no active-model state")
     status = active.get("status")
     code = status.get("code") if isinstance(status, Mapping) else None
+    production_claim = active.get("production_claim_allowed")
+    if not isinstance(production_claim, bool):
+        raise ProductNavigationStateError("Model overview has no production state")
     if code == "available":
         scope = active.get("supported_scope")
         if not isinstance(scope, Mapping):
@@ -496,6 +499,7 @@ def _model_summary(model_overview: Mapping[str, Any]) -> dict[str, Any]:
             },
             "description": str(active.get("description") or "Активная модель доступна для расчетов."),
             "details_path": "/model",
+            "production_claim_allowed": production_claim,
         }
     if code != "unavailable":
         raise ProductNavigationStateError("Model overview status is unsupported")
@@ -509,6 +513,7 @@ def _model_summary(model_overview: Mapping[str, Any]) -> dict[str, Any]:
         "supported_scope": None,
         "description": "Сведения об активной модели временно недоступны.",
         "details_path": "/model",
+        "production_claim_allowed": False,
     }
 
 
@@ -921,6 +926,7 @@ def build_model_overview(
                 if isinstance(item, Mapping) and str(item.get("target") or "")
             }
         )
+        production_claim = bool(serving["production_claim_allowed"])
         active_model = {
             "status": {"code": "available", "display_text": "Модель доступна"},
             "model_id": active_model_id,
@@ -941,7 +947,12 @@ def build_model_overview(
                     for key in ("primary", "caution", "diagnostic", "unavailable")
                 },
             },
-            "description": "Активная исследовательская модель проверяет кампанию в пределах поддерживаемых сегментов, каналов, географий и целевых показателей.",
+            "description": (
+                "Активная модель проверяет кампанию в пределах поддерживаемых сегментов, каналов, географий и целевых показателей."
+                if production_claim
+                else "Активная исследовательская модель проверяет кампанию в пределах поддерживаемых сегментов, каналов, географий и целевых показателей."
+            ),
+            "production_claim_allowed": production_claim,
         }
     else:
         active_model = {
@@ -955,6 +966,7 @@ def build_model_overview(
             "training_period": None,
             "supported_scope": None,
             "description": "Сведения об активной модели временно недоступны.",
+            "production_claim_allowed": False,
         }
 
     limitations: list[dict[str, str]] = [

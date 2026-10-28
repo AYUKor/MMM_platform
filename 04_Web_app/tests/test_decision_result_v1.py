@@ -21,6 +21,7 @@ if str(WEB_APP_DIR) not in sys.path:
 
 from adapters.optimizer_result_adapter import (  # noqa: E402
     OptimizerResultAdapterError,
+    _model_root_warnings,
     _status,
     _scenario_from_row,
     build_decision_result,
@@ -52,6 +53,35 @@ def _strings(value: Any) -> Iterator[str]:
             yield from _strings(nested)
     elif isinstance(value, str):
         yield value
+
+
+class ModelRootWarningsTest(unittest.TestCase):
+    def test_restriction_notice_follows_the_models_own_recorded_status(self) -> None:
+        restricted = _model_root_warnings(
+            {
+                "model_activation_status": "preprod_restricted",
+                "model_production_blockers": ["MISSING_OR_FAILED_OOT_VALIDATION"],
+            }
+        )
+        self.assertEqual(
+            [item.code for item in restricted],
+            ["model_preprod_restricted", "missing_or_failed_oot_validation"],
+        )
+
+        ready = _model_root_warnings(
+            {"model_activation_status": "production_ready", "model_production_blockers": []}
+        )
+        self.assertEqual(ready, [])
+
+        # Anything other than a clean production_ready record keeps the notice.
+        for run_card in (
+            {},
+            {"model_activation_status": "production_ready", "model_production_blockers": ["X"]},
+            {"model_activation_status": "preprod_restricted", "model_production_blockers": []},
+            {"model_activation_status": "unreviewed", "model_production_blockers": []},
+        ):
+            with self.subTest(run_card=run_card):
+                self.assertIn("model_preprod_restricted", [item.code for item in _model_root_warnings(run_card)])
 
 
 class DecisionResultV1ContractTest(unittest.TestCase):

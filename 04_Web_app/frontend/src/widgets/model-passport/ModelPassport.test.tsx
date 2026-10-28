@@ -115,6 +115,29 @@ describe("ModelPassport", () => {
     expect(container.textContent).not.toContain(passport.package.gate_policy_version);
   });
 
+  it("drops the research/preprod boundary for a record that supports a production claim", () => {
+    const productionPassport: ModelPassportV1 = {
+      ...passport,
+      record_origin: "verified_model_package",
+      serving: { ...passport.serving, production_claim_allowed: true },
+      package: { ...passport.package, package_stage: "posterior_ready", activation_status: "production_ready" },
+      validation: {
+        historical_replay: { ...passport.validation.historical_replay, status: "passed" },
+        sealed_oot: { ...passport.validation.sealed_oot, status: "passed", reason_code: null },
+        production_blockers: [],
+      },
+    };
+    const { container } = render(<ModelPassport passport={productionPassport} />);
+
+    expect(screen.getByRole("heading", { name: "Модель готова к production" })).toBeInTheDocument();
+    expect(screen.getAllByText("Готова к production").length).toBeGreaterThan(0);
+    expect(screen.getByText("Production-статус").parentElement as HTMLElement).toHaveTextContent("Разрешён");
+    expect(container).not.toHaveTextContent("Research / preprod");
+    expect(container).not.toHaveTextContent("Исследовательская / preprod модель");
+    expect(container).not.toHaveTextContent("Production claim всё равно запрещён");
+    expect(screen.getByText(/не является решением\s+запускать/)).toBeInTheDocument();
+  });
+
   it("filters target-specific policies without collapsing targets", () => {
     render(<ModelPassport passport={passport} />);
     fireEvent.change(screen.getByLabelText("Показатель"), {

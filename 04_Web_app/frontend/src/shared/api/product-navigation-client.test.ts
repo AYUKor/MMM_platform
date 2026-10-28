@@ -185,6 +185,85 @@ describe("Phase D runtime parsers", () => {
     expect(() => parseHelpCatalog(createHelpCatalogFixture())).not.toThrow();
   });
 
+  it("carries the production state on the home summary and the model overview", () => {
+    const home = createWorkspaceHomeFixture();
+    expect(parseWorkspaceHome(home).model.production_claim_allowed).toBe(false);
+    home.model.production_claim_allowed = true;
+    expect(parseWorkspaceHome(home).model.production_claim_allowed).toBe(true);
+
+    const model = createModelOverviewFixture();
+    expect(parseModelOverview(model).active_model.production_claim_allowed).toBe(false);
+    model.active_model.production_claim_allowed = true;
+    expect(parseModelOverview(model).active_model.production_claim_allowed).toBe(true);
+  });
+
+  it.each([
+    ["home: not a boolean", () => {
+      const value = createWorkspaceHomeFixture() as unknown as { model: Record<string, unknown> };
+      value.model.production_claim_allowed = "true";
+      return () => parseWorkspaceHome(value);
+    }],
+    ["home: key missing", () => {
+      const value = createWorkspaceHomeFixture() as unknown as { model: Record<string, unknown> };
+      delete value.model.production_claim_allowed;
+      return () => parseWorkspaceHome(value);
+    }],
+    ["home: unavailable model claims production", () => {
+      const value = createWorkspaceHomeFixture();
+      value.model = {
+        ...value.model,
+        status: { code: "unavailable", display_text: "Модель недоступна" },
+        model_id: null,
+        display_name: null,
+        version: null,
+        training_period: null,
+        supported_scope: null,
+        production_claim_allowed: true,
+      };
+      return () => parseWorkspaceHome(value);
+    }],
+    ["overview: not a boolean", () => {
+      const value = createModelOverviewFixture() as unknown as { active_model: Record<string, unknown> };
+      value.active_model.production_claim_allowed = 1;
+      return () => parseModelOverview(value);
+    }],
+    ["overview: key missing", () => {
+      const value = createModelOverviewFixture() as unknown as { active_model: Record<string, unknown> };
+      delete value.active_model.production_claim_allowed;
+      return () => parseModelOverview(value);
+    }],
+    ["overview: unavailable model claims production", () => {
+      const value = createModelOverviewFixture();
+      value.active_model = {
+        ...value.active_model,
+        status: { code: "unavailable", display_text: "Модель недоступна" },
+        model_id: null,
+        display_name: null,
+        version: null,
+        framework: null,
+        training_period: null,
+        supported_scope: null,
+        production_claim_allowed: true,
+      };
+      value.versions = [];
+      return () => parseModelOverview(value);
+    }],
+    ["overview: claim next to the missing independent check", () => {
+      const value = createModelOverviewFixture();
+      value.active_model.production_claim_allowed = true;
+      value.limitations.push({
+        code: "sealed_oot_unavailable",
+        status: "active",
+        title: "Независимая проверка не завершена",
+        display_text: "Полный новый период данных пока недоступен.",
+        recommended_action: "Не трактуйте результат как гарантию качества.",
+      });
+      return () => parseModelOverview(value);
+    }],
+  ])("rejects an inconsistent production state: %s", (_name, createAssertion) => {
+    expect(createAssertion()).toThrow(UnsupportedProductNavigationContractError);
+  });
+
   it("rejects malformed model limitation copy and status", () => {
     const blankAction = createModelOverviewFixture();
     blankAction.limitations[0].recommended_action = " ";

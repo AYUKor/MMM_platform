@@ -12,7 +12,7 @@ export interface ModelPassport {
     display_name: string;
     calculation_allowed: boolean;
     decision_scope: "forecast_and_allocation_only";
-    production_claim_allowed: false;
+    production_claim_allowed: boolean;
   };
   package: {
     registry_channel: string;

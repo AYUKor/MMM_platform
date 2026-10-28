@@ -69,7 +69,7 @@
         "active_serving_models_n": {"const": 4},
         "research_models_in_package_n": {"const": 12},
         "calculation_allowed": {"type": "boolean"},
-        "production_claim_allowed": {"const": false}
+        "production_claim_allowed": {"type": "boolean"}
       }
     },
     "summary": {

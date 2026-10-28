@@ -27,6 +27,10 @@ from mmm_core.serving_semantics import (  # noqa: E402
 from contracts.historical_model_geo_budget_v1 import (  # noqa: E402
     load_historical_model_geo_budget_v1_schema,
 )
+from contracts.product_api_v1 import (  # noqa: E402
+    passport_supports_production_claim,
+    production_claim_supported,
+)
 
 
 SCHEMA_VERSION = "2.0.0"
@@ -732,11 +736,38 @@ def _validate_serving_summary(payload: Mapping[str, Any], contract_name: str) ->
     for key, value in expected.items():
         if serving.get(key) != value:
             raise BusinessSemanticsContractError(f"serving.{key} is inconsistent")
+    production_claim = serving.get("production_claim_allowed")
+    if not isinstance(production_claim, bool):
+        raise BusinessSemanticsContractError("serving.production_claim_allowed must be boolean")
+    if production_claim and not _supports_production_claim(payload, contract_name):
+        raise BusinessSemanticsContractError(
+            "serving.production_claim_allowed lacks a production-ready verified record"
+        )
     for index, policy in enumerate(payload.get("channel_policies") or []):
         if policy.get("target") != SERVING_TARGET_ID:
             raise BusinessSemanticsContractError("Only turnover channel policies may be served")
         _channel(policy, f"channel_policies[{index}]")
     _reject_unsafe(payload)
+
+
+def _supports_production_claim(payload: Mapping[str, Any], contract_name: str) -> bool:
+    if contract_name == MODEL_PASSPORT_CONTRACT:
+        return passport_supports_production_claim(payload)
+    summary = payload.get("summary")
+    if not isinstance(summary, Mapping):
+        return False
+    replay = summary.get("historical_replay")
+    oot = summary.get("sealed_oot")
+    # The overview carries no blocker list and no record origin; it is derived
+    # from the passport, which has already been validated against both.
+    return production_claim_supported(
+        record_origin="verified_model_package",
+        package_stage=summary.get("package_status"),
+        activation_status=summary.get("activation_status"),
+        production_blockers=[],
+        replay_status=replay.get("status") if isinstance(replay, Mapping) else None,
+        oot_status=oot.get("status") if isinstance(oot, Mapping) else None,
+    )
 
 
 def validate_model_passport_v2(payload: Mapping[str, Any]) -> Mapping[str, Any]:
