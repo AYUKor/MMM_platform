@@ -81,6 +81,7 @@ export interface ModelSummary {
   } | null;
   description: NonEmptyText;
   details_path: InternalPath;
+  production_claim_allowed: boolean;
 }
 export interface QuickAction {
   action_id: "new_calculation" | "calculation_history" | "model_overview" | "help_catalog";

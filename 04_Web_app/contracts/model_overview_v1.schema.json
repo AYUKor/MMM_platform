@@ -128,7 +128,8 @@
         "purpose",
         "training_period",
         "supported_scope",
-        "description"
+        "description",
+        "production_claim_allowed"
       ],
       "properties": {
         "status": {
@@ -160,7 +161,8 @@
             { "type": "null" }
           ]
         },
-        "description": { "$ref": "#/$defs/nonEmptyText" }
+        "description": { "$ref": "#/$defs/nonEmptyText" },
+        "production_claim_allowed": { "type": "boolean" }
       }
     },
     "capability": {

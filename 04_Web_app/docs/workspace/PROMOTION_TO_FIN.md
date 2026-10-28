@@ -73,7 +73,10 @@ symlink.
 
 - `application.release_status = approved` means the application release is
   deployable.
-- `model.serving_status = preprod_restricted` remains an explicit restriction.
+- `model.serving_status = preprod_restricted` remains an explicit restriction for a
+  restricted package such as A. For a package whose own record is production-ready
+  (ADR 0026) the manifest must carry that recorded status; it is not copied from
+  the previous release.
 - `model.production_gate = not_passed` remains separate from Fin approval.
 - Fin-side `deployment.deployed = false` records that deployment had not occurred
   when the immutable Fin release was sealed. It is not rewritten in place after a

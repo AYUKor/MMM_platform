@@ -198,9 +198,15 @@ def validate_model_overview_payload(payload: Mapping[str, Any]) -> dict[str, Any
             "training_period",
             "supported_scope",
             "description",
+            "production_claim_allowed",
         },
     )
     active_status = _status(active["status"], "active_model.status")
+    production_claim = active["production_claim_allowed"]
+    if not isinstance(production_claim, bool):
+        raise ModelOverviewContractError("active_model.production_claim_allowed must be boolean")
+    if production_claim and active_status != "available":
+        raise ModelOverviewContractError("Unavailable active model cannot claim production")
     model_id = _text(active["model_id"], "active_model.model_id", nullable=True)
     if model_id is not None and not _MODEL_ID_RE.fullmatch(model_id):
         raise ModelOverviewContractError("active_model.model_id is invalid")
@@ -328,6 +334,8 @@ def validate_model_overview_payload(payload: Mapping[str, Any]) -> dict[str, Any
         _text(item["recommended_action"], f"{field_name}.recommended_action", presentation=True)
     if len(limitations) < 4:
         raise ModelOverviewContractError("Known model limitations are incomplete")
+    if production_claim and "sealed_oot_unavailable" in limitation_codes:
+        raise ModelOverviewContractError("Production claim contradicts the unavailable independent check")
 
     versions = _list(root["versions"], "versions")
     version_ids: set[str] = set()

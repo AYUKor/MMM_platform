@@ -43,6 +43,73 @@ class ProductApiContractError(ValueError):
     """Raised when a Product API v1 payload violates semantic rules."""
 
 
+def production_claim_supported(
+    *,
+    record_origin: object,
+    package_stage: object,
+    activation_status: object,
+    production_blockers: object,
+    replay_status: object,
+    oot_status: object,
+) -> bool:
+    """Say whether a verified package record itself supports a production label.
+
+    The portal never infers this from a registry channel name, a deployment
+    profile or a configuration switch. A package qualifies only when its own
+    record is ``production_ready`` with no blockers and both the historical
+    replay and the OOT check passed (the OOT check may be inherited under the
+    owner-approved policy; the passport labels that separately). Unknown or
+    missing values keep the model restricted.
+    """
+
+    return (
+        record_origin == "verified_model_package"
+        and package_stage == "posterior_ready"
+        and activation_status == "production_ready"
+        and isinstance(production_blockers, (list, tuple))
+        and len(production_blockers) == 0
+        and replay_status == "passed"
+        and oot_status == "passed"
+    )
+
+
+def lineage_is_production_ready(
+    activation_status: object,
+    production_blockers: object,
+) -> bool:
+    """Result-level form of the same rule for records without evidence statuses.
+
+    The package builder emits ``production_ready`` only when every gate passed
+    (replay and OOT included) and lists a failed gate as a blocker, so the two
+    fields recorded in a result's model lineage are sufficient.
+    """
+
+    return (
+        activation_status == "production_ready"
+        and isinstance(production_blockers, (list, tuple))
+        and len(production_blockers) == 0
+    )
+
+
+def passport_supports_production_claim(payload: Mapping[str, Any]) -> bool:
+    """Apply :func:`production_claim_supported` to a model passport payload."""
+
+    package = payload.get("package")
+    validation = payload.get("validation")
+    if not isinstance(package, Mapping) or not isinstance(validation, Mapping):
+        return False
+    replay = validation.get("historical_replay")
+    oot = validation.get("sealed_oot")
+    return production_claim_supported(
+        record_origin=payload.get("record_origin"),
+        package_stage=package.get("package_stage"),
+        activation_status=package.get("activation_status"),
+        production_blockers=validation.get("production_blockers"),
+        replay_status=replay.get("status") if isinstance(replay, Mapping) else None,
+        oot_status=oot.get("status") if isinstance(oot, Mapping) else None,
+    )
+
+
 HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
     "ADMIN_LAST_ADMIN_PROTECTED": {
         "http_status": 409,
@@ -387,8 +454,9 @@ def validate_model_passport(payload: Mapping[str, Any]) -> None:
         raise ProductApiContractError("Unknown deployment profile")
     if serving.get("decision_scope") != "forecast_and_allocation_only":
         raise ProductApiContractError("Model passport must remain allocation-only")
-    if serving.get("production_claim_allowed") is not False:
-        raise ProductApiContractError("Research passport cannot claim production activation")
+    production_claim = serving.get("production_claim_allowed")
+    if not isinstance(production_claim, bool):
+        raise ProductApiContractError("serving.production_claim_allowed must be boolean")
 
     package = _required_mapping(payload, "package")
     package_id = _required_text(package, "package_id")
@@ -483,6 +551,10 @@ def validate_model_passport(payload: Mapping[str, Any]) -> None:
     if oot.get("status") not in OOT_STATUS_CODES:
         raise ProductApiContractError("Unknown OOT status")
     _required_list(payload, "caveats")
+    if production_claim and not passport_supports_production_claim(payload):
+        raise ProductApiContractError(
+            "Passport cannot claim production without a production-ready verified record"
+        )
     _reject_paths(payload)
 
 

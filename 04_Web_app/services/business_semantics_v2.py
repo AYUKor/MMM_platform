@@ -39,6 +39,7 @@ from contracts.business_semantics_v2 import (  # noqa: E402
     validate_validation_result_v2,
     validate_workspace_geo_budget_v1,
 )
+from contracts.product_api_v1 import lineage_is_production_ready  # noqa: E402
 from mmm_core.serving_semantics import (  # noqa: E402
     ACTIVE_SERVING_MODELS_N,
     CHANNEL_CATALOG_VERSION,
@@ -791,7 +792,7 @@ def build_model_passport_v2(passport_v1: Mapping[str, Any]) -> dict[str, Any]:
                 else RESEARCH_MODELS_N
             ),
             "calculation_allowed": bool((passport_v1.get("serving") or {}).get("calculation_allowed")),
-            "production_claim_allowed": False,
+            "production_claim_allowed": bool((passport_v1.get("serving") or {}).get("production_claim_allowed")),
         },
         "package": dict(passport_v1.get("package") or {}),
         "data": dict(passport_v1.get("data") or {}),
@@ -1027,6 +1028,23 @@ def _recommendable_score(
     if scenario_id == "S06" and str(score.get("scenario_variant") or "") != "full_effect_maximizing":
         return False
     return True
+
+
+def _model_review_limitation(model: Mapping[str, Any]) -> dict[str, str]:
+    """Third result limitation; it follows the model's own recorded status."""
+
+    if lineage_is_production_ready(
+        model.get("activation_status"),
+        list(model.get("production_blockers") or []),
+    ):
+        return {
+            "code": "business_review_required",
+            "display_text": "Расчет помогает спланировать распределение бюджета и требует бизнес-проверки.",
+        }
+    return {
+        "code": "research_model",
+        "display_text": "Расчет предназначен для исследовательского планирования и требует бизнес-проверки.",
+    }
 
 
 def build_job_result_view_v2(
@@ -1305,7 +1323,7 @@ def build_job_result_view_v2(
         "limitations": [
             {"code": "incremental_effect_only", "display_text": "Результат показывает дополнительный оборот относительно варианта без кампании, а не полный прогноз оборота."},
             {"code": "turnover_roas_not_profit", "display_text": "ROAS рассчитан по дополнительному обороту и не является оценкой прибыли."},
-            {"code": "research_model", "display_text": "Расчет предназначен для исследовательского планирования и требует бизнес-проверки."},
+            _model_review_limitation(result.get("model") or {}),
         ],
     }
     validate_job_result_view_v2(payload)

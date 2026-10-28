@@ -217,6 +217,54 @@ describe("Model Passport client", () => {
     );
   });
 
+  function makeProductionPassport(): ModelPassportV1 {
+    const passport = makePassport();
+    passport.record_origin = "verified_model_package";
+    passport.serving.production_claim_allowed = true;
+    passport.package.activation_status = "production_ready";
+    passport.validation.sealed_oot = {
+      status: "passed",
+      generated_at_utc: "2026-10-27T15:00:00+00:00",
+      reason_code: null,
+      display_text: "OOT-проверка засчитана.",
+    };
+    passport.validation.production_blockers = [];
+    return passport;
+  }
+
+  it("accepts a production claim only when the passport's own record supports it", async () => {
+    const passport = makeProductionPassport();
+    stubPayload(passport);
+    await expect(getActiveModelPassport(API_BASE_URL)).resolves.toEqual(passport);
+  });
+
+  it.each([
+    ["historical replay did not pass", (value: ModelPassportV1) => { value.validation.historical_replay.status = "unavailable"; }],
+    ["the OOT check did not pass", (value: ModelPassportV1) => { value.validation.sealed_oot.status = "failed"; }],
+    ["a production blocker is open", (value: ModelPassportV1) => { value.validation.production_blockers = [{ code: "OPEN", display_text: "Нужна проверка." }]; }],
+    ["the activation status is restricted", (value: ModelPassportV1) => { value.package.activation_status = "preprod_restricted"; }],
+    ["the package is not posterior-ready", (value: ModelPassportV1) => { value.package.package_stage = "draft"; }],
+    ["the record is a synthetic fixture", (value: ModelPassportV1) => { value.record_origin = "synthetic_fixture"; }],
+  ])("rejects a production claim while %s", async (_name, mutate) => {
+    const passport = makeProductionPassport();
+    mutate(passport);
+    stubPayload(passport);
+
+    await expect(getActiveModelPassport(API_BASE_URL)).rejects.toBeInstanceOf(
+      UnsupportedModelPassportContractError,
+    );
+  });
+
+  it.each(["true", 1, null])("rejects a non-boolean production claim %s", async (claim) => {
+    const passport = makeProductionPassport() as unknown as { serving: Record<string, unknown> };
+    passport.serving.production_claim_allowed = claim;
+    stubPayload(passport);
+
+    await expect(getActiveModelPassport(API_BASE_URL)).rejects.toBeInstanceOf(
+      UnsupportedModelPassportContractError,
+    );
+  });
+
   it("maps a missing API route to unsupported-contract state", async () => {
     stubPayload(
       { error: { code: "ROUTE_NOT_FOUND", display_text: "RAW_ROUTE_TEXT" } },

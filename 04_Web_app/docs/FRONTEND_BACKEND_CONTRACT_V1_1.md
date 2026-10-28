@@ -139,12 +139,20 @@ jobs.
   `channel_display_name`;
 - orders and average basket must not be recovered from v1 or local files when
   rendering a v2 result;
-- v2 remains research/preprod and allocation-only; it does not change the OOT
-  or production-claim status.
+- v2 remains allocation-only. It is research/preprod unless the package's own
+  verified record supports a production label (`serving.production_claim_allowed`,
+  ADR 0026); it never changes the OOT status itself.
 
 - `serving.calculation_allowed=true` means the verified package can serve
   research forecast/allocation jobs. It does not mean formal production.
-- `serving.production_claim_allowed` is currently always `false`.
+- `serving.production_claim_allowed` is a boolean derived by the backend from the
+  package's own record: `true` only for a `posterior_ready`, `production_ready`
+  package with no production blockers whose historical replay and OOT both
+  `passed`; `false` for every other record. The frontend must not infer the
+  label from the registry channel, the deployment profile or the display name,
+  and must reject `true` next to a record that does not support it. The same
+  flag is published as `model.production_claim_allowed` on Home and
+  `active_model.production_claim_allowed` in the model overview v1.
 - `validation.sealed_oot.status=unavailable` means complete new-period data is
   not available; show the caveat, but do not disable research calculations.
 - `coverage.channel_policies[]` is at exact

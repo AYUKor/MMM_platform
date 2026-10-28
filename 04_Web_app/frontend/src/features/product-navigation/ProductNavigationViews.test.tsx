@@ -173,6 +173,23 @@ function createModelOverviewV2Fixture(passport = createModelPassportV2Fixture())
 }
 
 describe("Phase D product-navigation views", () => {
+  it("labels the Home model by its own production state", () => {
+    const restricted = createWorkspaceHomeFixture();
+    const { unmount } = renderInRouter(
+      <HomeView home={restricted} historicalGeoBudget={createHistoricalGeoBudgetFixture()} onRefresh={vi.fn()} />,
+    );
+    expect(screen.getByText("Режим").parentElement as HTMLElement).toHaveTextContent("Research / preprod");
+    unmount();
+
+    const production = createWorkspaceHomeFixture();
+    production.model.production_claim_allowed = true;
+    renderInRouter(
+      <HomeView home={production} historicalGeoBudget={createHistoricalGeoBudgetFixture()} onRefresh={vi.fn()} />,
+    );
+    expect(screen.getByText("Режим").parentElement as HTMLElement).toHaveTextContent("Production");
+    expect(screen.queryByText("Research / preprod")).not.toBeInTheDocument();
+  });
+
   it("renders backend zero as zero and missing recent facts as Нет данных on Home", () => {
     const home = createWorkspaceHomeFixture();
     home.summary.queued = 0;
@@ -288,6 +305,55 @@ describe("Phase D product-navigation views", () => {
     expect(container).not.toHaveTextContent(passport.package.model_run_id);
     expect(container).not.toHaveTextContent("posterior_ready");
     expect(container).not.toHaveTextContent("preprod_restricted");
+  });
+
+  it("shows a production-ready record as ready without research or preprod labels", () => {
+    const passport = createModelPassportV2Fixture();
+    passport.record_origin = "verified_model_package";
+    passport.serving.production_claim_allowed = true;
+    passport.package.activation_status = "production_ready";
+    passport.validation.sealed_oot = {
+      status: "passed",
+      generated_at_utc: "2026-10-27T15:00:00Z",
+      reason_code: null,
+      display_text: "OOT-проверка унаследована от предыдущей версии модели.",
+    };
+    passport.validation.production_blockers = [];
+    const overview = createModelOverviewV2Fixture(passport);
+    overview.summary.activation_status = "production_ready";
+    const { container } = renderInRouter(
+      <ModelOverviewView passport={passport} overview={overview} onRefresh={vi.fn()} />,
+    );
+
+    expect(screen.getByText("Production-статус").parentElement as HTMLElement)
+      .toHaveTextContent("Готова к production");
+    expect(screen.getByText("Статус пакета").parentElement as HTMLElement)
+      .toHaveTextContent("Готова к production");
+    expect(screen.getByText("Моделей в пакете").parentElement as HTMLElement).toHaveTextContent("12");
+    expect(screen.queryByText("Исследовательских моделей в пакете")).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent("Research / preprod");
+    expect(container).not.toHaveTextContent("Исследовательский / preprod");
+    expect(container).not.toHaveTextContent("Production-утверждение не разрешено");
+    expect(container).not.toHaveTextContent("Блокер публикации");
+    expect(container).not.toHaveTextContent("production_ready");
+    // The honest basis of the OOT check and the allocation-only boundary stay visible.
+    expect(screen.getByText("OOT-проверка унаследована от предыдущей версии модели.")).toBeInTheDocument();
+    expect(screen.getAllByText(/не принимает решение о запуске кампании/).length).toBeGreaterThan(0);
+  });
+
+  it("does not show a production label for a production_ready status the record does not back", () => {
+    const passport = createModelPassportV2Fixture();
+    passport.package.activation_status = "production_ready";
+    const overview = createModelOverviewV2Fixture(passport);
+    overview.summary.activation_status = "production_ready";
+    const { container } = renderInRouter(
+      <ModelOverviewView passport={passport} overview={overview} onRefresh={vi.fn()} />,
+    );
+
+    expect(container).not.toHaveTextContent("Готова к production");
+    expect(screen.getAllByText("Research / preprod").length).toBeGreaterThan(0);
+    expect(screen.getByText("Статус пакета").parentElement as HTMLElement)
+      .toHaveTextContent("Статус требует проверки");
   });
 
   it("shows calculation unavailable as a controlled non-production state", () => {

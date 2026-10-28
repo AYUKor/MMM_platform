@@ -56,7 +56,8 @@ export function ModelPassport({ passport }: { passport: ModelPassportV1 }) {
 
   const originCopy = getRecordOriginCopy(passport.record_origin);
   const deploymentCopy = getDeploymentProfileCopy(passport.serving.deployment_profile);
-  const calculationCopy = getCalculationCopy(passport.serving.calculation_allowed);
+  const production = passport.serving.production_claim_allowed;
+  const calculationCopy = getCalculationCopy(passport.serving.calculation_allowed, production);
   const targetLabels = useMemo(
     () => new Map(
       passport.coverage.targets.map((entry, index) => [
@@ -89,7 +90,9 @@ export function ModelPassport({ passport }: { passport: ModelPassportV1 }) {
         actions={(
           <div className={styles.headerBadges}>
             <StatusBadge tone={originCopy.tone}>{originCopy.label}</StatusBadge>
-            <StatusBadge tone="warning">Research / preprod</StatusBadge>
+            {production
+              ? <StatusBadge tone="accent">Готова к production</StatusBadge>
+              : <StatusBadge tone="warning">Research / preprod</StatusBadge>}
           </div>
         )}
       />
@@ -97,12 +100,15 @@ export function ModelPassport({ passport }: { passport: ModelPassportV1 }) {
       <section className={styles.researchBoundary} aria-labelledby="research-boundary-title">
         <div>
           <span className={styles.kicker}>Граница применения</span>
-          <h2 id="research-boundary-title">Исследовательская / preprod модель</h2>
+          <h2 id="research-boundary-title">
+            {production ? "Модель готова к production" : "Исследовательская / preprod модель"}
+          </h2>
         </div>
         <div className={styles.boundaryCopy}>
           <p>
-            Модель предназначена для research-прогноза и распределения бюджета. Она не
-            имеет статуса production-ready.
+            {production
+              ? "Запись модели подтверждает готовность к production: блокировок нет, проверки засчитаны."
+              : "Модель предназначена для research-прогноза и распределения бюджета. Она не имеет статуса production-ready."}
           </p>
           <p>
             Рекомендация относится к распределению бюджета и не является решением
@@ -158,7 +164,7 @@ export function ModelPassport({ passport }: { passport: ModelPassportV1 }) {
             <div><dt>Источник паспорта</dt><dd>{originCopy.label}</dd></div>
             <div><dt>Контур</dt><dd>{deploymentCopy.label}</dd></div>
             <div><dt>Область решения</dt><dd>Прогноз и распределение бюджета</dd></div>
-            <div><dt>Production-статус</dt><dd>Не разрешён</dd></div>
+            <div><dt>Production-статус</dt><dd>{production ? "Разрешён" : "Не разрешён"}</dd></div>
           </dl>
         </Card>
       </div>
@@ -180,7 +186,9 @@ export function ModelPassport({ passport }: { passport: ModelPassportV1 }) {
           <EvidenceCard
             title="Sealed OOT"
             evidence={passport.validation.sealed_oot}
-            note="Отсутствие OOT не блокирует research-расчеты, но не разрешает production claim."
+            note={production
+              ? "Основа проверки указана в описании выше."
+              : "Отсутствие OOT не блокирует research-расчеты, но не разрешает production claim."}
           />
         </div>
       </section>
@@ -338,7 +346,13 @@ export function ModelPassport({ passport }: { passport: ModelPassportV1 }) {
                 <li key={`${blocker.code}:${index}`}>{blocker.display_text}</li>
               ))}
             </ul>
-          ) : <p>Дополнительные blockers не переданы. Production claim всё равно запрещён контрактом.</p>}
+          ) : (
+            <p>
+              {production
+                ? "Блокеров нет: запись модели подтверждает все проверки."
+                : "Дополнительные blockers не переданы. Production claim остаётся запрещённым, пока запись модели не подтверждает все проверки."}
+            </p>
+          )}
         </div>
         <div>
           <span className={styles.kicker}>Ограничения</span>

@@ -28,6 +28,7 @@ from contracts.model_overview_v1 import (  # noqa: E402
     load_model_overview_schema,
     validate_model_overview_payload,
 )
+from contracts.product_api_v1 import ProductApiContractError  # noqa: E402
 from contracts.workspace_home_v1 import (  # noqa: E402
     WorkspaceHomeContractError,
     load_workspace_home_schema,
@@ -53,6 +54,29 @@ def _load_json(path: Path) -> dict:
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def _production_passport(passport: dict) -> dict:
+    """The restricted synthetic passport, rewritten as a fully verified production record."""
+
+    value = copy.deepcopy(passport)
+    value["record_origin"] = "verified_model_package"
+    value["serving"].update({"display_name": "MMM-модель", "production_claim_allowed": True})
+    value["package"]["activation_status"] = "production_ready"
+    value["validation"]["sealed_oot"] = {
+        "status": "passed",
+        "generated_at_utc": "2026-10-27T15:00:00+00:00",
+        "reason_code": None,
+        "display_text": "Независимая OOT-валидация пройдена.",
+    }
+    value["validation"]["production_blockers"] = []
+    value["caveats"] = [
+        {
+            "code": "allocation_only",
+            "display_text": "Система рекомендует распределение бюджета, но не принимает решение запускать или отменять кампанию.",
+        }
+    ]
+    return value
 
 
 class NavigationFixture:
@@ -166,11 +190,29 @@ class ProductNavigationProjectionTest(unittest.TestCase):
             import jsonschema
         except ImportError:
             self.skipTest("jsonschema is optional in the source-only runtime")
+        production_model = build_model_overview(
+            _production_passport(self.fixture.passport),
+            registry_root=None,
+            registry_channel="preprod",
+            now=NOW,
+            record_origin="synthetic_fixture",
+        )
+        production_home = build_workspace_home(
+            [record],
+            model_overview=production_model,
+            resource_reader=self.fixture.resource_reader,
+            validation_reader=self.fixture.validation_reader,
+            progress_view_builder=lambda _: {},
+            now=NOW,
+            record_origin="synthetic_fixture",
+        )
         pairs = (
             (home, load_workspace_home_schema()),
             (history, load_calculation_history_schema()),
             (self.model, load_model_overview_schema()),
             (help_catalog, load_help_catalog_schema()),
+            (production_home, load_workspace_home_schema()),
+            (production_model, load_model_overview_schema()),
         )
         for payload, schema in pairs:
             with self.subTest(contract=payload["contract_name"]):
@@ -262,6 +304,73 @@ class ProductNavigationProjectionTest(unittest.TestCase):
         self.assertEqual(payload["model"]["status"]["code"], "unavailable")
         self.assertIsNone(payload["model"]["model_id"])
         self.assertEqual(payload["warnings"][0]["code"], "active_model_unavailable")
+
+    def test_production_state_follows_the_verified_record_everywhere(self) -> None:
+        restricted = self.model["active_model"]
+        self.assertIs(restricted["production_claim_allowed"], False)
+        self.assertIn("исследовательская", restricted["description"])
+        self.assertIn("sealed_oot_unavailable", {item["code"] for item in self.model["limitations"]})
+
+        production = build_model_overview(
+            _production_passport(self.fixture.passport),
+            registry_root=None,
+            registry_channel="preprod",
+            now=NOW,
+            record_origin="synthetic_fixture",
+        )
+        active = production["active_model"]
+        self.assertIs(active["production_claim_allowed"], True)
+        self.assertEqual(active["display_name"], "MMM-модель")
+        self.assertNotIn("исследовательск", active["description"].casefold())
+        self.assertNotIn("sealed_oot_unavailable", {item["code"] for item in production["limitations"]})
+        self.assertIn("allocation_only", {item["code"] for item in production["limitations"]})
+
+        for overview, expected in ((self.model, False), (production, True)):
+            with self.subTest(claim=expected):
+                home = build_workspace_home(
+                    [],
+                    model_overview=overview,
+                    resource_reader=self.fixture.resource_reader,
+                    validation_reader=self.fixture.validation_reader,
+                    progress_view_builder=lambda _: {},
+                    now=NOW,
+                    record_origin="synthetic_fixture",
+                )
+                self.assertIs(home["model"]["production_claim_allowed"], expected)
+
+        unavailable = build_model_overview(
+            None,
+            registry_root=None,
+            registry_channel="preprod",
+            now=NOW,
+            record_origin="synthetic_fixture",
+        )
+        self.assertIs(unavailable["active_model"]["production_claim_allowed"], False)
+        home = build_workspace_home(
+            [],
+            model_overview=unavailable,
+            resource_reader=self.fixture.resource_reader,
+            validation_reader=self.fixture.validation_reader,
+            progress_view_builder=lambda _: {},
+            now=NOW,
+            record_origin="synthetic_fixture",
+        )
+        self.assertIs(home["model"]["production_claim_allowed"], False)
+
+        unsupported = _production_passport(self.fixture.passport)
+        unsupported["validation"]["historical_replay"]["status"] = "unavailable"
+        with self.assertRaises(ProductApiContractError):
+            build_model_overview(
+                unsupported,
+                registry_root=None,
+                registry_channel="preprod",
+                now=NOW,
+                record_origin="synthetic_fixture",
+            )
+
+    def test_help_text_does_not_describe_the_model_as_a_preprod_pilot(self) -> None:
+        catalog = json.dumps(load_help_catalog(), ensure_ascii=False)
+        self.assertNotIn("preprod", catalog.casefold())
 
     def test_history_pagination_search_filters_dates_and_sorting(self) -> None:
         records = [
@@ -531,6 +640,47 @@ class ProductNavigationContractGuardTest(unittest.TestCase):
         help_catalog["sections"][1]["articles"][0]["article_id"] = "quick_start"
         with self.assertRaises(HelpCatalogContractError):
             validate_help_catalog_payload(help_catalog)
+
+    def test_production_claim_must_be_boolean_and_consistent(self) -> None:
+        for bad in ("true", 1, None):
+            with self.subTest(contract="workspace_home_v1", value=bad):
+                home = copy.deepcopy(self.home)
+                home["model"]["production_claim_allowed"] = bad
+                with self.assertRaises(WorkspaceHomeContractError):
+                    validate_workspace_home_payload(home)
+            with self.subTest(contract="model_overview_v1", value=bad):
+                model = copy.deepcopy(self.model)
+                model["active_model"]["production_claim_allowed"] = bad
+                with self.assertRaises(ModelOverviewContractError):
+                    validate_model_overview_payload(model)
+
+        missing_home = copy.deepcopy(self.home)
+        del missing_home["model"]["production_claim_allowed"]
+        with self.assertRaises(WorkspaceHomeContractError):
+            validate_workspace_home_payload(missing_home)
+        missing_model = copy.deepcopy(self.model)
+        del missing_model["active_model"]["production_claim_allowed"]
+        with self.assertRaises(ModelOverviewContractError):
+            validate_model_overview_payload(missing_model)
+
+        # An unavailable model has nothing to claim.
+        unavailable_model = build_model_overview(
+            None,
+            registry_root=None,
+            registry_channel="preprod",
+            now=NOW,
+            record_origin="synthetic_fixture",
+        )
+        unavailable_model["active_model"]["production_claim_allowed"] = True
+        with self.assertRaises(ModelOverviewContractError):
+            validate_model_overview_payload(unavailable_model)
+
+        # A claim cannot sit next to the notice that the independent check is missing.
+        contradictory = copy.deepcopy(self.model)
+        contradictory["active_model"]["production_claim_allowed"] = True
+        self.assertIn("sealed_oot_unavailable", {item["code"] for item in contradictory["limitations"]})
+        with self.assertRaises(ModelOverviewContractError):
+            validate_model_overview_payload(contradictory)
 
 
 if __name__ == "__main__":

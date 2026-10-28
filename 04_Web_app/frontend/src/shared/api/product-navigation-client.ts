@@ -121,6 +121,7 @@ const HOME_MODEL_KEYS = [
   "supported_scope",
   "description",
   "details_path",
+  "production_claim_allowed",
 ] as const;
 const HOME_SCOPE_KEYS = ["segments", "channels", "targets", "geographies_n"] as const;
 const QUICK_ACTION_KEYS = ["action_id", "title", "description", "path"] as const;
@@ -189,6 +190,7 @@ const ACTIVE_MODEL_KEYS = [
   "training_period",
   "supported_scope",
   "description",
+  "production_claim_allowed",
 ] as const;
 const MODEL_SCOPE_KEYS = [
   "segments",
@@ -529,7 +531,8 @@ function isHomeModel(value: unknown): boolean {
     !isNullableText(value.model_id) || !isNullableText(value.display_name) ||
     !isNullableText(value.version) || !isNullableIsoDateTime(value.published_at_utc) ||
     (value.training_period !== null && !isOrderedPeriod(value.training_period)) ||
-    !isSafePresentationText(value.description) || !isSafeInternalPath(value.details_path)) return false;
+    !isSafePresentationText(value.description) || !isSafeInternalPath(value.details_path) ||
+    typeof value.production_claim_allowed !== "boolean") return false;
 
   let validScope = value.supported_scope === null;
   if (isRecord(value.supported_scope) && hasExactKeys(value.supported_scope, HOME_SCOPE_KEYS)) {
@@ -543,7 +546,7 @@ function isHomeModel(value: unknown): boolean {
   const facts = [value.model_id, value.display_name, value.version, value.training_period, value.supported_scope];
   if (available && facts.some((fact) => fact === null)) return false;
   if (!available && facts.some((fact) => fact !== null)) return false;
-  return true;
+  return available || value.production_claim_allowed === false;
 }
 
 export function parseWorkspaceHome(value: unknown): WorkspaceHomeV1 {
@@ -725,7 +728,8 @@ export function parseModelOverview(value: unknown): ModelOverviewV1 {
     !isSafePresentationText(value.active_model.purpose) ||
     (value.active_model.training_period !== null && !isOrderedPeriod(value.active_model.training_period)) ||
     (value.active_model.supported_scope !== null && !isModelScope(value.active_model.supported_scope)) ||
-    !isSafePresentationText(value.active_model.description) || !Array.isArray(value.capabilities) ||
+    !isSafePresentationText(value.active_model.description) ||
+    typeof value.active_model.production_claim_allowed !== "boolean" || !Array.isArray(value.capabilities) ||
     value.capabilities.length !== 5 || !Array.isArray(value.data_requirements) || value.data_requirements.length < 1 ||
     !Array.isArray(value.methodology) || value.methodology.length !== 6 || !Array.isArray(value.limitations) ||
     value.limitations.length < 4 || !Array.isArray(value.versions) || !Array.isArray(value.artifacts) ||
@@ -750,6 +754,7 @@ export function parseModelOverview(value: unknown): ModelOverviewV1 {
   ];
   if (active && activeFacts.some((fact) => fact === null)) fail();
   if (!active && activeFacts.some((fact) => fact !== null)) fail();
+  if (!active && activeModel.production_claim_allowed !== false) fail();
 
   const capabilityIds = new Set<string>();
   for (const capability of capabilities) {
@@ -790,6 +795,7 @@ export function parseModelOverview(value: unknown): ModelOverviewV1 {
       !isSafePresentationText(limitation.recommended_action)) fail();
     limitationCodes.add(String(limitation.code));
   }
+  if (activeModel.production_claim_allowed === true && limitationCodes.has("sealed_oot_unavailable")) fail();
 
   const versionIds = new Set<string>();
   const activeVersionIds = new Set<string>();

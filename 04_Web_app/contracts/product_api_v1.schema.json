@@ -52,7 +52,7 @@
             "display_name": {"type": "string", "minLength": 1},
             "calculation_allowed": {"type": "boolean"},
             "decision_scope": {"const": "forecast_and_allocation_only"},
-            "production_claim_allowed": {"const": false}
+            "production_claim_allowed": {"type": "boolean"}
           }
         },
         "package": {

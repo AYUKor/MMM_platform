@@ -20,6 +20,7 @@ function modelContractsAgree(passport: ModelPassportV2, overview: ModelOverviewV
     && passport.serving.active_serving_models_n === overview.serving.active_serving_models_n
     && passport.serving.research_models_in_package_n === overview.serving.research_models_in_package_n
     && passport.serving.calculation_allowed === overview.summary.calculation_allowed
+    && passport.serving.production_claim_allowed === overview.serving.production_claim_allowed
     && passport.data.training_period.start_date === overview.summary.training_period.start_date
     && passport.data.training_period.end_date === overview.summary.training_period.end_date;
 }

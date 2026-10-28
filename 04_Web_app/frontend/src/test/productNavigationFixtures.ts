@@ -78,6 +78,7 @@ export function createWorkspaceHomeFixture(): WorkspaceHomeV1 {
       },
       description: "Исследовательская модель для прогноза и распределения заданного бюджета.",
       details_path: "/model",
+      production_claim_allowed: false,
     },
     quick_actions: [
       {
@@ -228,6 +229,7 @@ export function createModelOverviewFixture(): ModelOverviewV1 {
         allowed_use_counts: { primary: 6, caution: 2, diagnostic: 1, unavailable: 1 },
       },
       description: "Исследовательская модель проверяет кампанию в поддерживаемой области.",
+      production_claim_allowed: false,
     },
     capabilities: [
       {

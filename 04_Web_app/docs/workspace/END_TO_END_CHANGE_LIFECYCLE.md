@@ -118,7 +118,8 @@ Every model package binds its input panel hash, training code/config, posterior
 artifacts, diagnostics, target/segment coverage and package status. Application
 release approval never upgrades `preprod_restricted` to production-approved. A
 production pointer or status change requires its own model-governance decision and
-evidence.
+evidence. The portal does not decide the status: it shows a package as
+production-ready only when the package's own verified record is (ADR 0026).
 
 ## E. Application change lifecycle
 

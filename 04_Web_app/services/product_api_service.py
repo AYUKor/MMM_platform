@@ -29,6 +29,7 @@ from contracts.product_api_v1 import (  # noqa: E402
     MODEL_PASSPORT_CONTRACT,
     SCHEMA_VERSION,
     build_job_list_payload,
+    production_claim_supported,
     validate_model_passport,
 )
 from mmm_core.model_package import OOT_BASIS_INHERITED  # noqa: E402
@@ -249,16 +250,54 @@ def build_model_passport(
         }
         for code in manifest.get("production_blockers") or []
     ]
+    # The label follows the package's own verified record, never a channel name
+    # or a configuration switch; a restricted or unknown record stays restricted.
+    production_claim = production_claim_supported(
+        record_origin="verified_model_package",
+        package_stage=package.package_stage,
+        activation_status=package.activation_status,
+        production_blockers=blockers,
+        replay_status=replay["status"],
+        oot_status=oot["status"],
+    )
+    caveats: list[dict[str, str]] = []
+    if not production_claim:
+        caveats.append(
+            {
+                "code": "research_model",
+                "display_text": "Результаты предназначены для исследовательского прогнозирования и планирования бюджета.",
+            }
+        )
+    caveats.extend(
+        [
+            {
+                "code": "allocation_only",
+                "display_text": "Система рекомендует распределение бюджета, но не принимает решение запускать или отменять кампанию.",
+            },
+            {
+                "code": (
+                    "sealed_oot_failed"
+                    if oot["status"] == "failed"
+                    else "sealed_oot_pending"
+                    if oot["status"] == "unavailable"
+                    else "sealed_oot_inherited"
+                    if _oot_is_inherited(manifest)
+                    else "sealed_oot_passed"
+                ),
+                "display_text": oot["display_text"],
+            },
+        ]
+    )
     payload = {
         "contract_name": MODEL_PASSPORT_CONTRACT,
         "schema_version": SCHEMA_VERSION,
         "record_origin": "verified_model_package",
         "serving": {
             "deployment_profile": deployment_profile,
-            "display_name": "Исследовательская MMM-модель",
+            "display_name": "MMM-модель" if production_claim else "Исследовательская MMM-модель",
             "calculation_allowed": package.package_stage == "posterior_ready",
             "decision_scope": "forecast_and_allocation_only",
-            "production_claim_allowed": False,
+            "production_claim_allowed": production_claim,
         },
         "package": {
             "registry_channel": str(resolved.get("channel") or ""),
@@ -300,28 +339,7 @@ def build_model_passport(
             "sealed_oot": oot,
             "production_blockers": blockers,
         },
-        "caveats": [
-            {
-                "code": "research_model",
-                "display_text": "Результаты предназначены для исследовательского прогнозирования и планирования бюджета.",
-            },
-            {
-                "code": "allocation_only",
-                "display_text": "Система рекомендует распределение бюджета, но не принимает решение запускать или отменять кампанию.",
-            },
-            {
-                "code": (
-                    "sealed_oot_failed"
-                    if oot["status"] == "failed"
-                    else "sealed_oot_pending"
-                    if oot["status"] == "unavailable"
-                    else "sealed_oot_inherited"
-                    if _oot_is_inherited(manifest)
-                    else "sealed_oot_passed"
-                ),
-                "display_text": oot["display_text"],
-            },
-        ],
+        "caveats": caveats,
     }
     validate_model_passport(payload)
     return payload

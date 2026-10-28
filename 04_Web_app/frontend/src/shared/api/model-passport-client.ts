@@ -293,6 +293,18 @@ function isCoverage(value: unknown): value is ModelPassportV1["coverage"] {
   );
 }
 
+function supportsProductionClaim(value: Record<string, unknown>): boolean {
+  const packageInfo = value.package as Record<string, unknown>;
+  const validation = value.validation as Record<string, unknown>;
+  const evidenceStatus = (key: string) => (validation[key] as Record<string, unknown>).status;
+  return value.record_origin === "verified_model_package" &&
+    packageInfo.package_stage === "posterior_ready" &&
+    packageInfo.activation_status === "production_ready" &&
+    (validation.production_blockers as unknown[]).length === 0 &&
+    evidenceStatus("historical_replay") === "passed" &&
+    evidenceStatus("sealed_oot") === "passed";
+}
+
 function isModelPassport(value: unknown): value is ModelPassportV1 {
   if (!isRecord(value) || !hasExactKeys(value, CONTRACT_KEYS)) return false;
   if (
@@ -316,7 +328,7 @@ function isModelPassport(value: unknown): value is ModelPassportV1 {
     !isNonEmptyString(serving.display_name) ||
     typeof serving.calculation_allowed !== "boolean" ||
     serving.decision_scope !== "forecast_and_allocation_only" ||
-    serving.production_claim_allowed !== false ||
+    typeof serving.production_claim_allowed !== "boolean" ||
     !isRecord(packageInfo) ||
     !hasExactKeys(packageInfo, PACKAGE_KEYS) ||
     !isNonEmptyString(packageInfo.registry_channel) ||
@@ -348,6 +360,7 @@ function isModelPassport(value: unknown): value is ModelPassportV1 {
     return false;
   }
 
+  if (serving.production_claim_allowed && !supportsProductionClaim(value)) return false;
   return !containsAbsolutePath(value);
 }
 
