@@ -77,14 +77,16 @@ the list per fit as `assumption_channels`.
 
 **The serving side must use the exposure the fit used.** Forecast engine, optimizer, historical replay and the
 past-campaign catalog treat an assumption channel as a *national index*: one exposure series per date, the mean
-over all fit geographies of the adstocked per-resident exposure (a plan geography adds its exposure, the others
-only carry over). The effect is `y_scale * sum_t M_t * [tanh(lambda * (A0_t + dA_t) / 2) - tanh(lambda * A0_t / 2)]`
-with `M_t` the coefficient-weighted number of users (orders for `avg_basket`) over all fit geographies, and it is
+over the fit geographies of the adstocked per-resident exposure (a plan geography adds its exposure, the others
+only carry over). In the forecast and the optimizer these are the fit geographies that have a usable denominator on
+every horizon date (the *universe* of the index; the replay uses the rows present on each date, as the fit does).
+The effect is `y_scale * sum_t M_t * [tanh(lambda * (A0_t + dA_t) / 2) - tanh(lambda * A0_t / 2)]`
+with `M_t` the coefficient-weighted number of users (orders for `avg_basket`) over the same geographies, and it is
 booked on the plan rows in proportion to their spend, so every row of one campaign x channel has the same ROAS.
 All other channels keep city-level exposure. The classification comes from `ForecastEngine.assumption_channels_for`
 (metadata first, then the frozen transform, so packages exported before the field existed work too). Result rows say
-which basis was used (`exposure_basis`: `city_level` or `national_mean_index`) and how many beneficiary geographies had no usable
-denominator (`national_index_geos_without_denominator_n`). The optimizer evaluates the cells of a national channel
+which basis was used (`exposure_basis`: `city_level` or `national_mean_index`) and how many fit geographies were left out
+of the index because they had no usable denominator (`national_index_geos_without_denominator_n`). The optimizer evaluates the cells of a national channel
 with a proportional-share kernel (exact at the plan's own proportions, concave away from them), so shifting money
 between cities inside a national channel is not rewarded; finalists are re-scored exactly by the forecast.
 
@@ -113,23 +115,24 @@ same draws) to the published ROAS table. It does not promise that the forecast o
   from one year to the next, every channel of the fit comes out lower by the same factor; this is the denominator policy
   and not a property of national channels. (Halloween package, 2026 windows against analog 2025: users grew by 3% to 36%
   depending on the fit.)
-- For an assumption channel the training mean runs over the fit rows present on each date; the forecast index divides by
-  all fit geographies. They coincide when every fit city has rows and differ before: in the Halloween panel 38, 41, 12
-  and 14 fit cities (TS5 online/offline, TSX online/offline) exist only from 2026-01-01, so a forecast for a window in
-  2025 is 10% to 18% lower than the replay for national channels. For future dates dividing by all fit geographies is
-  the right convention. A **historical** recalculation of a past campaign (the past-campaign catalog) must follow the
-  replay rule (`build_historical_forecast_replay_rows`: mean over the rows present on each date), not the forecast
-  convention.
-- A fit city with no usable denominator gets no weight in the national index. The denominator of a forecast day is the
-  one of the analog year (nearest available day of the same geography within 7 days), and
-  `_national_index_user_weights` drops a city from the index for the *whole* horizon when the denominator is missing on
-  any date of it. In the Halloween panel the cities that appear only in 2026 have no 2025 rows, so for a plan whose
-  horizon (plan end plus the carryover days) reaches past 2026-07-07 they are out on every date: 39, 41, 12 and 13 cities
-  in TS5 online, TS5 offline, TSX online and TSX offline (2.99%, 3.30%, 1.34% and 1.30% of the June 2026 users; one more
-  TSX offline city has no rows at all). The national-channel effect of such a plan is lower by about that user share
-  (inferred from the share, not recomputed). The count is in `national_index_geos_without_denominator_n` of the engine
-  rows; the CLI output files do not carry it. Changing the rule is a denominator-policy decision that also touches
-  other packages.
+- For an assumption channel the training mean runs over the fit rows present on each date; the forecast index runs over
+  the universe described above, which is constant over the horizon. They coincide when every fit city has rows and a
+  denominator and differ before: in the Halloween panel 38, 41, 12 and 14 fit cities (TS5 online/offline, TSX
+  online/offline) exist only from 2026-01-01, so a forecast for a window in 2025 is lower than the replay for national
+  channels. A **historical** recalculation of a past campaign (the past-campaign catalog) must follow the replay rule
+  (`build_historical_forecast_replay_rows`: mean over the rows present on each date), not the forecast convention.
+- A fit city with no usable denominator is outside the universe: it receives no exposure, carries no users and is not
+  in the divisor. The denominator of a forecast day is the one of the analog year (nearest available day of the same
+  geography within 7 days), and a city is left out when it is missing on any date of the horizon (plan end plus the
+  carryover days). In the Halloween panel the cities that appear only in 2026 have no 2025 rows, so for a plan whose
+  horizon reaches past 2026-07-07 they are out on every date: 39, 41, 12 and 13 cities in TS5 online, TS5 offline, TSX
+  online and TSX offline (2.99%, 3.30%, 1.34% and 1.30% of the June 2026 users; one more TSX offline city has no rows at
+  all). Two things follow. The national-channel effect of such a plan is lower by about that user share (inferred from
+  the share). And the divisor has to be the universe, not all fit cities: a federal row, which the portal spreads over
+  the cities it can compute (182 of 223 in TS5 offline), keeps its per-resident exposure only if the mean runs over
+  those same cities; dividing by all 223 understated national TV and digital by 17.5% in the test of a July plan. The
+  count of cities left out is `national_index_geos_without_denominator_n` in the engine rows; the CLI output files do
+  not carry it. Giving the new cities a denominator is a denominator-policy decision that also touches other packages.
 
 Checked on the real Halloween package, same real-spend plan and same 300 draws (replay against `forecast_daily_rows`),
 window 2026-02-01..2026-06-23 with the analog year 2026 (denominators of the same year): city-level channels agree to

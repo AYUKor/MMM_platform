@@ -13,9 +13,10 @@ with ``time_effect.mode = analytic_level`` replaces the lagged exposure of its
 *assumption channels* (default national TV and digital) by the unweighted mean
 over the fit geographies of the same date (``fit.py`` averaging block).  For
 such channels this engine builds ONE national index per campaign and channel,
-the mean over all fit geographies of the adstocked per-resident exposure, and
-applies the saturation and the posterior beta to that index for every fit
-geography (``exposure_basis = national_mean_index``).  All other channels, and
+the mean over the fit geographies that have a usable denominator on the whole
+horizon (the universe of the index) of the adstocked per-resident exposure, and
+applies the saturation and the posterior beta to that index for every geography
+of the universe (``exposure_basis = national_mean_index``).  All other channels, and
 every fit without assumption channels (model B), keep the city-level
 computation (``exposure_basis = city_level``) bit for bit.
 
@@ -681,10 +682,10 @@ def _beta_draw_vector(
 class _NationalIndexResult:
     """Effect of one campaign x channel that runs on the national mean exposure index."""
 
-    total_draws: np.ndarray  # incremental effect of the channel on all fit geographies, per posterior draw
+    total_draws: np.ndarray  # incremental effect of the channel on the geographies of the index universe, per posterior draw
     spend_rub: float  # plan spend that enters the index (plan geographies that exist in the fit)
     warm_start_used: bool
-    beneficiary_geos_skipped_n: int  # fit geographies without a usable denominator (they carry no weight)
+    beneficiary_geos_skipped_n: int  # fit geographies without a usable denominator (outside the index universe, no weight)
 
 
 def export_fit_design_metadata(run_dir: str | Path, *, force: bool = True) -> dict[str, Any]:
@@ -1162,12 +1163,14 @@ class ForecastEngine:
         *,
         analog_year: int | None,
         missing_geo_policy: str,
-    ) -> tuple[np.ndarray, int]:
+    ) -> tuple[np.ndarray, int, np.ndarray]:
         """Users (orders for avg_basket) of every fit geography on every horizon date.
 
         In the fit the saturated index response reaches every city in proportion to that city's
         users, so every fit geography is a beneficiary, not only the geographies with spend.  A
-        geography without a usable denominator carries zero weight and is counted as skipped.
+        geography without a usable denominator on some horizon date carries zero weight, is
+        counted as skipped and is also left out of the index itself: the third element is the
+        boolean mask of the geographies that take part (the *universe* of the index).
         """
         segment = str(fit_meta["segment"])
         geos = list(fit_meta["geos"])
@@ -1181,7 +1184,7 @@ class ForecastEngine:
         if cached is not None:
             return cached
         weights = np.zeros((len(geos), len(horizon)), dtype=float)
-        skipped = 0
+        included = np.zeros(len(geos), dtype=bool)
         for geo_pos, geo in enumerate(geos):
             try:
                 resolved = [
@@ -1191,29 +1194,41 @@ class ForecastEngine:
                     for dt in horizon
                 ]
             except ValueError:
-                skipped += 1
                 continue
+            included[geo_pos] = True
             weights[geo_pos] = 1.0 if kind is None else [float(item[kind]) for item in resolved]
+        skipped = int(len(geos) - int(included.sum()))
         if geos and skipped == len(geos):
             raise ValueError(
                 f"No fit geography of {fit_meta.get('segment')!r} has a usable denominator for the national exposure index"
             )
-        result = (weights, skipped)
+        result = (weights, skipped, included)
         self._index_cache_put(key, result)
         return result
 
     def _mean_warm_start(
-        self, fit_key: str, fit_meta: dict[str, Any], channel: str, start: date, l_max: int,
+        self,
+        fit_key: str,
+        fit_meta: dict[str, Any],
+        channel: str,
+        start: date,
+        l_max: int,
+        included: np.ndarray | None = None,
     ) -> np.ndarray | None:
-        """Mean over all fit geographies of the scaled training-tail exposure (None when it no longer carries over)."""
-        key = ("warm_mean", fit_key, channel, start, l_max)
+        """Mean over the index universe of the scaled training-tail exposure (None when it no longer carries over).
+
+        ``included`` is the universe mask of ``_national_index_user_weights``; without it every fit
+        geography takes part.
+        """
+        geos = list(fit_meta["geos"])
+        members = tuple(range(len(geos))) if included is None else tuple(int(i) for i in np.flatnonzero(included))
+        key = ("warm_mean", fit_key, channel, start, l_max, members)
         if key in self._index_cache:
             return self._index_cache[key]
-        geos = list(fit_meta["geos"])
         total = np.zeros(l_max, dtype=float)
         found = False
-        for geo in geos:
-            vector = self._warm_start_for(fit_key, geo, channel, start, l_max)
+        for geo_pos in members:
+            vector = self._warm_start_for(fit_key, geos[geo_pos], channel, start, l_max)
             if vector is None:
                 continue
             found = True
@@ -1221,7 +1236,7 @@ class ForecastEngine:
             if len(vector) < l_max:
                 vector = np.pad(vector, (l_max - len(vector), 0))
             total += vector
-        result = total / max(len(geos), 1) if found else None
+        result = total / max(len(members), 1) if found else None
         self._index_cache_put(key, result)
         return result
 
@@ -1254,13 +1269,16 @@ class ForecastEngine:
         *,
         analog_year: int | None,
         missing_geo_policy: str,
-    ) -> tuple[np.ndarray, int]:
-        """(draws x dates) ``y_scale * sum_g beta_g * users_g``: turns the index response into a target effect."""
-        weights, skipped = self._national_index_user_weights(
+    ) -> tuple[np.ndarray, int, np.ndarray]:
+        """(draws x dates) ``y_scale * sum_g beta_g * users_g``: turns the index response into a target effect.
+
+        Also returns the number of skipped fit geographies and the universe mask of the index.
+        """
+        weights, skipped, included = self._national_index_user_weights(
             fit_meta, horizon, target, analog_year=analog_year, missing_geo_policy=missing_geo_policy,
         )
         betas = self._beta_geo_draws(fit_meta, samples, ch_pos)
-        return float(fit_meta["y_scale"]) * (betas.T @ weights), skipped
+        return float(fit_meta["y_scale"]) * (betas.T @ weights), skipped, included
 
     def _national_index_campaign_effects(
         self,
@@ -1278,9 +1296,13 @@ class ForecastEngine:
     ) -> dict[str, _NationalIndexResult]:
         """Effect of each national-index channel of one campaign, exactly as the fit would have scored it.
 
-        The index is the mean over ALL fit geographies of the adstocked per-resident exposure
-        (plan geographies add their exposure, the others only their carryover).  The saturated
-        index response is then applied to the users of every fit geography.
+        The index is the mean over the fit geographies that have a usable denominator on every
+        horizon date (the *universe*) of the adstocked per-resident exposure: plan geographies add
+        their exposure, the others only their carryover.  Geographies without a denominator can
+        neither receive exposure nor carry users, so they are left out of the mean as well; this
+        keeps a nationwide plan, which the portal spreads over the geographies it can compute,
+        at the per-resident exposure it was entered with.  The saturated index response is then
+        applied to the users of the universe.
         """
         segment = str(fit_meta["segment"])
         channels = list(fit_meta["channels"])
@@ -1315,18 +1337,18 @@ class ForecastEngine:
                 spend_total += float(spend_raw.sum())
             if spend_total <= 0:
                 continue
-            mean_exposure /= max(len(geos), 1)
-            warm_mean = self._mean_warm_start(fit_key, fit_meta, channel, start, l_max)
+            effect_weights, skipped, included = self._national_index_effect_weights(
+                fit_meta, samples, ch_pos, horizon, target,
+                analog_year=analog_year, missing_geo_policy=missing_geo_policy,
+            )
+            mean_exposure /= max(int(included.sum()), 1)
+            warm_mean = self._mean_warm_start(fit_key, fit_meta, channel, start, l_max, included)
             response = _incremental_saturated_response_draw_matrix(
                 mean_exposure,
                 alpha_values=alpha[ch_pos, :],
                 lam_values=lam[ch_pos, :],
                 l_max=l_max,
                 warm_start=warm_mean,
-            )
-            effect_weights, skipped = self._national_index_effect_weights(
-                fit_meta, samples, ch_pos, horizon, target,
-                analog_year=analog_year, missing_geo_policy=missing_geo_policy,
             )
             results[channel] = _NationalIndexResult(
                 total_draws=(effect_weights * response).sum(axis=1),
@@ -3133,16 +3155,7 @@ def _build_turnover_response_kernels(
             index_per_rub = np.zeros(len(horizon), dtype=float)
             for _, _, member_total, member_x_per_rub in members:
                 index_per_rub += (member_total / group_total) * member_x_per_rub
-            index_per_rub /= max(len(geos), 1)
-            warm_mean = engine._mean_warm_start(fit_key, fit_meta, channel, start, l_max)
-            warm_adstock = _normalized_adstock_draw_matrix(
-                np.zeros(len(horizon), dtype=float),
-                alpha_values,
-                l_max,
-                warm_start=warm_mean,
-            )
-            unit_adstock = _normalized_adstock_draw_matrix(index_per_rub, alpha_values, l_max)
-            effect_weights, _ = engine._national_index_effect_weights(
+            effect_weights, _, included = engine._national_index_effect_weights(
                 fit_meta,
                 samples,
                 ch_pos,
@@ -3151,6 +3164,16 @@ def _build_turnover_response_kernels(
                 analog_year=analog_year,
                 missing_geo_policy=analog_missing_geo_policy,
             )
+            # Same universe as the forecast: the geographies with a usable denominator on the horizon.
+            index_per_rub /= max(int(included.sum()), 1)
+            warm_mean = engine._mean_warm_start(fit_key, fit_meta, channel, start, l_max, included)
+            warm_adstock = _normalized_adstock_draw_matrix(
+                np.zeros(len(horizon), dtype=float),
+                alpha_values,
+                l_max,
+                warm_start=warm_mean,
+            )
+            unit_adstock = _normalized_adstock_draw_matrix(index_per_rub, alpha_values, l_max)
             base_argument = lam_values[:, None] * warm_adstock / 2.0
             unit_argument = lam_values[:, None] * unit_adstock / 2.0
             counterfactual = np.tanh(base_argument)

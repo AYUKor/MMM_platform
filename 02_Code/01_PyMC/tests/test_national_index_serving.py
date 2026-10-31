@@ -236,8 +236,16 @@ def _betas(samples: dict, channel: str) -> np.ndarray:
     return out
 
 
-def training_formula_total(engine, samples, channel, budgets, horizon, use_warm, *, national_index, skip_users_of=()) -> np.ndarray:
-    """Campaign effect per posterior draw as the fit would score it (mean index or city level)."""
+def training_formula_total(
+    engine, samples, channel, budgets, horizon, use_warm, *, national_index, skip_users_of=(),
+    keep_skipped_in_mean=False,
+) -> np.ndarray:
+    """Campaign effect per posterior draw as the fit would score it (mean index or city level).
+
+    ``skip_users_of`` are the geographies without a usable denominator: they carry no users and, for
+    the mean index, are left out of the mean (``keep_skipped_in_mean=True`` gives the previous rule that
+    still divided by them; it is only used to show that the tests can fail).
+    """
     ch = CHANNELS.index(channel)
     x = _exposure_matrix(engine, channel, budgets, horizon)
     warm = _warm_matrix(engine, channel, use_warm)
@@ -246,6 +254,7 @@ def training_formula_total(engine, samples, channel, budgets, horizon, use_warm,
         users[GEOS.index(geo)] = 0.0
     beta = _betas(samples, channel)
     n_geo, n_t = x.shape
+    members = [g for g in range(n_geo) if keep_skipped_in_mean or GEOS[g] not in skip_users_of]
     totals = np.zeros(N_DRAWS)
     for s in range(N_DRAWS):
         alpha = samples["alpha"][ch, s]
@@ -260,8 +269,8 @@ def training_formula_total(engine, samples, channel, budgets, horizon, use_warm,
 
         for t in range(n_t):
             if national_index:
-                ads = sum(w[k] * np.mean([lagged(extended, g, t, k) for g in range(n_geo)]) for k in range(L_MAX + 1))
-                ads0 = sum(w[k] * np.mean([lagged(extended0, g, t, k) for g in range(n_geo)]) for k in range(L_MAX + 1))
+                ads = sum(w[k] * np.mean([lagged(extended, g, t, k) for g in members]) for k in range(L_MAX + 1))
+                ads0 = sum(w[k] * np.mean([lagged(extended0, g, t, k) for g in members]) for k in range(L_MAX + 1))
                 sat = np.tanh(lam * ads / 2.0) - np.tanh(lam * ads0 / 2.0)
                 totals[s] += Y_SCALE * sum(beta[g, s] * users[g, t] * sat for g in range(n_geo))
             else:
@@ -377,8 +386,8 @@ class NationalIndexForecastTests(unittest.TestCase):
         self.assertAlmostEqual(float(digital["total_effect_p50"].loc["A"]) / total_p50, float(share.loc["A"]), places=9)
         self.assertEqual(set(digital.index), {"A", "C"})
 
-    def test_effect_reaches_geographies_without_spend_and_is_diluted_by_all_fit_geographies(self):
-        """Money in one city moves the national index by 1/N; the response reaches every city's users."""
+    def test_effect_reaches_geographies_without_spend_and_is_diluted_by_the_geographies_of_the_index(self):
+        """Money in one city moves the national index by 1/N (N geographies in the index); the response reaches every city's users."""
         start = date(2026, 3, 10)
         budgets = {("A", "Digital_Performance"): [900.0, 1100.0, 0.0, 1300.0, 700.0]}
         engine = make_engine()
@@ -396,17 +405,71 @@ class NationalIndexForecastTests(unittest.TestCase):
         )
         self.assertFalse(np.allclose(actual, city_level, rtol=0.05))
 
-    def test_geography_without_denominator_is_skipped_but_still_counted_in_the_mean(self):
+    def test_geography_without_denominator_is_left_out_of_the_mean_and_carries_no_users(self):
         start = date(2026, 3, 10)
         engine = make_engine(skip_geo="E")
         budgets = {("A", "Digital_Performance"): [900.0, 1100.0, 0.0, 1300.0, 700.0]}
         detail, _, draws = forecast_channel_totals(engine, plan_rows(start, budgets))
+        samples = engine._posterior_samples(None, 0, 0)
         expected = training_formula_total(
-            engine, engine._posterior_samples(None, 0, 0), "Digital_Performance", budgets,
+            engine, samples, "Digital_Performance", budgets,
             self._horizon(start), use_warm=False, national_index=True, skip_users_of=("E",),
         )
-        np.testing.assert_allclose(draws.sort_values("draw_index")["total_effect"].to_numpy(float), expected, rtol=1e-11, atol=1e-9)
+        actual = draws.sort_values("draw_index")["total_effect"].to_numpy(float)
+        np.testing.assert_allclose(actual, expected, rtol=1e-11, atol=1e-9)
         self.assertEqual(int(detail["national_index_geos_without_denominator_n"].iloc[0]), 1)
+        # the previous rule divided by the skipped geography too: the test must be able to tell them apart
+        divided_by_all = training_formula_total(
+            engine, samples, "Digital_Performance", budgets,
+            self._horizon(start), use_warm=False, national_index=True, skip_users_of=("E",), keep_skipped_in_mean=True,
+        )
+        self.assertGreater(float(np.max(np.abs(divided_by_all / expected - 1.0))), 0.05)
+
+    def test_geography_without_denominator_is_left_out_of_the_carryover_mean_too(self):
+        start = date(2026, 2, 28)  # the day after the last training day: carryover of the training tail
+        engine = make_engine(skip_geo="E", as_of="2026-02-27")
+        budgets = {("A", "Digital_Performance"): [900.0, 1100.0, 0.0, 1300.0, 700.0]}
+        detail, _, draws = forecast_channel_totals(engine, plan_rows(start, budgets))
+        expected = training_formula_total(
+            engine, engine._posterior_samples(None, 0, 0), "Digital_Performance", budgets,
+            self._horizon(start), use_warm=True, national_index=True, skip_users_of=("E",),
+        )
+        np.testing.assert_allclose(draws.sort_values("draw_index")["total_effect"].to_numpy(float), expected, rtol=1e-11, atol=1e-9)
+        self.assertTrue(detail["warm_start_used"].all())
+
+    def test_nationwide_plan_gets_the_city_level_effect_whatever_the_number_of_skipped_geographies(self):
+        """A plan with the same per-resident exposure in every geography the forecast can compute.
+
+        This is the case of a federal row spread by population: the national index must stay at
+        that exposure, so the effect equals the city-level effect of the same plan, and does not
+        shrink with the number of fit geographies that have no denominator.
+        """
+        start = date(2026, 3, 10)
+        engine = make_engine(skip_geo="E")
+        frame = engine.denominators.set_index(["geo_label", "date"])
+        level = 0.9  # scaled per-resident exposure, the same everywhere
+        budgets = {}
+        for geo in ("A", "B", "C", "D"):
+            daily = []
+            for offset in range(5):
+                day = start + timedelta(days=offset)
+                population = float(frame.loc[(geo, day.replace(year=ANALOG_YEAR).isoformat()), "population_k"])
+                daily.append(level * population * X_SCALE[(geo, "Digital_Performance")])
+            budgets[(geo, "Digital_Performance")] = daily
+        samples = engine._posterior_samples(None, 0, 0)
+        _, _, draws = forecast_channel_totals(engine, plan_rows(start, budgets))
+        actual = draws.sort_values("draw_index")["total_effect"].to_numpy(float)
+        horizon = self._horizon(start)
+        city_level = training_formula_total(
+            engine, samples, "Digital_Performance", budgets, horizon,
+            use_warm=False, national_index=False, skip_users_of=("E",),
+        )
+        np.testing.assert_allclose(actual, city_level, rtol=1e-10, atol=1e-9)
+        divided_by_all = training_formula_total(
+            engine, samples, "Digital_Performance", budgets, horizon,
+            use_warm=False, national_index=True, skip_users_of=("E",), keep_skipped_in_mean=True,
+        )
+        self.assertGreater(float(np.max(np.abs(divided_by_all / city_level - 1.0))), 0.08)
 
     def test_every_beta_layout_gives_the_same_result_as_the_loop_formula(self):
         start = date(2026, 3, 10)
@@ -459,8 +522,8 @@ class NationalIndexOptimizerKernelTests(unittest.TestCase):
         ("B", "OOH_Total"): [500.0, 500.0, 500.0, 500.0, 500.0],
     }
 
-    def _setup(self, factor: float = 1.0, as_of: str = "2026-02-27"):
-        engine = make_engine(as_of=as_of)
+    def _setup(self, factor: float = 1.0, as_of: str = "2026-02-27", skip_geo: str | None = None):
+        engine = make_engine(as_of=as_of, skip_geo=skip_geo)
         rows = plan_rows(self.START, self.BUDGETS)
         plan = pd.DataFrame(rows)
         cells = (
@@ -490,6 +553,17 @@ class NationalIndexOptimizerKernelTests(unittest.TestCase):
         kernel_total, _ = _allocation_response_draws(kernels, allocation)
         _, _, draws = engine.forecast_daily_rows(rows, n_samples=N_DRAWS, seed=1, analog_year=ANALOG_YEAR, return_campaign_draws=True)
         np.testing.assert_allclose(kernel_total, draws.sort_values("draw_index")["total_effect"].to_numpy(float), rtol=1e-11, atol=1e-9)
+
+    def test_kernels_reproduce_the_exact_forecast_when_a_fit_geography_has_no_denominator(self):
+        for as_of in ("2026-02-27", "2026-03-09"):
+            with self.subTest(as_of=as_of):
+                engine, kernels, allocation, rows = self._setup(1.3, as_of=as_of, skip_geo="E")
+                kernel_total, _ = _allocation_response_draws(kernels, allocation)
+                _, _, draws = engine.forecast_daily_rows(
+                    rows, n_samples=N_DRAWS, seed=1, analog_year=ANALOG_YEAR, return_campaign_draws=True,
+                )
+                exact = draws.sort_values("draw_index")["total_effect"].to_numpy(float)
+                np.testing.assert_allclose(kernel_total, exact, rtol=1e-11, atol=1e-9)
 
     def test_moving_money_between_cities_inside_a_national_channel_is_not_rewarded_by_the_search(self):
         _, kernels, allocation, _ = self._setup()
