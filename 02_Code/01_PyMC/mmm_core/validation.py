@@ -881,6 +881,37 @@ def select_historical_replay_draw_pairs(
     return pairs
 
 
+def apply_assumption_channel_mean(
+    x_lagged: np.ndarray,
+    transform: dict[str, Any],
+    spend_columns: list[str],
+    dates: Any,
+) -> np.ndarray:
+    """Replay the fit's averaging of assumption channels on a lag tensor (lags x rows x channels).
+
+    Same rule as the averaging block of ``fit.py``: with ``time_effect.mode = analytic_level`` the
+    lagged exposure of every assumption channel is replaced by the mean over the rows of the same
+    date.  Fits without that mode (model B and older) keep the tensor untouched.
+    """
+    time_effect = transform.get("time_effect") or {}
+    if time_effect.get("mode") != "analytic_level":
+        return x_lagged
+    averaged = {str(value) for value in (time_effect.get("assumption_channels") or [])}
+    if not averaged:
+        return x_lagged
+    date_codes, _ = pd.factorize(pd.Series(dates).reset_index(drop=True), sort=True)
+    counts = np.bincount(date_codes, minlength=int(date_codes.max()) + 1).astype(float)
+    result = np.array(x_lagged, dtype=float, copy=True)
+    for column_index, column in enumerate(spend_columns):
+        if column not in averaged:
+            continue
+        for lag in range(result.shape[0]):
+            result[lag, :, column_index] = (
+                np.bincount(date_codes, weights=result[lag, :, column_index], minlength=len(counts)) / counts
+            )[date_codes]
+    return result
+
+
 def build_model_side_historical_replay_rows(
     run_dir: str | Path,
     panel: pd.DataFrame,
@@ -929,6 +960,9 @@ def build_model_side_historical_replay_rows(
             x_lagged = scaled_history_lags(frame, history, spend_columns, geos, x_scale_geo, int(transform['l_max']))
         else:
             x_lagged = _make_geo_lagged_tensor_np(x_scaled, geo_idx_values, int(transform["l_max"]))
+        # The fit replaces the lagged exposure of its assumption channels by the cross-city mean of
+        # the same date (fit.py averaging block); the frozen transform records which channels.
+        x_lagged = apply_assumption_channel_mean(x_lagged, transform, spend_columns, frame["date"])
         tier_by_geo = np.asarray(transform["geo_tier_idx"], dtype=int)
         obs_tier = tier_by_geo[geo_idx_values]
         target = fit_key.split("::", 1)[1]
@@ -1055,6 +1089,172 @@ def evaluate_historical_response_replay(
     }
 
 
+ROAS_TABLE_DRAWS = 200  # fit.py compute_revenue_roas: n_samples=200 ...
+ROAS_TABLE_SEED = 42  # ... drawn with np.random.RandomState(42).choice(n_total, size, replace=False)
+SERVING_ROAS_PARITY_REL_TOL = 0.01
+SERVING_ROAS_PARITY_VERSION = "serving_roas_parity_v1"
+
+
+def roas_table_draw_pairs(
+    run_dir: str | Path,
+    fit_key: str,
+    *,
+    n_samples: int = ROAS_TABLE_DRAWS,
+    seed: int = ROAS_TABLE_SEED,
+) -> list[tuple[int, int]]:
+    """The exact (chain, draw) pairs behind ``roas_rub_all_fits.csv`` of one fit.
+
+    ``compute_revenue_roas`` stacks the posterior as ``sample = (chain, draw)`` (chain-major) and
+    keeps ``RandomState(42).choice(n_total, 200, replace=False)``; replaying the same draws makes
+    the table and the serving replay comparable draw by draw.
+    """
+    run_dir = resolve_path(run_dir)
+    idata = az.from_netcdf(run_dir / f"posterior_{_safe_fit_key(fit_key)}.nc")
+    try:
+        chain_values = [int(value) for value in idata.posterior.coords["chain"].values]
+        draw_values = [int(value) for value in idata.posterior.coords["draw"].values]
+    finally:
+        if hasattr(idata, "close"):
+            idata.close()
+    n_draw = len(draw_values)
+    n_total = len(chain_values) * n_draw
+    positions = np.random.RandomState(seed).choice(n_total, size=min(n_samples, n_total), replace=False)
+    return [(chain_values[int(pos) // n_draw], draw_values[int(pos) % n_draw]) for pos in positions]
+
+
+def _trained_assumption_channels(transform: dict[str, Any]) -> frozenset[str]:
+    """Channels the fit averaged over cities, read straight from the frozen transform."""
+    time_effect = transform.get("time_effect") or {}
+    if time_effect.get("mode") != "analytic_level":
+        return frozenset()
+    averaged = {str(value) for value in (time_effect.get("assumption_channels") or [])}
+    return frozenset(
+        str(channel)
+        for channel, column in zip(transform.get("channels") or [], transform.get("spend_active") or [])
+        if str(column) in averaged
+    )
+
+
+def run_serving_roas_parity(
+    run_dir: str | Path,
+    panel: pd.DataFrame,
+    row_index: pd.DataFrame,
+    engine: Any,
+    fit_keys: list[str],
+    *,
+    rel_tol: float = SERVING_ROAS_PARITY_REL_TOL,
+) -> dict[str, Any]:
+    """The serving replay must reproduce the ROAS table the fit published for the same package.
+
+    This is the check that a change of the model is matched by a change of the serving side: the
+    fit wrote ``roas_rub_all_fits.csv`` with its own exposure rule (including the cross-city mean of
+    its assumption channels); the serving geo loop replays the training window on the same 200
+    posterior draws and its ROAS per channel (median, p5, p95) has to agree.  The channels the
+    serving side treats as national-index channels must also be exactly those the fit averaged.
+    """
+    from .forecast_engine import build_historical_forecast_replay_rows
+
+    run_dir = resolve_path(run_dir)
+    table_path = run_dir / "roas_rub_all_fits.csv"
+    report: dict[str, Any] = {
+        "version": SERVING_ROAS_PARITY_VERSION,
+        "rel_tol": float(rel_tol),
+        "table_draws_n": ROAS_TABLE_DRAWS,
+        "table_seed": ROAS_TABLE_SEED,
+        "table_sha256": sha256_file(table_path) if table_path.exists() else None,
+        "rows": [],
+        "classification_mismatch": [],
+    }
+    if not table_path.exists():
+        report.update({"status": "failed", "reason": "ROAS_TABLE_MISSING"})
+        return report
+    table = pd.read_csv(table_path)
+    needed = {"segment", "target", "channel", "roas_rub_median", "roas_rub_p5", "roas_rub_p95"}
+    if needed - set(table.columns):
+        report.update({"status": "failed", "reason": f"ROAS_TABLE_COLUMNS_MISSING:{sorted(needed - set(table.columns))}"})
+        return report
+
+    for fit_key in fit_keys:
+        transform = _load_transform(run_dir, fit_key)
+        fit_meta = (engine.metadata.get("fits") or {}).get(fit_key) or {}
+        trained = _trained_assumption_channels(transform)
+        served = frozenset(engine.assumption_channels_for(fit_key, fit_meta)) if fit_meta else frozenset()
+        if trained != served:
+            report["classification_mismatch"].append(
+                {"fit_key": fit_key, "fit_averaged": sorted(trained), "serving_averages": sorted(served)}
+            )
+
+    for fit_key in fit_keys:
+        segment, target = fit_key.split("::", 1)
+        if target != "turnover_per_user":
+            continue  # the ROAS table is a turnover table
+        transform = _load_transform(run_dir, fit_key)
+        trained = _trained_assumption_channels(transform)
+        pairs = roas_table_draw_pairs(run_dir, fit_key)
+        replayed = build_historical_forecast_replay_rows(engine, panel, row_index, pairs, fit_keys=[fit_key])
+        for channel, sub in replayed.groupby("channel", sort=False):
+            spend = float(sub["spend_rub"].iloc[0])
+            roas = sub["effect_value"].to_numpy(float) / spend if spend > 1e-10 else np.zeros(len(sub))
+            serving = {
+                "p5": float(np.percentile(roas, 5)),
+                "median": float(np.percentile(roas, 50)),
+                "p95": float(np.percentile(roas, 95)),
+            }
+            match = table[
+                table["segment"].astype(str).eq(segment)
+                & table["target"].astype(str).eq(target)
+                & table["channel"].astype(str).eq(str(channel))
+            ]
+            row: dict[str, Any] = {
+                "fit_key": fit_key,
+                "channel": str(channel),
+                "exposure_basis": "national_mean_index" if str(channel) in trained else "city_level",
+                "serving_roas_p5": serving["p5"],
+                "serving_roas_median": serving["median"],
+                "serving_roas_p95": serving["p95"],
+            }
+            if len(match) != 1:
+                row.update({"table_roas_median": None, "ok": False, "reason": f"TABLE_ROWS_{len(match)}"})
+            else:
+                table_row = match.iloc[0]
+                table_values = {
+                    "p5": float(table_row["roas_rub_p5"]),
+                    "median": float(table_row["roas_rub_median"]),
+                    "p95": float(table_row["roas_rub_p95"]),
+                }
+                ok = all(
+                    bool(np.isclose(serving[name], table_values[name], rtol=rel_tol, atol=1e-6))
+                    for name in ("p5", "median", "p95")
+                )
+                median_ref = table_values["median"]
+                row.update(
+                    {
+                        "table_roas_p5": table_values["p5"],
+                        "table_roas_median": median_ref,
+                        "table_roas_p95": table_values["p95"],
+                        "rel_diff_median": (serving["median"] - median_ref) / abs(median_ref) if abs(median_ref) > 1e-12 else None,
+                        "ok": ok,
+                    }
+                )
+            report["rows"].append(row)
+
+    failed_rows = [row for row in report["rows"] if not row.get("ok")]
+    report.update(
+        {
+            "compared_n": len(report["rows"]),
+            "failed_n": len(failed_rows),
+            "max_abs_rel_diff_median": max(
+                (abs(row["rel_diff_median"]) for row in report["rows"] if row.get("rel_diff_median") is not None),
+                default=0.0,
+            ),
+            "status": "passed" if report["rows"] and not failed_rows and not report["classification_mismatch"] else "failed",
+        }
+    )
+    if not report["rows"]:
+        report["reason"] = "NO_TURNOVER_CHANNEL_COMPARED"
+    return report
+
+
 def run_independent_historical_response_replay(
     run_dir: str | Path,
     panel_path: str | Path | None = None,
@@ -1065,7 +1265,11 @@ def run_independent_historical_response_replay(
     seed: int = 10042,
     write: bool = False,
 ) -> dict[str, Any]:
-    """Generate and compare two independent historical channel-response producers."""
+    """Generate and compare two independent historical channel-response producers.
+
+    The verdict also carries ``serving_roas_parity``: the serving replay has to reproduce the
+    package's own ROAS table, and a failure there fails the whole replay verdict.
+    """
     run_dir = resolve_path(run_dir)
     require_package_fingerprint(run_dir)
     config = read_json(run_dir / "run_config.json", {}) or {}
@@ -1104,6 +1308,11 @@ def run_independent_historical_response_replay(
         expected_effects=expected_effects,
         expected_draws=expected_draws,
     )
+    parity = run_serving_roas_parity(run_dir, panel, row_index, engine, fit_keys)
+    verdict["serving_roas_parity"] = parity
+    verdict["replay_comparison_status"] = verdict["status"]
+    if parity["status"] != "passed":
+        verdict["status"] = "failed"
     verdict.update(
         {
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -1118,6 +1327,7 @@ def run_independent_historical_response_replay(
                 "reference": "fit-side lag tensor with exact frozen x_scale_geo",
                 "replayed": "forecast serving geo loop with packaged media-scale lookup",
                 "shared_inputs_only": ["posterior draws", "frozen row index", "panel", "draw selection"],
+                "serving_roas_parity": "replayed serving ROAS per channel equals roas_rub_all_fits.csv on its own 200 draws",
             },
         }
     )

@@ -61,6 +61,49 @@ decision> [--write-verdict]`. The conditions (owner decision, same specification
 acceptance or pinned exceptions, passed replay) are checked by code; see "OOT inheritance for a refit" in
 `04_Web_app/docs/workspace/MODEL_LIFECYCLE.md`.
 
+## V4k time effect and assumption channels
+
+`config["time_effect"]` switches the V4k variant of the fit on (`mode: "analytic_level"`); the default is `off`, and
+then the fit, its contract and the posterior are the same as before V4k. Allowed keys (anything else is an error):
+`mode`, `eta_sd_prior` (0.02), `level_sd0` (1.0), `drop_time_only_controls` (true), `no_rounding_priors` (true),
+`roas_priors`, `pool_tier_channels`, `assumption_channels`, `alpha_prior`, `tc5_offline_policy_enabled`.
+
+An **assumption channel** is a channel whose exposure has no usable city split in the data (national TV, digital
+money spread by population). In the fit its lagged scaled exposure is replaced, row by row, by the unweighted mean
+of the same lag over all fit rows of the same date, and its coefficient follows the ROAS prior (the data cannot
+tell it from the time effect). The frozen `fit_transform_<fit>.json` records what was applied
+(`time_effect.mode`, `time_effect.assumption_channels` as spend-column names); `fit_design_metadata.json` carries
+the list per fit as `assumption_channels`.
+
+**The serving side must use the exposure the fit used.** Forecast engine, optimizer, historical replay and the
+past-campaign catalog treat an assumption channel as a *national index*: one exposure series per date, the mean
+over all fit geographies of the adstocked per-resident exposure (a plan geography adds its exposure, the others
+only carry over). The effect is `y_scale * sum_t M_t * [tanh(lambda * (A0_t + dA_t) / 2) - tanh(lambda * A0_t / 2)]`
+with `M_t` the coefficient-weighted number of users (orders for `avg_basket`) over all fit geographies, and it is
+booked on the plan rows in proportion to their spend, so every row of one campaign x channel has the same ROAS.
+All other channels keep city-level exposure. The classification comes from `ForecastEngine.assumption_channels_for`
+(metadata first, then the frozen transform, so packages exported before the field existed work too). Result rows say
+which basis was used (`exposure_basis`: `city` or `national_mean`) and how many beneficiary geographies had no usable
+denominator (`national_index_geos_without_denominator_n`). The optimizer evaluates the cells of a national channel
+with a proportional-share kernel (exact at the plan's own proportions, concave away from them), so shifting money
+between cities inside a national channel is not rewarded; finalists are re-scored exactly by the forecast.
+
+**Parity gate.** `validation.run_serving_roas_parity` replays the training window through the serving geo loop on the
+exact 200 posterior draws behind `roas_rub_all_fits.csv` (`RandomState(42).choice(n_total, 200, replace=False)`,
+chain-major) and compares the ROAS per turnover channel (p5, median, p95) with that table, relative tolerance 1%.
+It also checks that the channels the serving side averages are exactly those the fit averaged. The result is
+`historical_replay_validation.json["serving_roas_parity"]` and a failure fails the replay verdict, so the manifest
+gets the production blocker `MISSING_OR_FAILED_HISTORICAL_REPLAY`. Run it with the replay:
+
+```bash
+python 02_Code/01_PyMC/03_model_validation.py --mode response-replay --run-dir <run> --panel <panel.parquet> [--write-verdict]
+```
+
+A change of the model (new data, new exposure or response logic) needs the matching change of forecast engine and
+optimizer *before* the final package is built; see "Смена модели" in `AGENTS.md`. The code files in the package
+fingerprint are frozen after the package exists, so a failed parity check means: fix the code, build a new package,
+repeat validation.
+
 ## Forecast Engine Audit
 
 `forecast_engine_audit.py` checks whether a completed model run folder is ready for the posterior forecast/optimizer engine. It does not run PyMC and does not calculate campaign effects. It validates:

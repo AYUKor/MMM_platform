@@ -7,6 +7,18 @@ PyMC posterior response variables and the same MMM transforms:
 raw spend -> per-capita spend -> model scaling -> geo-reset adstock -> tanh
 saturation -> posterior beta -> target units.
 
+Exposure basis (standing rule of the project, AGENTS.md section "Смена модели"; details in
+mmm_core/README.md): the serving side must apply the same exposure rule that the fit applied.  A fit
+with ``time_effect.mode = analytic_level`` replaces the lagged exposure of its
+*assumption channels* (default national TV and digital) by the unweighted mean
+over the fit geographies of the same date (``fit.py`` averaging block).  For
+such channels this engine builds ONE national index per campaign and channel,
+the mean over all fit geographies of the adstocked per-resident exposure, and
+applies the saturation and the posterior beta to that index for every fit
+geography (``exposure_basis = national_mean_index``).  All other channels, and
+every fit without assumption channels (model B), keep the city-level
+computation (``exposure_basis = city_level``) bit for bit.
+
 Scope of this first production-oriented implementation:
 - incremental media effect forecast, i.e. campaign scenario minus no-campaign
   counterfactual; baseline and controls cancel out by construction;
@@ -617,6 +629,64 @@ def _build_lag_tail(X_scaled: np.ndarray, geo_idx: np.ndarray, geos: list[str], 
     return rows
 
 
+EXPOSURE_BASIS_CITY = "city_level"
+EXPOSURE_BASIS_NATIONAL_MEAN = "national_mean_index"
+_INDEX_CACHE_MAX_ENTRIES = 256
+
+
+def _assumption_channels_from_transform(transform: dict[str, Any] | None, channels: list[str]) -> frozenset[str]:
+    """Channels whose exposure the fit replaced by the cross-city mean (``fit.py`` averaging block).
+
+    The fit records the spend columns it averaged in ``fit_transform_*.json`` under
+    ``time_effect.assumption_channels``; a fit with ``time_effect.mode`` other than
+    ``analytic_level`` (model B and older) never averages.
+    """
+    block = (transform or {}).get("time_effect") or {}
+    if block.get("mode") != "analytic_level":
+        return frozenset()
+    averaged_columns = {str(value) for value in (block.get("assumption_channels") or [])}
+    if not averaged_columns:
+        return frozenset()
+    transform_channels = [str(value) for value in ((transform or {}).get("channels") or channels)]
+    spend_columns = [str(value) for value in ((transform or {}).get("spend_active") or [])]
+    return frozenset(
+        name for name, column in zip(transform_channels, spend_columns) if column in averaged_columns
+    )
+
+
+def _beta_draw_vector(
+    beta_arr: np.ndarray,
+    beta_dims: tuple[str, ...],
+    channel_idx: int,
+    geo_idx: int,
+    tier_idx: int,
+) -> np.ndarray:
+    """All posterior draws of one beta in one call (same indexing as ``_beta_value``)."""
+    index: list[Any] = []
+    for dim in beta_dims:
+        if dim == "channel":
+            index.append(channel_idx)
+        elif dim == "market_size_tier":
+            index.append(tier_idx)
+        elif dim == "geo_label":
+            index.append(geo_idx)
+        elif dim == "sample":
+            index.append(slice(None))
+        else:
+            raise ValueError(f"Unsupported beta dimension {dim!r}")
+    return np.asarray(beta_arr[tuple(index)], dtype=float)
+
+
+@dataclass(frozen=True)
+class _NationalIndexResult:
+    """Effect of one campaign x channel that runs on the national mean exposure index."""
+
+    total_draws: np.ndarray  # incremental effect of the channel on all fit geographies, per posterior draw
+    spend_rub: float  # plan spend that enters the index (plan geographies that exist in the fit)
+    warm_start_used: bool
+    beneficiary_geos_skipped_n: int  # fit geographies without a usable denominator (they carry no weight)
+
+
 def export_fit_design_metadata(run_dir: str | Path, *, force: bool = True) -> dict[str, Any]:
     """Rebuild and persist the transform metadata needed by forecast/optimizer."""
     run_dir = resolve_path(run_dir)
@@ -750,12 +820,16 @@ def export_fit_design_metadata(run_dir: str | Path, *, force: bool = True) -> di
             warm_rows.append(row)
 
         geo_to_tier = {geo: tier_names[int(geo_tier_idx[i])] if len(tier_names) else "" for i, geo in enumerate(geos)}
+        # Channels whose exposure the fit averaged over cities: serving must use the same national mean index.
+        transform_payload = read_json(run_dir / f"fit_transform_{_safe_id(fit_key)}.json") or {}
+        assumption_channels = sorted(_assumption_channels_from_transform(transform_payload, channels))
         fit_meta[fit_key] = {
             "segment": segment,
             "target": target,
             "posterior_file": posterior_file,
             "channels": channels,
             "spend_active": spend_active,
+            "assumption_channels": assumption_channels,
             "geos": geos,
             "market_size_tiers": tier_names,
             "geo_to_tier": geo_to_tier,
@@ -839,6 +913,9 @@ class ForecastEngine:
 
     _source_plan: pd.DataFrame | None = field(default=None, init=False, repr=False)
     _source_plan_index: dict[Any, Any] = field(default_factory=dict, init=False, repr=False)
+
+    _assumption_cache: dict[str, frozenset[str]] = field(default_factory=dict, init=False, repr=False)
+    _index_cache: dict[Any, Any] = field(default_factory=dict, init=False, repr=False)
 
     def _source_cell_rows(self, plan: pd.DataFrame, cell: pd.Series) -> pd.DataFrame:
         """Reuse row positions within the current immutable campaign flighting."""
@@ -1053,6 +1130,212 @@ class ForecastEngine:
                 index.append(sample_pos)
         return float(beta_arr[tuple(index)])
 
+    # ---- national mean exposure index (assumption channels of the fit) ----------------------------
+    def assumption_channels_for(self, fit_key: str, fit_meta: dict[str, Any]) -> frozenset[str]:
+        """Channels of this fit that the fit averaged over cities and serving must average the same way.
+
+        Read from the package metadata when it was exported with this serving rule
+        (``assumption_channels``), otherwise from the frozen ``fit_transform_*.json`` of the fit.
+        """
+        cached = self._assumption_cache.get(fit_key)
+        if cached is not None:
+            return cached
+        explicit = fit_meta.get("assumption_channels")
+        if explicit is not None:
+            names = frozenset(str(value) for value in explicit)
+        else:
+            transform = read_json(self.run_dir / f"fit_transform_{_safe_id(fit_key)}.json") or {}
+            names = _assumption_channels_from_transform(transform, list(fit_meta.get("channels") or []))
+        self._assumption_cache[fit_key] = names
+        return names
+
+    def _index_cache_put(self, key: Any, value: Any) -> None:
+        if len(self._index_cache) >= _INDEX_CACHE_MAX_ENTRIES:
+            self._index_cache.clear()
+        self._index_cache[key] = value
+
+    def _national_index_user_weights(
+        self,
+        fit_meta: dict[str, Any],
+        horizon: list[date],
+        target: str,
+        *,
+        analog_year: int | None,
+        missing_geo_policy: str,
+    ) -> tuple[np.ndarray, int]:
+        """Users (orders for avg_basket) of every fit geography on every horizon date.
+
+        In the fit the saturated index response reaches every city in proportion to that city's
+        users, so every fit geography is a beneficiary, not only the geographies with spend.  A
+        geography without a usable denominator carries zero weight and is counted as skipped.
+        """
+        segment = str(fit_meta["segment"])
+        geos = list(fit_meta["geos"])
+        kind = (
+            "orders_cnt" if target == "avg_basket"
+            else "unique_users" if target in {"turnover_per_user", "orders_per_user"}
+            else None
+        )
+        key = ("user_weights", segment, kind, horizon[0], horizon[-1], analog_year, missing_geo_policy)
+        cached = self._index_cache.get(key)
+        if cached is not None:
+            return cached
+        weights = np.zeros((len(geos), len(horizon)), dtype=float)
+        skipped = 0
+        for geo_pos, geo in enumerate(geos):
+            try:
+                resolved = [
+                    self._denominator_for(
+                        segment, geo, dt, analog_year=analog_year, missing_geo_policy=missing_geo_policy,
+                    )
+                    for dt in horizon
+                ]
+            except ValueError:
+                skipped += 1
+                continue
+            weights[geo_pos] = 1.0 if kind is None else [float(item[kind]) for item in resolved]
+        if geos and skipped == len(geos):
+            raise ValueError(
+                f"No fit geography of {fit_meta.get('segment')!r} has a usable denominator for the national exposure index"
+            )
+        result = (weights, skipped)
+        self._index_cache_put(key, result)
+        return result
+
+    def _mean_warm_start(
+        self, fit_key: str, fit_meta: dict[str, Any], channel: str, start: date, l_max: int,
+    ) -> np.ndarray | None:
+        """Mean over all fit geographies of the scaled training-tail exposure (None when it no longer carries over)."""
+        key = ("warm_mean", fit_key, channel, start, l_max)
+        if key in self._index_cache:
+            return self._index_cache[key]
+        geos = list(fit_meta["geos"])
+        total = np.zeros(l_max, dtype=float)
+        found = False
+        for geo in geos:
+            vector = self._warm_start_for(fit_key, geo, channel, start, l_max)
+            if vector is None:
+                continue
+            found = True
+            vector = np.asarray(vector, dtype=float)[-l_max:]
+            if len(vector) < l_max:
+                vector = np.pad(vector, (l_max - len(vector), 0))
+            total += vector
+        result = total / max(len(geos), 1) if found else None
+        self._index_cache_put(key, result)
+        return result
+
+    def _beta_geo_draws(self, fit_meta: dict[str, Any], samples: dict[str, Any], ch_pos: int) -> np.ndarray:
+        """(geographies x draws) beta of one channel for every fit geography."""
+        cache_key = f"_beta_by_geo_{ch_pos}"
+        cached = samples.get(cache_key)
+        if cached is not None:
+            return cached
+        beta = np.asarray(samples["beta"], dtype=float)
+        dims = tuple(samples["beta_dims"])
+        tiers = list(fit_meta.get("market_size_tiers") or [])
+        geo_to_tier = fit_meta.get("geo_to_tier") or {}
+        rows = []
+        for geo_pos, geo in enumerate(fit_meta["geos"]):
+            tier_name = str(geo_to_tier.get(geo) or "")
+            tier_pos = tiers.index(tier_name) if tier_name in tiers else 0
+            rows.append(_beta_draw_vector(beta, dims, ch_pos, geo_pos, tier_pos))
+        result = np.vstack(rows)
+        samples[cache_key] = result
+        return result
+
+    def _national_index_effect_weights(
+        self,
+        fit_meta: dict[str, Any],
+        samples: dict[str, Any],
+        ch_pos: int,
+        horizon: list[date],
+        target: str,
+        *,
+        analog_year: int | None,
+        missing_geo_policy: str,
+    ) -> tuple[np.ndarray, int]:
+        """(draws x dates) ``y_scale * sum_g beta_g * users_g``: turns the index response into a target effect."""
+        weights, skipped = self._national_index_user_weights(
+            fit_meta, horizon, target, analog_year=analog_year, missing_geo_policy=missing_geo_policy,
+        )
+        betas = self._beta_geo_draws(fit_meta, samples, ch_pos)
+        return float(fit_meta["y_scale"]) * (betas.T @ weights), skipped
+
+    def _national_index_campaign_effects(
+        self,
+        *,
+        fit_key: str,
+        fit_meta: dict[str, Any],
+        samples: dict[str, Any],
+        campaign_plan: pd.DataFrame,
+        index_channels: frozenset[str],
+        start: date,
+        horizon: list[date],
+        target: str,
+        analog_year: int | None,
+        missing_geo_policy: str,
+    ) -> dict[str, _NationalIndexResult]:
+        """Effect of each national-index channel of one campaign, exactly as the fit would have scored it.
+
+        The index is the mean over ALL fit geographies of the adstocked per-resident exposure
+        (plan geographies add their exposure, the others only their carryover).  The saturated
+        index response is then applied to the users of every fit geography.
+        """
+        segment = str(fit_meta["segment"])
+        channels = list(fit_meta["channels"])
+        geos = list(fit_meta["geos"])
+        geo_to_tier = fit_meta.get("geo_to_tier") or {}
+        l_max = int(fit_meta.get("l_max") or 14)
+        alpha = np.asarray(samples["alpha"], dtype=float)
+        lam = np.asarray(samples["lam"], dtype=float)
+        date_pos = {dt: i for i, dt in enumerate(horizon)}
+        results: dict[str, _NationalIndexResult] = {}
+        for channel in sorted(set(campaign_plan["channel"]).intersection(index_channels).intersection(channels)):
+            ch_pos = channels.index(channel)
+            channel_plan = campaign_plan[campaign_plan["channel"].eq(channel) & campaign_plan["geo"].isin(geos)]
+            mean_exposure = np.zeros(len(horizon), dtype=float)
+            spend_total = 0.0
+            for geo, geo_plan in channel_plan.groupby("geo"):
+                spend_raw = np.zeros(len(horizon), dtype=float)
+                for dt, amount in geo_plan.groupby("date")["budget_rub"].sum().items():
+                    spend_raw[date_pos[dt]] += float(amount)
+                if spend_raw.sum() <= 0:
+                    continue
+                resolved = [
+                    self._denominator_for(
+                        segment, str(geo), dt, analog_year=analog_year, missing_geo_policy=missing_geo_policy,
+                    )
+                    for dt in horizon
+                ]
+                tier_name = str(geo_to_tier.get(geo) or resolved[0].get("market_size_tier") or "")
+                population = np.array([max(float(item["population_k"]), 1e-3) for item in resolved])
+                x_scale = self._x_scale(fit_key, str(geo), channel, tier_name)
+                mean_exposure += (spend_raw / population) / max(x_scale, 1e-8)
+                spend_total += float(spend_raw.sum())
+            if spend_total <= 0:
+                continue
+            mean_exposure /= max(len(geos), 1)
+            warm_mean = self._mean_warm_start(fit_key, fit_meta, channel, start, l_max)
+            response = _incremental_saturated_response_draw_matrix(
+                mean_exposure,
+                alpha_values=alpha[ch_pos, :],
+                lam_values=lam[ch_pos, :],
+                l_max=l_max,
+                warm_start=warm_mean,
+            )
+            effect_weights, skipped = self._national_index_effect_weights(
+                fit_meta, samples, ch_pos, horizon, target,
+                analog_year=analog_year, missing_geo_policy=missing_geo_policy,
+            )
+            results[channel] = _NationalIndexResult(
+                total_draws=(effect_weights * response).sum(axis=1),
+                spend_rub=spend_total,
+                warm_start_used=warm_mean is not None,
+                beneficiary_geos_skipped_n=int(skipped),
+            )
+        return results
+
     def forecast_daily_rows(
         self,
         daily_rows: list[dict[str, Any]],
@@ -1143,12 +1426,29 @@ class ForecastEngine:
             beta = samples["beta"]
             beta_dims = tuple(samples["beta_dims"])
             sampled_n = alpha.shape[-1]
+            index_channels = self.assumption_channels_for(fit_key, fit_meta)
 
             for campaign_name, camp in seg_plan.groupby("campaign_name"):
                 start = min(camp["date"])
                 end = max(camp["date"])
                 horizon_end = end + timedelta(days=l_max if include_carryover_days else 0)
                 horizon = [start + timedelta(days=i) for i in range((horizon_end - start).days + 1)]
+                index_results = (
+                    self._national_index_campaign_effects(
+                        fit_key=fit_key,
+                        fit_meta=fit_meta,
+                        samples=samples,
+                        campaign_plan=camp,
+                        index_channels=index_channels,
+                        start=start,
+                        horizon=horizon,
+                        target=target,
+                        analog_year=analog_year,
+                        missing_geo_policy=analog_missing_geo_policy,
+                    )
+                    if index_channels
+                    else {}
+                )
                 for geo, geo_plan in camp.groupby("geo"):
                     if geo not in geos:
                         continue
@@ -1186,23 +1486,6 @@ class ForecastEngine:
                         pop = np.array([max(float(denom_by_date[dt]["population_k"]), 1e-3) for dt in horizon])
                         x_scale = self._x_scale(fit_key, geo, channel, tier_name)
                         x_scaled = (spend_raw / pop) / max(x_scale, 1e-8)
-                        warm_start = self._warm_start_for(fit_key, geo, channel, start, l_max)
-                        unit_weight_total = 1.0
-                        x_sat = _incremental_saturated_response_draw_matrix(
-                            x_scaled,
-                            alpha_values=np.asarray(alpha[ch_pos, :], dtype=float),
-                            lam_values=np.asarray(lam[ch_pos, :], dtype=float),
-                            l_max=l_max,
-                            warm_start=warm_start,
-                        )
-                        beta_values = np.asarray(
-                            [
-                                self._beta_value(beta, beta_dims, s, ch_pos, geo_pos, tier_pos)
-                                for s in range(sampled_n)
-                            ],
-                            dtype=float,
-                        )
-                        contrib_unit = beta_values[:, None] * x_sat * y_scale
                         if target in {"turnover_per_user", "orders_per_user"}:
                             weights = np.array(
                                 [float(denom_by_date[dt]["unique_users"]) for dt in horizon],
@@ -1217,11 +1500,40 @@ class ForecastEngine:
                             weights = np.ones(len(horizon), dtype=float)
                         safe_weights = np.maximum(weights, 1e-8)
                         unit_weight_total = float(safe_weights.sum())
-                        units = (contrib_unit * safe_weights[None, :]).sum(axis=1) / unit_weight_total
-                        totals = (contrib_unit * weights[None, :]).sum(axis=1)
+                        spend_total = float(spend_raw.sum())
+                        index_result = index_results.get(channel)
+                        if index_result is None:
+                            warm_start = self._warm_start_for(fit_key, geo, channel, start, l_max)
+                            x_sat = _incremental_saturated_response_draw_matrix(
+                                x_scaled,
+                                alpha_values=np.asarray(alpha[ch_pos, :], dtype=float),
+                                lam_values=np.asarray(lam[ch_pos, :], dtype=float),
+                                l_max=l_max,
+                                warm_start=warm_start,
+                            )
+                            beta_values = np.asarray(
+                                [
+                                    self._beta_value(beta, beta_dims, s, ch_pos, geo_pos, tier_pos)
+                                    for s in range(sampled_n)
+                                ],
+                                dtype=float,
+                            )
+                            contrib_unit = beta_values[:, None] * x_sat * y_scale
+                            units = (contrib_unit * safe_weights[None, :]).sum(axis=1) / unit_weight_total
+                            totals = (contrib_unit * weights[None, :]).sum(axis=1)
+                            warm_start_used = warm_start is not None
+                            exposure_basis = EXPOSURE_BASIS_CITY
+                            index_skipped_n = 0
+                        else:
+                            # National mean index (same rule as the fit): one response for the whole
+                            # channel, booked on the plan geographies in proportion to their spend.
+                            totals = index_result.total_draws * (spend_total / index_result.spend_rub)
+                            units = totals / unit_weight_total
+                            warm_start_used = index_result.warm_start_used
+                            exposure_basis = EXPOSURE_BASIS_NATIONAL_MEAN
+                            index_skipped_n = index_result.beneficiary_geos_skipped_n
                         cap = self._capability_row(segment, target, channel)
                         support = self._support_assessment(fit_key, geo, channel, spend_raw)
-                        spend_total = float(spend_raw.sum())
                         row_out = {
                             "campaign_name": campaign_name,
                             "segment": segment,
@@ -1268,8 +1580,10 @@ class ForecastEngine:
                             "y_scaling": y_scaling,
                             "y_offset": y_offset,
                             "posterior_samples": sampled_n,
-                            "warm_start_used": warm_start is not None,
+                            "warm_start_used": warm_start_used,
                             "warm_start_matched_in_counterfactual": True,
+                            "exposure_basis": exposure_basis,
+                            "national_index_geos_without_denominator_n": index_skipped_n,
                             "denominator_analog_year": analog_year if analog_year is not None else "previous_year",
                             "denominator_fallback_gap_days_max": max(
                                 int(denom_by_date[dt].get("denominator_fallback_gap_days") or 0)
@@ -1300,13 +1614,51 @@ class ForecastEngine:
         return detail, summary
 
 
+def _replay_geo_effect(
+    posterior_draws: list[tuple[Any, Any, Any]],
+    channel_name: str,
+    lam_values: np.ndarray,
+    target: str,
+    y_scale: float,
+    geo: Any,
+    geo_rows: pd.DataFrame,
+    tier: str,
+    adstock: np.ndarray,
+) -> np.ndarray:
+    """Training-window effect of one channel in one geography for every replayed posterior draw."""
+    saturation = np.tanh(lam_values[:, None] * adstock / 2.0)
+    beta_values: list[float] = []
+    for _, _, beta_draw in posterior_draws:
+        beta_index = {"channel": channel_name}
+        if "geo_label" in beta_draw.dims:
+            beta_index["geo_label"] = str(geo)
+        elif "market_size_tier" in beta_draw.dims:
+            beta_index["market_size_tier"] = tier
+        beta_values.append(float(beta_draw.sel(**beta_index).values))
+    if target in {"turnover_per_user", "orders_per_user"}:
+        denominator = geo_rows["unique_users"].to_numpy(float)
+    else:
+        denominator = geo_rows["orders_cnt"].to_numpy(float)
+    beta_array = np.asarray(beta_values, dtype=float)
+    contribution = beta_array[:, None] * saturation * y_scale
+    return np.sum(contribution * denominator[None, :], axis=1)
+
+
 def build_historical_forecast_replay_rows(
     engine: ForecastEngine,
     panel: pd.DataFrame,
     row_index: pd.DataFrame,
     draw_pairs: list[tuple[int, int]],
+    *,
+    fit_keys: Iterable[str] | None = None,
 ) -> pd.DataFrame:
-    """Replay training-period channel effects through the serving-side geo loop."""
+    """Replay training-period channel effects through the serving-side geo loop.
+
+    Assumption channels (those the fit averaged over cities) are replayed on the mean over
+    the fit rows of each date, the same exposure rule that ``forecast_daily_rows`` serves.
+    ``fit_keys`` restricts the replay to some fits (default: every fit of the package).
+    """
+    wanted_fits = None if fit_keys is None else {str(value) for value in fit_keys}
     if xr is None:
         raise RuntimeError(f"xarray is required for historical response replay: {_XARRAY_IMPORT_ERROR!r}")
     panel_frame = panel.copy()
@@ -1320,6 +1672,8 @@ def build_historical_forecast_replay_rows(
     rows: list[dict[str, Any]] = []
 
     for fit_key, fit_meta in (engine.metadata.get("fits") or {}).items():
+        if wanted_fits is not None and fit_key not in wanted_fits:
+            continue
         transform_path = engine.run_dir / f"fit_transform_{_safe_id(fit_key)}.json"
         transform = read_json(transform_path) or {}
         if not transform:
@@ -1344,6 +1698,10 @@ def build_historical_forecast_replay_rows(
             "avg_basket": "turnover_bridge_from_avg_basket_rub",
         }[target]
         posterior_path = engine.run_dir / str(fit_meta["posterior_file"])
+        index_channels = _assumption_channels_from_transform(transform, channels)
+        # Same rule as the fit: an assumption channel is scored on the mean over the rows of each date.
+        date_codes, _ = pd.factorize(frame["date"], sort=True)
+        date_counts = np.bincount(date_codes, minlength=int(date_codes.max()) + 1).astype(float)
         with xr.open_dataset(posterior_path, group="posterior") as posterior:
             posterior_draws = [
                 (
@@ -1361,6 +1719,8 @@ def build_historical_forecast_replay_rows(
                     [float(lam.sel(channel=channel_name).values) for _, lam, _ in posterior_draws]
                 )
                 effect_values = np.zeros(len(draw_pairs), dtype=float)
+                index_channel = channel_name in index_channels
+                index_geos: list[tuple[Any, pd.DataFrame, str, np.ndarray]] = []
                 for geo, geo_rows in frame.groupby("geo_label", sort=False):
                     population = np.maximum(geo_rows["population_k"].to_numpy(float), 1e-3)
                     tier = str(_mode_or_first(geo_rows["market_size_tier"]))
@@ -1379,22 +1739,23 @@ def build_historical_forecast_replay_rows(
                         adstock = daily_adstock[:, calendar.get_indexer(geo_rows.date)]
                     else:
                         adstock = _normalized_adstock_draw_matrix(x_scaled, alpha_values, l_max)
-                    saturation = np.tanh(lam_values[:, None] * adstock / 2.0)
-                    beta_values: list[float] = []
-                    for _, _, beta_draw in posterior_draws:
-                        beta_index = {"channel": channel_name}
-                        if "geo_label" in beta_draw.dims:
-                            beta_index["geo_label"] = str(geo)
-                        elif "market_size_tier" in beta_draw.dims:
-                            beta_index["market_size_tier"] = tier
-                        beta_values.append(float(beta_draw.sel(**beta_index).values))
-                    if target in {"turnover_per_user", "orders_per_user"}:
-                        denominator = geo_rows["unique_users"].to_numpy(float)
-                    else:
-                        denominator = geo_rows["orders_cnt"].to_numpy(float)
-                    beta_array = np.asarray(beta_values, dtype=float)
-                    contribution = beta_array[:, None] * saturation * y_scale
-                    effect_values += np.sum(contribution * denominator[None, :], axis=1)
+                    if index_channel:
+                        index_geos.append((geo, geo_rows, tier, adstock))
+                        continue
+                    effect_values += _replay_geo_effect(
+                        posterior_draws, channel_name, lam_values, target, y_scale, geo, geo_rows, tier, adstock,
+                    )
+                if index_channel:
+                    # Adstock is linear in the lags, so the mean of the lags equals the mean of the adstocks.
+                    adstock_sum = np.zeros((len(draw_pairs), len(date_counts)), dtype=float)
+                    for _, geo_rows, _, adstock in index_geos:
+                        adstock_sum[:, date_codes[geo_rows.index.to_numpy()]] += adstock
+                    mean_adstock = adstock_sum / date_counts[None, :]
+                    for geo, geo_rows, tier, _ in index_geos:
+                        effect_values += _replay_geo_effect(
+                            posterior_draws, channel_name, lam_values, target, y_scale, geo, geo_rows, tier,
+                            mean_adstock[:, date_codes[geo_rows.index.to_numpy()]],
+                        )
                 spend_rub = float(frame[spend_column].sum())
                 for (chain, draw), effect_value in zip(draw_pairs, effect_values):
                     rows.append(
@@ -2564,7 +2925,15 @@ def _enforce_support_caps(cells: pd.DataFrame, source_plan: pd.DataFrame, engine
 
 @dataclass
 class _CellResponseKernel:
-    """Exact turnover response for one geo x channel as total budget changes."""
+    """Exact turnover response for one geo x channel as total budget changes.
+
+    ``share`` is 1.0 for a city-level channel.  A cell of a national-index channel has no response
+    of its own (the whole channel moves one national index), so the channel response ``R`` of the
+    plan's proportional split is shared out: the cell kernel is ``share * R(budget / share)``.  It is
+    exact whenever the cells of the channel keep the plan's proportions, so the search compares whole
+    channels against each other exactly and treats moves between cities inside a national channel as
+    neutral at best.  Every finalist is re-scored by ``forecast_daily_rows`` with the exact index.
+    """
 
     cell_pos: int
     segment: str
@@ -2574,6 +2943,7 @@ class _CellResponseKernel:
     unit_argument_per_rub: np.ndarray
     counterfactual_tanh: np.ndarray
     effect_multiplier: np.ndarray
+    share: float = 1.0
     _draw_cache: dict[float, np.ndarray] = field(default_factory=dict, repr=False)
 
     def response_draws(self, budget_rub: float) -> np.ndarray:
@@ -2582,13 +2952,22 @@ class _CellResponseKernel:
         cached = self._draw_cache.get(cache_key)
         if cached is not None:
             return cached
-        response = (
-            self.effect_multiplier
-            * (
-                np.tanh(self.base_argument + budget * self.unit_argument_per_rub)
-                - self.counterfactual_tanh
-            )
-        ).sum(axis=1)
+        if self.share == 1.0:
+            response = (
+                self.effect_multiplier
+                * (
+                    np.tanh(self.base_argument + budget * self.unit_argument_per_rub)
+                    - self.counterfactual_tanh
+                )
+            ).sum(axis=1)
+        else:
+            response = self.share * (
+                self.effect_multiplier
+                * (
+                    np.tanh(self.base_argument + (budget / self.share) * self.unit_argument_per_rub)
+                    - self.counterfactual_tanh
+                )
+            ).sum(axis=1)
         self._draw_cache[cache_key] = response
         return response
 
@@ -2655,6 +3034,8 @@ def _build_turnover_response_kernels(
         sampled_n = int(alpha.shape[-1])
         sampled_lengths.add(sampled_n)
         denominator_cache: dict[str, dict[date, dict[str, Any]]] = {}
+        index_channels = engine.assumption_channels_for(fit_key, fit_meta)
+        index_cells: dict[str, list[tuple[int, str, float, np.ndarray]]] = {}
 
         for cell_pos, cell in segment_cells.iterrows():
             geo = str(cell["geo"])
@@ -2703,6 +3084,10 @@ def _build_turnover_response_kernels(
             )
             x_scale = engine._x_scale(fit_key, geo, channel, tier_name)
             x_per_rub = (spend_share / population) / max(x_scale, 1e-8)
+            if channel in index_channels:
+                # National mean index: compiled once per channel below, shared out over its cells.
+                index_cells.setdefault(channel, []).append((int(cell_pos), geo, source_total, x_per_rub))
+                continue
             warm_start = engine._warm_start_for(fit_key, geo, channel, start, l_max)
             alpha_values = alpha[ch_pos, :]
             lam_values = lam[ch_pos, :]
@@ -2739,6 +3124,48 @@ def _build_turnover_response_kernels(
                 counterfactual_tanh=np.tanh(base_argument),
                 effect_multiplier=beta_values[:, None] * y_scale * denominator[None, :],
             )
+        for channel, members in index_cells.items():
+            ch_pos = channels.index(channel)
+            alpha_values = alpha[ch_pos, :]
+            lam_values = lam[ch_pos, :]
+            group_total = float(sum(member[2] for member in members))
+            # Index per ruble of the whole channel when it is split like the source plan.
+            index_per_rub = np.zeros(len(horizon), dtype=float)
+            for _, _, member_total, member_x_per_rub in members:
+                index_per_rub += (member_total / group_total) * member_x_per_rub
+            index_per_rub /= max(len(geos), 1)
+            warm_mean = engine._mean_warm_start(fit_key, fit_meta, channel, start, l_max)
+            warm_adstock = _normalized_adstock_draw_matrix(
+                np.zeros(len(horizon), dtype=float),
+                alpha_values,
+                l_max,
+                warm_start=warm_mean,
+            )
+            unit_adstock = _normalized_adstock_draw_matrix(index_per_rub, alpha_values, l_max)
+            effect_weights, _ = engine._national_index_effect_weights(
+                fit_meta,
+                samples,
+                ch_pos,
+                horizon,
+                "turnover_per_user",
+                analog_year=analog_year,
+                missing_geo_policy=analog_missing_geo_policy,
+            )
+            base_argument = lam_values[:, None] * warm_adstock / 2.0
+            unit_argument = lam_values[:, None] * unit_adstock / 2.0
+            counterfactual = np.tanh(base_argument)
+            for member_pos, member_geo, member_total, _ in members:
+                kernels[member_pos] = _CellResponseKernel(
+                    cell_pos=member_pos,
+                    segment=str(segment),
+                    geo=member_geo,
+                    channel=channel,
+                    base_argument=base_argument,
+                    unit_argument_per_rub=unit_argument,
+                    counterfactual_tanh=counterfactual,
+                    effect_multiplier=effect_weights,
+                    share=member_total / group_total,
+                )
     if len(sampled_lengths) != 1:
         raise CandidateFeasibilityError(
             f"Adaptive optimizer posterior sample lengths differ across campaign fits: {sorted(sampled_lengths)}"

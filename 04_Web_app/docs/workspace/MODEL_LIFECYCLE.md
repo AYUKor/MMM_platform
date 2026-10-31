@@ -51,6 +51,33 @@ prepare -> fit -> review fit diagnostics -> package -> validation (OOT, response
 - Registry registration and promotion stay separate gates (below). CLI details are in
   `02_Code/01_PyMC/mmm_core/README.md`.
 
+## A model change changes the serving side
+
+A new model (a refit on new data, or any change of the response, exposure or time
+logic) is not finished when the fit is. Forecast engine, budget optimizer, historical
+replay and the past-campaign catalog must compute every channel exactly as that fit
+did, and this is proven before the package is released:
+
+- **Exposure rule.** When a fit replaces a channel's city exposure by something else,
+  the serving side uses the same basis. V4k assumption channels (national TV, digital
+  without a city split) are trained on the unweighted cross-city mean per date; the
+  forecast, the optimizer kernels and the replay use that national index for them
+  (`exposure_basis` in the forecast rows). Rule, formula and limits are in
+  `02_Code/01_PyMC/mmm_core/README.md`, section "V4k time effect and assumption
+  channels".
+- **Parity gate.** `validation.run_serving_roas_parity`, part of
+  `03_model_validation.py --mode response-replay`, replays the training window through
+  the serving geo loop on the 200 posterior draws behind the package's own
+  `roas_rub_all_fits.csv` and requires the same ROAS per turnover channel (p5, median,
+  p95, relative tolerance 1%). A failure fails the replay verdict
+  (`MISSING_OR_FAILED_HISTORICAL_REPLAY`), so the package cannot be released.
+- **Order.** `forecast_engine.py` and `validation.py` are part of the package
+  fingerprint (see "Code bound to a package"). Their change for the new model is
+  merged before the final package is built; a failed parity check means: fix the code,
+  build a new package (new fingerprint), run the replay again.
+- The standing rule of the project owner (31.10.2026) is in `AGENTS.md`, section
+  «Смена модели».
+
 ## Research and serving packages
 
 Research evidence and serving semantics are distinct:
@@ -137,9 +164,19 @@ monitoring plan names that check.
 ## Code bound to a package
 
 The package fingerprint includes the SHA-256 of `model_package.py`,
-`forecast_engine.py` and `validation.py`, and `ModelPackage.from_run_dir` recomputes it
-(hash validation is on by default). A package therefore only loads under exactly the
-code it was built with: any later change to those three files makes the package stale
-and requires a rebuilt package and new replay and OOT evidence. Merge a
-release branch exactly as the package was built and do not touch these files until the
-release is in Fin.
+`forecast_engine.py` and `validation.py` (and of `fit_design_metadata.json`), and
+`ModelPackage.from_run_dir` recomputes it where hash validation is on: registry
+`full_lineage` verification, the validation and replay CLIs, the package and manifest
+steps. A package therefore passes `full_lineage` only under exactly the code it was
+built with: any later change to those files makes it stale there and requires a rebuilt
+package and new replay and OOT evidence.
+
+A serving bundle (portal, MacBook, server) is loaded in `serving_bundle` mode: the
+registered inventory is verified byte for byte and the registered fingerprint must equal
+the manifest's, but the hash is not recomputed against the running code. An older bundle
+therefore keeps loading under newer code. That is a compatibility fact, not evidence:
+when serving math changes (for example the national-index exposure above), a package
+built before the change carries no proof of the new rule until it is rebuilt.
+
+Merge a release branch exactly as the package was built and do not touch these files
+between the package and the release in Fin. Change them before the package is built.
