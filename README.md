@@ -2,8 +2,8 @@
 
 Source-code and documentation baseline for a Bayesian Marketing Mix Modeling
 platform. The repository contains the data-preparation, model lifecycle,
-forecast, budget-optimization and reporting code that will later be integrated
-into an internal web application.
+forecast, budget-optimization and reporting code that is integrated into the
+internal research-pilot web application (portal) under `04_Web_app/`.
 
 ## Repository map
 
@@ -38,14 +38,15 @@ DecisionResult v1, application lifecycle v1 and local Execution Worker v1 are
 implemented under `04_Web_app`. Together they define upload, validation,
 immutable jobs, legal state transitions, progress, safe errors, completed
 campaign decisions, artifact references, and isolated invocation of the real
-optimizer/report process. The next implementation milestone is a thin local
-HTTP smoke boundary over these tested ports. API and frontend code must use the
-contracts rather than reading CSV or XLSX layouts directly.
+optimizer/report process. API and frontend code must use the contracts rather
+than reading CSV or XLSX layouts directly.
 
-The browser application is not implemented yet. There is currently no
-frontend, HTTP API, database, queue, authentication, or production worker
-runtime. The file-backed worker is a local development adapter, not enterprise
-infrastructure.
+The portal is implemented under `04_Web_app`: HTTP API with authentication, the
+file-backed execution worker and the browser frontend. Which release and model
+package are current is recorded by `03_Fin/CURRENT_RELEASE.json` and the model
+registry; the verified state at the last refresh is in
+`04_Web_app/CURRENT_TRUTH.md`. The file-backed worker is a pilot adapter, not
+enterprise infrastructure.
 
 Local development and future server deployment must use the same versioned
 calculation interfaces and immutable artifact contracts. Environment-specific

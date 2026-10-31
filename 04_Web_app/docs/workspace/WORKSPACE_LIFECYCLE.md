@@ -56,15 +56,10 @@ Predfin checkout or Fin copy never silently supersedes it.
 
 ## Current release
 
-- Release ID: `release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c`.
-- Application commit: `9355c6c8fdaf9d715434848ec306670e944ff263`.
-- Application tree: `d8f69aa5c47a1cbacca1aee6c94aaab85f841a31`.
-- Model package: `pkg_807d3ddbae57a52a_9aacd3beb350725b`.
-- Model status: `preprod_restricted`.
-- Production gate: `not_passed`.
-- Live server candidate:
-  `release_9355c6c8fdaf_807d3ddbae57_ed8a6c6c7642_77973f4d424c__deploy5`.
-- Deployment status: D1R5 accepted on 2026-09-03; observation active.
+The current release is whatever `03_Fin/CURRENT_RELEASE.json` points to. This document
+does not repeat the release ID, application commit, model package or deployment status:
+they change with every Fin release, and a copy here went stale after the PR #47-#49
+releases. Read the pointer, then the release manifest and deployment evidence it names.
 
 `03_Fin/CURRENT_RELEASE.json` is a relative machine-readable pointer. It may change
 only after a new release passes every Fin gate. Existing release directories are
