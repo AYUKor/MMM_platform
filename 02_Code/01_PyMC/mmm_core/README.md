@@ -114,7 +114,7 @@ same draws) to the published ROAS table. It does not promise that the forecast o
 - A forecast takes the users of the analog year (default: the year before the plan) for every plan day. Where users grew
   from one year to the next, every channel of the fit comes out lower by the same factor; this is the denominator policy
   and not a property of national channels. (Halloween package, 2026 windows against analog 2025: users grew by 3% to 36%
-  depending on the fit.)
+  depending on the direction and the window.)
 - For an assumption channel the training mean runs over the fit rows present on each date; the forecast index runs over
   the universe described above, which is constant over the horizon. They coincide when the cities with a denominator are
   the cities that have rows on those dates, which is the case for a window inside 2025 with the 2025 denominators
@@ -156,10 +156,11 @@ same draws) to the published ROAS table. It does not promise that the forecast o
   to 0.73, TS5 online 0.99 to 0.86, TS5 offline 1.12 to 0.98), while national TV does not move (0.9998 to 1.0003),
   because its history is spent by population. On the real plan of the clean window (2026-02-01..06-23), re-splitting the
   daily national totals by population instead of the real city spend raises digital by a factor of 3.7 in TSX online, 1.7
-  in TSX offline, 1.06 in TS5 online and 1.02 in TS5 offline. In TSX the three largest cities hold 58% to 80% of the
-  historical digital money against about 21% of the population. So a federal row shows a digital ROAS in TSX that is 1.7
-  to 3.7 times what the same money shows with the historical split of the fit; the optimizer is not affected. The remedy
-  is a model decision (a user- or population-weighted index at the next fit), not a serving change.
+  in TSX offline, 1.06 in TS5 online and 1.02 in TS5 offline. In TSX the three largest cities hold 58% to 62% of the
+  historical digital money (48% to 80% of the spend of the clean window) against about 21% of the population. So a
+  federal row shows a digital ROAS in TSX that is 1.7 to 3.7 times what the same money shows with the historical split
+  of the fit; the optimizer is not affected. The remedy is a model decision (a user- or population-weighted index at
+  the next fit), not a serving change.
 - Money booked in one city, or in a few, is not read like a federal row. The index is the unweighted mean of the
   per-resident exposure, so a ruble in a small city lifts the index more than a ruble in Moscow, and the effect then
   applies to the users of every city of the universe. The ROAS of such a plan row depends on the size of the city. In
