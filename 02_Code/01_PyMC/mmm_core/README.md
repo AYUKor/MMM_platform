@@ -83,7 +83,7 @@ with `M_t` the coefficient-weighted number of users (orders for `avg_basket`) ov
 booked on the plan rows in proportion to their spend, so every row of one campaign x channel has the same ROAS.
 All other channels keep city-level exposure. The classification comes from `ForecastEngine.assumption_channels_for`
 (metadata first, then the frozen transform, so packages exported before the field existed work too). Result rows say
-which basis was used (`exposure_basis`: `city` or `national_mean`) and how many beneficiary geographies had no usable
+which basis was used (`exposure_basis`: `city_level` or `national_mean_index`) and how many beneficiary geographies had no usable
 denominator (`national_index_geos_without_denominator_n`). The optimizer evaluates the cells of a national channel
 with a proportional-share kernel (exact at the plan's own proportions, concave away from them), so shifting money
 between cities inside a national channel is not rewarded; finalists are re-scored exactly by the forecast.
@@ -103,6 +103,41 @@ A change of the model (new data, new exposure or response logic) needs the match
 optimizer *before* the final package is built; see "Смена модели" in `AGENTS.md`. The code files in the package
 fingerprint are frozen after the package exists, so a failed parity check means: fix the code, build a new package,
 repeat validation.
+
+**What the gate ties, and what it does not.** The gate ties the replay of the training window (training rule, same rows,
+same draws) to the published ROAS table. It does not promise that the forecast of a *new plan* reproduces the table:
+
+- The table is the average over the whole training window; a shorter window or another budget level sits elsewhere on
+  the saturation curve.
+- A forecast takes the users of the analog year (default: the year before the plan) for every plan day. Where users grew
+  from one year to the next, every channel of the fit comes out lower by the same factor; this is the denominator policy
+  and not a property of national channels. (Halloween package, 2026 windows against analog 2025: users grew by 3% to 36%
+  depending on the fit.)
+- For an assumption channel the training mean runs over the fit rows present on each date; the forecast index divides by
+  all fit geographies. They coincide when every fit city has rows and differ before: in the Halloween panel 38, 41, 12
+  and 14 fit cities (TS5 online/offline, TSX online/offline) exist only from 2026-01-01, so a forecast for a window in
+  2025 is 10% to 18% lower than the replay for national channels. For future dates dividing by all fit geographies is
+  the right convention. A **historical** recalculation of a past campaign (the past-campaign catalog) must follow the
+  replay rule (`build_historical_forecast_replay_rows`: mean over the rows present on each date), not the forecast
+  convention.
+- A fit city with no usable denominator gets no weight in the national index. The denominator of a forecast day is the
+  one of the analog year (nearest available day of the same geography within 7 days), and
+  `_national_index_user_weights` drops a city from the index for the *whole* horizon when the denominator is missing on
+  any date of it. In the Halloween panel the cities that appear only in 2026 have no 2025 rows, so for a plan whose
+  horizon (plan end plus the carryover days) reaches past 2026-07-07 they are out on every date: 39, 41, 12 and 13 cities
+  in TS5 online, TS5 offline, TSX online and TSX offline (2.99%, 3.30%, 1.34% and 1.30% of the June 2026 users; one more
+  TSX offline city has no rows at all). The national-channel effect of such a plan is lower by about that user share
+  (inferred from the share, not recomputed). The count is in `national_index_geos_without_denominator_n` of the engine
+  rows; the CLI output files do not carry it. Changing the rule is a denominator-policy decision that also touches
+  other packages.
+
+Checked on the real Halloween package, same real-spend plan and same 300 draws (replay against `forecast_daily_rows`),
+window 2026-02-01..2026-06-23 with the analog year 2026 (denominators of the same year): city-level channels agree to
+0.7% (ratio 0.993 to 1.000), national channels to 2.1% (0.979 to 1.000; the shortfall is of the order of the fit cities
+without a usable denominator). A plan that starts inside the training window runs without a warm start (the carryover of
+earlier spend is supplied only for plans that start 1 to `l_max` days after the end of training), so a comparison on a
+historical window with large spend just before it comes out lower (window 2026-04-01..2026-06-23: 0.76 for one regional
+TV row); plans after the end of training are not affected.
 
 ## Forecast Engine Audit
 
