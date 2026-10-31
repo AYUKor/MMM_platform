@@ -116,10 +116,12 @@ same draws) to the published ROAS table. It does not promise that the forecast o
   and not a property of national channels. (Halloween package, 2026 windows against analog 2025: users grew by 3% to 36%
   depending on the fit.)
 - For an assumption channel the training mean runs over the fit rows present on each date; the forecast index runs over
-  the universe described above, which is constant over the horizon. They coincide when every fit city has rows and a
-  denominator and differ before: in the Halloween panel 38, 41, 12 and 14 fit cities (TS5 online/offline, TSX
-  online/offline) exist only from 2026-01-01, so a forecast for a window in 2025 is lower than the replay for national
-  channels. A **historical** recalculation of a past campaign (the past-campaign catalog) must follow the replay rule
+  the universe described above, which is constant over the horizon. They coincide when the cities with a denominator are
+  the cities that have rows on those dates, which is the case for a window inside 2025 with the 2025 denominators
+  (forecast against replay 0.9995 to 1.0007 on the Halloween package; in the Halloween panel 38, 41, 12 and 14 fit
+  cities exist only from 2026-01-01 and are outside the universe of such a plan, as they are outside the training mean
+  of those dates). They differ a little where a city appears or has gaps inside the window. A **historical**
+  recalculation of a past campaign (the past-campaign catalog) follows the replay rule
   (`build_historical_forecast_replay_rows`: mean over the rows present on each date), not the forecast convention.
 - A fit city with no usable denominator is outside the universe: it receives no exposure, carries no users and is not
   in the divisor. The denominator of a forecast day is the one of the analog year (nearest available day of the same
@@ -127,20 +129,63 @@ same draws) to the published ROAS table. It does not promise that the forecast o
   carryover days). In the Halloween panel the cities that appear only in 2026 have no 2025 rows, so for a plan whose
   horizon reaches past 2026-07-07 they are out on every date: 39, 41, 12 and 13 cities in TS5 online, TS5 offline, TSX
   online and TSX offline (2.99%, 3.30%, 1.34% and 1.30% of the June 2026 users; one more TSX offline city has no rows at
-  all). Two things follow. The national-channel effect of such a plan is lower by about that user share (inferred from
-  the share). And the divisor has to be the universe, not all fit cities: a federal row, which the portal spreads over
-  the cities it can compute (182 of 223 in TS5 offline), keeps its per-resident exposure only if the mean runs over
-  those same cities; dividing by all 223 understated national TV and digital by 17.5% in the test of a July plan. The
-  count of cities left out is `national_index_geos_without_denominator_n` in the engine rows; the CLI output files do
-  not carry it. Giving the new cities a denominator is a denominator-policy decision that also touches other packages.
+  all). Two things follow. First, such a plan puts no money and no effect in those cities, and its national-channel ROAS
+  comes out lower than the same plan with them included. Measured on a federal row of 20 mln national TV and 5 mln
+  digital over 14 days (600 draws; the second run with the analog-year gap raised to 400 days so that they get money):
+  TS5 online 1.7% (TV) and 3.9% (digital), TS5 offline 0.6% and 0.8%, TSX online digital 6.3%, TSX offline 0.0% (TV) and
+  8.1% (digital). The loss does not follow their share of users (1.3% to 3.3%) but their weight in the simple mean of the
+  index (see the next two bullets). Second, the divisor has to be the universe, not all fit cities: a federal row, which
+  the portal spreads over the cities it can compute (182 of 223 in TS5 offline), keeps its per-resident exposure only if
+  the mean runs over those same cities; dividing by all 223 understated national TV and digital by 17.5% in the test of a
+  July plan. The count of cities left out is `national_index_geos_without_denominator_n` in the engine rows; the CLI
+  output files do not carry it. Giving the new cities a denominator is a denominator-policy decision that also touches
+  other packages.
+- A federal row does not reproduce the table, and by how much depends on the fit. The index is the *simple* mean over the
+  universe of `e_g = spend_g / population_g / x_scale_g` (`x_scale_g` is a constant of the city's tier in the frozen
+  transform). Money spread by population gives every city the same spend per resident, so `e_g` differs between cities
+  wherever `x_scale_g` does, and the simple mean differs from the user-weighted mean that a city-by-city calculation (the
+  earlier serving rule) implies. For a federal row of 20 mln national TV and 5 mln digital on 2026-07-01..14 (Halloween
+  package, 600 draws, p50) the forecast against the package table is 0.91 (TS5 online TV), 0.99 (TS5 online digital),
+  0.93 and 1.12 (TS5 offline TV and digital), 2.02 (TSX online digital), 1.11 and 1.59 (TSX offline TV and digital);
+  against the earlier city-by-city rule 0.98, 1.05, 1.01, 1.01, 1.45, 1.00 and 1.04. Where the money is split so that
+  `e_g` is equal in every city, the two rules agree to 0.23%. The fit saw the real historical split of the money between
+  cities, and the table averages it; another split gives another ROAS under this rule. The gate is not affected: it
+  replays the training window with the real split, and that is the only place where table and forecast must agree.
+  Same money and dates with only the city split changed (Mac check, 600 draws): digital in TSX offline falls from 1.59 to
+  0.96 of the table when the money follows the historical split of the channel instead of the population (TSX online 2.02
+  to 0.73, TS5 online 0.99 to 0.86, TS5 offline 1.12 to 0.98), while national TV does not move (0.9998 to 1.0003),
+  because its history is spent by population. On the real plan of the clean window (2026-02-01..06-23), re-splitting the
+  daily national totals by population instead of the real city spend raises digital by a factor of 3.7 in TSX online, 1.7
+  in TSX offline, 1.06 in TS5 online and 1.02 in TS5 offline. In TSX the three largest cities hold 58% to 80% of the
+  historical digital money against about 21% of the population. So a federal row shows a digital ROAS in TSX that is 1.7
+  to 3.7 times what the same money shows with the historical split of the fit; the optimizer is not affected. The remedy
+  is a model decision (a user- or population-weighted index at the next fit), not a serving change.
+- Money booked in one city, or in a few, is not read like a federal row. The index is the unweighted mean of the
+  per-resident exposure, so a ruble in a small city lifts the index more than a ruble in Moscow, and the effect then
+  applies to the users of every city of the universe. The ROAS of such a plan row depends on the size of the city. In
+  the forecast (TSX offline, 5 mln digital over 14 days, p50): Moscow 1.4, Saint Petersburg 3.3, Tula 30 (ROAS times
+  population in thousands: 18.6, 18.6 and 13.9 thousand; the plans in Saint Petersburg and Tula lie outside the observed
+  spend range, so these two figures are indicative). The past-campaign catalog (replay rule) finds the same pattern for
+  real single-city campaigns (Moscow 1.2 to 1.5, Saint Petersburg 3.3, Tula 36). National TV, 20 mln in Moscow only,
+  gives 0.13 against 1.2 in the table (TSX offline). This follows from how the fit saw these channels, not from a defect
+  of the serving code. Book national TV and digital as a federal row (spread by population). The optimizer is not
+  affected (proportional-share kernel). A population-weighted mean in serving would stop agreeing with the fit, so it is
+  a decision for the model owner and, to stay consistent, a refit.
 
-Checked on the real Halloween package, same real-spend plan and same 300 draws (replay against `forecast_daily_rows`),
-window 2026-02-01..2026-06-23 with the analog year 2026 (denominators of the same year): city-level channels agree to
-0.7% (ratio 0.993 to 1.000), national channels to 2.1% (0.979 to 1.000; the shortfall is of the order of the fit cities
-without a usable denominator). A plan that starts inside the training window runs without a warm start (the carryover of
-earlier spend is supplied only for plans that start 1 to `l_max` days after the end of training), so a comparison on a
-historical window with large spend just before it comes out lower (window 2026-04-01..2026-06-23: 0.76 for one regional
-TV row); plans after the end of training are not affected.
+Checked on the real Halloween package (`pkg_8c7458c130658027_ab12e4a11a1af1e8`), same real-spend plan and same 300 draws
+(replay against `forecast_daily_rows`):
+
+| window | analog year of the denominators | city-level channels | national channels |
+|---|---|---|---|
+| 2026-02-01..2026-06-23 | 2026 | 0.993 to 1.000 (median 1.000) | 0.986 to 1.000 (median 0.998) |
+| 2025-01-01..2025-12-31 | 2025 | 1.000 to 1.003 | 0.9995 to 1.0007 |
+| 2026-04-01..2026-06-23 | 2026 | 0.76 to 1.00 (median 0.990) | 0.931 to 1.000 (median 0.985) |
+
+A plan that starts inside the training window runs without a warm start (the carryover of earlier spend is supplied only
+for plans that start 1 to `l_max` days after the end of training), so a comparison on a historical window with large
+spend just before it comes out lower (the last row: 0.76 for one regional TV row, 0.931 for national TV in TSX offline);
+plans after the end of training are not affected. City-level channels are not touched by the national-index code (their
+forecast and replay are identical before and after the change).
 
 ## Forecast Engine Audit
 

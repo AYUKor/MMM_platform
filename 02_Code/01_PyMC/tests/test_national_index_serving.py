@@ -471,6 +471,14 @@ class NationalIndexForecastTests(unittest.TestCase):
         )
         self.assertGreater(float(np.max(np.abs(divided_by_all / city_level - 1.0))), 0.08)
 
+    def test_plan_row_in_a_geography_without_denominator_still_fails_closed(self):
+        """Money in a city the forecast cannot compute is refused, never silently dropped from the index."""
+        start = date(2026, 3, 10)
+        engine = make_engine(skip_geo="E")
+        budgets = {("E", "Digital_Performance"): [500.0] * 5, ("A", "Digital_Performance"): [900.0] * 5}
+        with self.assertRaises(ValueError):
+            forecast_channel_totals(engine, plan_rows(start, budgets))
+
     def test_every_beta_layout_gives_the_same_result_as_the_loop_formula(self):
         start = date(2026, 3, 10)
         for dims in [("channel", "market_size_tier", "sample"), ("channel", "geo_label", "sample"), ("channel", "sample")]:
