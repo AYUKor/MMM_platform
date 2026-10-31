@@ -225,7 +225,7 @@ def _posterior_samples(run_dir: Path, fit_key: str, max_draws: int, seed: int) -
         values = data.transpose(*non_sample, "sample").values[..., selected]
         return values, non_sample
 
-    arrays = {name: stack(name) for name in ["alpha", "lam", "beta", "tau_g", "gamma", "sigma", "sigma_tier"]}
+    arrays = {name: stack(name) for name in ["alpha", "lam", "beta", "tau_g", "gamma", "sigma", "sigma_tier", "sigma_eta", "city_level_end_sd", "date_effect_sd", "nat_block_coef", "nat_block_resid_sd"]}
     sample_ids = [f"{int(sample_index.values[index][0])}:{int(sample_index.values[index][1])}" for index in selected]
     return {"arrays": arrays, "sample_ids": sample_ids, "posterior_sha256": sha256_file(path)}
 
@@ -278,6 +278,7 @@ def build_oot_feature_snapshot(
         "market_size_tier",
         *transform["spend_active"],
         *transform["controls"],
+        *[c for c in ((transform.get("time_effect") or {}).get("national_block") or {}).get("controls", []) if c not in transform["controls"]],
     ]
     missing = sorted(set(required_features) - set(segment_rows.columns))
     if missing:
@@ -322,7 +323,10 @@ def _score_fit_snapshot(
     *,
     seed: int,
     media_history: pd.DataFrame | None = None,
+    national_block: bool = False,
 ) -> tuple[pd.DataFrame, np.ndarray]:
+    """national_block (time_effect models only): the future national component (date effect) is predicted from the date-only controls by the ridge fitted on the
+    training dates instead of being drawn with mean zero.  It exists ONLY for scoring: it never enters channel estimates or portal forecasts."""
     geos = list(transform["geos"])
     channels = list(transform["spend_active"])
     controls = list(transform["controls"])
@@ -343,6 +347,24 @@ def _score_fit_snapshot(
         x_lagged = scaled_history_lags(frame, media_history, channels, geos, x_scale_geo, int(transform['l_max']))
     else:
         x_lagged = _make_geo_lagged_tensor_np(x_scaled, geo_idx_values, int(transform["l_max"]))
+    te = transform.get("time_effect") or {}
+    analytic = te.get("mode") == "analytic_level"
+    day_codes_all, _ = pd.factorize(pd.to_datetime(frame["date"]), sort=True)
+    n_days_all = int(day_codes_all.max()) + 1
+    if analytic and te.get("assumption_channels"):
+        # assumption channels enter the model with their cross-city mean exposure per date (see fit.py): the scorer uses the same definition
+        cnt_all = np.bincount(day_codes_all, minlength=n_days_all).astype(float)
+        for channel_a in te["assumption_channels"]:
+            if channel_a in channels:
+                m_a = channels.index(channel_a)
+                for lag_a in range(x_lagged.shape[0]):
+                    x_lagged[lag_a, :, m_a] = (np.bincount(day_codes_all, weights=x_lagged[lag_a, :, m_a], minlength=n_days_all) / cnt_all)[day_codes_all]
+    nat_block = (te.get("national_block") or {}) if analytic else {}
+    nb_controls = list(nat_block.get("controls", []))
+    nb_day_z = None
+    if national_block and nb_controls:
+        nb_rows = (frame[nb_controls].to_numpy(float) - np.asarray(nat_block["mean"], dtype=float)) / np.maximum(np.asarray(nat_block["std"], dtype=float), 1e-8)
+        nb_day_z = pd.DataFrame(nb_rows).groupby(day_codes_all).mean().to_numpy()
     if controls:
         control_raw = frame[controls].to_numpy(float)
         control_scaled = (
@@ -364,6 +386,17 @@ def _score_fit_snapshot(
     sigma_tier, _ = arrays["sigma_tier"]
     if alpha is None or lam is None or beta is None or tau_g is None:
         raise ValueError(f"Posterior lacks full-target OOT variables for {transform['fit_key']}")
+    if analytic:
+        sigma_eta, _ = arrays["sigma_eta"]
+        level_end_sd, _ = arrays["city_level_end_sd"]
+        date_effect_sd, _ = arrays["date_effect_sd"]
+        nat_coef, _ = arrays["nat_block_coef"]
+        nat_resid_sd, _ = arrays["nat_block_resid_sd"]
+        if sigma_eta is None or level_end_sd is None or date_effect_sd is None or (nb_day_z is not None and (nat_coef is None or nat_resid_sd is None)):
+            raise ValueError(f"Posterior lacks derived time_effect variables for {transform['fit_key']}")
+        week_ord = pd.PeriodIndex(pd.to_datetime(frame["date"]), freq="W-SUN").asi8
+        h_weeks = (week_ord - pd.Period(split.train_end, freq="W-SUN").ordinal).astype(int)       # weeks since the last training week (0 = same calendar week)
+        n_h = int(max(h_weeks.max(), 1))
     draws_n = alpha.shape[-1]
     predictions = np.zeros((int(scored_mask.sum()), draws_n), dtype=float)
     rng = np.random.RandomState(seed)
@@ -387,6 +420,17 @@ def _score_fit_snapshot(
             sigma_obs = np.broadcast_to(float(np.asarray(sigma[..., draw]).reshape(-1)[0]), len(mu))
         else:
             raise ValueError(f"Posterior lacks sigma for {transform['fit_key']}")
+        if analytic:
+            # city level at the end of training (filtered posterior), random-walk growth with the horizon (common to the days of a week), date effect per date, then noise
+            lvl_city = rng.normal(0.0, 1.0, len(geos)) * level_end_sd[:, draw]
+            path = np.cumsum(rng.normal(0.0, 1.0, (len(geos), n_h)) * float(sigma_eta[draw]), axis=1)
+            growth_rows = np.where(h_weeks > 0, path[geo_idx_values, np.maximum(h_weeks - 1, 0)], 0.0)
+            if nb_day_z is not None:
+                date_mean, date_sd = nb_day_z @ nat_coef[:, draw], float(nat_resid_sd[draw])
+            else:
+                date_mean, date_sd = np.zeros(n_days_all), float(date_effect_sd[draw])
+            date_draw = date_mean + rng.normal(0.0, 1.0, n_days_all) * date_sd
+            mu = mu + lvl_city[geo_idx_values] + growth_rows + date_draw[day_codes_all]
         y_scaled = rng.normal(mu, sigma_obs)
         if transform["y_scaling"] == "zscore":
             y = y_scaled * float(transform["y_scale"]) + float(transform["y_offset"])
@@ -578,6 +622,7 @@ def run_predictive_oot(
         transform = _load_transform(run_dir, fit_key)
         snapshot, outcomes = build_oot_feature_snapshot(panel, transform, split)
         posterior = _posterior_samples(run_dir, fit_key, max_draws, seed + fit_index)
+        te_model = bool(transform.get("time_effect"))
         predictions, draws = _score_fit_snapshot(
             snapshot,
             transform,
@@ -585,6 +630,7 @@ def run_predictive_oot(
             split,
             seed=seed + 1000 + fit_index,
             media_history=history,
+            national_block=te_model,
         )
         prediction_hashes[fit_key] = _canonical_hash(predictions.to_dict("records"))
         target = fit_key.split("::", 1)[1]
@@ -605,6 +651,17 @@ def run_predictive_oot(
         if metrics['scored_days'] < split.min_scored_days:
             raise ValueError(f'Insufficient observed OOT days for {fit_key}: {metrics["scored_days"]} < {split.min_scored_days}')
         verdict = classify_oot_metrics(metrics)
+        spec_columns: dict[str, Any] = {}
+        if te_model:       # the official class uses the national-component block; the variant without it (date effect drawn with mean zero) always sits next to it
+            predictions_spec, draws_spec = _score_fit_snapshot(
+                snapshot, transform, posterior, split, seed=seed + 1000 + fit_index, media_history=history, national_block=False,
+            )
+            metrics_spec = evaluate_predictive_oot(predictions_spec, draws_spec, outcomes, training_outcomes, target=target)
+            spec_columns = {
+                "oot_variant": "national_block",
+                **{f"{key}_spec": metrics_spec[key] for key in ("mae", "mase", "crps", "crps_skill_vs_last_value", "normalized_abs_bias", "coverage_90")},
+                "quality_status_spec": classify_oot_metrics(metrics_spec),
+            }
         geo_coverage = snapshot.attrs.get("geo_coverage") or {}
         for row in geo_coverage.get('excluded_observations', []):
             coverage_rows.append({'fit_key': fit_key, **row})
@@ -617,6 +674,7 @@ def run_predictive_oot(
                 "segment": segment,
                 **metrics,
                 "quality_status": verdict,
+                **spec_columns,
                 "unknown_geos_excluded_n": int(geo_coverage.get("unknown_geos_excluded_n", 0)),
                 "known_geo_row_coverage": float(geo_coverage.get("known_geo_row_coverage", 1.0)),
             }

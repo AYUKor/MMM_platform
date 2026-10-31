@@ -22,6 +22,7 @@ import arviz as az
 import numpy as np
 import pandas as pd
 import pymc as pm
+import pytensor
 import pytensor.tensor as pt
 from linearmodels.panel import PanelOLS
 
@@ -166,6 +167,18 @@ TC5_OFFLINE_POLICY_TARGETS = {"turnover_per_user", "avg_basket"}
 TC5_OFFLINE_EXCLUDED_MEDIA_COLS = {"spend_Digital_Performance"}
 INDOOR_MEDIA_COL = "spend_Indoor"
 INDOOR_REPORTING_MODE = "diagnostic_only_in_fast_until_medium_validated"
+# ---- time_effect (v4k) switches: set from config["time_effect"] by _configure_runtime_globals; all OFF by default =>
+# model graph, fit contract and posterior are identical to the previous fit.py (see tests/test_time_effect_v4k.py) ----
+TIME_EFFECT_MODE = "off"                     # "off" | "analytic_level": date effects removed by within-date centring, weekly random-walk city level integrated out analytically
+TIME_EFFECT_ETA_SD = 0.02                    # HalfNormal scale of the weekly step of the city level (units of Y / y_scale)
+TIME_EFFECT_LEVEL_SD0 = 1.0                  # prior SD of the initial city level
+TIME_EFFECT_DROP_TIME_ONLY_CONTROLS = True   # controls without cross-city variation inside a date (or inside a city) are absorbed by the date effect / city level and are not modelled
+ROAS_PRIORS = None                           # None | {"targets": [...], "default": (median, lo90, hi90) | None, "by_channel": {spend_col: (median, lo90, hi90)}}: priors of beta stated in ROAS space
+POOL_TIER_CHANNELS = None                    # None | {(network, channel, target): {"Нац_ТВ", ...}} overrides BETA_TIER_POOLED_CHANNELS_BY_FIT
+NO_ROUNDING_PRIORS = False                   # True: beta_FE / beta_SE are not rounded to 6 decimals in _build_empirical_priors
+ASSUMPTION_CHANNELS: dict = {}               # {"default": (spend_col, ...), "by_fit": {fit_key: (spend_col, ...)}}: channels whose exposure is replaced by the cross-city mean per date (no cross-city identification, beta follows its ROAS prior)
+ALPHA_PRIOR = None                           # None | {spend_col: (alpha_mean, concentration)}: Beta prior of the carry-over alpha (sampled-shape modes)
+_TC5_POLICY_TOUCHED = False                  # True while TC5_OFFLINE_SPECIFIC_POLICY_ENABLED was set by config["time_effect"] (restored to the stock value when the switches go off)
 MODE = "production"
 
 SPEND_ACTIVE_BASE: list[str] = []
@@ -193,6 +206,7 @@ class GuardedFitSpec:
     vif_threshold: float
     fixed_lambda_channels_by_fit: dict[str, tuple[str, ...]] = field(default_factory=dict)
     media_history_path: Path | None = None
+    time_effect: dict[str, Any] | None = None
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -265,6 +279,8 @@ def get_beta_structure_for_fit(network, channel, target):
 
 def get_beta_tier_pooled_channels_for_fit(network, channel, target):
     """Channels that should be pooled inside a hierarchical_tier beta fit."""
+    if POOL_TIER_CHANNELS is not None and (network, channel, target) in POOL_TIER_CHANNELS:
+        return set(POOL_TIER_CHANNELS[(network, channel, target)])
     return set(BETA_TIER_POOLED_CHANNELS_BY_FIT.get((network, channel, target), set()))
 
 def compute_vif_for_cols(df, cols):
@@ -467,6 +483,18 @@ def beta_prior_from_empirical(seg_priors, spend_col, fallback_median, fallback_s
         "x_scale_typical": float(x_scale_m),
         "spend_scaled_typical": float(spend_scaled_typical),
     }
+
+def beta_prior_from_roas(roas_median, roas_lo90, roas_hi90, spend_total_rub, users, x_sat_col, y_scale):
+    """Prior of beta stated in ROAS space (rub of turnover per rub of spend).
+
+    ROAS_m = beta_m * R_m with R_m = y_scale * sum_i users_i * x_sat_i,m / sum_i spend_i,m, where x_sat = tanh(lam * adstock / 2) is the model's own
+    normalised adstock + saturation at the prior-mean alpha, lambda (so adstock accumulation is exact by construction).
+    median(beta) = ROAS_median / R_m ;  log-sd = ln(hi90 / lo90) / (2 * 1.645)."""
+    R = float(y_scale) * float(np.sum(users * x_sat_col)) / max(float(spend_total_rub), 1e-12)
+    if not np.isfinite(R) or R <= 1e-12:
+        raise ValueError("ROAS prior is not representable: zero response basis")
+    return {"median": float(roas_median) / R, "scale": float(np.log(float(roas_hi90) / float(roas_lo90)) / (2.0 * 1.6448536269514722)), "R_per_unit_beta": R}
+
 
 def _positive_p95(values, default=1.0):
     vals = np.asarray(values, dtype=float)
@@ -796,6 +824,19 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
     if len(seg) == 0:
         return None, None, None
 
+    time_only_controls_dropped: list[str] = []
+    date_only_controls_dropped: list[str] = []
+    city_only_controls_dropped: list[str] = []
+    if TIME_EFFECT_MODE == "analytic_level" and TIME_EFFECT_DROP_TIME_ONLY_CONTROLS and ctrl_active:
+        # a control that does not vary across cities inside a date is a function of the date alone (absorbed by the date effect), one that does not vary inside a
+        # city is absorbed by the city level: neither is identified, so neither is modelled (the model is equivalent, the posterior of its coefficient would be the prior)
+        within_date_sd = seg.groupby("date")[ctrl_active].std(ddof=0).fillna(0.0).max(axis=0)
+        within_city_sd = seg.groupby("geo_label")[ctrl_active].std(ddof=0).fillna(0.0).max(axis=0)
+        date_only_controls_dropped = [c for c in ctrl_active if float(within_date_sd[c]) <= 1e-12]
+        city_only_controls_dropped = [c for c in ctrl_active if float(within_city_sd[c]) <= 1e-12 and c not in set(date_only_controls_dropped)]
+        time_only_controls_dropped = date_only_controls_dropped + city_only_controls_dropped
+        ctrl_active = [c for c in ctrl_active if c not in set(time_only_controls_dropped)]
+
     geos = sorted(seg["geo_label"].unique())
     M, G, K = len(spend_active), len(geos), len(ctrl_active)
     geo_idx = pd.Categorical(seg["geo_label"], categories=geos).codes.astype(int)
@@ -846,6 +887,20 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
         X_lagged = make_geo_lagged_tensor(X_spend_scaled, geo_idx, l_max, dates=seg.date)
     else:
         X_lagged = scaled_history_lags(seg, media_history, spend_active, geos, x_scale_geo, l_max)
+
+    assumption_channels_applied: list[str] = []
+    assumption_set = set((ASSUMPTION_CHANNELS.get("by_fit") or {}).get(f"{network}/{channel}::{target}", ASSUMPTION_CHANNELS.get("default") or ()))
+    if TIME_EFFECT_MODE == "analytic_level" and assumption_set:
+        # assumption channels: the exposure at every lag is replaced by its cross-city mean on the same date, so the channel has no cross-city variation and is not
+        # identified by the data (its beta follows the ROAS prior); forecast scenarios still use the planned city-level per-capita exposure with the same beta
+        date_codes_n, _ = pd.factorize(seg["date"], sort=True)
+        n_dates_n = int(date_codes_n.max()) + 1
+        cnt_dates_n = np.bincount(date_codes_n, minlength=n_dates_n).astype(float)
+        for m_n, sc_n in enumerate(spend_active):
+            if sc_n in assumption_set:
+                for lag_n in range(X_lagged.shape[0]):
+                    X_lagged[lag_n, :, m_n] = (np.bincount(date_codes_n, weights=X_lagged[lag_n, :, m_n], minlength=n_dates_n) / cnt_dates_n)[date_codes_n]
+                assumption_channels_applied.append(sc_n)
 
     if target == "orders_per_user":
         y_offset = float(Y_raw.mean())
@@ -1050,10 +1105,35 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
         alpha_raw_mean = min(max(alpha_prior_mean[m_idx] / alpha_cap, 0.05), 0.95)
         a_pars[m_idx] = max(alpha_raw_mean * PRIOR_CONCENTRATION, 0.5)
         b_pars[m_idx] = max((1 - alpha_raw_mean) * PRIOR_CONCENTRATION, 0.5)
+        if ALPHA_PRIOR and setup["spend_col"] in ALPHA_PRIOR:
+            alpha_mean_ov, alpha_conc_ov = ALPHA_PRIOR[setup["spend_col"]]
+            alpha_prior_mean[m_idx] = min(max(float(alpha_mean_ov), 1e-4), alpha_cap - 1e-4)
+            alpha_raw_ov = min(max(alpha_prior_mean[m_idx] / alpha_cap, 0.02), 0.98)
+            a_pars[m_idx] = float(alpha_conc_ov) * alpha_raw_ov
+            b_pars[m_idx] = float(alpha_conc_ov) * (1.0 - alpha_raw_ov)
 
         lam_unit_mean = min(max(lam_prior_mean_arr[m_idx] / lam_cap, 0.05), 0.95)
         lam_a_pars[m_idx] = max(lam_unit_mean * LAM_PRIOR_CONCENTRATION, 0.5)
         lam_b_pars[m_idx] = max((1 - lam_unit_mean) * LAM_PRIOR_CONCENTRATION, 0.5)
+
+    v4_roas_rows = []
+    if ROAS_PRIORS is not None and target in set(ROAS_PRIORS.get("targets") or ["turnover_per_user"]):
+        w_prior = alpha_prior_mean[None, :] ** np.arange(l_max + 1)[:, None]
+        w_prior = w_prior / w_prior.sum(axis=0, keepdims=True)
+        x_sat_prior = np.tanh(lam_prior_mean_arr[None, :] * (w_prior[:, None, :] * X_lagged).sum(axis=0) / 2.0)
+        users_row = seg["unique_users"].to_numpy(float)
+        for m_idx, sc in enumerate(spend_active):
+            roas_spec = (ROAS_PRIORS.get("by_channel") or {}).get(sc, ROAS_PRIORS.get("default"))
+            if roas_spec is None:
+                continue
+            info = beta_prior_from_roas(roas_spec[0], roas_spec[1], roas_spec[2], float(seg[sc].sum()), users_row, x_sat_prior[:, m_idx], y_scale)
+            beta_prior_medians[m_idx] = info["median"]
+            beta_scales[m_idx] = info["scale"]
+            beta_prior_source[m_idx] = "roas_prior_v4"
+            beta_prior_type[m_idx] = "lognormal_roas_prior_v4"
+            beta_pymc_implied[m_idx] = info["median"]
+            v4_roas_rows.append({"spend_col": sc, "roas_median": float(roas_spec[0]), "roas_lo90": float(roas_spec[1]), "roas_hi90": float(roas_spec[2]),
+                                 "beta_median": info["median"], "beta_log_sd": info["scale"], "R_per_unit_beta": info["R_per_unit_beta"]})
 
     if "get_beta_structure_for_fit" in globals():
         beta_structure = get_beta_structure_for_fit(network, channel, target)
@@ -1135,6 +1215,20 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
     ])
     # `beta_scales` is legacy-named; in this fixed spec it stores lognormal sigma_log.
     beta_prior_log_sd = np.clip(beta_scales, 0.3, 2.0)
+
+    v4_time = {}
+    if TIME_EFFECT_MODE == "analytic_level":
+        week_codes, week_names = pd.factorize(seg["date"].dt.to_period("W-SUN").astype(str), sort=True)
+        date_codes, date_names = pd.factorize(seg["date"], sort=True)
+        v4_time = {"city_level": "analytic", "week_idx": week_codes.astype(int), "date_idx": date_codes.astype(int), "n_week": int(len(week_names)), "n_date": int(len(date_names)),
+                   "eta_sd_prior": float(TIME_EFFECT_ETA_SD), "level_sd0": float(TIME_EFFECT_LEVEL_SD0), "drop_city_intercept": True,
+                   "time_only_controls_dropped": list(time_only_controls_dropped), "assumption_channels_applied": list(assumption_channels_applied),
+                   "date_only_controls_dropped": list(date_only_controls_dropped), "city_only_controls_dropped": list(city_only_controls_dropped)}
+        if date_only_controls_dropped:
+            # national-component block (used ONLY by the OOT scorer, never by channel estimates or portal forecasts): the dropped date-only controls per date, standardised
+            nb_by_date = seg.groupby("date")[date_only_controls_dropped].mean().sort_index().astype(float)
+            nb_mean = nb_by_date.mean(axis=0).to_numpy(float); nb_std = np.maximum(nb_by_date.std(axis=0, ddof=0).to_numpy(float), 1e-8)
+            v4_time.update({"nat_block_names": list(date_only_controls_dropped), "nat_block_mean": nb_mean, "nat_block_std": nb_std, "nat_block_z": (nb_by_date.to_numpy(float) - nb_mean) / nb_std})
 
     coords = {
         "channel": channel_names,
@@ -1218,7 +1312,52 @@ def build_single_target_data(panel_df, network, channel, target, spend_cols, ctr
         "tc5_offline_specific_policy_applied": tc5_policy_applied,
         "tc5_offline_excluded_media_cols": tc5_policy_excluded_media_cols,
         "M": M, "G": G, "T": T, "K_ctrl": K, "l_max": l_max,
+        "v4_roas_prior_rows": v4_roas_rows,
+        **v4_time,
     }
+
+def city_level_loglik(r, geo_np, wk_np, G, W, sig_g, sigma_eta, s0, solver="scan"):
+    """Gaussian log-likelihood of residuals r (one per city-day) when every city has a weekly random-walk local level
+    c[g,w] = c[g,w-1] + sigma_eta*eps, c[g,0] ~ N(0, s0^2), integrated out analytically (week of a row = wk_np).
+    Given the data the precision of the levels, Q_g = K/sigma_eta^2 + e0/s0^2 + diag(n_gw/sig_g^2), is tridiagonal, so
+    solver='scan' uses an LDL' recursion over weeks (vectorised over cities); 'chol' is the dense batched Cholesky kept
+    for tests (tests/test_time_effect_v4k.py checks both against brute force).  Weeks without observations are handled (the level still evolves)."""
+    n_gw = np.zeros((G, W)); np.add.at(n_gw, (geo_np, wk_np), 1.0)
+    N_g = n_gw.sum(axis=1)
+    S1 = pt.inc_subtensor(pt.zeros((G, W))[geo_np, wk_np], r)
+    S2 = pt.inc_subtensor(pt.zeros((G, W))[geo_np, wk_np], r ** 2)
+    prec_e = 1.0 / sig_g ** 2
+    b = S1 * prec_e[:, None]
+    if solver == "scan":
+        kdiag = np.full(W, 2.0); kdiag[0] = kdiag[-1] = 1.0
+        e0v = np.zeros(W); e0v[0] = 1.0 / s0 ** 2
+        a_mat = kdiag[None, :] / sigma_eta ** 2 + e0v[None, :] + n_gw * prec_e[:, None]       # (G, W) diagonal of Q
+        cc = -1.0 / sigma_eta ** 2                                                              # off-diagonal of Q
+
+        def _step(a_t, b_t, d_prev, u_prev, c_off):
+            l_t = c_off / d_prev
+            return a_t - c_off * l_t, b_t - l_t * u_prev
+
+        (d_seq, u_seq), _ = pytensor.scan(_step, sequences=[a_mat[:, 1:].T, b[:, 1:].T],
+                                          outputs_info=[a_mat[:, 0], b[:, 0]], non_sequences=[cc])
+        d_all = pt.concatenate([a_mat[:, :1].T, d_seq], axis=0)                                # (W, G)
+        u_all = pt.concatenate([b[:, :1].T, u_seq], axis=0)
+        logdet_q = pt.log(d_all).sum()
+        quad = (u_all ** 2 / d_all).sum()
+    else:
+        D = np.zeros((W - 1, W))
+        for i_ in range(W - 1):
+            D[i_, i_], D[i_, i_ + 1] = -1.0, 1.0
+        Kmat = D.T @ D
+        e0 = np.zeros((W, W)); e0[0, 0] = 1.0
+        eye = np.eye(W)
+        Q = Kmat[None] / sigma_eta ** 2 + e0[None] / s0 ** 2 + (n_gw * prec_e[:, None])[:, :, None] * eye[None]
+        L = pt.linalg.cholesky(Q)
+        z = pt.linalg.solve_triangular(L, b[:, :, None], lower=True)[:, :, 0]
+        logdet_q = 2.0 * pt.log((L * eye[None]).sum(axis=-1)).sum()
+        quad = (z ** 2).sum()
+    return (-0.5 * (prec_e * S2.sum(axis=1)).sum() - 0.5 * (N_g * pt.log(2 * np.pi * sig_g ** 2)).sum()
+            + 0.5 * quad - 0.5 * logdet_q + 0.5 * G * (-np.log(s0 ** 2) - (W - 1) * pt.log(sigma_eta ** 2)))
 
 def build_pymc_model(coords, data):
     """Single-target Bayesian MMM, fixed specification.
@@ -1328,9 +1467,15 @@ def build_pymc_model(coords, data):
         geo_idx_data = pm.Data("geo_idx", data["geo_idx"])
         tier_idx_data = pm.Data("market_tier_idx", data["obs_tier_idx"])
 
-        mu_tau = pm.Normal("mu_tau", mu=data["y_level_prior_mu"], sigma=data["y_level_prior_sd"])
+        _analytic = data.get("city_level", "off") == "analytic"
+        # analytic mode: the city intercepts are redundant with the integrated level c[g, 0]; as free parameters they are prior-only and add a funnel (mu_tau, sigma_tau, tau_g)
+        _drop_tau = _analytic and bool(data.get("drop_city_intercept", True))
+        if not _drop_tau:
+            mu_tau = pm.Normal("mu_tau", mu=data["y_level_prior_mu"], sigma=data["y_level_prior_sd"])
         baseline_structure = data.get("baseline_structure", "tier_geo")
-        if baseline_structure == "tier_geo":
+        if _drop_tau:
+            tau_g = None
+        elif baseline_structure == "tier_geo":
             sigma_tau_tier = pm.HalfNormal("sigma_tau_tier", sigma=data["y_tier_sd_prior"])
             tau_tier_raw = pm.Normal("tau_tier_raw", mu=0, sigma=1.0, dims="market_size_tier")
             tau_tier = pm.Deterministic("tau_tier", mu_tau + sigma_tau_tier * tau_tier_raw, dims="market_size_tier")
@@ -1361,7 +1506,7 @@ def build_pymc_model(coords, data):
         else:
             beta_obs = beta[:, geo_idx_data].T
             spend_contrib = (beta_obs * x_sat).sum(axis=1)
-        mu = tau_g[geo_idx_data] + spend_contrib
+        mu = spend_contrib if _drop_tau else tau_g[geo_idx_data] + spend_contrib
         if K > 0:
             x_ctrl = pm.Data("x_ctrl", data["X_ctrl"])
             mu = mu + pt.dot(x_ctrl, gamma)
@@ -1372,7 +1517,26 @@ def build_pymc_model(coords, data):
         else:
             sigma = pm.HalfNormal("sigma", sigma=data["sigma_prior"])
             sigma_obs = sigma
-        pm.Normal("y_obs", mu=mu, sigma=sigma_obs, observed=data["Y"], dims="obs")
+        if _analytic:
+            # within-date centring (the flat-prior limit of free date effects) + weekly random-walk city level integrated out analytically
+            day_idx = np.asarray(data["date_idx"], dtype=int); n_days = int(day_idx.max()) + 1
+            geo_np = np.asarray(data["geo_idx"], dtype=int); n_geo_c = int(geo_np.max()) + 1
+            wk_np = np.asarray(data["week_idx"], dtype=int); n_wk_c = int(wk_np.max()) + 1
+            cnt_d = np.bincount(day_idx, minlength=n_days).astype(float)
+            Ynp = np.asarray(data["Y"], dtype=float)
+            Y_til = Ynp - (np.bincount(day_idx, weights=Ynp, minlength=n_days) / cnt_d)[day_idx]
+            mu_d = pt.inc_subtensor(pt.zeros(n_days)[day_idx], mu) / cnt_d
+            r_res = pt.as_tensor_variable(Y_til) - (mu - mu_d[day_idx])
+            if data.get("error_structure", "tier") == "tier":
+                city_tier = np.zeros(n_geo_c, dtype=int); city_tier[geo_np] = np.asarray(data["obs_tier_idx"], dtype=int)
+                sig_g = sigma_tier[city_tier]
+            else:
+                sig_g = pt.ones(n_geo_c) * sigma
+            sigma_eta = pm.HalfNormal("sigma_eta", sigma=float(data.get("eta_sd_prior", 0.02)))
+            ll = city_level_loglik(r_res, geo_np, wk_np, n_geo_c, n_wk_c, sig_g, sigma_eta, float(data.get("level_sd0", 1.0)), solver="scan")
+            pm.Potential("y_ll", ll)
+        else:
+            pm.Normal("y_obs", mu=mu, sigma=sigma_obs, observed=data["Y"], dims="obs")
 
     return model
 
@@ -1792,6 +1956,72 @@ def prior_posterior_contraction(idata, model, var_names=("beta",), samples=500):
     return pd.DataFrame(rows)
 
 
+def _parse_time_effect_config(raw: Any) -> dict[str, Any] | None:
+    """Validate config["time_effect"]; None (or mode "off") keeps every switch off."""
+    if not raw:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("time_effect must be a mapping")
+    mode = str(raw.get("mode", "off"))
+    if mode == "off":
+        return None
+    if mode != "analytic_level":
+        raise ValueError(f"Unsupported time_effect.mode={mode!r}; expected 'off' or 'analytic_level'")
+    allowed = {"mode", "eta_sd_prior", "level_sd0", "drop_time_only_controls", "no_rounding_priors", "roas_priors", "pool_tier_channels", "assumption_channels", "alpha_prior", "tc5_offline_policy_enabled"}
+    unknown = sorted(set(raw) - allowed)
+    if unknown:
+        raise ValueError(f"Unknown time_effect keys: {unknown}")
+    out: dict[str, Any] = {
+        "mode": mode,
+        "eta_sd_prior": float(raw.get("eta_sd_prior", 0.02)),
+        "level_sd0": float(raw.get("level_sd0", 1.0)),
+        "drop_time_only_controls": bool(raw.get("drop_time_only_controls", True)),
+        "no_rounding_priors": bool(raw.get("no_rounding_priors", True)),
+    }
+    if out["eta_sd_prior"] <= 0 or out["level_sd0"] <= 0:
+        raise ValueError("time_effect.eta_sd_prior and level_sd0 must be positive")
+    roas = raw.get("roas_priors")
+    if roas:
+        def _triple(value: Any, label: str) -> list[float]:
+            if not (isinstance(value, (list, tuple)) and len(value) == 3 and 0 < float(value[1]) < float(value[0]) < float(value[2])):
+                raise ValueError(f"time_effect.roas_priors {label} must be [median, lo90, hi90] with 0 < lo90 < median < hi90")
+            return [float(v) for v in value]
+        out["roas_priors"] = {
+            "targets": [str(t) for t in (roas.get("targets") or ["turnover_per_user"])],
+            "default": _triple(roas["default"], "default") if roas.get("default") is not None else None,
+            "by_channel": {str(k): _triple(v, str(k)) for k, v in (roas.get("by_channel") or {}).items()},
+        }
+    pool = raw.get("pool_tier_channels")
+    if pool:
+        out["pool_tier_channels"] = {}
+        for fit_key_token, channels in pool.items():
+            fit_key = next((fk for fk in EXPECTED_FIT_KEYS if fit_key_token in (fk, _safe_fit_key(fk))), None)
+            if fit_key is None:
+                raise ValueError(f"Unknown pool_tier_channels fit_key: {fit_key_token}")
+            out["pool_tier_channels"][fit_key] = [str(c) for c in channels]
+    ac = raw.get("assumption_channels") or []
+    if isinstance(ac, dict):         # {"default": [...], "<fit_key>": [...]}: the decision may differ by segment x target
+        by_fit = {}
+        for key, channels in ac.items():
+            if key == "default":
+                continue
+            fit_key = next((fk for fk in EXPECTED_FIT_KEYS if key in (fk, _safe_fit_key(fk))), None)
+            if fit_key is None:
+                raise ValueError(f"Unknown assumption_channels fit_key: {key}")
+            by_fit[fit_key] = [str(c) for c in channels]
+        out["assumption_channels"] = {"default": [str(c) for c in ac.get("default", [])], "by_fit": by_fit}
+    else:
+        out["assumption_channels"] = {"default": [str(c) for c in ac], "by_fit": {}}
+    if raw.get("tc5_offline_policy_enabled") is not None:
+        out["tc5_offline_policy_enabled"] = bool(raw["tc5_offline_policy_enabled"])        # False = digital is NOT excluded from the TC5/Offline turnover and basket fits (stock policy excludes it)
+    alpha_prior = raw.get("alpha_prior")
+    if alpha_prior:
+        out["alpha_prior"] = {str(k): {"mean": float(v["mean"]), "concentration": float(v["concentration"])} for k, v in alpha_prior.items()}
+        if any(not 0 < v["mean"] < 1 or v["concentration"] <= 0 for v in out["alpha_prior"].values()):
+            raise ValueError("time_effect.alpha_prior needs 0 < mean < 1 and concentration > 0")
+    return out
+
+
 def load_guarded_fit_spec(
     config_path: str | Path,
     *,
@@ -1853,6 +2083,7 @@ def load_guarded_fit_spec(
         vif_threshold=float(config.get("vif_threshold", 7.0)),
         fixed_lambda_channels_by_fit=fixed_lambda_channels_by_fit,
         media_history_path=resolve_path(config['media_history_path']) if config.get('media_history_path') else None,
+        time_effect=_parse_time_effect_config(config.get("time_effect")),
     )
 
 
@@ -1868,8 +2099,40 @@ def normalize_only_fits(only_fits: Iterable[str] | None) -> set[str] | None:
 
 def _configure_runtime_globals(spec: GuardedFitSpec) -> None:
     global MODE, MEDIA_RESPONSE_MODE
+    global TIME_EFFECT_MODE, TIME_EFFECT_ETA_SD, TIME_EFFECT_LEVEL_SD0, TIME_EFFECT_DROP_TIME_ONLY_CONTROLS
+    global ROAS_PRIORS, POOL_TIER_CHANNELS, NO_ROUNDING_PRIORS, ASSUMPTION_CHANNELS, ALPHA_PRIOR, TC5_OFFLINE_SPECIFIC_POLICY_ENABLED, _TC5_POLICY_TOUCHED
     MODE = spec.mode
     MEDIA_RESPONSE_MODE = "fixed" if spec.mode == "fast" else "tight"
+    te = spec.time_effect
+    if not te:       # every switch back to its default: a previous spec in the same process must not leak
+        TIME_EFFECT_MODE, TIME_EFFECT_ETA_SD, TIME_EFFECT_LEVEL_SD0, TIME_EFFECT_DROP_TIME_ONLY_CONTROLS = "off", 0.02, 1.0, True
+        ROAS_PRIORS, POOL_TIER_CHANNELS, NO_ROUNDING_PRIORS, ASSUMPTION_CHANNELS, ALPHA_PRIOR = None, None, False, {}, None
+        if _TC5_POLICY_TOUCHED:
+            TC5_OFFLINE_SPECIFIC_POLICY_ENABLED, _TC5_POLICY_TOUCHED = True, False
+        return
+    if te.get("tc5_offline_policy_enabled") is not None:
+        TC5_OFFLINE_SPECIFIC_POLICY_ENABLED, _TC5_POLICY_TOUCHED = bool(te["tc5_offline_policy_enabled"]), True
+    TIME_EFFECT_MODE = te["mode"]
+    TIME_EFFECT_ETA_SD = float(te["eta_sd_prior"])
+    TIME_EFFECT_LEVEL_SD0 = float(te["level_sd0"])
+    TIME_EFFECT_DROP_TIME_ONLY_CONTROLS = bool(te["drop_time_only_controls"])
+    NO_ROUNDING_PRIORS = bool(te["no_rounding_priors"])
+    roas = te.get("roas_priors")
+    ROAS_PRIORS = None if not roas else {
+        "targets": list(roas["targets"]),
+        "default": tuple(roas["default"]) if roas.get("default") is not None else None,
+        "by_channel": {channel_to_spend_col(k): tuple(v) for k, v in roas["by_channel"].items()},
+    }
+    POOL_TIER_CHANNELS = None if not te.get("pool_tier_channels") else {
+        _fit_tuple(fit_key): set(channels) for fit_key, channels in te["pool_tier_channels"].items()
+    }
+    ASSUMPTION_CHANNELS = {
+        "default": tuple(channel_to_spend_col(c) for c in (te.get("assumption_channels") or {}).get("default", [])),
+        "by_fit": {fit_key: tuple(channel_to_spend_col(c) for c in channels) for fit_key, channels in ((te.get("assumption_channels") or {}).get("by_fit") or {}).items()},
+    }
+    ALPHA_PRIOR = None if not te.get("alpha_prior") else {
+        channel_to_spend_col(k): (float(v["mean"]), float(v["concentration"])) for k, v in te["alpha_prior"].items()
+    }
 
 
 def _validate_panel_frame(frame: pd.DataFrame, spec: GuardedFitSpec) -> dict[str, Any]:
@@ -2115,11 +2378,15 @@ def _build_empirical_priors(
                     "decay": round(float(decay), 3),
                     "alpha_a": round(max(decay * concentration, 0.5), 2),
                     "alpha_b": round(max((1 - decay) * concentration, 0.5), 2),
-                    "beta_FE": round(float(beta_fe), 6),
-                    "beta_SE": round(float(se_fe), 6) if se_fe is not None and np.isfinite(se_fe) else None,
+                    "beta_FE": float(beta_fe) if NO_ROUNDING_PRIORS else round(float(beta_fe), 6),
+                    "beta_SE": (float(se_fe) if NO_ROUNDING_PRIORS else round(float(se_fe), 6)) if se_fe is not None and np.isfinite(se_fe) else None,
                     "beta_sigma": round(max(abs(beta_fe) * 3 if np.isfinite(beta_fe) else 0, 0.5), 4),
                 }
     return priors
+
+
+def channel_to_spend_col(channel: str) -> str:
+    return channel if str(channel).startswith("spend_") else f"spend_{channel}"
 
 
 def _safe_fit_key(fit_key: str) -> str:
@@ -2223,8 +2490,29 @@ def _fit_contract_payload(
             "l_max": int(data["l_max"]),
         },
     }
+    if TIME_EFFECT_MODE != "off":
+        payload["time_effect"] = _time_effect_block(data)
     payload["fit_contract_sha256"] = _canonical_json_sha256(payload)
     return payload
+
+
+def _time_effect_block(data: dict[str, Any]) -> dict[str, Any]:
+    """What the time_effect switches did to this fit (contract, transform and passport must not claim more than this)."""
+    return {
+        "mode": TIME_EFFECT_MODE,
+        "city_level": "weekly random walk, integrated out analytically (tridiagonal precision, LDL' scan over weeks)",
+        "date_effects": "not parameters: removed by within-date centring (flat-prior limit of free date effects)",
+        "city_intercepts": "not parameters (tau_g, mu_tau, sigma_tau absent): absorbed by the integrated level c[g, 0]; posterior variable tau_g is derived after sampling = baseline at the end of training",
+        "eta_sd_prior": float(data.get("eta_sd_prior", TIME_EFFECT_ETA_SD)),
+        "level_sd0": float(data.get("level_sd0", TIME_EFFECT_LEVEL_SD0)),
+        "time_only_controls_absorbed_by_date_effect": list(data.get("date_only_controls_dropped", [])),
+        "controls_absorbed_by_city_level": list(data.get("city_only_controls_dropped", [])),
+        "national_block": {"purpose": "OOT scoring only: ridge of the empirical date effects on these controls; never enters channel estimates or portal forecasts",
+                           "controls": list(data.get("nat_block_names", [])), "mean": [float(v) for v in data.get("nat_block_mean", [])], "std": [float(v) for v in data.get("nat_block_std", [])]},
+        "assumption_channels": list(data.get("assumption_channels_applied", [])),
+        "roas_priors": data.get("v4_roas_prior_rows", []),
+        "alpha_prior": {k: list(v) for k, v in sorted((ALPHA_PRIOR or {}).items())},
+    }
 
 
 def _write_or_validate_contract(path: Path, payload: dict[str, Any]) -> None:
@@ -2284,7 +2572,7 @@ def _run_config_payload(
     controls: list[str],
     spend_active: list[str],
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "mode": spec.mode,
         "run_label": spec.run_dir.parent.name,
         "run_variant": spec.run_dir.name.removeprefix(f"{spec.mode}_"),
@@ -2362,6 +2650,13 @@ def _run_config_payload(
             "tv_grouping_enabled": False,
         },
     }
+    if spec.time_effect:
+        payload["time_effect"] = {
+            **spec.time_effect,
+            "note": "ctrl_cols lists the CANDIDATE controls; controls without cross-city variation inside a date are absorbed by the date effect and are not modelled "
+                    "(see fit_contract_*.json time_effect.time_only_controls_absorbed_by_date_effect and fit_transform_*.json controls)",
+        }
+    return payload
 
 
 def _prepare_one_fit(
@@ -2444,6 +2739,8 @@ def _prepare_one_fit(
         "media_scaling_mode": data["media_scaling_mode"],
         "fixed_lambda_channels": fixed_lambda_channels,
     }
+    if TIME_EFFECT_MODE != "off":
+        transform["time_effect"] = _time_effect_block(data)
     transform["transform_sha256"] = _canonical_json_sha256(transform)
     transform_path = spec.run_dir / f"fit_transform_{safe}.json"
     if transform_path.exists():
@@ -2510,6 +2807,9 @@ def _sample_fit_atomic(
         require_numpyro=spec.require_numpyro,
         random_seed=spec.random_seed,
     )
+    if prepared["data"].get("city_level") == "analytic":
+        idata = _postprocess_analytic_levels(idata, prepared["data"])
+        diagnostics = _refresh_final_file_diagnostics(idata, diagnostics, int(spec.profile["draws"]), int(spec.profile["chains"]))
     try:
         az.to_netcdf(idata, partial_path)
         os.replace(partial_path, final_path)
@@ -2532,7 +2832,151 @@ def _sample_fit_atomic(
     return idata, diagnostics
 
 
+def _analytic_setup(idata: Any, data: dict[str, Any]) -> dict[str, Any]:
+    """Chain-major stacked posterior arrays needed to rebuild the fitted components of the analytic city-level model."""
+    post = idata.posterior
+    alpha_s, _ = _stack_channel_samples(post["alpha"])
+    lam_s, _ = _stack_channel_samples(post["lam"])
+    beta_s, beta_kind = _stack_channel_samples(post["beta"])
+    gamma_s = post["gamma"].stack(sample=("chain", "draw")).transpose("ctrl", "sample").values if "gamma" in post else None
+    sigma_tier_s = post["sigma_tier"].stack(sample=("chain", "draw")).transpose("market_size_tier", "sample").values if "sigma_tier" in post else None
+    sigma_s = post["sigma"].stack(sample=("chain", "draw")).values if "sigma" in post else None
+    eta_s = post["sigma_eta"].stack(sample=("chain", "draw")).values
+    return {"alpha": alpha_s, "lam": lam_s, "beta": beta_s, "beta_kind": beta_kind, "gamma": gamma_s, "sigma_tier": sigma_tier_s, "sigma": sigma_s, "eta": eta_s,
+            "n_chain": int(post.sizes["chain"]), "n_draw": int(post.sizes["draw"])}
+
+
+def _analytic_level_draw(data: dict[str, Any], s: int, st: dict[str, Any], *, smooth: bool = False) -> dict[str, Any]:
+    """One posterior draw of the analytic model: fitted media + controls f, national component, empirical date effects and the Kalman filter
+    (optionally the RTS smoother) of the weekly random-walk city level of the cross-city-centred residual (scaled units)."""
+    Y = np.asarray(data["Y"], float); gt = np.asarray(data["geo_idx"], int); dt = np.asarray(data["date_idx"], int); wt = np.asarray(data["week_idx"], int)
+    G, W, n_d = int(data["G"]), int(data["n_week"]), int(data["n_date"])
+    _, xs = _x_ads_sat_np(data, st["alpha"][:, s], st["lam"][:, s])
+    bi = _beta_sample(st["beta"], st["beta_kind"], s)
+    f = np.zeros(len(Y))
+    for m in range(int(data["M"])):
+        f += _beta_obs_for_channel(bi, st["beta_kind"], data, m) * xs[:, m]
+    if st["gamma"] is not None and data.get("X_ctrl") is not None:
+        f = f + np.asarray(data["X_ctrl"], float) @ st["gamma"][:, s]
+    e = Y - f
+    nat = np.bincount(dt, weights=e, minlength=n_d) / np.bincount(dt, minlength=n_d)
+    L0 = float(nat.mean()); dhat = nat - L0
+    u = e - nat[dt]
+    sig_row = st["sigma_tier"][np.asarray(data["obs_tier_idx"], int), s] if st["sigma_tier"] is not None else np.full(len(Y), float(st["sigma"][s]))
+    sig_g = np.zeros(G); sig_g[gt] = sig_row
+    n_gw = np.zeros((G, W)); su = np.zeros((G, W)); np.add.at(n_gw, (gt, wt), 1.0); np.add.at(su, (gt, wt), u)
+    eta = float(st["eta"][s]); s0 = float(data.get("level_sd0", 1.0))
+    m_f = np.zeros((W, G)); P_f = np.zeros((W, G)); m_p = np.zeros((W, G)); P_p = np.zeros((W, G))
+    m_prev = np.zeros(G); P_prev = np.full(G, s0 ** 2)
+    for w in range(W):
+        Pp = P_prev + (eta ** 2 if w > 0 else 0.0)
+        has = n_gw[:, w] > 0
+        R = sig_g ** 2 / np.maximum(n_gw[:, w], 1.0)
+        ubar = np.where(has, su[:, w] / np.maximum(n_gw[:, w], 1.0), 0.0)
+        K = np.where(has, Pp / (Pp + R), 0.0)
+        m_w = m_prev + K * (ubar - m_prev); P_w = (1.0 - K) * Pp
+        m_p[w], P_p[w], m_f[w], P_f[w] = m_prev, Pp, m_w, P_w
+        m_prev, P_prev = m_w, P_w
+    out = {"f": f, "L0": L0, "dhat": dhat, "nat": nat, "sig_g": sig_g, "sig_row": sig_row, "m_end": m_f[-1], "P_end": P_f[-1]}
+    if smooth:
+        cs = np.zeros((W, G)); cs[-1] = m_f[-1]
+        for w in range(W - 2, -1, -1):
+            J = P_f[w] / np.maximum(P_p[w + 1], 1e-300)
+            cs[w] = m_f[w] + J * (cs[w + 1] - m_p[w + 1])
+        out["c_smooth"] = cs
+    return out
+
+
+def _refresh_final_file_diagnostics(idata: Any, diagnostics: dict[str, Any], draws: int, chains: int) -> dict[str, Any]:
+    """analytic mode: the portal's gate (build_roas_quality_flags, fit_risk_from_artifacts) reads rhat_max / ess_bulk_min / ess_per_draw of the fit; they are recomputed here over EVERY
+    variable of the final posterior file (sampled + derived: tau_g, city_level_end_sd, date_effect_sd, nat_block_*), so that the gate is evaluated on what is actually stored.
+    The sampler-only statistics stay in sampler_only_* columns."""
+    summary = az.summary(idata, round_to=4)
+    out = dict(diagnostics)
+    out.update({"sampler_only_rhat_max": diagnostics.get("rhat_max"), "sampler_only_ess_bulk_min": diagnostics.get("ess_bulk_min"), "sampler_only_n_params": diagnostics.get("n_params"),
+                "rhat_max": float(summary["r_hat"].max()), "rhat_mean": float(summary["r_hat"].mean()), "ess_bulk_min": float(summary["ess_bulk"].min()),
+                "ess_per_draw": float(summary["ess_bulk"].min()) / (draws * chains), "n_params": len(summary), "diagnostics_scope": "final_posterior_file_incl_derived_variables"})
+    issues = []
+    if out["rhat_max"] > 1.05: issues.append(f"R̂={out['rhat_max']:.3f}")
+    if out["ess_per_draw"] < 0.1: issues.append(f"ESS/draw={out['ess_per_draw']:.3f}")
+    if out.get("n_divergences", 0) > 5: issues.append(f"div={out['n_divergences']}")
+    out["status"] = "OK ✓" if not issues else "⚠ " + "; ".join(issues)
+    return out
+
+
+def _postprocess_analytic_levels(idata: Any, data: dict[str, Any]) -> Any:
+    """Derived (not sampled) posterior variables of the analytic city-level model, computed for every draw:
+      tau_g[geo_label]        baseline of the city at the END of training = global level + filtered city level (scaled units); same role as the stock tau_g for scorers that need a baseline
+      city_level_end_sd[geo]  posterior SD of the filtered city level at the end of training given the draw
+      date_effect_sd          SD of the empirical date effects (cross-city mean of the residual per date) given the draw
+    Computed AFTER sampling: the sampler diagnostics (fit_with_diagnostics) never see them."""
+    import xarray as xr
+    st = _analytic_setup(idata, data)
+    n_chain, n_draw = st["n_chain"], st["n_draw"]
+    S = n_chain * n_draw; G = int(data["G"])
+    tau = np.zeros((S, G)); lev_sd = np.zeros((S, G)); d_sd = np.zeros(S)
+    nb_z = np.asarray(data["nat_block_z"], float) if data.get("nat_block_z") is not None else None
+    nb_coef = np.zeros((S, nb_z.shape[1])) if nb_z is not None else None; nb_sd = np.zeros(S)
+    for s in range(S):
+        d = _analytic_level_draw(data, s, st)
+        tau[s] = d["L0"] + d["m_end"]; lev_sd[s] = np.sqrt(np.maximum(d["P_end"], 0.0)); d_sd[s] = float(np.std(d["dhat"]))
+        if nb_z is not None:     # ridge of the empirical date effects on the date-only controls (strength = number of training dates, z-scored columns)
+            b = np.linalg.solve(nb_z.T @ nb_z + float(len(nb_z)) * np.eye(nb_z.shape[1]), nb_z.T @ d["dhat"])
+            nb_coef[s] = b; nb_sd[s] = float(np.std(d["dhat"] - nb_z @ b))
+    coords = {"chain": idata.posterior.coords["chain"].values, "draw": idata.posterior.coords["draw"].values, "geo_label": list(data["geos"])}
+    idata.posterior["tau_g"] = xr.DataArray(tau.reshape(n_chain, n_draw, G), dims=("chain", "draw", "geo_label"), coords=coords)
+    idata.posterior["city_level_end_sd"] = xr.DataArray(lev_sd.reshape(n_chain, n_draw, G), dims=("chain", "draw", "geo_label"), coords=coords)
+    idata.posterior["date_effect_sd"] = xr.DataArray(d_sd.reshape(n_chain, n_draw), dims=("chain", "draw"), coords={k: coords[k] for k in ("chain", "draw")})
+    if nb_z is not None:
+        nb_coords = {"chain": coords["chain"], "draw": coords["draw"], "nat_block_control": list(data["nat_block_names"])}
+        idata.posterior["nat_block_coef"] = xr.DataArray(nb_coef.reshape(n_chain, n_draw, -1), dims=("chain", "draw", "nat_block_control"), coords=nb_coords)
+        idata.posterior["nat_block_resid_sd"] = xr.DataArray(nb_sd.reshape(n_chain, n_draw), dims=("chain", "draw"), coords={k: coords[k] for k in ("chain", "draw")})
+    return idata
+
+
+def _adequacy_metrics_analytic(idata: Any, data: dict[str, Any], fit_key: str, max_draws: int = 200) -> dict[str, Any]:
+    """In-sample posterior predictive adequacy of the analytic city-level model, with the definition of the stock `_adequacy_metrics`
+    (r2_mean = mean over draws of 1 - SSE(Y - y_rep) / TSS, r2_point from the mean prediction, coverage_90 of the 5-95 % band).
+    y_rep = global level + date effect + smoothed city level + media + controls + noise, the latent date effects and city levels at their conditional values given the draw.
+    Extra, honest second number: r2_media_controls_only = explained share of the outcome NET of the date effects and city levels by media + controls alone."""
+    st = _analytic_setup(idata, data)
+    S = st["n_chain"] * st["n_draw"]
+    sel = np.sort(np.random.RandomState(RANDOM_SEED).choice(S, size=min(max_draws, S), replace=False))
+    Y = np.asarray(data["Y"], float); gt = np.asarray(data["geo_idx"], int); dt = np.asarray(data["date_idx"], int); wt = np.asarray(data["week_idx"], int)
+    tss = float(np.sum((Y - Y.mean()) ** 2))
+    rng = np.random.RandomState(RANDOM_SEED)
+    reps = np.zeros((len(sel), len(Y)), dtype=np.float32); r2_draws = []; r2_fc = []; r2_flex_point = []
+    for k, s in enumerate(sel):
+        d = _analytic_level_draw(data, s, st, smooth=True)
+        flex = d["dhat"][dt] + d["c_smooth"][wt, gt]
+        fitted = d["L0"] + flex + d["f"]
+        y_rep = fitted + rng.normal(0.0, 1.0, len(Y)) * d["sig_row"]
+        reps[k] = y_rep
+        r2_draws.append(1.0 - float(np.sum((Y - y_rep) ** 2)) / (tss + 1e-10))
+        r2_flex_point.append(1.0 - float(np.sum((Y - fitted) ** 2)) / (tss + 1e-10))
+        y_adj = Y - flex
+        tss_adj = float(np.sum((y_adj - y_adj.mean()) ** 2))
+        r2_fc.append(1.0 - float(np.sum((y_adj - d["L0"] - d["f"]) ** 2)) / (tss_adj + 1e-10))
+    mean_pred = reps.mean(axis=0)
+    low = np.percentile(reps, 5, axis=0); high = np.percentile(reps, 95, axis=0)
+    r2_point = 1.0 - float(np.sum((Y - mean_pred) ** 2)) / (tss + 1e-10)
+    return {
+        "target": data["target"],
+        "r2_mean": float(np.mean(r2_draws)),
+        "r2_p5": float(np.percentile(r2_draws, 5)),
+        "r2_p95": float(np.percentile(r2_draws, 95)),
+        "r2_point": float(r2_point),
+        "r2_method": "analytic_level_conditional_ppc_sse_by_draw",
+        "coverage_90": float(((Y >= low) & (Y <= high)).mean()),
+        "r2_media_controls_only": float(np.mean(r2_fc)),
+        "r2_fitted_no_noise": float(np.mean(r2_flex_point)),
+        "ppc_draws_n": int(len(sel)),
+    }
+
+
 def _adequacy_metrics(idata: Any, model: pm.Model, data: dict[str, Any], fit_key: str) -> dict[str, Any]:
+    if data.get("city_level") == "analytic":
+        return _adequacy_metrics_analytic(idata, data, fit_key)
     with model:
         ppc = pm.sample_posterior_predictive(
             idata,
