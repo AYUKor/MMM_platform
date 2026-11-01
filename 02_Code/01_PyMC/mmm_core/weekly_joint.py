@@ -306,6 +306,8 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     e = jnp.where(has_prev[None, :], r - rho_n * r[:, prev], r * jnp.sqrt(1 - rho_n ** 2))
     sc = sig[:, s_i, arr['tier_i']]
     e_c_cond = e[1] - b_oc[s_i] * e[0] * sc[1] / sc[0]
+    # first week of a run: stationary scale; Jacobian of r -> e = r*sqrt(1-rho^2)
+    numpyro.factor('ar_first_jacobian', 0.5 * jnp.sum(jnp.where(has_prev[None, :], 0.0, jnp.log1p(-rho_n ** 2))))
     numpyro.sample('lik_orders', dist.StudentT(nu, 0.0, sc[0]), obs=e[0])
     numpyro.sample('lik_check', dist.StudentT(nu, 0.0, sc[1]), obs=e_c_cond)
 
