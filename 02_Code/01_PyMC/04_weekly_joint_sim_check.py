@@ -5,8 +5,12 @@ the owner's moderate priors and compares the recovered turnover ROAS with the tr
 segment. Two worlds: A (TV 1, regional TV 3, radio 1, OOH 5, digital 3) and B (TV 5, regional TV 1, radio 3,
 OOH 1, digital 5), so it shows whether the model tells 1 from 5 on our data.
 
-Run: python -I 04_weekly_joint_sim_check.py --panel P.parquet --national N.csv --out OUTDIR [--world A|B]
-     [--warmup 500 --draws 500 --chains 4]
+Stages (as the platform's fit.py MODE_PROFILES): fast = top-20 units per segment, 2 chains, 300/300, target
+accept 0.90; medium = top-20, 4 chains, 1000/1000, 0.99; pilot = all units, 2 chains, 1000/1000, 0.99;
+production = all units, 4 chains, 2000/2000, 0.99. Runs on the Mac mini.
+
+Run: python -I 04_weekly_joint_sim_check.py --panel P.parquet --national N.csv --out OUTDIR --world A|B
+     --profile fast|medium|pilot|production
 """
 from __future__ import annotations
 
@@ -24,6 +28,13 @@ import numpy as np
 import pandas as pd
 
 from mmm_core import weekly_joint as wj
+
+PROFILES = {
+    'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
+    'medium': dict(top_units=20, chains=4, warmup=1000, draws=1000, target_accept=0.99, max_tree_depth=10),
+    'pilot': dict(top_units=None, chains=2, warmup=1000, draws=1000, target_accept=0.99, max_tree_depth=10),
+    'production': dict(top_units=None, chains=4, warmup=2000, draws=2000, target_accept=0.99, max_tree_depth=10),
+}
 
 WORLDS = {
     'A': {'Нац_ТВ': 1.0, 'Рег_ТВ': 3.0, 'Радио': 1.0, 'OOH_Total': 5.0, 'Digital_Performance': 3.0},
@@ -77,12 +88,13 @@ def main() -> None:
     ap.add_argument('--national', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--world', default='A', choices=list(WORLDS))
-    ap.add_argument('--warmup', type=int, default=500)
-    ap.add_argument('--draws', type=int, default=500)
-    ap.add_argument('--chains', type=int, default=4)
+    ap.add_argument('--profile', default='fast', choices=list(PROFILES))
     ap.add_argument('--seed', type=int, default=20261102)
     ap.add_argument('--prior-set', default='moderate', choices=list(wj.PRIOR_SETS))
+    ap.add_argument('--chain-method', default='vectorized', choices=['sequential', 'parallel', 'vectorized'])
     a = ap.parse_args()
+    prof = PROFILES[a.profile]
+    a.chains, a.warmup, a.draws = prof['chains'], prof['warmup'], prof['draws']
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -92,7 +104,7 @@ def main() -> None:
     numpyro.set_host_device_count(a.chains)
 
     t0 = time.time()
-    d = wj.prepare(a.panel, a.national)
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'])
     arr = wj.model_arrays(d)
     sw = real_week_noise(d)
     truth = truth_for(a.world, sw)
@@ -100,8 +112,8 @@ def main() -> None:
     arr_s = wj.with_targets(arr, y)
     print('dims', d.dims, 'real week noise', sw, f'prep {time.time()-t0:.0f}s', flush=True)
 
-    kernel = NUTS(wj.numpyro_model, target_accept_prob=0.85, max_tree_depth=8)
-    mcmc = MCMC(kernel, num_warmup=a.warmup, num_samples=a.draws, num_chains=a.chains, chain_method='parallel',
+    kernel = NUTS(wj.numpyro_model, target_accept_prob=prof['target_accept'], max_tree_depth=prof['max_tree_depth'])
+    mcmc = MCMC(kernel, num_warmup=a.warmup, num_samples=a.draws, num_chains=a.chains, chain_method=a.chain_method,
                 progress_bar=False)
     t1 = time.time()
     mcmc.run(jax.random.PRNGKey(a.seed), arr_s, d.dims, a.prior_set, y=y)
@@ -115,7 +127,7 @@ def main() -> None:
     ess = {k: float(np.nanmin(v['n_eff'])) for k, v in summ.items()}
 
     est = summarize(d, arr_s, samples, tr['turnover'])
-    est.to_csv(out / f'roas_draws_world{a.world}.csv', index=False)
+    est.to_csv(out / f'roas_draws_world{a.world}_{a.profile}.csv', index=False)
     true_seg = tr['roas']
     true_ch = by_channel(true_seg.assign(draw=0)).drop(columns='draw')
     q = by_channel(est).groupby('channel').roas.quantile([0.05, 0.5, 0.95]).unstack()
@@ -127,9 +139,10 @@ def main() -> None:
     res_seg = true_seg[['segment', 'channel', 'roas', 'spend_rub']].rename(columns={'roas': 'true'}).merge(
         qs.reset_index(), on=['segment', 'channel'])
     res_seg['inside_90'] = (res_seg.true >= res_seg.q05) & (res_seg.true <= res_seg.q95)
-    res.to_csv(out / f'recovery_by_channel_world{a.world}.csv', index=False)
-    res_seg.to_csv(out / f'recovery_by_segment_channel_world{a.world}.csv', index=False)
-    card = dict(world=a.world, truth=truth | {'sig_week': list(sw)}, prior_set=a.prior_set, dims=d.dims,
+    res.to_csv(out / f'recovery_by_channel_world{a.world}_{a.profile}.csv', index=False)
+    res_seg.to_csv(out / f'recovery_by_segment_channel_world{a.world}_{a.profile}.csv', index=False)
+    card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
+                prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},
@@ -137,7 +150,7 @@ def main() -> None:
                 alpha_post=np.asarray(samples['alpha']).mean(0).round(3).tolist(),
                 lam_post=np.asarray(samples['lam']).mean(0).round(3).tolist(),
                 sig_week_post=np.asarray(samples['sig_week']).mean(0).round(4).tolist())
-    (out / f'sim_card_world{a.world}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
+    (out / f'sim_card_world{a.world}_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
     print(json.dumps(card, ensure_ascii=False, indent=1, default=str))
     print(res.round(2).to_string())
     print(res_seg.round(2).to_string())

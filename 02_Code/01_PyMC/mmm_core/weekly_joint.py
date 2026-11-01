@@ -92,9 +92,15 @@ def _holiday_matrix(weeks: pd.DatetimeIndex) -> tuple[np.ndarray, list]:
     return np.column_stack(list(cols.values())), list(cols)
 
 
-def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None) -> ModelData:
+def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None,
+            top_units_per_segment: int | None = None) -> ModelData:
+    """top_units_per_segment: keep only the N largest units of each segment by turnover (fast/medium stages)."""
     p = pd.read_parquet(panel_path)
     assert p.week_start.max() <= pd.Timestamp('2026-06-22'), 'панель выходит за 28.06.2026'
+    if top_units_per_segment:
+        tot = p[p.target_valid_week & p.fit_exclude_reason.fillna('').eq('')].groupby(['segment', 'unit_label']).turnover_total.sum()
+        keep = {(s, u) for s, g in tot.groupby(level=0) for (_, u) in g.nlargest(top_units_per_segment).index}
+        p = p[[(s, u) in keep for s, u in zip(p.segment, p.unit_label)]].copy()
     nat = pd.read_csv(national_csv, encoding='utf-8-sig', parse_dates=['week_start'])
     weeks = pd.DatetimeIndex(sorted(p.week_start.unique()))
     W = len(weeks)
