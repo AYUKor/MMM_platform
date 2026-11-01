@@ -117,8 +117,9 @@ def main() -> None:
                 progress_bar=False)
     t1 = time.time()
     mcmc.run(jax.random.PRNGKey(a.seed), arr_s, d.dims, a.prior_set, y=y)
-    fit_s = time.time() - t1
     samples = mcmc.get_samples()
+    jax.block_until_ready(samples)          # JAX runs asynchronously: time the finished sampling, not the dispatch
+    fit_s = time.time() - t1
     extra = mcmc.get_extra_fields()
     div = int(np.asarray(extra['diverging']).sum())
     from numpyro.diagnostics import summary
