@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v7_real_city_yearly_wave_20261103'
+CODE_VERSION = 'v7b_real_city_yearly_wave_centred_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -124,6 +124,10 @@ def main() -> None:
     ap.add_argument('--stop-if-roas-above', type=float, default=10.0)
     ap.add_argument('--jitter', type=float, default=0.05)
     ap.add_argument('--no-city-wave', action='store_true', help='fit the v6 model (no own yearly wave per unit)')
+    ap.add_argument('--wave-param', default='centred', choices=['centred', 'noncentred'],
+                    help='coordinates of the own city waves (v7 = noncentred, v7b = centred); same model')
+    ap.add_argument('--slope-param', default='noncentred', choices=['centred', 'noncentred'],
+                    help='coordinates of the unit slopes; same model')
     ap.add_argument('--inject', default='',
                     help='injection check: add a known effect to the real orders, e.g. "Нац_ТВ=2,Digital_Performance=2" '
                          '(ROAS through orders at typical spend; no city deviations, no check part). The fit should find '
@@ -141,7 +145,8 @@ def main() -> None:
 
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'])
-    arr = wj.model_arrays(d, city_wave=not a.no_city_wave)
+    arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
+                           slope_centred=a.slope_param == 'centred')
     o = d.obs
     y = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
     if a.inject:
@@ -218,7 +223,7 @@ def main() -> None:
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
                 fit_window_end=a.fit_window_end, inject=a.inject, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
-                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, mode_search=ms_card,
+                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, mode_search=ms_card,
                 chains_stats=dict(potential_energy_mean=np.asarray(extra['potential_energy']).mean(1).round(1).tolist(),
                                   num_steps_mean=np.asarray(extra['num_steps']).mean(1).round(1).tolist(),
                                   divergences=np.asarray(extra['diverging']).sum(1).astype(int).tolist()),

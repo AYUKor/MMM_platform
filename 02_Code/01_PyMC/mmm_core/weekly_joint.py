@@ -270,8 +270,9 @@ def _week_basis(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
     return vecs[:, vals > 0.5]
 
 
-def model_arrays(d: ModelData, city_wave: bool = True) -> dict:
-    """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit)."""
+def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False) -> dict:
+    """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
+    wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model."""
     o = d.obs
     ad = d.ad_units
     seg_m = d.model_units.seg_i.to_numpy()
@@ -282,7 +283,7 @@ def model_arrays(d: ModelData, city_wave: bool = True) -> dict:
     grp_m = seg_m * 2 + resort_m
     G = 2 * len(SEGMENTS)
     return dict(
-        city_wave=bool(city_wave),
+        city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred),
         wave_grp_m=grp_m, wave_grp_onehot_m=np.eye(G)[grp_m],
         wave_grp_count_m=np.maximum(np.bincount(grp_m, minlength=G), 1).astype(float),
         spend_norm=np.where(d.m_ref[ad.seg_i.to_numpy()][:, None, :] > 0,
@@ -344,9 +345,13 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     # base
     a_m = numpyro.sample('a', dist.Normal(0, 0.3).expand([2, M]))
     sig_slope = numpyro.sample('sig_slope', dist.HalfNormal(0.2).expand([2]))
-    z_slope = numpyro.sample('z_slope', dist.Normal(0, 1).expand([2, M]))
+    if arr.get('slope_centred', False):
+        # v7b option: centred unit slopes (78 weeks pin each slope; the non-centred form makes a curved ridge)
+        slope_u = numpyro.sample('slope_unit', dist.Normal(jnp.zeros((2, M)), sig_slope[:, None]))
+    else:
+        slope_u = sig_slope[:, None] * numpyro.sample('z_slope', dist.Normal(0, 1).expand([2, M]))
     # unit slopes are deviations from the segment slope: centred within each segment
-    z_slope = z_slope - (z_slope @ arr['seg_onehot_m'] / arr['seg_count_m'][None, :])[:, arr['seg_m']]
+    slope_u = slope_u - (slope_u @ arr['seg_onehot_m'] / arr['seg_count_m'][None, :])[:, arr['seg_m']]
     slope0 = numpyro.sample('slope0', dist.Normal(0, 0.3).expand([2, S]))
     tau_tr = numpyro.sample('tau_trend', dist.HalfNormal(0.5).expand([2]))
     z_tr = numpyro.sample('z_trend', dist.Normal(0, 1).expand([2, S, K]))
@@ -363,16 +368,22 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     week_shock = jnp.einsum('jsr,wr->jsw', v_wk * sig_wk[:, :, None] ** (1 - c_wk), arr['week_basis'])
     base_sw = trend + season + week_shock                                                # [2, S, W]
     s_i, w_i, m_i = arr['s_i'], arr['w_i'], arr['m_i']
-    mu = (arr['ybar'].T + a_m[:, m_i] + (sig_slope[:, None] * z_slope)[:, m_i] * arr['t'][w_i][None, :]
+    mu = (arr['ybar'].T + a_m[:, m_i] + slope_u[:, m_i] * arr['t'][w_i][None, :]
           + base_sw[:, s_i, w_i] + (four_res @ arr['F'][w_i].T) * arr['resort'][None, :]
           + jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']) + media)
     if arr.get('city_wave', False):
         # v7: own yearly wave of every unit, a shrunk deviation from its group's wave (centred within the group)
         sig_cw = numpyro.sample('sig_city_wave', dist.HalfNormal(CITY_WAVE_SD).expand([2, S]))
-        z_cw = numpyro.sample('z_city_wave', dist.Normal(0, 1).expand([2, M, arr['F'].shape[1]]))
-        g_mean = jnp.einsum('jmf,mg->jgf', z_cw, arr['wave_grp_onehot_m'] / arr['wave_grp_count_m'][None, :])
-        z_cw = z_cw - g_mean[:, arr['wave_grp_m'], :]
-        cw = sig_cw[:, arr['seg_m'], None] * z_cw                                       # [2, M, F]
+        nf = arr['F'].shape[1]
+        sc = sig_cw[:, arr['seg_m'], None]                                              # [2, M, 1]
+        if arr.get('wave_centred', False):
+            # v7b: centred own waves. Real fast v7 (03.11): with the non-centred form sig_city_wave, rho, sig_slope
+            # did not mix (R-hat 2.1-2.8, chains in different modes); 78 weeks pin each unit's wave.
+            raw = numpyro.sample('city_wave', dist.Normal(jnp.zeros((2, M, nf)), sc))
+        else:
+            raw = sc * numpyro.sample('z_city_wave', dist.Normal(0, 1).expand([2, M, nf]))
+        g_mean = jnp.einsum('jmf,mg->jgf', raw, arr['wave_grp_onehot_m'] / arr['wave_grp_count_m'][None, :])
+        cw = raw - g_mean[:, arr['wave_grp_m'], :]                                       # [2, M, F]
         mu = mu + jnp.einsum('jnf,nf->jn', cw[:, m_i, :], arr['F'][w_i])
 
     # AR(1) errors per target and segment, check innovation regressed on the orders innovation

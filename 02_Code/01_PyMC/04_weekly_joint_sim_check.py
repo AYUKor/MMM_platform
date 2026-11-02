@@ -45,7 +45,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v7_city_yearly_wave_20261103'
+CODE_VERSION = 'v7b_city_yearly_wave_centred_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -129,6 +129,10 @@ def main() -> None:
                     help='add back the offline-label TV -> online channel (removed in v4: owner 02.11, store ads act only '
                          'on stores, delivery ads only on delivery)')
     ap.add_argument('--no-city-wave', action='store_true', help='fit the v6 model (no own yearly wave per unit)')
+    ap.add_argument('--wave-param', default='centred', choices=['centred', 'noncentred'],
+                    help='coordinates of the own city waves (v7 = noncentred, v7b = centred); same model')
+    ap.add_argument('--slope-param', default='noncentred', choices=['centred', 'noncentred'],
+                    help='coordinates of the unit slopes; same model')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     a.chains, a.warmup, a.draws = prof['chains'], prof['warmup'], prof['draws']
@@ -142,7 +146,8 @@ def main() -> None:
 
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'], cross_tv=a.cross_tv)
-    arr = wj.model_arrays(d, city_wave=not a.no_city_wave)
+    arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
+                           slope_centred=a.slope_param == 'centred')
     sw = real_week_noise(d)
     truth = truth_for(a.world, sw)
     y, tr = wj.simulate(d, arr, truth, seed=a.seed)
@@ -231,7 +236,7 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
-                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
+                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
                 max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},
