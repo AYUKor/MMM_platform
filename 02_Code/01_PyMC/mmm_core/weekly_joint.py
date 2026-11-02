@@ -58,9 +58,19 @@ PRIOR_SETS = {
     'meridian': {c: (1.22, 0.9) for c in CHANNELS} | {NATIONAL_TV_CROSS: (0.3, 1.1)},
     'wide': {c: (1.5, 1.4) for c in CHANNELS} | {NATIONAL_TV_CROSS: (0.3, 1.4)},
 }
+# v8 check (03.11): the owner's moderate medians held almost fixed (log sd 0.1). Its approximation loss against the
+# free fit tells how much worse the data like the industry-level ROAS (a difference of a few units = no evidence).
+PRIOR_SETS['moderate_pinned'] = {c: (m, 0.1) for c, (m, _) in PRIOR_SETS['moderate'].items()}
 CHECK_ROAS_SD = 0.5        # ROAS through the average check, Normal(0, 0.5) at segment level
 ADSTOCK_PRIOR = {'Нац_ТВ': (6, 4), NATIONAL_TV_CROSS: (6, 4), 'Рег_ТВ': (6, 4), 'Радио': (4, 6),
                  'OOH_Total': (4, 6), 'Digital_Performance': (2, 8)}   # Beta(a, b) for weekly decay
+# v8 option adstock='long' (03.11): the injection check showed the model sees ads only through their week-to-week
+# swings and loses part of an effect; if real ads build up over months, an 8-week window with a short-decay prior
+# cannot see it. Long: 26 weeks, decay prior Beta(2, 2) (median 0.5, anything from fast to very slow), and the
+# weeks before the panel start get the unit's average spend of its first 26 weeks instead of zero (2024 spend
+# is unknown, a zero would make early 2025 look ad-free).
+ADSTOCK_L_LONG = 26
+ADSTOCK_PRIOR_LONG = {c: (2.0, 2.0) for c in ADSTOCK_PRIOR}
 
 
 @dataclass
@@ -231,15 +241,19 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
 
 # ---------------------------------------------------------------- model (numpyro / JAX)
 
-def adstock_sat(spend_norm, alpha, lam):
-    """spend_norm [A, W, C] (spend per resident / m_ref); alpha, lam [C]. Returns sat [A, W, C] and sat(1) [C]."""
+def adstock_sat(spend_norm, alpha, lam, L: int = ADSTOCK_L, pad_steady: bool = False):
+    """spend_norm [A, W, C] (spend per resident / m_ref); alpha, lam [C]. Returns sat [A, W, C] and sat(1) [C].
+    L: adstock window in weeks; pad_steady: weeks before the first one get the unit's mean spend of its first L
+    weeks (v8 long adstock) instead of zero."""
     import jax.numpy as jnp
     A, W, C = spend_norm.shape
-    lags = jnp.arange(ADSTOCK_L)
+    lags = jnp.arange(L)
     w = alpha[None, :] ** lags[:, None]               # [L, C]
     w = w / w.sum(0, keepdims=True)
-    pad = jnp.concatenate([jnp.zeros((A, ADSTOCK_L - 1, C)), spend_norm], axis=1)
-    x = sum(w[l][None, None, :] * pad[:, ADSTOCK_L - 1 - l: ADSTOCK_L - 1 - l + W, :] for l in range(ADSTOCK_L))
+    head = (jnp.broadcast_to(jnp.asarray(spend_norm)[:, :L, :].mean(1, keepdims=True), (A, L - 1, C)) if pad_steady
+            else jnp.zeros((A, L - 1, C)))
+    pad = jnp.concatenate([head, spend_norm], axis=1)
+    x = sum(w[l][None, None, :] * pad[:, L - 1 - l: L - 1 - l + W, :] for l in range(L))
     sat = 1.0 - jnp.exp(-x / lam[None, None, :])
     return sat, 1.0 - jnp.exp(-1.0 / lam)
 
@@ -294,13 +308,18 @@ def placebo_spend(d: ModelData, spec: str) -> ModelData:
     return dataclasses.replace(d, spend_pr=sp)
 
 def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
-                 wave_scale: str = 'learned') -> dict:
+                 wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal') -> dict:
     """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
     wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
     wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
     (with_fixed_wave_scale); call with_fixed_wave_scale(d, arr, y) once the targets are known."""
     if wave_scale not in ('learned', 'fixed'):
         raise ValueError(f'wave_scale {wave_scale}')
+    if adstock not in ('short', 'long'):
+        raise ValueError(f'adstock {adstock}')
+    if roas_scale not in ('equal', 'turnover', 'gamma'):
+        raise ValueError(f'roas_scale {roas_scale}')
+    ab = ADSTOCK_PRIOR_LONG if adstock == 'long' else ADSTOCK_PRIOR
     o = d.obs
     ad = d.ad_units
     seg_m = d.model_units.seg_i.to_numpy()
@@ -312,6 +331,8 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
     G = 2 * len(SEGMENTS)
     return dict(
         city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
+        adstock=adstock, adstock_l=ADSTOCK_L_LONG if adstock == 'long' else ADSTOCK_L, adstock_pad_steady=adstock == 'long',
+        adstock_ab=np.array([ab[c] for c in CHANNELS], float),
         wave_grp_m=grp_m, wave_grp_onehot_m=np.eye(G)[grp_m],
         wave_grp_count_m=np.maximum(np.bincount(grp_m, minlength=G), 1).astype(float),
         spend_norm=np.where(d.m_ref[ad.seg_i.to_numpy()][:, None, :] > 0,
@@ -319,6 +340,12 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         m_ref_a=d.m_ref[ad.seg_i.to_numpy()],                 # [A, C]
         mask_a=d.chan_mask[ad.seg_i.to_numpy()],              # [A, C]
         tau_a=ad.tau.to_numpy(),
+        # v8 option, city ROAS by turnover per resident: ROAS of a city = R * (its turnover per resident / segment
+        # median) ** g. 'equal' (v6/v7): g = 0, the same ROAS in every city of a segment at the same pressure;
+        # 'turnover': g = 1, the same pressure lifts sales by the same share everywhere; 'gamma': g ~ Beta(2, 2)
+        # learned from the data (gamma_geo)
+        roas_scale=roas_scale,
+        geo_ratio_a=(ad.tau / ad.groupby('seg_i').tau.transform('median')).to_numpy(float),
         seg_a=ad.seg_i.to_numpy(), tier_a=ad.tier_i.to_numpy(),
         local_c=np.array([c in LOCAL_UNIT_DEVIATION for c in CHANNELS], float),
         m_i=o.m_i.to_numpy(), a_i=o.a_i.to_numpy(), w_i=o.w_i.to_numpy(), s_i=o.seg_i.to_numpy(),
@@ -345,10 +372,10 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     pri = PRIOR_SETS[prior_set]
 
     # media: adstock + saturation shared across segments and targets
-    a_ab = np.array([ADSTOCK_PRIOR[c] for c in CHANNELS], float)
+    a_ab = arr['adstock_ab'] if 'adstock_ab' in arr else np.array([ADSTOCK_PRIOR[c] for c in CHANNELS], float)
     alpha = numpyro.sample('alpha', dist.Beta(a_ab[:, 0], a_ab[:, 1]))
     lam = numpyro.sample('lam', dist.LogNormal(0.0, 0.5).expand([C]))
-    sat, sat1 = adstock_sat(arr['spend_norm'], alpha, lam)
+    sat, sat1 = adstock_sat(arr['spend_norm'], alpha, lam, arr.get('adstock_l', ADSTOCK_L), arr.get('adstock_pad_steady', False))
 
     mu_r = np.log([pri[c][0] for c in CHANNELS]); sd_r = np.array([pri[c][1] for c in CHANNELS])
     logR = numpyro.sample('logR_orders', dist.Normal(mu_r, sd_r))                          # [C] channel level
@@ -365,7 +392,13 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     R_check_s = numpyro.sample('R_check', dist.Normal(0, CHECK_ROAS_SD).expand([S, C]))
     R_check_a = R_check_s[arr['seg_a']]
     numpyro.deterministic('R_orders_seg', jnp.exp(logR_s))
-    conv = arr['m_ref_a'] / (arr['tau_a'][:, None] * sat1[None, :]) * arr['mask_a']    # ROAS -> beta
+    rs = arr.get('roas_scale', 'equal')
+    if rs == 'gamma':
+        geo = arr['geo_ratio_a'] ** numpyro.sample('gamma_geo', dist.Beta(2.0, 2.0))
+    else:
+        geo = arr['geo_ratio_a'] if rs == 'turnover' else np.ones(A)
+    conv = (arr['m_ref_a'] / (arr['tau_a'][:, None] * sat1[None, :]) * arr['mask_a']
+            * geo[:, None])                                                              # ROAS -> beta
     beta = jnp.stack([R_orders_a * conv, R_check_a * conv])                              # [2, A, C]
     contrib = jnp.einsum('kac,awc->kaw', beta, sat)                                      # [2, A, W]
     media = contrib[:, arr['a_i'], arr['w_i']]                                           # [2, N]
@@ -456,6 +489,11 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
 # ---------------------------------------------------------------- start of sampling: mode search from several starts
 
 ROAS_KEYS = ['alpha', 'lam', 'logR_orders', 'sig_seg', 'z_seg', 'sig_tier', 'z_tier', 'sig_unit', 'z_unit', 'R_check']
+
+
+def roas_keys(arr: dict) -> list[str]:
+    """Parameters that set the media effect of a fit with these arrays (ROAS_KEYS, plus gamma_geo when learned)."""
+    return ROAS_KEYS + (['gamma_geo'] if arr.get('roas_scale', 'equal') == 'gamma' else [])
 
 
 def multi_start_map(arr: dict, dims: dict, prior_set: str, y, n_starts: int = 8, steps: int = 4000,
@@ -578,11 +616,15 @@ def init_params_from(start: dict, n_chains: int, jitter: float = 0.05, seed: int
 def media_contrib_draw(arr: dict, draw: dict) -> np.ndarray:
     """Per-channel log contributions [2, A, W, C] for one posterior draw (numpy)."""
     import jax.numpy as jnp
-    sat, sat1 = adstock_sat(arr['spend_norm'], jnp.asarray(draw['alpha']), jnp.asarray(draw['lam']))
+    sat, sat1 = adstock_sat(arr['spend_norm'], jnp.asarray(draw['alpha']), jnp.asarray(draw['lam']),
+                            arr.get('adstock_l', ADSTOCK_L), arr.get('adstock_pad_steady', False))
     logR_s = draw['logR_orders'][None, :] + draw['sig_seg'] * draw['z_seg']
     logR_a = (logR_s[arr['seg_a']] + draw['sig_tier'] * draw['z_tier'][arr['tier_a']]
               + draw['sig_unit'] * draw['z_unit'] * arr['local_c'][None, :])
-    conv = arr['m_ref_a'] / (arr['tau_a'][:, None] * np.asarray(sat1)[None, :]) * arr['mask_a']
+    rs = arr.get('roas_scale', 'equal')
+    geo = (arr['geo_ratio_a'] ** float(draw['gamma_geo']) if rs == 'gamma'
+           else arr['geo_ratio_a'] if rs == 'turnover' else np.ones(len(arr['tau_a'])))
+    conv = arr['m_ref_a'] / (arr['tau_a'][:, None] * np.asarray(sat1)[None, :]) * arr['mask_a'] * geo[:, None]
     beta = np.stack([np.exp(logR_a) * conv, draw['R_check'][arr['seg_a']] * conv])
     return np.asarray(beta)[:, :, None, :] * np.asarray(sat)[None]
 

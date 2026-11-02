@@ -38,7 +38,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v1_injection_absorption_20261103'
+CODE_VERSION = 'v2_injection_absorption_long_adstock_20261103'
 PARTS = ['level', 'unit_slope', 'trend', 'season', 'week_shock', 'controls', 'city_wave', 'media', 'ar_part', 'innovation']
 
 
@@ -47,22 +47,6 @@ def _real_fit_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def injected_contrib(arr: dict, spec: str, inject_alpha: dict) -> tuple[np.ndarray, list[str]]:
-    """Per-channel log contributions [2, A, W, C] of the injection, as 05 --inject builds them (orders only)."""
-    inj = {k.strip(): float(v) for k, v in (kv.split('=') for kv in spec.split(','))}
-    bad = set(inj) - set(wj.CHANNELS)
-    if bad:
-        raise SystemExit(f'unknown channels in --inject: {sorted(bad)}')
-    S, C, A = len(wj.SEGMENTS), len(wj.CHANNELS), len(arr['tau_a'])
-    draw = dict(alpha=np.array([inject_alpha[c] for c in wj.CHANNELS]), lam=np.ones(C),
-                logR_orders=np.log([max(inj.get(c, 0.0), 1e-12) for c in wj.CHANNELS]),
-                sig_seg=0.0, z_seg=np.zeros((S, C)), sig_tier=0.0, z_tier=np.zeros((3, C)), sig_unit=0.0,
-                z_unit=np.zeros((A, C)), R_check=np.zeros((S, C)))
-    contrib = wj.media_contrib_draw(arr, draw)
-    keep = np.array([c in inj for c in wj.CHANNELS], dtype=float)
-    return contrib * keep[None, None, None, :], [c for c in wj.CHANNELS if c in inj]
 
 
 def fit_parts(d, arr: dict, prior_set: str, y: np.ndarray, steps: int, seed: int) -> dict:
@@ -79,7 +63,7 @@ def fit_parts(d, arr: dict, prior_set: str, y: np.ndarray, steps: int, seed: int
     rho_n = np.asarray(point['rho'], float)[:, arr['s_i']]
     parts['ar_part'] = np.where(has_prev[None, :], rho_n * r[:, prev], 0.0)
     parts['innovation'] = r - parts['ar_part']
-    draw = {k: np.asarray(point[k]) for k in wj.ROAS_KEYS}
+    draw = {k: np.asarray(point[k]) for k in wj.roas_keys(arr)}
     roas = wj.roas_from_contrib(d, arr, wj.media_contrib_draw(arr, draw), np.exp(y[0] + y[1]))
     return dict(parts=parts, roas=roas, loss=st['loss'], finite=st['finite'],
                 rho=np.asarray(point['rho'], float).round(3).tolist(),
@@ -100,6 +84,8 @@ def main() -> None:
     ap.add_argument('--seed', type=int, default=20261102)
     ap.add_argument('--no-city-wave', action='store_true', help='v6 model (no own yearly wave per unit)')
     ap.add_argument('--wave-scale', default='fixed', choices=['learned', 'fixed'])
+    ap.add_argument('--adstock', default='short', choices=['short', 'long'])
+    ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'])
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -107,10 +93,11 @@ def main() -> None:
 
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
-    arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, wave_scale=a.wave_scale)
+    arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale)
     o = d.obs
     y_p = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
-    contrib, inj_ch = injected_contrib(arr, a.inject, rf.INJECT_ALPHA)
+    contrib = rf.injection_contrib(arr, a.inject)
+    inj_ch = [c for c in wj.CHANNELS if c in rf.parse_inject(a.inject)[0]]
     a_i, w_i = arr['a_i'], arr['w_i']
     G = contrib[0][a_i, w_i, :][:, [wj.CHANNELS.index(c) for c in inj_ch]]          # [N, Ci] injected log orders
     g = G.sum(1)
@@ -161,7 +148,7 @@ def main() -> None:
     rc.to_csv(out / 'roas_plain_vs_inject_by_segment_channel.csv', index=False)
     rch.to_csv(out / 'roas_plain_vs_inject_by_channel.csv')
     card = dict(code_version=CODE_VERSION, inject=a.inject, prior_set=a.prior_set, top_units=a.top_units,
-                city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, vi_steps=a.vi_steps, seed=a.seed, dims=d.dims,
+                city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, vi_steps=a.vi_steps, seed=a.seed, dims=d.dims,
                 wave_sd_fixed=(np.asarray(arr_p['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr_p else None),
                 max_abs_gap_parts_vs_injection=gap,
                 fits={k: {kk: v for kk, v in f.items() if kk not in ('parts', 'roas')} for k, f in fits.items()},

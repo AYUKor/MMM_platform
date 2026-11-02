@@ -92,14 +92,14 @@ def summarize(d, arr, samples, turnover, n_chains, n_draws=200) -> pd.DataFrame:
     idx = np.linspace(0, total - 1, min(n_draws, total)).astype(int)
     tabs = []
     for i in idx:
-        draw = {k: np.asarray(samples[k][i]) for k in wj.ROAS_KEYS}
+        draw = {k: np.asarray(samples[k][i]) for k in wj.roas_keys(arr)}
         t = wj.roas_from_contrib(d, arr, wj.media_contrib_draw(arr, draw), turnover)
         tabs.append(t.assign(draw=i, chain=i // per_chain))
     return pd.concat(tabs)
 
 
 def roas_at_point(d, arr, point, turnover) -> pd.Series:
-    t = wj.roas_from_contrib(d, arr, wj.media_contrib_draw(arr, {k: np.asarray(point[k]) for k in wj.ROAS_KEYS}), turnover)
+    t = wj.roas_from_contrib(d, arr, wj.media_contrib_draw(arr, {k: np.asarray(point[k]) for k in wj.roas_keys(arr)}), turnover)
     g = t.groupby('channel')[['effect_rub', 'spend_rub']].sum()
     return g.effect_rub / g.spend_rub
 
@@ -213,7 +213,7 @@ def main() -> None:
     rh = {k: float(np.nanmax(v['r_hat'])) for k, v in summ.items()}
     ess = {k: float(np.nanmin(v['n_eff'])) for k, v in summ.items()}
     np.savez_compressed(out / f'posterior_roas_params_world{a.world}_{a.profile}.npz',
-                        **{k: np.asarray(by_chain[k], dtype=np.float32) for k in wj.ROAS_KEYS},
+                        **{k: np.asarray(by_chain[k], dtype=np.float32) for k in wj.roas_keys(arr)},
                         potential_energy=np.asarray(extra['potential_energy'], dtype=np.float32),
                         num_steps=np.asarray(extra['num_steps'], dtype=np.int32))
 
@@ -243,7 +243,7 @@ def main() -> None:
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
                 code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
                 wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
-                max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
+                max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.roas_keys(arr)},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},
                 rho_post=np.asarray(samples['rho']).mean(0).round(3).tolist(),

@@ -40,13 +40,15 @@ def main() -> None:
     ap.add_argument('--out', required=True)
     ap.add_argument('--draws', type=int, default=200)
     ap.add_argument('--top-units', type=int, default=None, help='same as the fit (fast/medium: 20); pilot/production: all')
+    ap.add_argument('--adstock', default='short', choices=['short', 'long'], help='the same as the fit')
+    ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit')
     ap.add_argument('--show', default='ТС5/Оффлайн|OOH_Total,ТС5/Онлайн|Digital_Performance,ТСХ/Оффлайн|Рег_ТВ')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
     d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
-    arr = wj.model_arrays(d)
+    arr = wj.model_arrays(d, adstock=a.adstock, roas_scale=a.roas_scale)
     o = d.obs
     y = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
     turnover = np.exp(y[0] + y[1])
@@ -65,13 +67,13 @@ def main() -> None:
                 corr[u, j] = np.corrcoef(x, logT[m])[0, 1]
 
     post = np.load(a.npz)
-    flat = {k: post[k].reshape((-1,) + post[k].shape[2:]) for k in wj.ROAS_KEYS}
+    flat = {k: post[k].reshape((-1,) + post[k].shape[2:]) for k in wj.roas_keys(arr)}
     n = flat['alpha'].shape[0]
     idx = np.linspace(0, n - 1, min(a.draws, n)).astype(int)
     eff = np.zeros((len(idx), A, C))
     r_orders = np.zeros((len(idx), A, C))
     for t, i in enumerate(idx):
-        draw = {k: np.asarray(flat[k][i]) for k in wj.ROAS_KEYS}
+        draw = {k: np.asarray(flat[k][i]) for k in wj.roas_keys(arr)}
         contrib = wj.media_contrib_draw(arr, draw)                                    # [2, A, W, C]
         c = contrib[0][a_i, w_i, :] + contrib[1][a_i, w_i, :]
         inc = turnover[:, None] * (1 - np.exp(-c))

@@ -49,6 +49,8 @@ def main() -> None:
     ap.add_argument('--plan', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--draws', type=int, default=400)
+    ap.add_argument('--adstock', default='short', choices=['short', 'long'], help='the same as the fit that wrote the npz')
+    ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit that wrote the npz')
     ap.add_argument('--segment-table', default=None, help='roas_by_segment_channel_*.csv of the same fit: budget x segment ROAS for comparison')
     a = ap.parse_args()
     out = Path(a.out)
@@ -62,14 +64,15 @@ def main() -> None:
     wp = weekly_plan(plan)
 
     d = wj.prepare(a.panel, a.national, top_units_per_segment=None)
-    arr = wj.model_arrays(d, city_wave=False)          # media part only; the city wave does not enter the forecast
+    arr = wj.model_arrays(d, city_wave=False, adstock=a.adstock, roas_scale=a.roas_scale)   # media part only; the city wave does not enter the forecast
+    L = arr['adstock_l']
     ad = d.ad_units
     key = {(wj.SEGMENTS[s], u): i for i, (s, u) in enumerate(zip(ad.seg_i, ad.unit_label))}
     missing = sorted({(s, g) for s, g in zip(wp.segment, wp.geo) if (s, g) not in key})
     if missing:
         raise SystemExit(f'plan cities not in the model: {missing}')
 
-    weeks = pd.date_range(wp.week_start.min(), wp.week_start.max() + pd.Timedelta(weeks=wj.ADSTOCK_L - 1), freq='7D')
+    weeks = pd.date_range(wp.week_start.min(), wp.week_start.max() + pd.Timedelta(weeks=L - 1), freq='7D')
     A, Wp, C = len(ad), len(weeks), len(wj.CHANNELS)
     widx = {w: i for i, w in enumerate(weeks)}
     spend = np.zeros((A, Wp, C))
@@ -78,7 +81,7 @@ def main() -> None:
     pop = ad.pop_k.to_numpy() * 1000.0
     m_ref_a = d.m_ref[ad.seg_i.to_numpy()]
     spend_pr = spend / pop[:, None, None]
-    arr_p = dict(arr, spend_norm=np.where(m_ref_a[:, None, :] > 0, spend_pr / np.where(m_ref_a > 0, m_ref_a, 1.0)[:, None, :], 0.0))
+    arr_p = dict(arr, adstock_pad_steady=False, spend_norm=np.where(m_ref_a[:, None, :] > 0, spend_pr / np.where(m_ref_a > 0, m_ref_a, 1.0)[:, None, :], 0.0))
 
     # baseline turnover: the same week one year earlier, per ad unit (sum of its model units)
     o = d.obs
@@ -94,14 +97,14 @@ def main() -> None:
             base[u, j] = v if np.isfinite(v) else hist.xs(u, level=0).median()
 
     post = np.load(a.npz)
-    flat = {k: post[k].reshape((-1,) + post[k].shape[2:]) for k in wj.ROAS_KEYS}
+    flat = {k: post[k].reshape((-1,) + post[k].shape[2:]) for k in wj.roas_keys(arr)}
     n = flat['alpha'].shape[0]
     idx = np.linspace(0, n - 1, min(a.draws, n)).astype(int)
     U = np.array(plan_units)
     eff_c = np.zeros((len(idx), len(U), C))          # extra turnover by channel (channel alone)
     eff_t = np.zeros((len(idx), len(U)))             # extra turnover of the whole plan in the city
     for t, i in enumerate(idx):
-        draw = {k: np.asarray(flat[k][i]) for k in wj.ROAS_KEYS}
+        draw = {k: np.asarray(flat[k][i]) for k in wj.roas_keys(arr)}
         contrib = wj.media_contrib_draw(arr_p, draw)                                  # [2, A, Wp, C]
         c = (contrib[0] + contrib[1])[U]                                              # [U, Wp, C]
         b = base[U][:, :, None]
@@ -152,7 +155,7 @@ def main() -> None:
     by_ch.to_csv(out / 'plan_forecast_by_channel.csv', index=False)
 
     pd.set_option('display.width', 250)
-    print(f'plan weeks {weeks[0].date()} .. {weeks[-1].date()} (incl. {wj.ADSTOCK_L - 1} carry-over weeks), draws {len(idx)}, '
+    print(f'plan weeks {weeks[0].date()} .. {weeks[-1].date()} (incl. {L - 1} carry-over weeks), draws {len(idx)}, '
           f'cities {len(U)}, analog-year weeks used {used_analog[U].mean():.0%}')
     print(by_ch.round(3).to_string(index=False))
     print()
