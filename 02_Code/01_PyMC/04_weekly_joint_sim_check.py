@@ -21,6 +21,9 @@ Version 4 (02.11, owner's decision): no offline-label TV -> online channel. Stor
 ads only on delivery sales; the world has no such effect either (--cross-tv adds it back).
 Version 5 (02.11, after pilot v4: ROAS agreed between chains, but the week shock, holidays, Fourier and controls did
 not mix): the week shock is made orthogonal to every modelled week-level term, so it cannot copy them.
+Version 6 (02.11, after fast v5: worse mixing of the shock, trend and Fourier): same model in sampler-friendly
+coordinates. The shock is written in its own subspace (centred in segments with many units), the trend hinges are
+orthogonal to the line and the yearly wave, controls are deviations from their segment-week mean.
 
 Run: python -I 04_weekly_joint_sim_check.py --panel P.parquet --national N.csv --out OUTDIR --world A|B
      --profile fast|medium|pilot|production
@@ -42,7 +45,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v5_week_shock_orthogonal_20261102'
+CODE_VERSION = 'v6_one_owner_per_week_term_20261102'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),

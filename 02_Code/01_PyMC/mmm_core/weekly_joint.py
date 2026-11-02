@@ -15,7 +15,10 @@ R_check is centred at 0. Turnover ROAS = R_orders + R_check at typical spend; th
 afterwards by switching each channel off (roas_table).
 
 week_shock is a common, shrunk shock of a segment-week (not a free effect per date): it carries the common
-noise that made old intervals 3-5 times too narrow. Adstock (normalized geometric, 8 weeks) and saturation
+noise that made old intervals 3-5 times too narrow. Every week-level part has one owner (v6): the line belongs to
+slope0, the yearly wave to Fourier, single weeks to holidays, the rest of the trend to the hinges, and the shock
+only to what none of them can produce. Controls enter as deviations from their segment-week mean (the common part
+of the weather and of the calendar is owned by the week-level terms). Adstock (normalized geometric, 8 weeks) and saturation
 (1 - exp(-x/lambda)) are shared by both targets and all segments of a channel.
 
 Data: panels/04_2025_2026Q2_fourth_pass/v3_20261102 and the national per-1000 table next to it
@@ -37,7 +40,10 @@ TARGETS = ['orders', 'check']
 RESORTS = {'СОЧИ', 'АНАПА', 'ГЕЛЕНДЖИК'}
 ADSTOCK_L = 8
 KNOT_EVERY_WEEKS = 7
-CONTROLS = ['nonworking_share', 'temp_dev_from_norm_c', 'log1p_precip', 'log1p_snow']
+WEEK_SHOCK_CENTRED_MIN_UNITS = 50   # v6: segments with at least this many units get the centred week shock
+# v6: nonworking_share left out: in panel v3 it is the same in every unit each week (national calendar), so after
+# removing the segment-week mean nothing is left; the holiday dummies own the calendar.
+CONTROLS = ['temp_dev_from_norm_c', 'log1p_precip', 'log1p_snow']
 
 # ROAS priors, log-normal (median, sd of log). Owner's moderate set (30.10.2026): national TV 2 (90% 0.5-8),
 # digital 3 (90% 0.5-12), other channels 1.2 (90% 0.28-5.4). Offline-label TV on online turnover: 0.3.
@@ -61,13 +67,14 @@ class ModelData:
     m_ref: np.ndarray               # [S, C] typical positive weekly spend per resident (0 = channel absent)
     chan_mask: np.ndarray           # [S, C] 1 if the channel is modelled in the segment
     obs: pd.DataFrame               # observations: indices, targets, controls
-    trend_basis: np.ndarray         # [W, K]
+    trend_basis: np.ndarray         # [W, K] hinges made orthogonal to [1, t, Fourier] (v6)
     t_year: np.ndarray              # [W]
     fourier: np.ndarray             # [W, 4]
     holidays: np.ndarray            # [W, H]
     holiday_names: list
     controls_mean: np.ndarray = field(default_factory=lambda: np.zeros(0))
     controls_sd: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    trend_coef: np.ndarray = field(default_factory=lambda: np.zeros(0))   # basis(t) = hinges(t) - [1, t, F] @ coef
 
     @property
     def dims(self) -> dict:
@@ -180,6 +187,10 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
     o['log1p_precip'] = np.log1p(o.precipitation_mm.fillna(0).clip(lower=0))
     o['log1p_snow'] = np.log1p(o.snow_fall_cm.fillna(0).clip(lower=0))
     o['temp_dev_from_norm_c'] = o.temp_dev_from_norm_c.fillna(0)
+    # v6: controls keep only their deviation from the segment-week mean. The common part (national calendar of days
+    # off, a cold week everywhere) is owned by holidays, season and the week shock; before, both owned it
+    # (pilot v4: R-hat 1.5 on holidays, 1.3 on gamma).
+    o[CONTROLS] = o[CONTROLS] - o.groupby(['seg_i', 'w_i'])[CONTROLS].transform('mean')
     X = o[CONTROLS].to_numpy(float)
     cm, cs = X.mean(0), X.std(0) + 1e-9
     o[CONTROLS] = (X - cm) / cs
@@ -191,7 +202,7 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
 
     t = (weeks - weeks[0]).days.to_numpy() / 365.25
     t_c = t - t.mean()
-    knots = t[KNOT_EVERY_WEEKS::KNOT_EVERY_WEEKS]
+    knots = t[KNOT_EVERY_WEEKS:-1:KNOT_EVERY_WEEKS]          # v6: no knot at the last week (all-zero column)
     basis = np.maximum(0.0, t[:, None] - knots[None, :])
     doy = (weeks + pd.Timedelta(days=3)).dayofyear.to_numpy() / 365.25
     fourier = np.column_stack([np.sin(2 * np.pi * doy), np.cos(2 * np.pi * doy),
@@ -202,9 +213,15 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
     basis = basis - basis.mean(0)
     fourier = fourier - fourier.mean(0)
     hol = hol - hol.mean(0)
+    # v6: over 78 weeks the hinges reproduce the yearly Fourier pair almost exactly (R2 0.999; half-year pair 0.98)
+    # and contain the straight line: flat ridges between trend, season and slope0 (fast v5: R-hat about 1.5 on
+    # fourier, tau_trend, slope0, z_trend). The hinges are made orthogonal to [1, t, Fourier]; same fitted space.
+    G = np.column_stack([np.ones_like(t_c), t_c, fourier])
+    trend_coef = np.linalg.lstsq(G, basis, rcond=None)[0]
+    basis = basis - G @ trend_coef
     return ModelData(weeks=weeks, ad_units=ad, model_units=mu, spend_pr=spend_pr, m_ref=m_ref, chan_mask=chan_mask,
                      obs=o, trend_basis=basis, t_year=t_c, fourier=fourier, holidays=hol, holiday_names=hol_names,
-                     controls_mean=cm, controls_sd=cs)
+                     controls_mean=cm, controls_sd=cs, trend_coef=trend_coef)
 
 
 # ---------------------------------------------------------------- model (numpyro / JAX)
@@ -232,19 +249,21 @@ def with_targets(arr: dict, y: np.ndarray) -> dict:
 
 def _week_projector(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
     """[W, W] projector that removes from a week series the mean, the straight line and every modelled week-level
-    term (trend hinges, Fourier, holidays, the national calendar of nonworking days).
-
-    The week shock carries only what these terms cannot: v2 removed the level and the line; v5 (pilot v4, 02.11:
-    R-hat 1.7 on the week shock, 1.6 on holidays, 1.3 on Fourier and controls while ROAS agreed) also removes the
-    other week terms, which the shock could copy at no cost.
-    """
+    term (trend hinges, Fourier, holidays). v2 removed the level and the line; v5 also the other week terms, which
+    the shock could copy at no cost (pilot v4: R-hat 1.7 on the week shock, 1.6 on holidays, 1.3 on Fourier)."""
     X = np.column_stack([np.ones_like(t), t] + [np.reshape(m, (len(t), -1)) for m in week_terms])
     return np.eye(len(t)) - X @ np.linalg.pinv(X, rcond=1e-8)
 
 
-def _weekly_mean(o: pd.DataFrame, col: str, W: int) -> np.ndarray:
-    """Mean of an observation column per week (0 for weeks without observations)."""
-    return o.groupby('w_i')[col].mean().reindex(range(W)).fillna(0.0).to_numpy()
+def _week_basis(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
+    """[W, R] orthonormal basis of the week series no modelled week term can produce (range of _week_projector).
+
+    v6: the shock is written in these R coordinates. In v5 it was P @ z with z of length W, so W - R directions of z
+    never touched the data; they are not along single coordinates, the sampler's per-coordinate scaling cannot
+    handle them, and they wandered (fast v5: R-hat 2.1 on z_week). Q z with z ~ N(0, I_R) is the same prior N(0, P).
+    """
+    vals, vecs = np.linalg.eigh(_week_projector(t, *week_terms))
+    return vecs[:, vals > 0.5]
 
 
 def model_arrays(d: ModelData) -> dict:
@@ -264,7 +283,11 @@ def model_arrays(d: ModelData) -> dict:
         seg_m=d.model_units.seg_i.to_numpy(),
         seg_onehot_m=np.eye(len(SEGMENTS))[d.model_units.seg_i.to_numpy()],          # [M, S]
         seg_count_m=np.maximum(np.bincount(d.model_units.seg_i.to_numpy(), minlength=len(SEGMENTS)), 1),
-        week_proj=_week_projector(d.t_year, d.trend_basis, d.fourier, d.holidays, _weekly_mean(o, 'nonworking_share', len(d.weeks))),
+        week_basis=_week_basis(d.t_year, d.trend_basis, d.fourier, d.holidays),              # [W, R]
+        # v6: centred shock where a segment has many units (each week's shock is pinned by the data, and the
+        # non-centred form makes a curved ridge between sig_week and every coefficient); non-centred otherwise
+        wk_centred=(np.bincount(d.model_units.seg_i.to_numpy(), minlength=len(SEGMENTS)) >= WEEK_SHOCK_CENTRED_MIN_UNITS
+                    ).astype(float),
         ybar=np.column_stack([o.groupby('m_i').y_orders.transform('mean'), o.groupby('m_i').y_check.transform('mean')]),
     )
 
@@ -313,14 +336,16 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     tau_tr = numpyro.sample('tau_trend', dist.HalfNormal(0.5).expand([2]))
     z_tr = numpyro.sample('z_trend', dist.Normal(0, 1).expand([2, S, K]))
     trend = slope0[:, :, None] * arr['t'][None, None, :] + jnp.einsum('wk,jsk->jsw', arr['basis'], tau_tr[:, None, None] * z_tr)
-    four = numpyro.sample('fourier', dist.Normal(0, 0.1).expand([2, S, 4]))
+    four = numpyro.sample('fourier', dist.Normal(0, 0.3).expand([2, S, 4]))     # v6: owns the whole yearly wave
     four_res = numpyro.sample('fourier_resort', dist.Normal(0, 0.2).expand([2, 4]))
     hol = numpyro.sample('holidays', dist.Normal(0, 0.2).expand([2, S, H]))
     season = jnp.einsum('wf,jsf->jsw', arr['F'], four) + jnp.einsum('wh,jsh->jsw', arr['H'], hol)
     gam = numpyro.sample('gamma', dist.Normal(0, 0.05).expand([2, S, arr['X'].shape[1]]))
     sig_wk = numpyro.sample('sig_week', dist.HalfNormal(0.03).expand([2, S]))
-    z_wk = numpyro.sample('z_week', dist.Normal(0, 1).expand([2, S, W]))
-    week_shock = sig_wk[:, :, None] * jnp.einsum('jsw,vw->jsv', z_wk, arr['week_proj'])   # only what week terms miss
+    c_wk = arr['wk_centred'][None, :, None]                                             # 1 centred, 0 non-centred
+    R = arr['week_basis'].shape[1]
+    v_wk = numpyro.sample('v_week', dist.Normal(0, sig_wk[:, :, None] ** c_wk).expand([2, S, R]))
+    week_shock = jnp.einsum('jsr,wr->jsw', v_wk * sig_wk[:, :, None] ** (1 - c_wk), arr['week_basis'])
     base_sw = trend + season + week_shock                                                # [2, S, W]
     s_i, w_i, m_i = arr['s_i'], arr['w_i'], arr['m_i']
     mu = (arr['ybar'].T + a_m[:, m_i] + (sig_slope[:, None] * z_slope)[:, m_i] * arr['t'][w_i][None, :]
