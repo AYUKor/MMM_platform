@@ -391,10 +391,68 @@ def multi_start_map(arr: dict, dims: dict, prior_set: str, y, n_starts: int = 8,
     return out
 
 
-def init_params_from(start: dict, n_chains: int, jitter: float = 0.05, seed: int = 0) -> dict:
-    """NUTS init_params [chains, ...] (unconstrained) around one mode, with a small jitter per chain."""
+def multi_start_vi(arr: dict, dims: dict, prior_set: str, y, n_starts: int = 8, steps: int = 15000,
+                   seed: int = 0, radius: float = 2.0, lr: tuple = (0.01, 0.001), init_scale: float = 0.05,
+                   tail: int = 1000) -> list[dict]:
+    """Approximate the posterior from several starts (independent normals on the unconstrained scale), compiled once.
+
+    Version 3 (02.11 after the v2 pilot): on all 621 units the single best point (multi_start_map) is degenerate,
+    the city deviations of the local channels fit noise and blow their ROAS up to 12-176 in both simulated worlds,
+    while the sampled posterior of the v1 pilot sat at sane values. The approximation counts the volume of the
+    posterior, not only its peak, so its centre lies where the posterior mass is. Each result: start, loss
+    (= minus ELBO averaged over the last `tail` steps, lower is better), loss_at_75pct, unconstrained centre and
+    scale (NUTS chains start at draws from this approximation) and the constrained centre of every latent site.
+    """
+    import jax
+    import jax.numpy as jnp
+    import numpyro
+    from numpyro.infer import SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoNormal
+    from numpyro.infer.initialization import init_to_median
+    from numpyro.infer.svi import SVIState
+
+    guide = AutoNormal(numpyro_model, init_loc_fn=init_to_median(num_samples=15), init_scale=init_scale)
+    optim = numpyro.optim.Adam(lambda i: lr[0] * (lr[1] / lr[0]) ** (i / steps))
+    svi = SVI(numpyro_model, guide, optim, Trace_ELBO())
+    state0 = svi.init(jax.random.PRNGKey(seed), arr, dims, prior_set, y=y)
+
+    @jax.jit
+    def run(state):
+        def body(st, _):
+            return svi.update(st, arr, dims, prior_set, y=y)
+        return jax.lax.scan(body, state, None, length=steps)
+
+    u0 = svi.optim.get_params(state0.optim_state)
     rng = np.random.default_rng(seed)
-    return {k: v[None] + jitter * rng.standard_normal((n_chains,) + v.shape) for k, v in start['unconstrained'].items()}
+    loc_sfx, sc_sfx = '_auto_loc', '_auto_scale'
+    out = []
+    for i in range(n_starts):
+        if i == 0:
+            st = state0
+        else:
+            u = {k: (jnp.asarray(rng.uniform(-radius, radius, np.shape(v)), dtype=jnp.result_type(v))
+                     if k.endswith(loc_sfx) else v) for k, v in u0.items()}
+            st = SVIState(svi.optim.init(u), state0.mutable_state, jax.random.PRNGKey(seed + i))
+        st, losses = run(st)
+        losses = np.asarray(losses)
+        c_end = svi.get_params(st)
+        q = int(0.75 * steps)
+        out.append(dict(start=i, init='prior_median' if i == 0 else f'random_{radius:g}',
+                        loss=float(np.mean(losses[-tail:])), loss_at_75pct=float(np.mean(losses[max(q - tail, 0):q])),
+                        finite=bool(np.all(np.isfinite(losses[-tail:]))),
+                        unconstrained={k[:-len(loc_sfx)]: np.asarray(v) for k, v in c_end.items() if k.endswith(loc_sfx)},
+                        scale={k[:-len(sc_sfx)]: np.asarray(v) for k, v in c_end.items() if k.endswith(sc_sfx)},
+                        point={k: np.asarray(v) for k, v in guide.median(c_end).items()}))
+    return out
+
+
+def init_params_from(start: dict, n_chains: int, jitter: float = 0.05, seed: int = 0) -> dict:
+    """NUTS init_params [chains, ...] (unconstrained): draws from the approximation when it has scales (v3),
+    otherwise the point with a small jitter per chain (v2)."""
+    rng = np.random.default_rng(seed)
+    sc = start.get('scale') or {}
+    return {k: v[None] + (sc[k][None] if k in sc else jitter) * rng.standard_normal((n_chains,) + v.shape)
+            for k, v in start['unconstrained'].items()}
 
 
 # ---------------------------------------------------------------- ROAS by switching channels off

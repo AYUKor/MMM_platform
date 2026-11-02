@@ -13,6 +13,10 @@ Before sampling (version 2, 02.11 after the pilot): the posterior mode is search
 7 random), the table of the starts is written first (multistart_*.csv), and all chains start next to the best
 mode. The chain-by-chain ROAS, energy and the posterior draws of the ROAS parameters are saved, so a chain stuck
 in a false solution is visible and can be checked.
+Version 3 (02.11, after the v2 pilot start search): on all units the single best point is degenerate (city
+deviations fit noise, local channels blown up to ROAS 12-176), so by default the start search approximates the
+posterior instead (--init vi) and the chains start at draws from that approximation. If the centre of the best
+start already has a channel ROAS above --stop-if-roas-above (pre-registered stop rule 10), sampling is skipped.
 
 Run: python -I 04_weekly_joint_sim_check.py --panel P.parquet --national N.csv --out OUTDIR --world A|B
      --profile fast|medium|pilot|production
@@ -33,6 +37,8 @@ import numpy as np
 import pandas as pd
 
 from mmm_core import weekly_joint as wj
+
+CODE_VERSION = 'v3_vi_start_20261102'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -104,7 +110,10 @@ def main() -> None:
     ap.add_argument('--prior-set', default='moderate', choices=list(wj.PRIOR_SETS))
     ap.add_argument('--chain-method', default='vectorized', choices=['sequential', 'parallel', 'vectorized'])
     ap.add_argument('--starts', type=int, default=8, help='mode search starts before sampling (0 = NUTS default start)')
-    ap.add_argument('--map-steps', type=int, default=4000)
+    ap.add_argument('--map-steps', type=int, default=None, help='steps of the start search (vi 15000, map 4000)')
+    ap.add_argument('--init', default='vi', choices=['vi', 'map', 'median'],
+                    help='vi: approximate posterior from several starts (v3); map: best point (v2); median: prior median')
+    ap.add_argument('--stop-if-roas-above', type=float, default=10.0)
     ap.add_argument('--jitter', type=float, default=0.05)
     a = ap.parse_args()
     prof = PROFILES[a.profile]
@@ -130,9 +139,12 @@ def main() -> None:
     true_ch = by_channel(true_seg.assign(draw=0)).drop(columns='draw')
 
     init_params, ms_card = None, None
-    if a.starts > 0:
+    if a.map_steps is None:
+        a.map_steps = 15000 if a.init == 'vi' else 4000
+    if a.starts > 0 and a.init != 'median':
         t_ms = time.time()
-        starts = wj.multi_start_map(arr_s, d.dims, a.prior_set, y, n_starts=a.starts, steps=a.map_steps, seed=a.seed)
+        search = wj.multi_start_vi if a.init == 'vi' else wj.multi_start_map
+        starts = search(arr_s, d.dims, a.prior_set, y, n_starts=a.starts, steps=a.map_steps, seed=a.seed)
         rows = []
         for st in starts:
             r = roas_at_point(d, arr_s, st['point'], tr['turnover']) if st['finite'] else pd.Series(dtype=float)
@@ -144,13 +156,23 @@ def main() -> None:
         pd.concat([ms, pd.DataFrame([truth_row])]).to_csv(out / f'multistart_world{a.world}_{a.profile}.csv', index=False)
         best = starts[int(ms.loss.where(ms.finite).idxmin())]
         init_params = wj.init_params_from(best, a.chains, jitter=a.jitter, seed=a.seed)
-        ms_card = dict(seconds=round(time.time() - t_ms), steps=a.map_steps, best_start=best['start'],
+        best_roas = ms.loc[ms.loss.where(ms.finite).idxmin(), [f'roas_{c}' for c in wj.CHANNELS]].astype(float)
+        ms_card = dict(init=a.init, seconds=round(time.time() - t_ms), steps=a.map_steps, best_start=best['start'],
                        loss_minus_best=ms.loss_minus_best.round(1).tolist(),
-                       settled=(ms.loss_at_75pct - ms.loss).round(1).tolist())
-        print('mode search', ms_card, flush=True)
+                       settled=(ms.loss_at_75pct - ms.loss).round(1).tolist(),
+                       best_start_roas=best_roas.round(2).to_dict())
+        print('start search', ms_card, flush=True)
         print(pd.concat([ms, pd.DataFrame([truth_row])]).round(2).to_string(), flush=True)
+        if (best_roas > a.stop_if_roas_above).any():
+            card = dict(world=a.world, profile=a.profile, status='stopped_start_roas_above_rule', code_version=CODE_VERSION,
+                        stop_if_roas_above=a.stop_if_roas_above, mode_search=ms_card, dims=d.dims)
+            (out / f'start_stopped_world{a.world}_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2))
+            print('STOPPED: the centre of the best start breaks the ROAS stop rule, sampling skipped', flush=True)
+            return
 
-    kernel = NUTS(wj.numpyro_model, target_accept_prob=prof['target_accept'], max_tree_depth=prof['max_tree_depth'])
+    from numpyro.infer.initialization import init_to_median
+    kernel = NUTS(wj.numpyro_model, target_accept_prob=prof['target_accept'], max_tree_depth=prof['max_tree_depth'],
+                  init_strategy=init_to_median(num_samples=15))
     mcmc = MCMC(kernel, num_warmup=a.warmup, num_samples=a.draws, num_chains=a.chains, chain_method=a.chain_method,
                 progress_bar=False)
     t1 = time.time()
@@ -195,7 +217,7 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
-                code_version='v2_centred_multistart_20261102', mode_search=ms_card, chains_stats=chain_stats,
+                code_version=CODE_VERSION, mode_search=ms_card, chains_stats=chain_stats,
                 max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},
