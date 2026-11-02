@@ -16,6 +16,7 @@ delivery sales (owner 02.11): the tables are per segment; there is no cross-dire
 
 Run: python -I 05_weekly_joint_real_fit.py --panel P.parquet --national N.csv --out OUTDIR
      --profile fast|medium|pilot|production [--prior-set moderate|wide] [--fit-window-end YYYY-MM-DD]
+     [--inject "Нац_ТВ=2,..."]   (injection check: real data plus a known effect; the fit must find it on top)
 """
 from __future__ import annotations
 
@@ -83,6 +84,31 @@ def segment_table(est: pd.DataFrame, turnover_by_seg: pd.Series) -> pd.DataFrame
     return t
 
 
+INJECT_ALPHA = {'Нац_ТВ': 0.6, 'Рег_ТВ': 0.5, 'Радио': 0.4, 'OOH_Total': 0.4, 'Digital_Performance': 0.2,
+                wj.NATIONAL_TV_CROSS: 0.6}          # same carry-over as the simulated worlds
+
+
+def inject_effect(d, arr, y: np.ndarray, spec: str, truth_path: Path) -> np.ndarray:
+    """Real targets plus a known media effect on log orders; writes the injected turnover ROAS by segment."""
+    inj = {k.strip(): float(v) for k, v in (kv.split('=') for kv in spec.split(','))}
+    bad = set(inj) - set(wj.CHANNELS)
+    if bad:
+        raise SystemExit(f'unknown channels in --inject: {sorted(bad)}')
+    S, C, A = len(wj.SEGMENTS), len(wj.CHANNELS), len(d.ad_units)
+    draw = dict(alpha=np.array([INJECT_ALPHA[c] for c in wj.CHANNELS]), lam=np.ones(C),
+                logR_orders=np.log([max(inj.get(c, 0.0), 1e-12) for c in wj.CHANNELS]),
+                sig_seg=0.0, z_seg=np.zeros((S, C)), sig_tier=0.0, z_tier=np.zeros((3, C)), sig_unit=0.0,
+                z_unit=np.zeros((A, C)), R_check=np.zeros((S, C)))
+    contrib = wj.media_contrib_draw(arr, draw)                                   # [2, A, W, C]
+    keep = np.array([c in inj for c in wj.CHANNELS], dtype=float)
+    contrib = contrib * keep[None, None, None, :]
+    y = y.copy()
+    y[0] = y[0] + contrib[0].sum(-1)[arr['a_i'], arr['w_i']]
+    truth = wj.roas_from_contrib(d, arr, contrib, np.exp(y[0] + y[1]))
+    truth[truth.channel.isin(list(inj))].to_csv(truth_path, index=False)
+    return y
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--panel', required=True)
@@ -97,6 +123,10 @@ def main() -> None:
     ap.add_argument('--vi-steps', type=int, default=15000)
     ap.add_argument('--stop-if-roas-above', type=float, default=10.0)
     ap.add_argument('--jitter', type=float, default=0.05)
+    ap.add_argument('--inject', default='',
+                    help='injection check: add a known effect to the real orders, e.g. "Нац_ТВ=2,Digital_Performance=2" '
+                         '(ROAS through orders at typical spend; no city deviations, no check part). The fit should find '
+                         'its plain real ROAS plus about the injected amount; the truth is in injected_truth_{profile}.csv')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     out = Path(a.out)
@@ -113,6 +143,8 @@ def main() -> None:
     arr = wj.model_arrays(d)
     o = d.obs
     y = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
+    if a.inject:
+        y = inject_effect(d, arr, y, a.inject, out / f'injected_truth_{a.profile}.csv')
     arr = wj.with_targets(arr, y)
     turnover = np.exp(y[0] + y[1])
     turnover_by_seg = pd.Series(turnover).groupby(pd.Series(arr['s_i']).map(dict(enumerate(wj.SEGMENTS)))).sum()
@@ -183,7 +215,7 @@ def main() -> None:
     per_chain.columns = [f'chain{c}' for c in per_chain.columns]
     per_chain.to_csv(out / f'roas_by_chain_{a.profile}.csv')
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
-                fit_window_end=a.fit_window_end, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
+                fit_window_end=a.fit_window_end, inject=a.inject, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
                 code_version=CODE_VERSION, mode_search=ms_card,
                 chains_stats=dict(potential_energy_mean=np.asarray(extra['potential_energy']).mean(1).round(1).tolist(),
