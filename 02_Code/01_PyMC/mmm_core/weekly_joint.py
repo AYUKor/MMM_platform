@@ -3,8 +3,8 @@
 One model for all four segments (ТС5/ТСХ x Онлайн/Оффлайн). For every model unit u (city, or oblast rest per
 composition period) and week t, for target k in {orders, check}:
 
-    log y[k,u,t] = a[k,u] + slope[k,u]*t + trend[k,s](t) + season[k,s](t) + holidays + resort summer
-                   + gamma[k,s] . controls[u,t] + week_shock[k,s,t]
+    log y[k,u,t] = a[k,u] + slope[k,u]*t + trend[k,s](t) + season[k,s](t) + city_wave[k,u](t) + holidays
+                   + resort summer + gamma[k,s] . controls[u,t] + week_shock[k,s,t]
                    + sum_c beta[k,c,u] * sat_c(adstock_c(spend per resident[c,u,t] / m_ref[s,c])) + e[k,u,t]
 
     e[k,u,t] = rho[k,s] * e[k,u,t-1] + innovation;  check innovation regressed on the orders innovation.
@@ -17,7 +17,10 @@ afterwards by switching each channel off (roas_table).
 week_shock is a common, shrunk shock of a segment-week (not a free effect per date): it carries the common
 noise that made old intervals 3-5 times too narrow. Every week-level part has one owner (v6): the line belongs to
 slope0, the yearly wave to Fourier, single weeks to holidays, the rest of the trend to the hinges, and the shock
-only to what none of them can produce. Controls enter as deviations from their segment-week mean (the common part
+only to what none of them can produce. v7: every unit has its own yearly wave around its segment's (shrunk, scale
+sig_city_wave): in the real pilot of 03.11 the segment wave alone let cities whose spring rises more than their
+segment's pass that rise to the ads that run in spring (OOH in ТС5 stores 9.6; simple fixed-effect fit 14 with a
+common wave, 3 with own city waves). Controls enter as deviations from their segment-week mean (the common part
 of the weather and of the calendar is owned by the week-level terms). Adstock (normalized geometric, 8 weeks) and saturation
 (1 - exp(-x/lambda)) are shared by both targets and all segments of a channel.
 
@@ -41,6 +44,7 @@ RESORTS = {'СОЧИ', 'АНАПА', 'ГЕЛЕНДЖИК'}
 ADSTOCK_L = 8
 KNOT_EVERY_WEEKS = 7
 WEEK_SHOCK_CENTRED_MIN_UNITS = 50   # v6: segments with at least this many units get the centred week shock
+CITY_WAVE_SD = 0.05   # v7: prior scale of a unit's own yearly wave around its segment's (real spread 0.01-0.05)
 # v6: nonworking_share left out: in panel v3 it is the same in every unit each week (national calendar), so after
 # removing the segment-week mean nothing is left; the holiday dummies own the calendar.
 CONTROLS = ['temp_dev_from_norm_c', 'log1p_precip', 'log1p_snow']
@@ -266,10 +270,21 @@ def _week_basis(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
     return vecs[:, vals > 0.5]
 
 
-def model_arrays(d: ModelData) -> dict:
+def model_arrays(d: ModelData, city_wave: bool = True) -> dict:
+    """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit)."""
     o = d.obs
     ad = d.ad_units
+    seg_m = d.model_units.seg_i.to_numpy()
+    M = len(d.model_units)
+    resort_m = (np.bincount(o.m_i, o.resort, minlength=M) > 0).astype(int)
+    # own waves are deviations from the wave of their group (segment x resort): the group's wave is owned by the
+    # segment Fourier and the resort Fourier, so the mean of the own waves of a group is not a second owner
+    grp_m = seg_m * 2 + resort_m
+    G = 2 * len(SEGMENTS)
     return dict(
+        city_wave=bool(city_wave),
+        wave_grp_m=grp_m, wave_grp_onehot_m=np.eye(G)[grp_m],
+        wave_grp_count_m=np.maximum(np.bincount(grp_m, minlength=G), 1).astype(float),
         spend_norm=np.where(d.m_ref[ad.seg_i.to_numpy()][:, None, :] > 0,
                             d.spend_pr / np.where(d.m_ref > 0, d.m_ref, 1.0)[ad.seg_i.to_numpy()][:, None, :], 0.0),
         m_ref_a=d.m_ref[ad.seg_i.to_numpy()],                 # [A, C]
@@ -351,6 +366,14 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     mu = (arr['ybar'].T + a_m[:, m_i] + (sig_slope[:, None] * z_slope)[:, m_i] * arr['t'][w_i][None, :]
           + base_sw[:, s_i, w_i] + (four_res @ arr['F'][w_i].T) * arr['resort'][None, :]
           + jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']) + media)
+    if arr.get('city_wave', False):
+        # v7: own yearly wave of every unit, a shrunk deviation from its group's wave (centred within the group)
+        sig_cw = numpyro.sample('sig_city_wave', dist.HalfNormal(CITY_WAVE_SD).expand([2, S]))
+        z_cw = numpyro.sample('z_city_wave', dist.Normal(0, 1).expand([2, M, arr['F'].shape[1]]))
+        g_mean = jnp.einsum('jmf,mg->jgf', z_cw, arr['wave_grp_onehot_m'] / arr['wave_grp_count_m'][None, :])
+        z_cw = z_cw - g_mean[:, arr['wave_grp_m'], :]
+        cw = sig_cw[:, arr['seg_m'], None] * z_cw                                       # [2, M, F]
+        mu = mu + jnp.einsum('jnf,nf->jn', cw[:, m_i, :], arr['F'][w_i])
 
     # AR(1) errors per target and segment, check innovation regressed on the orders innovation
     rho = numpyro.sample('rho', dist.Beta(8, 2).expand([2, S]))
@@ -536,12 +559,31 @@ def roas_from_contrib(d: ModelData, arr: dict, contrib: np.ndarray, turnover: np
 
 # ---------------------------------------------------------------- simulated world
 
+def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26) -> np.ndarray:
+    """Each model unit's own yearly wave in the real data, [2, M, F]: Fourier part of a fit of the unit's log target
+    around its segment's week mean, with the unit's own level and line. Used to put the real trap into a world."""
+    o = d.obs
+    M, nf = len(d.model_units), d.fourier.shape[1]
+    m_i, w_i = arr['m_i'], arr['w_i']
+    out = np.zeros((2, M, nf))
+    for k, col in enumerate(['y_orders', 'y_check']):
+        dm = o[col] - o.groupby('m_i')[col].transform('mean')
+        r = (dm - dm.groupby([o.seg_i, o.w_i]).transform('mean')).to_numpy()
+        for m in range(M):
+            sel = m_i == m
+            if sel.sum() < min_obs:
+                continue
+            Z = np.column_stack([np.ones(sel.sum()), d.t_year[w_i[sel]], d.fourier[w_i[sel]]])
+            out[k, m] = np.linalg.lstsq(Z, r[sel], rcond=None)[0][2:]
+    return out
+
+
 def simulate(d: ModelData, arr: dict, truth: dict, seed: int = 0) -> tuple[np.ndarray, dict]:
     """Targets from the model with known parameters, real spend, real units and real baseline shape.
 
     truth: R_orders {channel: ROAS through orders}, R_check {channel: ROAS through check}, alpha {c}, lam {c},
     unit_sd (log sd of unit ROAS deviation for local channels), rho (orders, check), sigma (orders, check),
-    sig_week (orders, check), b_check_on_orders.
+    sig_week (orders, check), b_check_on_orders, city_wave (bool: add every unit's own real yearly wave, v7 world C).
     Baseline per segment = real segment-week mean of unit-demeaned log target, smoothed over 5 weeks.
     """
     rng = np.random.default_rng(seed)
@@ -563,6 +605,9 @@ def simulate(d: ModelData, arr: dict, truth: dict, seed: int = 0) -> tuple[np.nd
         shock = rng.normal(0, truth['sig_week'][k], (S, len(d.weeks)))[arr['s_i'], arr['w_i']]
         ys.append(o.groupby('m_i')[col].transform('mean').to_numpy() + base + shock)
     y = np.vstack(ys) + media
+    if truth.get('city_wave', False):
+        cw = real_city_waves(d, arr)
+        y = y + np.einsum('jnf,nf->jn', cw[:, arr['m_i'], :], d.fourier[arr['w_i']])
     # AR(1) noise per model unit, check innovations correlated with orders innovations
     eps = np.zeros_like(y)
     rho, sig, b = truth['rho'], truth['sigma'], truth['b_check_on_orders']

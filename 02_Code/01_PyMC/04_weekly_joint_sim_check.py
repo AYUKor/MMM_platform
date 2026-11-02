@@ -45,7 +45,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v6_one_owner_per_week_term_20261102'
+CODE_VERSION = 'v7_city_yearly_wave_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -57,7 +57,10 @@ PROFILES = {
 WORLDS = {
     'A': {'Нац_ТВ': 1.0, 'Рег_ТВ': 3.0, 'Радио': 1.0, 'OOH_Total': 5.0, 'Digital_Performance': 3.0},
     'B': {'Нац_ТВ': 5.0, 'Рег_ТВ': 1.0, 'Радио': 3.0, 'OOH_Total': 1.0, 'Digital_Performance': 5.0},
+    # C = A plus every unit's own real yearly wave (the trap of the real pilot of 03.11: OOH in ТС5 stores 9.6)
+    'C': {'Нац_ТВ': 1.0, 'Рег_ТВ': 3.0, 'Радио': 1.0, 'OOH_Total': 5.0, 'Digital_Performance': 3.0},
 }
+CITY_WAVE_WORLDS = {'C'}
 
 
 def truth_for(world: str, sig_week: tuple[float, float]) -> dict:
@@ -67,7 +70,7 @@ def truth_for(world: str, sig_week: tuple[float, float]) -> dict:
                 alpha={'Нац_ТВ': 0.6, 'Рег_ТВ': 0.5, 'Радио': 0.4, 'OOH_Total': 0.4, 'Digital_Performance': 0.2,
                        wj.NATIONAL_TV_CROSS: 0.6},
                 lam={c: 1.0 for c in wj.CHANNELS}, unit_sd=0.3, rho=(0.84, 0.64), sigma=(0.045, 0.02),
-                sig_week=sig_week, b_check_on_orders=-0.3)
+                sig_week=sig_week, b_check_on_orders=-0.3, city_wave=world in CITY_WAVE_WORLDS)
 
 
 def real_week_noise(d: wj.ModelData) -> tuple[float, float]:
@@ -125,6 +128,7 @@ def main() -> None:
     ap.add_argument('--cross-tv', action='store_true',
                     help='add back the offline-label TV -> online channel (removed in v4: owner 02.11, store ads act only '
                          'on stores, delivery ads only on delivery)')
+    ap.add_argument('--no-city-wave', action='store_true', help='fit the v6 model (no own yearly wave per unit)')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     a.chains, a.warmup, a.draws = prof['chains'], prof['warmup'], prof['draws']
@@ -138,7 +142,7 @@ def main() -> None:
 
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'], cross_tv=a.cross_tv)
-    arr = wj.model_arrays(d)
+    arr = wj.model_arrays(d, city_wave=not a.no_city_wave)
     sw = real_week_noise(d)
     truth = truth_for(a.world, sw)
     y, tr = wj.simulate(d, arr, truth, seed=a.seed)
@@ -227,7 +231,7 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
-                code_version=CODE_VERSION, cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
+                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
                 max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},
