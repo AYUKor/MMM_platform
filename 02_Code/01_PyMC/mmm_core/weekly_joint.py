@@ -29,6 +29,7 @@ Data: panels/04_2025_2026Q2_fourth_pass/v3_20261102 and the national per-1000 ta
 """
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -269,6 +270,28 @@ def _week_basis(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
     vals, vecs = np.linalg.eigh(_week_projector(t, *week_terms))
     return vecs[:, vals > 0.5]
 
+
+def placebo_spend(d: ModelData, spec: str) -> ModelData:
+    """Placebo check: the same spend put where it could not have worked; a fit on it should find ROAS near zero.
+
+    'shift:K' moves every unit's spend K weeks later, circularly over the whole history (K = 26 puts spring money
+    into autumn); 'swap:SEED' gives every unit the per-resident spend of another unit of its segment (one random
+    permutation per segment, the same for all channels; national channels, equal everywhere, do not change, so
+    use a shift for them). Typical spend (m_ref) and the targets stay as they are.
+    """
+    kind, _, arg = spec.partition(':')
+    sp = d.spend_pr.copy()
+    if kind == 'shift':
+        sp = np.roll(sp, int(arg), axis=1)
+    elif kind == 'swap':
+        rng = np.random.default_rng(int(arg))
+        seg = d.ad_units.seg_i.to_numpy()
+        for s in np.unique(seg):
+            idx = np.where(seg == s)[0]
+            sp[idx] = d.spend_pr[rng.permutation(idx)]
+    else:
+        raise ValueError(f'placebo {spec}: use shift:K or swap:SEED')
+    return dataclasses.replace(d, spend_pr=sp)
 
 def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
                  wave_scale: str = 'learned') -> dict:

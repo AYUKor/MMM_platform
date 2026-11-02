@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v7c_real_city_yearly_wave_fixed_scale_20261103'
+CODE_VERSION = 'v7c2_real_city_yearly_wave_fixed_scale_placebo_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -130,6 +130,9 @@ def main() -> None:
                     help='coordinates of the unit slopes; same model')
     ap.add_argument('--wave-scale', default='learned', choices=['learned', 'fixed'],
                     help='spread of the own city waves: learned (v7/v7b) or fixed from the data being fitted (v7c)')
+    ap.add_argument('--placebo', default='',
+                    help='placebo check: shift:K (spend K weeks later, circular) or swap:SEED (spend of another unit of '
+                         'the segment); the fit should find ROAS near zero')
     ap.add_argument('--inject', default='',
                     help='injection check: add a known effect to the real orders, e.g. "Нац_ТВ=2,Digital_Performance=2" '
                          '(ROAS through orders at typical spend; no city deviations, no check part). The fit should find '
@@ -147,6 +150,10 @@ def main() -> None:
 
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'])
+    if a.placebo:
+        if a.inject:
+            raise SystemExit('--placebo and --inject together are not a check of anything')
+        d = wj.placebo_spend(d, a.placebo)
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
                            slope_centred=a.slope_param == 'centred', wave_scale=a.wave_scale)
     o = d.obs
@@ -191,7 +198,8 @@ def main() -> None:
         print(ms.round(2).to_string(), flush=True)
         if (best_seg.roas > a.stop_if_roas_above).any():
             card = dict(profile=a.profile, status='stopped_start_roas_above_rule', code_version=CODE_VERSION,
-                        stop_if_roas_above=a.stop_if_roas_above, mode_search=ms_card, dims=d.dims)
+                        stop_if_roas_above=a.stop_if_roas_above, mode_search=ms_card, dims=d.dims,
+                        inject=a.inject, placebo=a.placebo, prior_set=a.prior_set)
             (out / f'start_stopped_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
             print('STOPPED: the centre of the best start breaks the ROAS stop rule, sampling skipped', flush=True)
             return
@@ -225,7 +233,7 @@ def main() -> None:
     per_chain.columns = [f'chain{c}' for c in per_chain.columns]
     per_chain.to_csv(out / f'roas_by_chain_{a.profile}.csv')
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
-                fit_window_end=a.fit_window_end, inject=a.inject, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
+                fit_window_end=a.fit_window_end, inject=a.inject, placebo=a.placebo, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
                 code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
                 wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), mode_search=ms_card,
