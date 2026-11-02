@@ -45,7 +45,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v7b_city_yearly_wave_centred_20261103'
+CODE_VERSION = 'v7c_city_yearly_wave_fixed_scale_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -133,6 +133,8 @@ def main() -> None:
                     help='coordinates of the own city waves (v7 = noncentred, v7b = centred); same model')
     ap.add_argument('--slope-param', default='noncentred', choices=['centred', 'noncentred'],
                     help='coordinates of the unit slopes; same model')
+    ap.add_argument('--wave-scale', default='learned', choices=['learned', 'fixed'],
+                    help='spread of the own city waves: learned (v7/v7b) or fixed from the data being fitted (v7c)')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     a.chains, a.warmup, a.draws = prof['chains'], prof['warmup'], prof['draws']
@@ -147,11 +149,14 @@ def main() -> None:
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'], cross_tv=a.cross_tv)
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
-                           slope_centred=a.slope_param == 'centred')
+                           slope_centred=a.slope_param == 'centred', wave_scale=a.wave_scale)
     sw = real_week_noise(d)
     truth = truth_for(a.world, sw)
     y, tr = wj.simulate(d, arr, truth, seed=a.seed)
-    arr_s = wj.with_targets(arr, y)
+    arr_s = wj.with_fixed_wave_scale(d, wj.with_targets(arr, y), y)
+    arr = arr_s
+    if 'wave_sd_fixed' in arr:
+        print('fixed own-wave spread [orders; check] x segments', np.round(arr['wave_sd_fixed'], 4).tolist(), flush=True)
     print('dims', d.dims, 'real week noise', sw, f'prep {time.time()-t0:.0f}s', flush=True)
 
     true_seg = tr['roas']
@@ -236,7 +241,8 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
-                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
+                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
+                wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
                 max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},

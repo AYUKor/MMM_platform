@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v7b_real_city_yearly_wave_centred_20261103'
+CODE_VERSION = 'v7c_real_city_yearly_wave_fixed_scale_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -128,6 +128,8 @@ def main() -> None:
                     help='coordinates of the own city waves (v7 = noncentred, v7b = centred); same model')
     ap.add_argument('--slope-param', default='noncentred', choices=['centred', 'noncentred'],
                     help='coordinates of the unit slopes; same model')
+    ap.add_argument('--wave-scale', default='learned', choices=['learned', 'fixed'],
+                    help='spread of the own city waves: learned (v7/v7b) or fixed from the data being fitted (v7c)')
     ap.add_argument('--inject', default='',
                     help='injection check: add a known effect to the real orders, e.g. "Нац_ТВ=2,Digital_Performance=2" '
                          '(ROAS through orders at typical spend; no city deviations, no check part). The fit should find '
@@ -146,14 +148,16 @@ def main() -> None:
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'])
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
-                           slope_centred=a.slope_param == 'centred')
+                           slope_centred=a.slope_param == 'centred', wave_scale=a.wave_scale)
     o = d.obs
     y = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
     if a.inject:
         y = inject_effect(d, arr, y, a.inject, out / f'injected_truth_{a.profile}.csv')
-    arr = wj.with_targets(arr, y)
+    arr = wj.with_fixed_wave_scale(d, wj.with_targets(arr, y), y)
     turnover = np.exp(y[0] + y[1])
     turnover_by_seg = pd.Series(turnover).groupby(pd.Series(arr['s_i']).map(dict(enumerate(wj.SEGMENTS)))).sum()
+    if 'wave_sd_fixed' in arr:
+        print('fixed own-wave spread [orders; check] x segments', np.round(arr['wave_sd_fixed'], 4).tolist(), flush=True)
     print('dims', d.dims, 'weeks', str(d.weeks[0].date()), '-', str(o.week_start.max().date()),
           f'prep {time.time()-t0:.0f}s', flush=True)
 
@@ -223,7 +227,8 @@ def main() -> None:
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
                 fit_window_end=a.fit_window_end, inject=a.inject, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
-                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, mode_search=ms_card,
+                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
+                wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), mode_search=ms_card,
                 chains_stats=dict(potential_energy_mean=np.asarray(extra['potential_energy']).mean(1).round(1).tolist(),
                                   num_steps_mean=np.asarray(extra['num_steps']).mean(1).round(1).tolist(),
                                   divergences=np.asarray(extra['diverging']).sum(1).astype(int).tolist()),

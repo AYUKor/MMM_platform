@@ -270,9 +270,14 @@ def _week_basis(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
     return vecs[:, vals > 0.5]
 
 
-def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False) -> dict:
+def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
+                 wave_scale: str = 'learned') -> dict:
     """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
-    wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model."""
+    wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
+    wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
+    (with_fixed_wave_scale); call with_fixed_wave_scale(d, arr, y) once the targets are known."""
+    if wave_scale not in ('learned', 'fixed'):
+        raise ValueError(f'wave_scale {wave_scale}')
     o = d.obs
     ad = d.ad_units
     seg_m = d.model_units.seg_i.to_numpy()
@@ -283,7 +288,7 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
     grp_m = seg_m * 2 + resort_m
     G = 2 * len(SEGMENTS)
     return dict(
-        city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred),
+        city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
         wave_grp_m=grp_m, wave_grp_onehot_m=np.eye(G)[grp_m],
         wave_grp_count_m=np.maximum(np.bincount(grp_m, minlength=G), 1).astype(float),
         spend_norm=np.where(d.m_ref[ad.seg_i.to_numpy()][:, None, :] > 0,
@@ -373,9 +378,15 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
           + jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']) + media)
     if arr.get('city_wave', False):
         # v7: own yearly wave of every unit, a shrunk deviation from its group's wave (centred within the group)
-        sig_cw = numpyro.sample('sig_city_wave', dist.HalfNormal(CITY_WAVE_SD).expand([2, S]))
+        if arr.get('wave_scale', 'learned') == 'fixed':
+            # v7c: fixed spread of the own waves, set from the data (with_fixed_wave_scale). Real fast v7/v7b (03.11):
+            # with a learned spread, the spread, rho/sigma of AR(1) and the unit slopes trade slow city deviations
+            # and the chains stay in different modes (energy gaps 150-330) in both coordinates; world C mixes.
+            sc = jnp.asarray(arr['wave_sd_fixed'])[:, arr['seg_m'], None]               # [2, M, 1]
+        else:
+            sig_cw = numpyro.sample('sig_city_wave', dist.HalfNormal(CITY_WAVE_SD).expand([2, S]))
+            sc = sig_cw[:, arr['seg_m'], None]                                          # [2, M, 1]
         nf = arr['F'].shape[1]
-        sc = sig_cw[:, arr['seg_m'], None]                                              # [2, M, 1]
         if arr.get('wave_centred', False):
             # v7b: centred own waves. Real fast v7 (03.11): with the non-centred form sig_city_wave, rho, sig_slope
             # did not mix (R-hat 2.1-2.8, chains in different modes); 78 weeks pin each unit's wave.
@@ -570,15 +581,18 @@ def roas_from_contrib(d: ModelData, arr: dict, contrib: np.ndarray, turnover: np
 
 # ---------------------------------------------------------------- simulated world
 
-def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26) -> np.ndarray:
+def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26, y: np.ndarray | None = None) -> np.ndarray:
     """Each model unit's own yearly wave in the real data, [2, M, F]: Fourier part of a fit of the unit's log target
-    around its segment's week mean, with the unit's own level and line. Used to put the real trap into a world."""
+    around its segment's week mean, with the unit's own level and line. Used to put the real trap into a world.
+    y [2, N] (optional): use these targets instead of the real ones (a simulated world). Units with fewer than
+    min_obs weeks get zeros."""
     o = d.obs
     M, nf = len(d.model_units), d.fourier.shape[1]
     m_i, w_i = arr['m_i'], arr['w_i']
     out = np.zeros((2, M, nf))
     for k, col in enumerate(['y_orders', 'y_check']):
-        dm = o[col] - o.groupby('m_i')[col].transform('mean')
+        v = o[col] if y is None else pd.Series(np.asarray(y[k], float), index=o.index)
+        dm = v - v.groupby(o.m_i).transform('mean')
         r = (dm - dm.groupby([o.seg_i, o.w_i]).transform('mean')).to_numpy()
         for m in range(M):
             sel = m_i == m
@@ -587,6 +601,38 @@ def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26) -> np.ndarray:
             Z = np.column_stack([np.ones(sel.sum()), d.t_year[w_i[sel]], d.fourier[w_i[sel]]])
             out[k, m] = np.linalg.lstsq(Z, r[sel], rcond=None)[0][2:]
     return out
+
+
+WAVE_SD_FLOOR = 0.005
+
+
+def fixed_wave_scale(d: ModelData, arr: dict, y: np.ndarray, min_obs: int = 26) -> np.ndarray:
+    """v7c: spread of the own yearly waves per target and segment, [2, S], from the data being fitted: robust sd
+    (1.4826 x median absolute deviation) of the units' Fourier coefficients (real_city_waves on y, units with at
+    least min_obs weeks), each taken around the median of its group (segment x resort), as in the model. It holds
+    the units' estimation noise too, so it is a little wider than the true spread (the waves are shrunk less)."""
+    cw = real_city_waves(d, arr, min_obs=min_obs, y=y)
+    n_obs = np.bincount(arr['m_i'], minlength=cw.shape[1])
+    ok = n_obs >= min_obs
+    grp, seg = arr['wave_grp_m'], arr['seg_m']
+    out = np.full((2, len(SEGMENTS)), WAVE_SD_FLOOR)
+    for k in range(2):
+        dev = np.zeros_like(cw[k])
+        for g in np.unique(grp[ok]):
+            sel = ok & (grp == g)
+            dev[sel] = cw[k, sel] - np.median(cw[k, sel], axis=0)
+        for s in range(len(SEGMENTS)):
+            sel = ok & (seg == s)
+            if sel.sum() >= 3:
+                out[k, s] = max(WAVE_SD_FLOOR, 1.4826 * float(np.median(np.abs(dev[sel]))))
+    return out
+
+
+def with_fixed_wave_scale(d: ModelData, arr: dict, y: np.ndarray) -> dict:
+    """Arrays with the fixed own-wave spread set from the targets y (only used when arr['wave_scale'] == 'fixed')."""
+    if not arr.get('city_wave', False) or arr.get('wave_scale', 'learned') != 'fixed':
+        return arr
+    return dict(arr, wave_sd_fixed=fixed_wave_scale(d, arr, y))
 
 
 def simulate(d: ModelData, arr: dict, truth: dict, seed: int = 0) -> tuple[np.ndarray, dict]:
