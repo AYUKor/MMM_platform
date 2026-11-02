@@ -17,6 +17,8 @@ Version 3 (02.11, after the v2 pilot start search): on all units the single best
 deviations fit noise, local channels blown up to ROAS 12-176), so by default the start search approximates the
 posterior instead (--init vi) and the chains start at draws from that approximation. If the centre of the best
 start already has a channel ROAS above --stop-if-roas-above (pre-registered stop rule 10), sampling is skipped.
+Version 4 (02.11, owner's decision): no offline-label TV -> online channel. Store ads act only on store sales, delivery
+ads only on delivery sales; the world has no such effect either (--cross-tv adds it back).
 
 Run: python -I 04_weekly_joint_sim_check.py --panel P.parquet --national N.csv --out OUTDIR --world A|B
      --profile fast|medium|pilot|production
@@ -38,7 +40,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v3_vi_start_20261102'
+CODE_VERSION = 'v4_no_cross_tv_20261102'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -115,6 +117,9 @@ def main() -> None:
                     help='vi: approximate posterior from several starts (v3); map: best point (v2); median: prior median')
     ap.add_argument('--stop-if-roas-above', type=float, default=10.0)
     ap.add_argument('--jitter', type=float, default=0.05)
+    ap.add_argument('--cross-tv', action='store_true',
+                    help='add back the offline-label TV -> online channel (removed in v4: owner 02.11, store ads act only '
+                         'on stores, delivery ads only on delivery)')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     a.chains, a.warmup, a.draws = prof['chains'], prof['warmup'], prof['draws']
@@ -127,7 +132,7 @@ def main() -> None:
     numpyro.set_host_device_count(a.chains)
 
     t0 = time.time()
-    d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'])
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'], cross_tv=a.cross_tv)
     arr = wj.model_arrays(d)
     sw = real_week_noise(d)
     truth = truth_for(a.world, sw)
@@ -217,7 +222,7 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
-                code_version=CODE_VERSION, mode_search=ms_card, chains_stats=chain_stats,
+                code_version=CODE_VERSION, cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
                 max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},

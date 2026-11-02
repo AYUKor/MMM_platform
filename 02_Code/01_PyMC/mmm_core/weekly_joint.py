@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 CHANNELS = ['Нац_ТВ', 'Рег_ТВ', 'Радио', 'OOH_Total', 'Digital_Performance', 'Нац_ТВ_офлайн_в_онлайн']
-NATIONAL_TV_CROSS = 'Нац_ТВ_офлайн_в_онлайн'   # TV of the offline label of the same network, fed to online
+NATIONAL_TV_CROSS = 'Нац_ТВ_офлайн_в_онлайн'   # offline-label TV fed to online: off by default since v4 (owner 02.11)
 LOCAL_UNIT_DEVIATION = {'Рег_ТВ', 'OOH_Total', 'Digital_Performance'}   # channels with city-level differences
 SEGMENTS = ['ТС5/Онлайн', 'ТС5/Оффлайн', 'ТСХ/Онлайн', 'ТСХ/Оффлайн']
 TIERS = ['small', 'medium', 'large']
@@ -92,7 +92,7 @@ def _holiday_matrix(weeks: pd.DatetimeIndex) -> tuple[np.ndarray, list]:
     return np.column_stack(list(cols.values())), list(cols)
 
 
-def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None,
+def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None, cross_tv: bool = False,
             top_units_per_segment: int | None = None) -> ModelData:
     """top_units_per_segment: keep only the N largest units of each segment by turnover (fast/medium stages)."""
     p = pd.read_parquet(panel_path)
@@ -161,6 +161,8 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
             if pos.size >= 20:
                 m_ref[s, j] = pos.mean()
     chan_mask = (m_ref > 0).astype(float)
+    if not cross_tv:      # owner 02.11: store ads act only on stores, delivery ads only on delivery (no cross channel)
+        chan_mask[:, CHANNELS.index(NATIONAL_TV_CROSS)] = 0.0
 
     mu = (p[p.ad_key.isin(aidx)].groupby('mu_key').agg(ad_key=('ad_key', 'first'), seg_i=('seg_i', 'first'))
           .reset_index())
