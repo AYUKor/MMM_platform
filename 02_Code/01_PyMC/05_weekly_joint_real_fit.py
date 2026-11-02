@@ -21,8 +21,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 import time
 from pathlib import Path
+
+os.environ.setdefault('XLA_FLAGS', '--xla_force_host_platform_device_count=4')
+sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -I: the script folder is not on the path
 
 import numpy as np
 import pandas as pd
