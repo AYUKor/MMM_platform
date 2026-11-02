@@ -396,6 +396,19 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
         g_mean = jnp.einsum('jmf,mg->jgf', raw, arr['wave_grp_onehot_m'] / arr['wave_grp_count_m'][None, :])
         cw = raw - g_mean[:, arr['wave_grp_m'], :]                                       # [2, M, F]
         mu = mu + jnp.einsum('jnf,nf->jn', cw[:, m_i, :], arr['F'][w_i])
+    if arr.get('emit_parts', False):
+        # diagnostics only (08_weekly_joint_injection_absorption.py): the fitted parts of log y per row; never set
+        # in sampling runs (these [2, N] sites would be stored with every draw)
+        numpyro.deterministic('part_level', arr['ybar'].T + a_m[:, m_i])
+        numpyro.deterministic('part_unit_slope', slope_u[:, m_i] * arr['t'][w_i][None, :])
+        numpyro.deterministic('part_trend', trend[:, s_i, w_i])
+        numpyro.deterministic('part_season', season[:, s_i, w_i] + (four_res @ arr['F'][w_i].T) * arr['resort'][None, :])
+        numpyro.deterministic('part_week_shock', week_shock[:, s_i, w_i])
+        numpyro.deterministic('part_controls', jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']))
+        numpyro.deterministic('part_city_wave', jnp.einsum('jnf,nf->jn', cw[:, m_i, :], arr['F'][w_i])
+                              if arr.get('city_wave', False) else jnp.zeros_like(media))
+        numpyro.deterministic('part_media', media)
+        numpyro.deterministic('part_mu', mu)
 
     # AR(1) errors per target and segment, check innovation regressed on the orders innovation
     rho = numpyro.sample('rho', dist.Beta(8, 2).expand([2, S]))
