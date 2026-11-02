@@ -74,6 +74,28 @@ ADSTOCK_PRIOR = {'Нац_ТВ': (6, 4), NATIONAL_TV_CROSS: (6, 4), 'Рег_ТВ'
 # effect (Alex 03.11), so the long window must not open them up.
 ADSTOCK_L_LONG = 26
 ADSTOCK_PRIOR_LONG = dict(ADSTOCK_PRIOR)
+# v9 option --weaken (03.11, Alex: find what in the data takes the ad effect and lower its weight step by step,
+# without steering at ROAS). The injection check showed which baseline parts take a known effect: AR(1) inertia
+# (radio/OOH up to 15% in v6), unit slopes (OOH up to 11%), own city waves and the segment season (radio up to 10%
+# each); trend, week shocks and weather < 1% each. Each can be weakened: rho prior Beta(a, b) (default 8, 2: mean
+# 0.8, pulls to high inertia), prior scale of the unit-slope spread (0.2), multiplier of the fixed own-wave
+# spread (1), prior scale of the segment and resort Fourier coefficients (0.3, 0.2 scaled together). A step is
+# kept only if the injection is found more fully AND both placebos stay near zero; ROAS itself is never the goal.
+BASE_DEFAULT = dict(rho=(8.0, 2.0), slope=0.2, wave=1.0, season=0.3)
+
+
+def parse_weaken(spec: str) -> dict:
+    """'rho=2:2,slope=0.1,wave=0.5,season=0.15' -> baseline settings (unnamed parts keep BASE_DEFAULT)."""
+    out = dict(BASE_DEFAULT)
+    for kv in filter(None, (x.strip() for x in (spec or '').split(','))):
+        k, v = kv.split('=')
+        k = k.strip()
+        if k not in BASE_DEFAULT:
+            raise ValueError(f'--weaken: unknown part {k}; use {sorted(BASE_DEFAULT)}')
+        out[k] = tuple(float(x) for x in v.split(':')) if k == 'rho' else float(v)
+        if k == 'rho' and len(out[k]) != 2:
+            raise ValueError('--weaken rho=a:b')
+    return out
 
 
 @dataclass
@@ -311,7 +333,8 @@ def placebo_spend(d: ModelData, spec: str) -> ModelData:
     return dataclasses.replace(d, spend_pr=sp)
 
 def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
-                 wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal') -> dict:
+                 wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal',
+                 weaken: str = '') -> dict:
     """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
     wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
     wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
@@ -323,6 +346,7 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
     if roas_scale not in ('equal', 'turnover', 'gamma'):
         raise ValueError(f'roas_scale {roas_scale}')
     ab = ADSTOCK_PRIOR_LONG if adstock == 'long' else ADSTOCK_PRIOR
+    base = parse_weaken(weaken)
     o = d.obs
     ad = d.ad_units
     seg_m = d.model_units.seg_i.to_numpy()
@@ -336,6 +360,8 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
         adstock=adstock, adstock_l=ADSTOCK_L_LONG if adstock == 'long' else ADSTOCK_L, adstock_pad_steady=adstock == 'long',
         adstock_ab=np.array([ab[c] for c in CHANNELS], float),
+        weaken=weaken or '', rho_ab=np.array(base['rho'], float), slope_sd=float(base['slope']),
+        wave_mult=float(base['wave']), season_sd=float(base['season']),
         wave_grp_m=grp_m, wave_grp_onehot_m=np.eye(G)[grp_m],
         wave_grp_count_m=np.maximum(np.bincount(grp_m, minlength=G), 1).astype(float),
         spend_norm=np.where(d.m_ref[ad.seg_i.to_numpy()][:, None, :] > 0,
@@ -408,7 +434,7 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
 
     # base
     a_m = numpyro.sample('a', dist.Normal(0, 0.3).expand([2, M]))
-    sig_slope = numpyro.sample('sig_slope', dist.HalfNormal(0.2).expand([2]))
+    sig_slope = numpyro.sample('sig_slope', dist.HalfNormal(arr.get('slope_sd', 0.2)).expand([2]))
     if arr.get('slope_centred', False):
         # v7b option: centred unit slopes (78 weeks pin each slope; the non-centred form makes a curved ridge)
         slope_u = numpyro.sample('slope_unit', dist.Normal(jnp.zeros((2, M)), sig_slope[:, None]))
@@ -420,8 +446,9 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     tau_tr = numpyro.sample('tau_trend', dist.HalfNormal(0.5).expand([2]))
     z_tr = numpyro.sample('z_trend', dist.Normal(0, 1).expand([2, S, K]))
     trend = slope0[:, :, None] * arr['t'][None, None, :] + jnp.einsum('wk,jsk->jsw', arr['basis'], tau_tr[:, None, None] * z_tr)
-    four = numpyro.sample('fourier', dist.Normal(0, 0.3).expand([2, S, 4]))     # v6: owns the whole yearly wave
-    four_res = numpyro.sample('fourier_resort', dist.Normal(0, 0.2).expand([2, 4]))
+    s_sd = arr.get('season_sd', 0.3)
+    four = numpyro.sample('fourier', dist.Normal(0, s_sd).expand([2, S, 4]))    # v6: owns the whole yearly wave
+    four_res = numpyro.sample('fourier_resort', dist.Normal(0, s_sd * 2 / 3).expand([2, 4]))
     hol = numpyro.sample('holidays', dist.Normal(0, 0.2).expand([2, S, H]))
     season = jnp.einsum('wf,jsf->jsw', arr['F'], four) + jnp.einsum('wh,jsh->jsw', arr['H'], hol)
     gam = numpyro.sample('gamma', dist.Normal(0, 0.05).expand([2, S, arr['X'].shape[1]]))
@@ -470,7 +497,8 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
         numpyro.deterministic('part_mu', mu)
 
     # AR(1) errors per target and segment, check innovation regressed on the orders innovation
-    rho = numpyro.sample('rho', dist.Beta(8, 2).expand([2, S]))
+    rho_ab = arr.get('rho_ab', (8.0, 2.0))
+    rho = numpyro.sample('rho', dist.Beta(float(rho_ab[0]), float(rho_ab[1])).expand([2, S]))
     sig = numpyro.sample('sigma', dist.HalfNormal(0.1).expand([2, S, 3]))
     b_oc = numpyro.sample('b_check_on_orders', dist.Normal(0, 0.5).expand([S]))
     nu = 6.0
@@ -713,7 +741,7 @@ def with_fixed_wave_scale(d: ModelData, arr: dict, y: np.ndarray) -> dict:
     """Arrays with the fixed own-wave spread set from the targets y (only used when arr['wave_scale'] == 'fixed')."""
     if not arr.get('city_wave', False) or arr.get('wave_scale', 'learned') != 'fixed':
         return arr
-    return dict(arr, wave_sd_fixed=fixed_wave_scale(d, arr, y))
+    return dict(arr, wave_sd_fixed=fixed_wave_scale(d, arr, y) * float(arr.get('wave_mult', 1.0)))
 
 
 def simulate(d: ModelData, arr: dict, truth: dict, seed: int = 0) -> tuple[np.ndarray, dict]:

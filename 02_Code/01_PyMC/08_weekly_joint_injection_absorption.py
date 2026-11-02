@@ -38,7 +38,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v2_injection_absorption_long_adstock_20261103'
+CODE_VERSION = 'v3_injection_absorption_weaken_20261103'
 PARTS = ['level', 'unit_slope', 'trend', 'season', 'week_shock', 'controls', 'city_wave', 'media', 'ar_part', 'innovation']
 
 
@@ -86,6 +86,7 @@ def main() -> None:
     ap.add_argument('--wave-scale', default='fixed', choices=['learned', 'fixed'])
     ap.add_argument('--adstock', default='short', choices=['short', 'long'])
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'])
+    ap.add_argument('--weaken', default='', help='v9: weaken baseline parts that take the ad effect, e.g. "rho=2:2,slope=0.1,wave=0.5,season=0.15" (rho prior Beta(a,b), default 8:2; unit-slope spread prior 0.2; own-wave spread multiplier 1; season prior 0.3)')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -93,7 +94,7 @@ def main() -> None:
 
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
-    arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale)
+    arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken)
     o = d.obs
     y_p = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
     contrib = rf.injection_contrib(arr, a.inject)
@@ -148,7 +149,7 @@ def main() -> None:
     rc.to_csv(out / 'roas_plain_vs_inject_by_segment_channel.csv', index=False)
     rch.to_csv(out / 'roas_plain_vs_inject_by_channel.csv')
     card = dict(code_version=CODE_VERSION, inject=a.inject, prior_set=a.prior_set, top_units=a.top_units,
-                city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, vi_steps=a.vi_steps, seed=a.seed, dims=d.dims,
+                city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, vi_steps=a.vi_steps, seed=a.seed, dims=d.dims,
                 wave_sd_fixed=(np.asarray(arr_p['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr_p else None),
                 max_abs_gap_parts_vs_injection=gap,
                 fits={k: {kk: v for kk, v in f.items() if kk not in ('parts', 'roas')} for k, f in fits.items()},
