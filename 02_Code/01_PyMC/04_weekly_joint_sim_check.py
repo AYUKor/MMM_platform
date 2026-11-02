@@ -9,6 +9,11 @@ Stages (as the platform's fit.py MODE_PROFILES): fast = top-20 units per segment
 accept 0.90; medium = top-20, 4 chains, 1000/1000, 0.99; pilot = all units, 2 chains, 1000/1000, 0.99;
 production = all units, 4 chains, 2000/2000, 0.99. Runs on the Mac mini.
 
+Before sampling (version 2, 02.11 after the pilot): the posterior mode is searched from 8 starts (prior median +
+7 random), the table of the starts is written first (multistart_*.csv), and all chains start next to the best
+mode. The chain-by-chain ROAS, energy and the posterior draws of the ROAS parameters are saved, so a chain stuck
+in a false solution is visible and can be checked.
+
 Run: python -I 04_weekly_joint_sim_check.py --panel P.parquet --national N.csv --out OUTDIR --world A|B
      --profile fast|medium|pilot|production
 """
@@ -65,16 +70,22 @@ def real_week_noise(d: wj.ModelData) -> tuple[float, float]:
     return out[0], out[1]
 
 
-def summarize(d, arr, samples, turnover, n_draws=200) -> pd.DataFrame:
-    keys = ['alpha', 'lam', 'logR_orders', 'sig_seg', 'z_seg', 'sig_tier', 'z_tier', 'sig_unit', 'z_unit', 'R_check']
+def summarize(d, arr, samples, turnover, n_chains, n_draws=200) -> pd.DataFrame:
     total = samples['alpha'].shape[0]
+    per_chain = total // n_chains                      # get_samples() stacks the chains one after another
     idx = np.linspace(0, total - 1, min(n_draws, total)).astype(int)
     tabs = []
     for i in idx:
-        draw = {k: np.asarray(samples[k][i]) for k in keys}
+        draw = {k: np.asarray(samples[k][i]) for k in wj.ROAS_KEYS}
         t = wj.roas_from_contrib(d, arr, wj.media_contrib_draw(arr, draw), turnover)
-        tabs.append(t.assign(draw=i))
+        tabs.append(t.assign(draw=i, chain=i // per_chain))
     return pd.concat(tabs)
+
+
+def roas_at_point(d, arr, point, turnover) -> pd.Series:
+    t = wj.roas_from_contrib(d, arr, wj.media_contrib_draw(arr, {k: np.asarray(point[k]) for k in wj.ROAS_KEYS}), turnover)
+    g = t.groupby('channel')[['effect_rub', 'spend_rub']].sum()
+    return g.effect_rub / g.spend_rub
 
 
 def by_channel(t: pd.DataFrame) -> pd.DataFrame:
@@ -92,6 +103,9 @@ def main() -> None:
     ap.add_argument('--seed', type=int, default=20261102)
     ap.add_argument('--prior-set', default='moderate', choices=list(wj.PRIOR_SETS))
     ap.add_argument('--chain-method', default='vectorized', choices=['sequential', 'parallel', 'vectorized'])
+    ap.add_argument('--starts', type=int, default=8, help='mode search starts before sampling (0 = NUTS default start)')
+    ap.add_argument('--map-steps', type=int, default=4000)
+    ap.add_argument('--jitter', type=float, default=0.05)
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     a.chains, a.warmup, a.draws = prof['chains'], prof['warmup'], prof['draws']
@@ -112,25 +126,61 @@ def main() -> None:
     arr_s = wj.with_targets(arr, y)
     print('dims', d.dims, 'real week noise', sw, f'prep {time.time()-t0:.0f}s', flush=True)
 
+    true_seg = tr['roas']
+    true_ch = by_channel(true_seg.assign(draw=0)).drop(columns='draw')
+
+    init_params, ms_card = None, None
+    if a.starts > 0:
+        t_ms = time.time()
+        starts = wj.multi_start_map(arr_s, d.dims, a.prior_set, y, n_starts=a.starts, steps=a.map_steps, seed=a.seed)
+        rows = []
+        for st in starts:
+            r = roas_at_point(d, arr_s, st['point'], tr['turnover']) if st['finite'] else pd.Series(dtype=float)
+            rows.append(dict(start=st['start'], init=st['init'], loss=st['loss'], loss_at_75pct=st['loss_at_75pct'],
+                             finite=st['finite']) | {f'roas_{c}': r.get(c, np.nan) for c in wj.CHANNELS})
+        ms = pd.DataFrame(rows)
+        ms['loss_minus_best'] = ms.loss - ms.loss[ms.finite].min()
+        truth_row = dict(start='truth', init='truth') | {f'roas_{c}': v for c, v in zip(true_ch.channel, true_ch.roas)}
+        pd.concat([ms, pd.DataFrame([truth_row])]).to_csv(out / f'multistart_world{a.world}_{a.profile}.csv', index=False)
+        best = starts[int(ms.loss.where(ms.finite).idxmin())]
+        init_params = wj.init_params_from(best, a.chains, jitter=a.jitter, seed=a.seed)
+        ms_card = dict(seconds=round(time.time() - t_ms), steps=a.map_steps, best_start=best['start'],
+                       loss_minus_best=ms.loss_minus_best.round(1).tolist(),
+                       settled=(ms.loss_at_75pct - ms.loss).round(1).tolist())
+        print('mode search', ms_card, flush=True)
+        print(pd.concat([ms, pd.DataFrame([truth_row])]).round(2).to_string(), flush=True)
+
     kernel = NUTS(wj.numpyro_model, target_accept_prob=prof['target_accept'], max_tree_depth=prof['max_tree_depth'])
     mcmc = MCMC(kernel, num_warmup=a.warmup, num_samples=a.draws, num_chains=a.chains, chain_method=a.chain_method,
                 progress_bar=False)
     t1 = time.time()
-    mcmc.run(jax.random.PRNGKey(a.seed), arr_s, d.dims, a.prior_set, y=y)
+    mcmc.run(jax.random.PRNGKey(a.seed), arr_s, d.dims, a.prior_set, y=y, init_params=init_params,
+             extra_fields=('diverging', 'potential_energy', 'num_steps'))
     samples = mcmc.get_samples()
     jax.block_until_ready(samples)          # JAX runs asynchronously: time the finished sampling, not the dispatch
     fit_s = time.time() - t1
-    extra = mcmc.get_extra_fields()
+    extra = mcmc.get_extra_fields(group_by_chain=True)
     div = int(np.asarray(extra['diverging']).sum())
     from numpyro.diagnostics import summary
-    summ = summary(mcmc.get_samples(group_by_chain=True), group_by_chain=True)
+    by_chain = mcmc.get_samples(group_by_chain=True)
+    summ = summary(by_chain, group_by_chain=True)
     rh = {k: float(np.nanmax(v['r_hat'])) for k, v in summ.items()}
     ess = {k: float(np.nanmin(v['n_eff'])) for k, v in summ.items()}
+    np.savez_compressed(out / f'posterior_roas_params_world{a.world}_{a.profile}.npz',
+                        **{k: np.asarray(by_chain[k], dtype=np.float32) for k in wj.ROAS_KEYS},
+                        potential_energy=np.asarray(extra['potential_energy'], dtype=np.float32),
+                        num_steps=np.asarray(extra['num_steps'], dtype=np.int32))
 
-    est = summarize(d, arr_s, samples, tr['turnover'])
+    est = summarize(d, arr_s, samples, tr['turnover'], a.chains)
     est.to_csv(out / f'roas_draws_world{a.world}_{a.profile}.csv', index=False)
-    true_seg = tr['roas']
-    true_ch = by_channel(true_seg.assign(draw=0)).drop(columns='draw')
+    per_chain = by_channel(est).merge(est[['draw', 'chain']].drop_duplicates(), on='draw')
+    per_chain = per_chain.groupby(['channel', 'chain']).roas.median().unstack('chain')
+    per_chain.columns = [f'chain{c}' for c in per_chain.columns]
+    per_chain = true_ch.rename(columns={'roas': 'true'}).set_index('channel').join(per_chain)
+    per_chain.to_csv(out / f'roas_by_chain_world{a.world}_{a.profile}.csv')
+    chain_stats = dict(potential_energy_mean=np.asarray(extra['potential_energy']).mean(1).round(1).tolist(),
+                       num_steps_mean=np.asarray(extra['num_steps']).mean(1).round(1).tolist(),
+                       divergences=np.asarray(extra['diverging']).sum(1).astype(int).tolist())
     q = by_channel(est).groupby('channel').roas.quantile([0.05, 0.5, 0.95]).unstack()
     q.columns = ['q05', 'median', 'q95']
     res = true_ch.rename(columns={'roas': 'true'}).merge(q.reset_index(), on='channel')
@@ -145,6 +195,8 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
+                code_version='v2_centred_multistart_20261102', mode_search=ms_card, chains_stats=chain_stats,
+                max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.ROAS_KEYS},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},
                 min_ess={k: round(v) for k, v in sorted(ess.items(), key=lambda x: x[1])[:8]},
                 rho_post=np.asarray(samples['rho']).mean(0).round(3).tolist(),
@@ -154,6 +206,7 @@ def main() -> None:
     (out / f'sim_card_world{a.world}_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
     print(json.dumps(card, ensure_ascii=False, indent=1, default=str))
     print(res.round(2).to_string())
+    print(per_chain.round(2).to_string())
     print(res_seg.round(2).to_string())
 
 

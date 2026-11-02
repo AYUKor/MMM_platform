@@ -195,6 +195,11 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
     fourier = np.column_stack([np.sin(2 * np.pi * doy), np.cos(2 * np.pi * doy),
                                np.sin(4 * np.pi * doy), np.cos(4 * np.pi * doy)])
     hol, hol_names = _holiday_matrix(weeks)
+    # week-level terms are centred over the weeks: they carry no level, the unit level a[k,u] does. Without this
+    # the common shift of all unit levels and of the trend is a flat ridge (pilot 02.11: R-hat 6 on level/trend).
+    basis = basis - basis.mean(0)
+    fourier = fourier - fourier.mean(0)
+    hol = hol - hol.mean(0)
     return ModelData(weeks=weeks, ad_units=ad, model_units=mu, spend_pr=spend_pr, m_ref=m_ref, chan_mask=chan_mask,
                      obs=o, trend_basis=basis, t_year=t_c, fourier=fourier, holidays=hol, holiday_names=hol_names,
                      controls_mean=cm, controls_sd=cs)
@@ -223,6 +228,13 @@ def with_targets(arr: dict, y: np.ndarray) -> dict:
     return arr | {'ybar': ybar}
 
 
+def _week_projector(t: np.ndarray) -> np.ndarray:
+    """[W, W] projector that removes the mean and the straight line from a week series (the week shock must not
+    take over the unit levels or the segment slope)."""
+    X = np.column_stack([np.ones_like(t), t])
+    return np.eye(len(t)) - X @ np.linalg.solve(X.T @ X, X.T)
+
+
 def model_arrays(d: ModelData) -> dict:
     o = d.obs
     ad = d.ad_units
@@ -238,6 +250,9 @@ def model_arrays(d: ModelData) -> dict:
         tier_i=o.tier_i.to_numpy(), prev=o.prev.to_numpy(), resort=o.resort.to_numpy().astype(float),
         X=o[CONTROLS].to_numpy(float), basis=d.trend_basis, t=d.t_year, F=d.fourier, H=d.holidays,
         seg_m=d.model_units.seg_i.to_numpy(),
+        seg_onehot_m=np.eye(len(SEGMENTS))[d.model_units.seg_i.to_numpy()],          # [M, S]
+        seg_count_m=np.maximum(np.bincount(d.model_units.seg_i.to_numpy(), minlength=len(SEGMENTS)), 1),
+        week_proj=_week_projector(d.t_year),
         ybar=np.column_stack([o.groupby('m_i').y_orders.transform('mean'), o.groupby('m_i').y_check.transform('mean')]),
     )
 
@@ -280,6 +295,8 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     a_m = numpyro.sample('a', dist.Normal(0, 0.3).expand([2, M]))
     sig_slope = numpyro.sample('sig_slope', dist.HalfNormal(0.2).expand([2]))
     z_slope = numpyro.sample('z_slope', dist.Normal(0, 1).expand([2, M]))
+    # unit slopes are deviations from the segment slope: centred within each segment
+    z_slope = z_slope - (z_slope @ arr['seg_onehot_m'] / arr['seg_count_m'][None, :])[:, arr['seg_m']]
     slope0 = numpyro.sample('slope0', dist.Normal(0, 0.3).expand([2, S]))
     tau_tr = numpyro.sample('tau_trend', dist.HalfNormal(0.5).expand([2]))
     z_tr = numpyro.sample('z_trend', dist.Normal(0, 1).expand([2, S, K]))
@@ -291,7 +308,7 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     gam = numpyro.sample('gamma', dist.Normal(0, 0.05).expand([2, S, arr['X'].shape[1]]))
     sig_wk = numpyro.sample('sig_week', dist.HalfNormal(0.03).expand([2, S]))
     z_wk = numpyro.sample('z_week', dist.Normal(0, 1).expand([2, S, W]))
-    week_shock = sig_wk[:, :, None] * z_wk
+    week_shock = sig_wk[:, :, None] * jnp.einsum('jsw,vw->jsv', z_wk, arr['week_proj'])   # no level, no line
     base_sw = trend + season + week_shock                                                # [2, S, W]
     s_i, w_i, m_i = arr['s_i'], arr['w_i'], arr['m_i']
     mu = (arr['ybar'].T + a_m[:, m_i] + (sig_slope[:, None] * z_slope)[:, m_i] * arr['t'][w_i][None, :]
@@ -316,6 +333,68 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     numpyro.factor('ar_first_jacobian', 0.5 * jnp.sum(jnp.where(has_prev[None, :], 0.0, jnp.log1p(-rho_n ** 2))))
     numpyro.sample('lik_orders', dist.StudentT(nu, 0.0, sc[0]), obs=e[0])
     numpyro.sample('lik_check', dist.StudentT(nu, 0.0, sc[1]), obs=e_c_cond)
+
+
+# ---------------------------------------------------------------- start of sampling: mode search from several starts
+
+ROAS_KEYS = ['alpha', 'lam', 'logR_orders', 'sig_seg', 'z_seg', 'sig_tier', 'z_tier', 'sig_unit', 'z_unit', 'R_check']
+
+
+def multi_start_map(arr: dict, dims: dict, prior_set: str, y, n_starts: int = 8, steps: int = 4000,
+                    seed: int = 0, radius: float = 2.0, lr: tuple = (0.03, 0.003)) -> list[dict]:
+    """Search the posterior mode from several starts (point estimate + Adam), compiled once.
+
+    Start 0 is the prior median; the others are random points (uniform in [-radius, radius] on the unconstrained
+    scale, as NUTS starts by default). Each result: start, loss (= minus log joint at the end, lower is better),
+    loss_at_75pct (to see whether it settled), unconstrained point (for NUTS init_params) and the constrained
+    values of the ROAS keys. The pilot of 02.11 showed a chain stuck in a false solution: comparing the losses
+    of the starts tells a sampler trap (much worse loss) from a solution the data cannot rule out (similar loss).
+    """
+    import jax
+    import jax.numpy as jnp
+    import numpyro
+    from numpyro.infer import SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoDelta
+    from numpyro.infer.initialization import init_to_median
+    from numpyro.infer.svi import SVIState
+
+    guide = AutoDelta(numpyro_model, init_loc_fn=init_to_median(num_samples=15))
+    optim = numpyro.optim.Adam(lambda i: lr[0] * (lr[1] / lr[0]) ** (i / steps))
+    svi = SVI(numpyro_model, guide, optim, Trace_ELBO())
+    state0 = svi.init(jax.random.PRNGKey(seed), arr, dims, prior_set, y=y)
+
+    @jax.jit
+    def run(state):
+        def body(st, _):
+            return svi.update(st, arr, dims, prior_set, y=y)
+        return jax.lax.scan(body, state, None, length=steps)
+
+    u0 = svi.optim.get_params(state0.optim_state)
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(n_starts):
+        if i == 0:
+            st = state0
+        else:
+            u = {k: jnp.asarray(rng.uniform(-radius, radius, np.shape(v)), dtype=jnp.result_type(v)) for k, v in u0.items()}
+            st = SVIState(svi.optim.init(u), state0.mutable_state, jax.random.PRNGKey(seed + i))
+        st, losses = run(st)
+        losses = np.asarray(losses)
+        u_end = svi.optim.get_params(st.optim_state)
+        c_end = svi.get_params(st)
+        suffix = '_auto_loc'
+        out.append(dict(start=i, init='prior_median' if i == 0 else f'random_{radius:g}',
+                        loss=float(np.mean(losses[-50:])), loss_at_75pct=float(np.mean(losses[int(0.75 * steps) - 50:int(0.75 * steps)])),
+                        finite=bool(np.isfinite(losses[-1])),
+                        unconstrained={k[:-len(suffix)]: np.asarray(v) for k, v in u_end.items() if k.endswith(suffix)},
+                        point={k[:-len(suffix)]: np.asarray(v) for k, v in c_end.items() if k.endswith(suffix)}))
+    return out
+
+
+def init_params_from(start: dict, n_chains: int, jitter: float = 0.05, seed: int = 0) -> dict:
+    """NUTS init_params [chains, ...] (unconstrained) around one mode, with a small jitter per chain."""
+    rng = np.random.default_rng(seed)
+    return {k: v[None] + jitter * rng.standard_normal((n_chains,) + v.shape) for k, v in start['unconstrained'].items()}
 
 
 # ---------------------------------------------------------------- ROAS by switching channels off
