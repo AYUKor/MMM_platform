@@ -230,11 +230,21 @@ def with_targets(arr: dict, y: np.ndarray) -> dict:
     return arr | {'ybar': ybar}
 
 
-def _week_projector(t: np.ndarray) -> np.ndarray:
-    """[W, W] projector that removes the mean and the straight line from a week series (the week shock must not
-    take over the unit levels or the segment slope)."""
-    X = np.column_stack([np.ones_like(t), t])
-    return np.eye(len(t)) - X @ np.linalg.solve(X.T @ X, X.T)
+def _week_projector(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
+    """[W, W] projector that removes from a week series the mean, the straight line and every modelled week-level
+    term (trend hinges, Fourier, holidays, the national calendar of nonworking days).
+
+    The week shock carries only what these terms cannot: v2 removed the level and the line; v5 (pilot v4, 02.11:
+    R-hat 1.7 on the week shock, 1.6 on holidays, 1.3 on Fourier and controls while ROAS agreed) also removes the
+    other week terms, which the shock could copy at no cost.
+    """
+    X = np.column_stack([np.ones_like(t), t] + [np.reshape(m, (len(t), -1)) for m in week_terms])
+    return np.eye(len(t)) - X @ np.linalg.pinv(X, rcond=1e-8)
+
+
+def _weekly_mean(o: pd.DataFrame, col: str, W: int) -> np.ndarray:
+    """Mean of an observation column per week (0 for weeks without observations)."""
+    return o.groupby('w_i')[col].mean().reindex(range(W)).fillna(0.0).to_numpy()
 
 
 def model_arrays(d: ModelData) -> dict:
@@ -254,7 +264,7 @@ def model_arrays(d: ModelData) -> dict:
         seg_m=d.model_units.seg_i.to_numpy(),
         seg_onehot_m=np.eye(len(SEGMENTS))[d.model_units.seg_i.to_numpy()],          # [M, S]
         seg_count_m=np.maximum(np.bincount(d.model_units.seg_i.to_numpy(), minlength=len(SEGMENTS)), 1),
-        week_proj=_week_projector(d.t_year),
+        week_proj=_week_projector(d.t_year, d.trend_basis, d.fourier, d.holidays, _weekly_mean(o, 'nonworking_share', len(d.weeks))),
         ybar=np.column_stack([o.groupby('m_i').y_orders.transform('mean'), o.groupby('m_i').y_check.transform('mean')]),
     )
 
@@ -310,7 +320,7 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     gam = numpyro.sample('gamma', dist.Normal(0, 0.05).expand([2, S, arr['X'].shape[1]]))
     sig_wk = numpyro.sample('sig_week', dist.HalfNormal(0.03).expand([2, S]))
     z_wk = numpyro.sample('z_week', dist.Normal(0, 1).expand([2, S, W]))
-    week_shock = sig_wk[:, :, None] * jnp.einsum('jsw,vw->jsv', z_wk, arr['week_proj'])   # no level, no line
+    week_shock = sig_wk[:, :, None] * jnp.einsum('jsw,vw->jsv', z_wk, arr['week_proj'])   # only what week terms miss
     base_sw = trend + season + week_shock                                                # [2, S, W]
     s_i, w_i, m_i = arr['s_i'], arr['w_i'], arr['m_i']
     mu = (arr['ybar'].T + a_m[:, m_i] + (sig_slope[:, None] * z_slope)[:, m_i] * arr['t'][w_i][None, :]
