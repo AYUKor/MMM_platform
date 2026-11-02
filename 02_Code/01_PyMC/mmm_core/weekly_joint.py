@@ -64,13 +64,16 @@ PRIOR_SETS['moderate_pinned'] = {c: (m, 0.1) for c, (m, _) in PRIOR_SETS['modera
 CHECK_ROAS_SD = 0.5        # ROAS through the average check, Normal(0, 0.5) at segment level
 ADSTOCK_PRIOR = {'Нац_ТВ': (6, 4), NATIONAL_TV_CROSS: (6, 4), 'Рег_ТВ': (6, 4), 'Радио': (4, 6),
                  'OOH_Total': (4, 6), 'Digital_Performance': (2, 8)}   # Beta(a, b) for weekly decay
-# v8 option adstock='long' (03.11): the injection check showed the model sees ads only through their week-to-week
-# swings and loses part of an effect; if real ads build up over months, an 8-week window with a short-decay prior
-# cannot see it. Long: 26 weeks, decay prior Beta(2, 2) (median 0.5, anything from fast to very slow), and the
-# weeks before the panel start get the unit's average spend of its first 26 weeks instead of zero (2024 spend
-# is unknown, a zero would make early 2025 look ad-free).
+# The decay priors follow common industry ranges for weekly models (e.g. Meta's open-source Robyn guidance):
+# TV 0.3-0.8, radio and OOH 0.1-0.4, digital 0-0.3 (Beta(6,4): 90% in 0.33-0.84; Beta(4,6): 0.16-0.67;
+# Beta(2,8): 0.04-0.45).
+# v8 option adstock='long' (03.11): a 26-week window instead of 8, so a TV effect at the top of its range is not
+# cut (decay 0.8 leaves 17% of the effect beyond 8 weeks), and the weeks before the panel start get the unit's
+# average spend of its first 26 weeks instead of zero (2024 spend is unknown, a zero would make early 2025 look
+# ad-free). The decay priors stay the industry ones above: a half-year carry-over is not an accepted short-term
+# effect (Alex 03.11), so the long window must not open them up.
 ADSTOCK_L_LONG = 26
-ADSTOCK_PRIOR_LONG = {c: (2.0, 2.0) for c in ADSTOCK_PRIOR}
+ADSTOCK_PRIOR_LONG = dict(ADSTOCK_PRIOR)
 
 
 @dataclass

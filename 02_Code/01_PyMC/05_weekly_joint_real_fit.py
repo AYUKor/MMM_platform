@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v8_real_long_adstock_turnover_scale_options_20261103'
+CODE_VERSION = 'v8_real_long_window_industry_decay_geo_scale_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -174,7 +174,7 @@ def main() -> None:
     ap.add_argument('--wave-scale', default='learned', choices=['learned', 'fixed'],
                     help='spread of the own city waves: learned (v7/v7b) or fixed from the data being fitted (v7c)')
     ap.add_argument('--adstock', default='short', choices=['short', 'long'],
-                    help='short: 8 weeks, fast-decay priors (v6/v7); long: 26 weeks, decay prior Beta(2,2) (v8 option)')
+                    help='short: 8-week window (v6/v7); long: 26-week window and the pre-panel weeks filled with early mean spend (v8); both use the industry decay priors')
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'],
                     help='city ROAS = R * (turnover per resident / segment median) ** g: equal g=0 (v6/v7), turnover g=1, '
                          'gamma g learned (v8 options)')
