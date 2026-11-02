@@ -45,7 +45,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v9_sim_weaken_baseline_option_20261103'
+CODE_VERSION = 'v10_sim_realized_roas_anchor_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -135,6 +135,7 @@ def main() -> None:
                     help='coordinates of the unit slopes; same model')
     ap.add_argument('--wave-scale', default='learned', choices=['learned', 'fixed'],
                     help='spread of the own city waves: learned (v7/v7b) or fixed from the data being fitted (v7c)')
+    ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide)')
     ap.add_argument('--weaken', default='', help='v9: weaken baseline parts of the fitted model, as in 05 (the simulated world does not change)')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
@@ -150,7 +151,7 @@ def main() -> None:
     t0 = time.time()
     d = wj.prepare(a.panel, a.national, top_units_per_segment=prof['top_units'], cross_tv=a.cross_tv)
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
-                           slope_centred=a.slope_param == 'centred', wave_scale=a.wave_scale, weaken=a.weaken)
+                           slope_centred=a.slope_param == 'centred', wave_scale=a.wave_scale, weaken=a.weaken, anchor=a.anchor)
     sw = real_week_noise(d)
     truth = truth_for(a.world, sw)
     y, tr = wj.simulate(d, arr, truth, seed=a.seed)
@@ -242,7 +243,7 @@ def main() -> None:
     card = dict(world=a.world, profile=a.profile, chain_method=a.chain_method, truth=truth | {'sig_week': list(sw)},
                 prior_set=a.prior_set, dims=d.dims,
                 warmup=a.warmup, draws=a.draws, chains=a.chains, fit_seconds=round(fit_s), divergences=div,
-                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale, weaken=a.weaken,
+                code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale, weaken=a.weaken, anchor=a.anchor,
                 wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), cross_tv=a.cross_tv, mode_search=ms_card, chains_stats=chain_stats,
                 max_r_hat_roas_params={k: round(rh[k], 3) for k in wj.roas_keys(arr)},
                 max_r_hat={k: round(v, 3) for k, v in sorted(rh.items(), key=lambda x: -x[1])[:8]},

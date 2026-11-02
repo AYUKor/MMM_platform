@@ -82,6 +82,23 @@ ADSTOCK_PRIOR_LONG = dict(ADSTOCK_PRIOR)
 # spread (1), prior scale of the segment and resort Fourier coefficients (0.3, 0.2 scaled together). A step is
 # kept only if the injection is found more fully AND both placebos stay near zero; ROAS itself is never the goal.
 BASE_DEFAULT = dict(rho=(8.0, 2.0), slope=0.2, wave=1.0, season=0.3)
+# v10 option --anchor SET:SD (03.11). The checks of 03.11 showed the data do not tell the overall ROAS level: spend
+# moved 13-39 weeks gets the same ROAS as the real spend, the city level takes the always-on part, cross-city
+# comparisons are confounded (budgets follow sales), and holding the channel ROAS near industry costs about as much
+# fit as the noise. The anchor puts the industry yardstick on the quantity it is quoted in: the realized turnover
+# ROAS of each channel over the fit window (sum of T*(1-exp(-c)) over all observed unit-weeks / spend), as
+# LogNormal(log median of SET, SD). It replaces the ROAS prior at reference spend (use with --prior-set wide, or the
+# yardstick counts twice). Segments, size tiers, cities and the weeks still split the effect from the data.
+
+
+def parse_anchor(spec: str) -> tuple[str, float] | None:
+    """'moderate:0.3' -> ('moderate', 0.3); '' -> None."""
+    if not spec:
+        return None
+    name, _, sd = spec.partition(':')
+    if name not in PRIOR_SETS or not sd:
+        raise ValueError(f'--anchor SET:SD with SET in {sorted(PRIOR_SETS)}')
+    return name, float(sd)
 
 
 def parse_weaken(spec: str) -> dict:
@@ -334,7 +351,7 @@ def placebo_spend(d: ModelData, spec: str) -> ModelData:
 
 def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
                  wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal',
-                 weaken: str = '') -> dict:
+                 weaken: str = '', anchor: str = '') -> dict:
     """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
     wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
     wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
@@ -347,6 +364,7 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         raise ValueError(f'roas_scale {roas_scale}')
     ab = ADSTOCK_PRIOR_LONG if adstock == 'long' else ADSTOCK_PRIOR
     base = parse_weaken(weaken)
+    anc = parse_anchor(anchor)
     o = d.obs
     ad = d.ad_units
     seg_m = d.model_units.seg_i.to_numpy()
@@ -356,7 +374,14 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
     # segment Fourier and the resort Fourier, so the mean of the own waves of a group is not a second owner
     grp_m = seg_m * 2 + resort_m
     G = 2 * len(SEGMENTS)
-    return dict(
+    a_obs, w_obs, s_obs = o.a_i.to_numpy(), o.w_i.to_numpy(), o.seg_i.to_numpy()
+    spend_rub_n = (d.spend_pr[a_obs, w_obs, :] * (ad.pop_k.to_numpy()[a_obs] * 1000.0)[:, None]
+                   * d.chan_mask[s_obs])                                                   # [N, C] as in roas_from_contrib
+    anchor_arrays = (dict(anchor=anchor, anchor_on=True, anchor_sd=anc[1],
+                          anchor_log_target=np.log([PRIOR_SETS[anc[0]][c][0] for c in CHANNELS]),
+                          anchor_spend_c=spend_rub_n.sum(0), anchor_mask_c=(spend_rub_n.sum(0) > 0).astype(float))
+                     if anc else dict(anchor='', anchor_on=False))
+    return anchor_arrays | dict(
         city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
         adstock=adstock, adstock_l=ADSTOCK_L_LONG if adstock == 'long' else ADSTOCK_L, adstock_pad_steady=adstock == 'long',
         adstock_ab=np.array([ab[c] for c in CHANNELS], float),
@@ -504,6 +529,15 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     nu = 6.0
     if y is None:
         return
+    if arr.get('anchor_on', False):
+        # v10: industry yardstick on the realized turnover ROAS of each channel over the fit window
+        cn = beta[:, arr['a_i'], :] * sat[arr['a_i'], arr['w_i'], :]                     # [2, N, C]
+        eff = jnp.sum(jnp.exp(y[0] + y[1])[:, None] * (1.0 - jnp.exp(-(cn[0] + cn[1]))), axis=0)
+        mask = arr['anchor_mask_c']
+        roas_c = jnp.maximum(eff / np.where(mask > 0, arr['anchor_spend_c'], 1.0), 1e-3)
+        numpyro.deterministic('roas_realized', roas_c)
+        lp = dist.Normal(arr['anchor_log_target'], arr['anchor_sd']).log_prob(jnp.log(roas_c))
+        numpyro.factor('anchor_realized_roas', jnp.sum(lp * mask))
     r = y - mu                                                                          # [2, N]
     has_prev = arr['prev'] >= 0
     prev = np.where(has_prev, arr['prev'], 0)
