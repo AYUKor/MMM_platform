@@ -79,6 +79,7 @@ def main() -> None:
     ap.add_argument('--top-units', type=int, default=None, help='same as the fit (fast/medium: 20); pilot/production: all')
     ap.add_argument('--adstock', default='short', choices=['short', 'long'], help='the same as the fit')
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit')
+    ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='v12: unit = own ROAS deviation per city (v6-v11), tier = cities differ only by size tier and spend per resident; the same as the fit')
     ap.add_argument('--only', default='', help='test: comma-separated campaign numbers')
     a = ap.parse_args()
     out = Path(a.out)
@@ -94,7 +95,7 @@ def main() -> None:
     checks = {}
     # ---- model data, as the fit
     d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
-    arr = wj.model_arrays(d, adstock=a.adstock, roas_scale=a.roas_scale)
+    arr = wj.model_arrays(d, adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo)
     log(f'model data: {len(d.ad_units)} units, {len(d.weeks)} weeks, {len(d.obs)} fit rows')
 
     # ---- campaigns and names
@@ -285,7 +286,7 @@ def main() -> None:
     checks['flag1'] = int(sum(x['flag'] for x in results.values()))
     checks['modeled'] = int(sum(x['modeled'] for x in results.values()))
     meta = dict(code_version=CODE_VERSION, n_campaigns=n, n_draws=D, calc_seconds=round(time.time() - T0),
-                finished_utc=time.strftime('%d.%m.%Y %H:%M', time.gmtime()), adstock=a.adstock, roas_scale=a.roas_scale,
+                finished_utc=time.strftime('%d.%m.%Y %H:%M', time.gmtime()), adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo,
                 adstock_weeks=camp.L, top_units=a.top_units,
                 inputs={k: dict(path=str(v), sha256=sha(v)) for k, v in
                         (('panel', a.panel), ('national', a.national), ('npz', a.npz), ('ledger', a.ledger),

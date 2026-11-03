@@ -51,6 +51,7 @@ def main() -> None:
     ap.add_argument('--draws', type=int, default=400)
     ap.add_argument('--adstock', default='short', choices=['short', 'long'], help='the same as the fit that wrote the npz')
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit that wrote the npz')
+    ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='v12: unit = own ROAS deviation per city (v6-v11), tier = cities differ only by size tier and spend per resident; the same as the fit')
     ap.add_argument('--segment-table', default=None, help='roas_by_segment_channel_*.csv of the same fit: budget x segment ROAS for comparison')
     a = ap.parse_args()
     out = Path(a.out)
@@ -64,7 +65,7 @@ def main() -> None:
     wp = weekly_plan(plan)
 
     d = wj.prepare(a.panel, a.national, top_units_per_segment=None)
-    arr = wj.model_arrays(d, city_wave=False, adstock=a.adstock, roas_scale=a.roas_scale)   # media part only; the city wave does not enter the forecast
+    arr = wj.model_arrays(d, city_wave=False, adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo)   # media part only; the city wave does not enter the forecast
     L = arr['adstock_l']
     ad = d.ad_units
     key = {(wj.SEGMENTS[s], u): i for i, (s, u) in enumerate(zip(ad.seg_i, ad.unit_label))}

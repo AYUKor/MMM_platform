@@ -61,7 +61,9 @@ PRIOR_SETS = {
 # v8 check (03.11): the owner's moderate medians held almost fixed (log sd 0.1). Its approximation loss against the
 # free fit tells how much worse the data like the industry-level ROAS (a difference of a few units = no evidence).
 PRIOR_SETS['moderate_pinned'] = {c: (m, 0.1) for c, (m, _) in PRIOR_SETS['moderate'].items()}
-CHECK_ROAS_SD = 0.5        # ROAS through the average check, Normal(0, 0.5) at segment level
+CHECK_ROAS_SD = 0.5        # ROAS through the average check, Normal(0, 0.5) at segment level (v12: --check-sd)
+MEDIA_GEO = ('unit', 'tier')   # v12: 'unit' = own ROAS deviation per city for local channels (v6-v11); 'tier' = none,
+                               # cities differ only by size tier and by spend per resident (saturation)
 ADSTOCK_PRIOR = {'Нац_ТВ': (6, 4), NATIONAL_TV_CROSS: (6, 4), 'Рег_ТВ': (6, 4), 'Радио': (4, 6),
                  'OOH_Total': (4, 6), 'Digital_Performance': (2, 8)}   # Beta(a, b) for weekly decay
 # The decay priors follow common industry ranges for weekly models (e.g. Meta's open-source Robyn guidance):
@@ -360,7 +362,7 @@ def placebo_spend(d: ModelData, spec: str) -> ModelData:
 
 def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
                  wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal',
-                 weaken: str = '', anchor: str = '') -> dict:
+                 weaken: str = '', anchor: str = '', media_geo: str = 'unit', check_sd: float = CHECK_ROAS_SD) -> dict:
     """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
     wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
     wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
@@ -371,6 +373,8 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         raise ValueError(f'adstock {adstock}')
     if roas_scale not in ('equal', 'turnover', 'gamma'):
         raise ValueError(f'roas_scale {roas_scale}')
+    if media_geo not in MEDIA_GEO:
+        raise ValueError(f'media_geo {media_geo}')
     ab = ADSTOCK_PRIOR_LONG if adstock == 'long' else ADSTOCK_PRIOR
     base = parse_weaken(weaken)
     anc = parse_anchor(anchor)
@@ -420,7 +424,11 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         roas_scale=roas_scale,
         geo_ratio_a=(ad.tau / ad.groupby('seg_i').tau.transform('median')).to_numpy(float),
         seg_a=ad.seg_i.to_numpy(), tier_a=ad.tier_i.to_numpy(),
-        local_c=np.array([c in LOCAL_UNIT_DEVIATION for c in CHANNELS], float),
+        # v12 media_geo='tier': no own ROAS deviation per city (with the segment anchor of v11 the extra effect went into
+        # the city with the largest turnover, e.g. Moscow 6.3 in ТСХ delivery digital); z_unit stays a parameter with no
+        # effect, so every downstream script reads the same draws
+        media_geo=media_geo, check_sd=float(check_sd),
+        local_c=np.array([c in LOCAL_UNIT_DEVIATION and media_geo == 'unit' for c in CHANNELS], float),
         m_i=o.m_i.to_numpy(), a_i=o.a_i.to_numpy(), w_i=o.w_i.to_numpy(), s_i=o.seg_i.to_numpy(),
         tier_i=o.tier_i.to_numpy(), prev=o.prev.to_numpy(), resort=o.resort.to_numpy().astype(float),
         X=o[CONTROLS].to_numpy(float), basis=d.trend_basis, t=d.t_year, F=d.fourier, H=d.holidays,
@@ -462,7 +470,7 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     logR_a = (logR_s[arr['seg_a']] + sig_tier * z_tier[arr['tier_a']]
               + sig_unit * z_unit * arr['local_c'][None, :])
     R_orders_a = jnp.exp(logR_a)                                                         # [A, C]
-    R_check_s = numpyro.sample('R_check', dist.Normal(0, CHECK_ROAS_SD).expand([S, C]))
+    R_check_s = numpyro.sample('R_check', dist.Normal(0, arr.get('check_sd', CHECK_ROAS_SD)).expand([S, C]))
     R_check_a = R_check_s[arr['seg_a']]
     numpyro.deterministic('R_orders_seg', jnp.exp(logR_s))
     rs = arr.get('roas_scale', 'equal')
