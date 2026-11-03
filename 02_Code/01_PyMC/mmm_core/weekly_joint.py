@@ -89,16 +89,25 @@ BASE_DEFAULT = dict(rho=(8.0, 2.0), slope=0.2, wave=1.0, season=0.3)
 # ROAS of each channel over the fit window (sum of T*(1-exp(-c)) over all observed unit-weeks / spend), as
 # LogNormal(log median of SET, SD). It replaces the ROAS prior at reference spend (use with --prior-set wide, or the
 # yardstick counts twice). Segments, size tiers, cities and the weeks still split the effect from the data.
+# v11 (03.11, after Alex chose the industry level): with the channel-total yardstick the model put the extra effect
+# into ТС5 stores, where turnover is largest and a small share is invisible, while ТСХ and delivery stayed below 1.
+# 'SET:SD:segment' puts the same yardstick on each network x direction separately (realized ROAS of each segment
+# and channel); then the data only split it across cities (by spend pressure) and weeks.
+ANCHOR_BY = ('channel', 'segment')
 
 
-def parse_anchor(spec: str) -> tuple[str, float] | None:
-    """'moderate:0.3' -> ('moderate', 0.3); '' -> None."""
+def parse_anchor(spec: str) -> tuple[str, float, str] | None:
+    """'moderate:0.3' -> ('moderate', 0.3, 'channel'); 'moderate:0.1:segment' -> ('moderate', 0.1, 'segment');
+    '' -> None."""
     if not spec:
         return None
-    name, _, sd = spec.partition(':')
-    if name not in PRIOR_SETS or not sd:
-        raise ValueError(f'--anchor SET:SD with SET in {sorted(PRIOR_SETS)}')
-    return name, float(sd)
+    parts = spec.split(':')
+    if len(parts) not in (2, 3) or parts[0] not in PRIOR_SETS or not parts[1]:
+        raise ValueError(f'--anchor SET:SD[:BY] with SET in {sorted(PRIOR_SETS)}, BY in {ANCHOR_BY}')
+    by = parts[2] if len(parts) == 3 else 'channel'
+    if by not in ANCHOR_BY:
+        raise ValueError(f'--anchor SET:SD[:BY] with BY in {ANCHOR_BY}')
+    return parts[0], float(parts[1]), by
 
 
 def parse_weaken(spec: str) -> dict:
@@ -377,10 +386,20 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
     a_obs, w_obs, s_obs = o.a_i.to_numpy(), o.w_i.to_numpy(), o.seg_i.to_numpy()
     spend_rub_n = (d.spend_pr[a_obs, w_obs, :] * (ad.pop_k.to_numpy()[a_obs] * 1000.0)[:, None]
                    * d.chan_mask[s_obs])                                                   # [N, C] as in roas_from_contrib
-    anchor_arrays = (dict(anchor=anchor, anchor_on=True, anchor_sd=anc[1],
-                          anchor_log_target=np.log([PRIOR_SETS[anc[0]][c][0] for c in CHANNELS]),
-                          anchor_spend_c=spend_rub_n.sum(0), anchor_mask_c=(spend_rub_n.sum(0) > 0).astype(float))
-                     if anc else dict(anchor='', anchor_on=False))
+    if anc and anc[2] == 'segment':
+        # v11: one yardstick per segment x channel, [S, C]
+        sp_sc = np.zeros((len(SEGMENTS), len(CHANNELS)))
+        np.add.at(sp_sc, s_obs, spend_rub_n)
+        tgt = np.log([PRIOR_SETS[anc[0]][c][0] for c in CHANNELS])
+        anchor_arrays = dict(anchor=anchor, anchor_on=True, anchor_by='segment', anchor_sd=anc[1],
+                             anchor_log_target=np.broadcast_to(tgt, sp_sc.shape).copy(),
+                             anchor_spend_c=sp_sc, anchor_mask_c=(sp_sc > 0).astype(float))
+    elif anc:
+        anchor_arrays = dict(anchor=anchor, anchor_on=True, anchor_by='channel', anchor_sd=anc[1],
+                             anchor_log_target=np.log([PRIOR_SETS[anc[0]][c][0] for c in CHANNELS]),
+                             anchor_spend_c=spend_rub_n.sum(0), anchor_mask_c=(spend_rub_n.sum(0) > 0).astype(float))
+    else:
+        anchor_arrays = dict(anchor='', anchor_on=False)
     return anchor_arrays | dict(
         city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
         adstock=adstock, adstock_l=ADSTOCK_L_LONG if adstock == 'long' else ADSTOCK_L, adstock_pad_steady=adstock == 'long',
@@ -530,9 +549,14 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     if y is None:
         return
     if arr.get('anchor_on', False):
-        # v10: industry yardstick on the realized turnover ROAS of each channel over the fit window
+        # v10: industry yardstick on the realized turnover ROAS of each channel over the fit window (v11: or of
+        # each segment x channel)
         cn = beta[:, arr['a_i'], :] * sat[arr['a_i'], arr['w_i'], :]                     # [2, N, C]
-        eff = jnp.sum(jnp.exp(y[0] + y[1])[:, None] * (1.0 - jnp.exp(-(cn[0] + cn[1]))), axis=0)
+        eff_n = jnp.exp(y[0] + y[1])[:, None] * (1.0 - jnp.exp(-(cn[0] + cn[1])))       # [N, C]
+        if arr.get('anchor_by', 'channel') == 'segment':
+            eff = jnp.zeros(arr['anchor_spend_c'].shape).at[arr['s_i']].add(eff_n)      # [S, C]
+        else:
+            eff = jnp.sum(eff_n, axis=0)                                                # [C]
         mask = arr['anchor_mask_c']
         roas_c = jnp.maximum(eff / np.where(mask > 0, arr['anchor_spend_c'], 1.0), 1e-3)
         numpyro.deterministic('roas_realized', roas_c)

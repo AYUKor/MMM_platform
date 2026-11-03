@@ -38,7 +38,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v4_injection_absorption_anchor_20261103'
+CODE_VERSION = 'v5_injection_absorption_segment_anchor_20261103'
 PARTS = ['level', 'unit_slope', 'trend', 'season', 'week_shock', 'controls', 'city_wave', 'media', 'ar_part', 'innovation']
 
 
@@ -86,7 +86,7 @@ def main() -> None:
     ap.add_argument('--wave-scale', default='fixed', choices=['learned', 'fixed'])
     ap.add_argument('--adstock', default='short', choices=['short', 'long'])
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'])
-    ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide)')
+    ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide); v11: SET:SD:segment puts it on each segment x channel')
     ap.add_argument('--weaken', default='', help='v9: weaken baseline parts that take the ad effect, e.g. "rho=2:2,slope=0.1,wave=0.5,season=0.15" (rho prior Beta(a,b), default 8:2; unit-slope spread prior 0.2; own-wave spread multiplier 1; season prior 0.3)')
     a = ap.parse_args()
     out = Path(a.out)

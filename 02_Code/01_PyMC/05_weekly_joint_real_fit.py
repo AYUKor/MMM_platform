@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v10_real_realized_roas_anchor_20261103'
+CODE_VERSION = 'v11_real_segment_anchor_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -175,7 +175,7 @@ def main() -> None:
                     help='spread of the own city waves: learned (v7/v7b) or fixed from the data being fitted (v7c)')
     ap.add_argument('--adstock', default='short', choices=['short', 'long'],
                     help='short: 8-week window (v6/v7); long: 26-week window and the pre-panel weeks filled with early mean spend (v8); both use the industry decay priors')
-    ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide)')
+    ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide); v11: SET:SD:segment puts it on each segment x channel')
     ap.add_argument('--weaken', default='', help='v9: weaken baseline parts that take the ad effect, e.g. "rho=2:2,slope=0.1,wave=0.5,season=0.15" (rho prior Beta(a,b), default 8:2; unit-slope spread prior 0.2; own-wave spread multiplier 1; season prior 0.3)')
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'],
                     help='city ROAS = R * (turnover per resident / segment median) ** g: equal g=0 (v6/v7), turnover g=1, '
