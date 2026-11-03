@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v12_real_geo_check_20261103'
+CODE_VERSION = 'v13_real_lam_prior_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -178,6 +178,7 @@ def main() -> None:
     ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide); v11: SET:SD:segment puts it on each segment x channel')
     ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='v12: unit = own ROAS deviation per city (v6-v11), tier = cities differ only by size tier and spend per resident; the same as the fit')
     ap.add_argument('--check-sd', type=float, default=0.5, help='v12: prior scale of the ROAS through the average check, Normal(0, SD) (v6-v11: 0.5)')
+    ap.add_argument('--lam-prior', default='', help='v13: saturation shape prior, data:SD = lam medians of the model without the yardstick (real_production_v6) with log-SD SD; or C=median:sd,...; default LogNormal(0, 0.5)')
     ap.add_argument('--weaken', default='', help='v9: weaken baseline parts that take the ad effect, e.g. "rho=2:2,slope=0.1,wave=0.5,season=0.15" (rho prior Beta(a,b), default 8:2; unit-slope spread prior 0.2; own-wave spread multiplier 1; season prior 0.3)')
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'],
                     help='city ROAS = R * (turnover per resident / segment median) ** g: equal g=0 (v6/v7), turnover g=1, '
@@ -209,7 +210,7 @@ def main() -> None:
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=a.wave_param == 'centred',
                            slope_centred=a.slope_param == 'centred', wave_scale=a.wave_scale,
                            adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor,
-                           media_geo=a.media_geo, check_sd=a.check_sd)
+                           media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior)
     o = d.obs
     y = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])
     if a.inject:
@@ -259,7 +260,7 @@ def main() -> None:
             card = dict(profile=a.profile, status='stopped_start_roas_above_rule', code_version=CODE_VERSION,
                         stop_if_roas_above=a.stop_if_roas_above, mode_search=ms_card, dims=d.dims,
                         inject=a.inject, placebo=a.placebo, prior_set=a.prior_set, adstock=a.adstock, roas_scale=a.roas_scale,
-                        weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd)
+                        weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior)
             (out / f'start_stopped_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
             print('STOPPED: the centre of the best start breaks the ROAS stop rule, sampling skipped', flush=True)
             return
@@ -293,7 +294,7 @@ def main() -> None:
     per_chain.columns = [f'chain{c}' for c in per_chain.columns]
     per_chain.to_csv(out / f'roas_by_chain_{a.profile}.csv')
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
-                fit_window_end=a.fit_window_end, inject=a.inject, placebo=a.placebo, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
+                fit_window_end=a.fit_window_end, inject=a.inject, placebo=a.placebo, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
                 code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
                 wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), mode_search=ms_card,

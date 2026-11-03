@@ -64,6 +64,13 @@ PRIOR_SETS['moderate_pinned'] = {c: (m, 0.1) for c, (m, _) in PRIOR_SETS['modera
 CHECK_ROAS_SD = 0.5        # ROAS through the average check, Normal(0, 0.5) at segment level (v12: --check-sd)
 MEDIA_GEO = ('unit', 'tier')   # v12: 'unit' = own ROAS deviation per city for local channels (v6-v11); 'tier' = none,
                                # cities differ only by size tier and by spend per resident (saturation)
+LAM_PRIOR_DEFAULT = (1.0, 0.5)  # saturation scale lam ~ LogNormal(log 1, 0.5) per channel (v1-v12)
+# v13 (03.11): lam medians of the model without the industry yardstick (real_production_v6, sampled, R-hat 1.008).
+# With the per-segment yardstick of v11 the national TV lam fell to 0.14 (4 SD below its prior centre): the model held
+# the industry level in cells where the data show ~0 by turning always-on national TV into a constant, fully saturated
+# block (marginal ROAS ~4% of the average, every national TV campaign ~0 in the catalog). '--lam-prior data:SD' takes
+# the shape of each channel's curve from the model without the yardstick; the yardstick then sets only the level.
+LAM_DATA_ONLY = {'Нац_ТВ': 1.011, 'Рег_ТВ': 1.03, 'Радио': 1.354, 'OOH_Total': 0.969, 'Digital_Performance': 2.648}
 ADSTOCK_PRIOR = {'Нац_ТВ': (6, 4), NATIONAL_TV_CROSS: (6, 4), 'Рег_ТВ': (6, 4), 'Радио': (4, 6),
                  'OOH_Total': (4, 6), 'Digital_Performance': (2, 8)}   # Beta(a, b) for weekly decay
 # The decay priors follow common industry ranges for weekly models (e.g. Meta's open-source Robyn guidance):
@@ -96,6 +103,27 @@ BASE_DEFAULT = dict(rho=(8.0, 2.0), slope=0.2, wave=1.0, season=0.3)
 # 'SET:SD:segment' puts the same yardstick on each network x direction separately (realized ROAS of each segment
 # and channel); then the data only split it across cities (by spend pressure) and weeks.
 ANCHOR_BY = ('channel', 'segment')
+
+
+def parse_lam_prior(spec: str) -> tuple[np.ndarray, np.ndarray] | None:
+    """'' -> None (LAM_PRIOR_DEFAULT for every channel); 'data:0.1' -> LAM_DATA_ONLY medians with log-SD 0.1;
+    'Нац_ТВ=1.0:0.1,Радио=1.3:0.2' -> those channels, the others keep LAM_PRIOR_DEFAULT. Returns (log median, log SD) [C]."""
+    if not spec:
+        return None
+    med = np.full(len(CHANNELS), LAM_PRIOR_DEFAULT[0])
+    sd = np.full(len(CHANNELS), LAM_PRIOR_DEFAULT[1])
+    if spec.startswith('data:'):
+        v = float(spec.split(':', 1)[1])
+        for c, m in LAM_DATA_ONLY.items():
+            med[CHANNELS.index(c)], sd[CHANNELS.index(c)] = m, v
+    else:
+        for kv in filter(None, (x.strip() for x in spec.split(','))):
+            c, _, ms = kv.partition('=')
+            if c not in CHANNELS or ':' not in ms:
+                raise ValueError(f'--lam-prior C=median:sd with C in {CHANNELS}, or data:SD')
+            m, v = ms.split(':')
+            med[CHANNELS.index(c)], sd[CHANNELS.index(c)] = float(m), float(v)
+    return np.log(med), sd
 
 
 def parse_anchor(spec: str) -> tuple[str, float, str] | None:
@@ -362,7 +390,8 @@ def placebo_spend(d: ModelData, spec: str) -> ModelData:
 
 def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
                  wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal',
-                 weaken: str = '', anchor: str = '', media_geo: str = 'unit', check_sd: float = CHECK_ROAS_SD) -> dict:
+                 weaken: str = '', anchor: str = '', media_geo: str = 'unit', check_sd: float = CHECK_ROAS_SD,
+                 lam_prior: str = '') -> dict:
     """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
     wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
     wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
@@ -377,6 +406,7 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         raise ValueError(f'media_geo {media_geo}')
     ab = ADSTOCK_PRIOR_LONG if adstock == 'long' else ADSTOCK_PRIOR
     base = parse_weaken(weaken)
+    lp = parse_lam_prior(lam_prior)
     anc = parse_anchor(anchor)
     o = d.obs
     ad = d.ad_units
@@ -404,7 +434,8 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
                              anchor_spend_c=spend_rub_n.sum(0), anchor_mask_c=(spend_rub_n.sum(0) > 0).astype(float))
     else:
         anchor_arrays = dict(anchor='', anchor_on=False)
-    return anchor_arrays | dict(
+    lam_arrays = dict(lam_loc=lp[0], lam_sd=lp[1]) if lp is not None else {}
+    return anchor_arrays | lam_arrays | dict(
         city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
         adstock=adstock, adstock_l=ADSTOCK_L_LONG if adstock == 'long' else ADSTOCK_L, adstock_pad_steady=adstock == 'long',
         adstock_ab=np.array([ab[c] for c in CHANNELS], float),
@@ -427,7 +458,7 @@ def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True
         # v12 media_geo='tier': no own ROAS deviation per city (with the segment anchor of v11 the extra effect went into
         # the city with the largest turnover, e.g. Moscow 6.3 in ТСХ delivery digital); z_unit stays a parameter with no
         # effect, so every downstream script reads the same draws
-        media_geo=media_geo, check_sd=float(check_sd),
+        media_geo=media_geo, check_sd=float(check_sd), lam_prior=lam_prior,
         local_c=np.array([c in LOCAL_UNIT_DEVIATION and media_geo == 'unit' for c in CHANNELS], float),
         m_i=o.m_i.to_numpy(), a_i=o.a_i.to_numpy(), w_i=o.w_i.to_numpy(), s_i=o.seg_i.to_numpy(),
         tier_i=o.tier_i.to_numpy(), prev=o.prev.to_numpy(), resort=o.resort.to_numpy().astype(float),
@@ -455,7 +486,10 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     # media: adstock + saturation shared across segments and targets
     a_ab = arr['adstock_ab'] if 'adstock_ab' in arr else np.array([ADSTOCK_PRIOR[c] for c in CHANNELS], float)
     alpha = numpyro.sample('alpha', dist.Beta(a_ab[:, 0], a_ab[:, 1]))
-    lam = numpyro.sample('lam', dist.LogNormal(0.0, 0.5).expand([C]))
+    if 'lam_loc' in arr:   # v13 --lam-prior
+        lam = numpyro.sample('lam', dist.LogNormal(arr['lam_loc'], arr['lam_sd']))
+    else:
+        lam = numpyro.sample('lam', dist.LogNormal(0.0, 0.5).expand([C]))
     sat, sat1 = adstock_sat(arr['spend_norm'], alpha, lam, arr.get('adstock_l', ADSTOCK_L), arr.get('adstock_pad_steady', False))
 
     mu_r = np.log([pri[c][0] for c in CHANNELS]); sd_r = np.array([pri[c][1] for c in CHANNELS])
