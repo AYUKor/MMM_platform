@@ -12,8 +12,6 @@ ROAS = turnover effect / full ledger budget of the campaign (money the model can
 """
 from __future__ import annotations
 
-import difflib
-import itertools
 import re
 import unicodedata
 
@@ -129,9 +127,34 @@ def read_names_xlsx(path: str) -> pd.DataFrame:
     return t.reset_index(drop=True)
 
 
-def keep_numbers(d: pd.DataFrame, old: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def numbers_overrides(d: pd.DataFrame, old: pd.DataFrame) -> pd.DataFrame:
+    """Short form of the saved directory: only the rows whose number is not their place in the start-date order (plus rows
+    whose saved name differs from the computed one). keep_numbers(d, overrides, sparse=True) gives the same numbers."""
+    full, _ = keep_numbers(d, old)
+    pos = d.sort_values(['first', 'name', 'name_key']).reset_index(drop=True).assign(pos=lambda x: np.arange(1, len(x) + 1))
+    j = full.merge(pos[['name_key', 'wave', 'pos', 'name']].rename(columns={'name': 'name_computed'}), on=['name_key', 'wave'])
+    need = j[(j.id != j.pos) | (j.name != j.name_computed)]
+    return old[old.id.isin(need.id)][['id', 'name', 'start', 'end', 'budget_mln']].reset_index(drop=True)
+
+
+def keep_numbers(d: pd.DataFrame, old: pd.DataFrame, sparse: bool = False) -> tuple[pd.DataFrame, dict]:
     """Give each campaign the number it has in the saved directory; new campaigns get the next numbers by start date.
-    Match: same catalog name, else same base name with overlapping dates (one candidate only)."""
+    Match: same catalog name, else same base name with overlapping dates (one candidate only).
+    sparse=True: old holds only the overrides (numbers_overrides); every other campaign keeps its place in the
+    start-date order as its number, as when the directory was made."""
+    if sparse:
+        d = d.sort_values(['first', 'name', 'name_key']).reset_index(drop=True)
+        d['pos'] = np.arange(1, len(d) + 1)
+        x, info = keep_numbers(d.drop(columns='pos'), old)
+        x = x.merge(d[['name_key', 'wave', 'pos']], on=['name_key', 'wave'])
+        x.loc[x.id_match.eq('new'), 'id'] = x.pos
+        x.loc[x.id_match.eq('new'), 'id_match'] = 'place_in_order'
+        assert x.id.is_unique, 'номера из краткого справочника совпали с местами по порядку: нужен полный справочник'
+        info = dict(campaigns=int(len(x)), kept_by_name=int((x.id_match == 'name').sum()),
+                    kept_by_base_name_and_dates=int((x.id_match == 'base_name_dates').sum()),
+                    by_place_in_order=int((x.id_match == 'place_in_order').sum()), new=0,
+                    old_not_found=[dict(id=int(k), name='') for k in sorted(set(range(1, int(x.id.max()) + 1)) - set(x.id))])
+        return x.drop(columns='pos').sort_values('id').reset_index(drop=True), info
     d = d.copy()
     d['id'] = -1
     d['id_match'] = ''
@@ -162,31 +185,6 @@ def keep_numbers(d: pd.DataFrame, old: pd.DataFrame) -> tuple[pd.DataFrame, dict
                 kept_by_base_name_and_dates=int((d.id_match == 'base_name_dates').sum()), new=int((d.id_match == 'new').sum()),
                 old_not_found=gone[['id', 'name']].to_dict('records'))
     return d, info
-
-
-def lookalikes(d: pd.DataFrame) -> pd.DataFrame:
-    TR = {'a': 'а', 'b': 'б', 'c': 'к', 'd': 'д', 'e': 'е', 'f': 'ф', 'g': 'г', 'h': 'х', 'i': 'и', 'j': 'ж', 'k': 'к', 'l': 'л',
-          'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'q': 'к', 'r': 'р', 's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс',
-          'y': 'и', 'z': 'з'}
-    keys = d.groupby('name_key').agg(base=('base_name', 'first'), money=('money', 'sum'), first=('first', 'min'),
-                                     last=('last', 'max')).reset_index().set_index('name_key')
-    tl = {k: ''.join(TR.get(ch, ch) for ch in k) for k in keys.index}
-    nod = {k: re.sub(r'\d+', '', k) for k in keys.index}
-    out = []
-    for a, b in itertools.combinations(keys.index, 2):
-        why = None
-        if tl[a] == tl[b]:
-            why = 'то же, но латиницей/кириллицей'
-        elif nod[a] == nod[b] and nod[a]:
-            why = 'различаются только цифрами'
-        elif len(a) >= 5 and len(b) >= 5 and (a.startswith(b) or b.startswith(a) or a.endswith(b) or b.endswith(a)):
-            why = 'одно название входит в другое'
-        elif min(len(a), len(b)) >= 5 and difflib.SequenceMatcher(None, tl[a], tl[b]).ratio() >= 0.86:
-            why = 'очень похожи'
-        if why:
-            ra, rb = keys.loc[a], keys.loc[b]
-            out.append(dict(название_1=ra.base, название_2=rb.base, чем_похожи=why))
-    return pd.DataFrame(out)
 
 
 def overlaps(led: pd.DataFrame, cid: np.ndarray, n: int) -> np.ndarray:

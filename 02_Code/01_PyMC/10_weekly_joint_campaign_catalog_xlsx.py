@@ -250,7 +250,8 @@ TBD = "будет указано при расчёте"
 DN = dt.timezone(dt.timedelta(hours=7))
 num = checks.get('numbers', {})
 gone = num.get('old_not_found', [])
-gone_txt = ("; " + "; ".join(f"№{g['id']} «{g['name']}» вошла в другую кампанию после исправления дат в журнале 02.11.2026" for g in gone)) if gone else ""
+gone_txt = ("; " + "; ".join(f"№{g['id']}" + (f" «{g['name']}»" if g.get('name') else "") +
+                             " вошла в другую кампанию после исправления дат в журнале 02.11.2026" for g in gone)) if gone else ""
 secs = int(meta['calc_seconds'])
 code_h = hashlib.sha256(''.join(f"{k}:{v}" for k, v in sorted(meta['code_sha256'].items())).encode()).hexdigest()[:12]
 T = dict(

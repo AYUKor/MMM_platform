@@ -72,6 +72,7 @@ def main() -> None:
         ap.add_argument(a, required=True)
     ap.add_argument('--media-units-daily', default=None, help="the panel's routed money, for the routing check")
     ap.add_argument('--names', default=None, help='saved names directory (xlsx or its csv copy): numbers stay the same')
+    ap.add_argument('--names-sparse', action='store_true', help='--names holds only the overrides (numbers_overrides)')
     ap.add_argument('--roas-draws', default=None, help='roas_draws_*.csv of the same fit (default: next to the npz)')
     ap.add_argument('--draws', type=int, default=400)
     ap.add_argument('--procs', type=int, default=4)
@@ -102,7 +103,8 @@ def main() -> None:
     led, waves = cc.assign_waves(led)
     directory, groups = cc.build_directory(led, waves)
     if a.names:
-        directory, num_info = cc.keep_numbers(directory, cc.read_names_xlsx(a.names))
+        names = cc.read_names_xlsx(a.names)
+        directory, num_info = cc.keep_numbers(directory, names, sparse=bool(a.names_sparse))
     else:
         directory['id'], directory['id_match'] = np.arange(1, len(directory) + 1), 'new'
         num_info = {}
