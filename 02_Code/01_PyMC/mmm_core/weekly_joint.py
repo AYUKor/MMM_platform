@@ -196,8 +196,12 @@ def _holiday_matrix(weeks: pd.DatetimeIndex) -> tuple[np.ndarray, list]:
 
 
 def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None, cross_tv: bool = False,
-            top_units_per_segment: int | None = None) -> ModelData:
-    """top_units_per_segment: keep only the N largest units of each segment by turnover (fast/medium stages)."""
+            top_units_per_segment: int | None = None, m_ref_csv: str | None = None) -> ModelData:
+    """top_units_per_segment: keep only the N largest units of each segment by turnover (fast/medium stages).
+    m_ref_csv (v14): typical spend per resident (segment, channel, m_ref) taken from another panel instead of this one.
+    Panel v4 spreads Moscow and SPb regional TV and radio over their oblasts, which moves the typical spend of those
+    channels by up to 30%; with the v3 values the saturation scale lam keeps its meaning (the curve shape of
+    --lam-prior data comes from a v3 fit) and v14 differs from v13 only by where the money lands."""
     p = pd.read_parquet(panel_path)
     assert p.week_start.max() <= pd.Timestamp('2026-06-22'), 'панель выходит за 28.06.2026'
     if top_units_per_segment:
@@ -263,6 +267,12 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
             pos = x[x > 0]
             if pos.size >= 20:
                 m_ref[s, j] = pos.mean()
+    if m_ref_csv:
+        mr = pd.read_csv(m_ref_csv, encoding='utf-8-sig')
+        for r in mr.itertuples(index=False):
+            s_, j_ = sidx[r.segment], CHANNELS.index(r.channel)
+            if m_ref[s_, j_] > 0 and r.m_ref > 0:
+                m_ref[s_, j_] = float(r.m_ref)
     chan_mask = (m_ref > 0).astype(float)
     if not cross_tv:      # owner 02.11: store ads act only on stores, delivery ads only on delivery (no cross channel)
         chan_mask[:, CHANNELS.index(NATIONAL_TV_CROSS)] = 0.0

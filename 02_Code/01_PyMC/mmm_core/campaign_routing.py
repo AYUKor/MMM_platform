@@ -9,6 +9,8 @@ Rules (panel v3): national «РФ» by population over units with sales that day
 with sales outside the regions named in the same agency campaign the same day; a city label on its unit inside the
 unit's period, otherwise on the rest of its oblast; physical outdoor on an oblast label to the rest of the oblast;
 TV, radio, digital on an oblast label by population over its cities and the rest that day.
+Panel v4 (agglo=True): regional TV and radio with the label МОСКВА or САНКТ-ПЕТЕРБУРГ by population over the city and
+every unit of its oblast with sales that day (the city's broadcast is received in the whole agglomeration).
 """
 from __future__ import annotations
 
@@ -25,6 +27,10 @@ MODEL_CHANNEL = {'Нац ТВ': 'Нац_ТВ', 'Рег ТВ': 'Рег_ТВ', 'Р
                  'OOH': 'OOH_Total', 'ООН РТБ': 'OOH_Total', 'Indoor': 'OOH_Total',
                  **{d: 'Digital_Performance' for d in DIGITAL}}
 SEGKEY = ['network', 'channel']
+# panel v4: broadcast with a federal city label -> the city + its oblast (agglomeration), by population
+AGGLO = {'МОСКВА': 'МОСКОВСКАЯ ОБЛАСТЬ', 'САНКТ-ПЕТЕРБУРГ': 'ЛЕНИНГРАДСКАЯ ОБЛАСТЬ'}
+AGGLO_TYPES = {'Рег ТВ', 'Радио'}                 # ledger channel types
+AGGLO_MODEL_CHANNELS = {'Рег_ТВ', 'Радио'}         # model channels (plans)
 NO_SALES = 'остаток <= 0'
 LEDGER_COLS = ['date', 'network', 'channel', 'channel_type', 'action', 'media_geo_norm', 'geo_label', 'budget',
                'source_row_id', 'campaign_id_for_audit']
@@ -63,7 +69,8 @@ def spread(budget: pd.DataFrame, units: pd.DataFrame, on: list[str], rule: str) 
     return x.drop(columns=['w']), lost
 
 
-def route_media(m: pd.DataFrame, units: pd.DataFrame, c2o: dict[str, str], extra: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def route_media(m: pd.DataFrame, units: pd.DataFrame, c2o: dict[str, str], extra: list[str],
+                agglo: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
     """m: ledger rows (LEDGER_COLS + extra). Returns routed money [date, network, channel, channel_type, unit_label,
     budget, rule, *extra] and money with no unit [.., reason, *extra]."""
     assert m['date'].between(FIRST_DAY, LAST_DAY).all(), 'журнал выходит за 01.01.2025-30.06.2026'
@@ -122,6 +129,9 @@ def route_media(m: pd.DataFrame, units: pd.DataFrame, c2o: dict[str, str], extra
             return 'oblast_physical' if r.channel_type in PHYSICAL else 'oblast_broadcast'
         return 'direct'
     d['label_kind'] = d.apply(kind, axis=1) if len(d) else pd.Series(dtype=str)
+    if agglo:   # panel v4
+        agg = (d.label_kind == 'direct') & d.geo_label.isin(list(AGGLO)) & d.channel_type.isin(AGGLO_TYPES)
+        d.loc[agg, 'label_kind'] = 'agglo_broadcast'
 
     # 2a) direct to the unit, inside the unit's period
     dd = d[d.label_kind == 'direct']
@@ -154,6 +164,16 @@ def route_media(m: pd.DataFrame, units: pd.DataFrame, c2o: dict[str, str], extra
                      'oblast_broadcast_by_population')
     routed.append(x.rename(columns={'oblast': 'geo_label_src'}))
     unmodeled.append(lost.rename(columns={'oblast': 'geo_label'}).assign(reason='в этот день у области нет единиц'))
+
+    # 2d) panel v4: broadcast of a federal city by population over the city and its oblast's units with sales that day
+    if agglo:
+        da = d[d.label_kind == 'agglo_broadcast'].rename(columns={'geo_label': 'agglo'})
+        su = sales.copy()
+        su['agglo'] = np.where(su.geo_label.isin(list(AGGLO)), su.geo_label, su.oblast.map({v: k for k, v in AGGLO.items()}))
+        x, lost = spread(da, su.dropna(subset=['agglo']), ['date', 'network', 'channel', 'agglo'],
+                         'agglomeration_broadcast_by_population')
+        routed.append(x.rename(columns={'agglo': 'geo_label_src'}))
+        unmodeled.append(lost.rename(columns={'agglo': 'geo_label'}).assign(reason='в этот день у агломерации нет единиц'))
 
     keep = ['date', 'network', 'channel', 'channel_type', 'unit_label', 'budget', 'rule'] + list(extra)
     r = pd.concat([x_[keep] for x_ in routed], ignore_index=True)

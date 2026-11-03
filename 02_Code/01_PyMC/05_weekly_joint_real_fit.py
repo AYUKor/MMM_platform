@@ -35,7 +35,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v13_real_lam_prior_20261103'
+CODE_VERSION = 'v14_real_agglomeration_20261103'
 
 PROFILES = {
     'fast': dict(top_units=20, chains=2, warmup=300, draws=300, target_accept=0.90, max_tree_depth=8),
@@ -190,6 +190,7 @@ def main() -> None:
                     help='injection check: add a known effect to the real orders, e.g. "Нац_ТВ=2,Digital_Performance=2" '
                          '(ROAS through orders at typical spend; no city deviations, no check part). The fit should find '
                          'its plain real ROAS plus about the injected amount; the truth is in injected_truth_{profile}.csv')
+    ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
     out = Path(a.out)
@@ -202,7 +203,7 @@ def main() -> None:
     numpyro.set_host_device_count(prof['chains'])
 
     t0 = time.time()
-    d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'])
+    d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'], m_ref_csv=a.m_ref)
     if a.placebo:
         if a.inject:
             raise SystemExit('--placebo and --inject together are not a check of anything')
@@ -260,7 +261,8 @@ def main() -> None:
             card = dict(profile=a.profile, status='stopped_start_roas_above_rule', code_version=CODE_VERSION,
                         stop_if_roas_above=a.stop_if_roas_above, mode_search=ms_card, dims=d.dims,
                         inject=a.inject, placebo=a.placebo, prior_set=a.prior_set, adstock=a.adstock, roas_scale=a.roas_scale,
-                        weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior)
+                        weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior,
+                        panel=a.panel, m_ref=a.m_ref)
             (out / f'start_stopped_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
             print('STOPPED: the centre of the best start breaks the ROAS stop rule, sampling skipped', flush=True)
             return
@@ -294,7 +296,7 @@ def main() -> None:
     per_chain.columns = [f'chain{c}' for c in per_chain.columns]
     per_chain.to_csv(out / f'roas_by_chain_{a.profile}.csv')
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
-                fit_window_end=a.fit_window_end, inject=a.inject, placebo=a.placebo, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
+                fit_window_end=a.fit_window_end, inject=a.inject, placebo=a.placebo, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior, panel=a.panel, m_ref=a.m_ref, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
                 code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
                 wave_sd_fixed=(np.asarray(arr['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr else None), mode_search=ms_card,

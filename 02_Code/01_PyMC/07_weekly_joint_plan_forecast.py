@@ -13,6 +13,10 @@ real turnover in the same week one year earlier (analog year, no growth added); 
 July-September 2026 are never read. The plan's spend intensity is shown against the model's typical spend (m_ref)
 so that saturation is visible.
 
+Panel v4 (--agglo-city-map): a plan row of regional TV or radio in МОСКВА or САНКТ-ПЕТЕРБУРГ is spread by population
+over the city and every unit of its oblast in the model (the same rule as the panel), so the forecast counts the
+oblast sales too; the rows of the by-city table then include those oblast units.
+
 Run: python -I 07_weekly_joint_plan_forecast.py --panel P.parquet --national N.csv --npz posterior.npz
      --plan plan.csv --out OUTDIR [--draws 400] [--segment-table roas_by_segment_channel_pilot.csv]
 """
@@ -27,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -
 import numpy as np
 import pandas as pd
 
+from mmm_core import campaign_routing as cr
 from mmm_core import weekly_joint as wj
 
 
@@ -37,7 +42,7 @@ def weekly_plan(plan: pd.DataFrame) -> pd.DataFrame:
         per_day = float(r.budget_rub) / len(days)
         wk = (days - pd.to_timedelta(days.weekday, unit='D')).normalize()
         for w, n in pd.Series(1, index=wk).groupby(level=0).sum().items():
-            rows.append(dict(segment=r.segment, geo=r.geo, channel=r.channel, week_start=w, spend=per_day * n))
+            rows.append(dict(segment=r.segment, geo=r.geo, plan_geo=r.geo, channel=r.channel, week_start=w, spend=per_day * n))
     return pd.DataFrame(rows)
 
 
@@ -53,6 +58,8 @@ def main() -> None:
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit that wrote the npz')
     ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='v12: unit = own ROAS deviation per city (v6-v11), tier = cities differ only by size tier and spend per resident; the same as the fit')
     ap.add_argument('--segment-table', default=None, help='roas_by_segment_channel_*.csv of the same fit: budget x segment ROAS for comparison')
+    ap.add_argument('--agglo-city-map', default=None, help='panel v4: city_oblast_map csv; Moscow/SPb regional TV and radio of the plan over the city and its oblast')
+    ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -64,10 +71,26 @@ def main() -> None:
         raise SystemExit(f'unknown channels {bad_ch} or segments {bad_seg} in the plan')
     wp = weekly_plan(plan)
 
-    d = wj.prepare(a.panel, a.national, top_units_per_segment=None)
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=None, m_ref_csv=a.m_ref)
     arr = wj.model_arrays(d, city_wave=False, adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo)   # media part only; the city wave does not enter the forecast
     L = arr['adstock_l']
     ad = d.ad_units
+    if a.agglo_city_map:   # panel v4: the plan's Moscow / SPb broadcast over the agglomeration, by population
+        cmap = pd.read_csv(a.agglo_city_map, encoding='utf-8-sig')
+        c2o = dict(zip(cmap.city, cmap.oblast))
+        seg_name = np.array(wj.SEGMENTS)[ad.seg_i.to_numpy()]
+        rows = []
+        for r in wp.itertuples(index=False):
+            if r.geo in cr.AGGLO and r.channel in cr.AGGLO_MODEL_CHANNELS:
+                ob = cr.AGGLO[r.geo]
+                mem = np.where((seg_name == r.segment) & ((ad.unit_label == r.geo) | ad.unit_label.map(c2o).eq(ob)
+                                                         | ad.unit_label.str.startswith(ob)).to_numpy())[0]
+                w = ad.pop_k.to_numpy()[mem] / ad.pop_k.to_numpy()[mem].sum()
+                rows += [dict(segment=r.segment, geo=ad.unit_label.iloc[i], plan_geo=r.geo, channel=r.channel,
+                              week_start=r.week_start, spend=r.spend * wi) for i, wi in zip(mem, w)]
+            else:
+                rows.append(r._asdict())
+        wp = pd.DataFrame(rows).groupby(['segment', 'geo', 'plan_geo', 'channel', 'week_start'], as_index=False).spend.sum()
     key = {(wj.SEGMENTS[s], u): i for i, (s, u) in enumerate(zip(ad.seg_i, ad.unit_label))}
     missing = sorted({(s, g) for s, g in zip(wp.segment, wp.geo) if (s, g) not in key})
     if missing:

@@ -27,7 +27,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'marginal_roas_weekly_joint_v1_20261103'
+CODE_VERSION = 'marginal_roas_weekly_joint_v2_20261103'
 BUMP = 0.01
 CUT = 0.10
 
@@ -49,12 +49,13 @@ def main() -> None:
     ap.add_argument('--adstock', default='short', choices=['short', 'long'], help='the same as the fit')
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit')
     ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='the same as the fit')
+    ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
 
-    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units, m_ref_csv=a.m_ref)
     arr = wj.model_arrays(d, adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo)
     a_i, w_i, s_i = arr['a_i'], arr['w_i'], arr['s_i']
     T = d.obs.turnover_total.to_numpy(float)
@@ -121,7 +122,7 @@ def main() -> None:
                                                 x_over_lam_p90=('x_over_lam_p90', 'median')).round(3).reset_index()
     lam_q = sr.drop_duplicates(['draw', 'channel']).groupby('channel').lam.quantile([0.05, 0.5, 0.95]).unstack().round(3)
     st.to_csv(out / 'saturation_by_cell.csv', index=False, encoding='utf-8-sig')
-    card = dict(code_version=CODE_VERSION, npz=str(a.npz), draws=int(len(idx)), bump=BUMP, cut=CUT, media_geo=a.media_geo,
+    card = dict(code_version=CODE_VERSION, npz=str(a.npz), panel=a.panel, m_ref=a.m_ref, draws=int(len(idx)), bump=BUMP, cut=CUT, media_geo=a.media_geo,
                 adstock=a.adstock, roas_scale=a.roas_scale, top_units=a.top_units, seconds=round(time.time() - t0),
                 lam_by_channel={c: lam_q.loc[c].tolist() for c in lam_q.index})
     (out / 'marginal_card.json').write_text(json.dumps(card, ensure_ascii=False, indent=1), encoding='utf-8')

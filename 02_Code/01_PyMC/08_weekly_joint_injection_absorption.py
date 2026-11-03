@@ -38,7 +38,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'v7_injection_absorption_lam_prior_20261103'
+CODE_VERSION = 'v8_injection_absorption_agglomeration_20261103'
 PARTS = ['level', 'unit_slope', 'trend', 'season', 'week_shock', 'controls', 'city_wave', 'media', 'ar_part', 'innovation']
 
 
@@ -91,13 +91,14 @@ def main() -> None:
     ap.add_argument('--lam-prior', default='', help='v13: saturation shape prior (data:SD or C=median:sd,...), the same as the fit')
     ap.add_argument('--anchor', default='', help='v10: industry yardstick on the realized turnover ROAS of each channel, SET:SD, e.g. moderate:0.3 (use with --prior-set wide); v11: SET:SD:segment puts it on each segment x channel')
     ap.add_argument('--weaken', default='', help='v9: weaken baseline parts that take the ad effect, e.g. "rho=2:2,slope=0.1,wave=0.5,season=0.15" (rho prior Beta(a,b), default 8:2; unit-slope spread prior 0.2; own-wave spread multiplier 1; season prior 0.3)')
+    ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rf = _real_fit_module()
 
     t0 = time.time()
-    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units, m_ref_csv=a.m_ref)
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor,
                           media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior)
     o = d.obs
@@ -154,7 +155,7 @@ def main() -> None:
     rc.to_csv(out / 'roas_plain_vs_inject_by_segment_channel.csv', index=False)
     rch.to_csv(out / 'roas_plain_vs_inject_by_channel.csv')
     card = dict(code_version=CODE_VERSION, inject=a.inject, prior_set=a.prior_set, top_units=a.top_units,
-                city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior, vi_steps=a.vi_steps, seed=a.seed, dims=d.dims,
+                city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior, panel=a.panel, m_ref=a.m_ref, vi_steps=a.vi_steps, seed=a.seed, dims=d.dims,
                 wave_sd_fixed=(np.asarray(arr_p['wave_sd_fixed']).round(4).tolist() if 'wave_sd_fixed' in arr_p else None),
                 max_abs_gap_parts_vs_injection=gap,
                 fits={k: {kk: v for kk, v in f.items() if kk not in ('parts', 'roas')} for k, f in fits.items()},

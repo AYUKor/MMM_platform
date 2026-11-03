@@ -44,11 +44,12 @@ def main() -> None:
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit')
     ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='v12: unit = own ROAS deviation per city (v6-v11), tier = cities differ only by size tier and spend per resident; the same as the fit')
     ap.add_argument('--show', default='ТС5/Оффлайн|OOH_Total,ТС5/Онлайн|Digital_Performance,ТСХ/Оффлайн|Рег_ТВ')
+    ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units, m_ref_csv=a.m_ref)
     arr = wj.model_arrays(d, adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo)
     o = d.obs
     y = np.vstack([o.y_orders.to_numpy(float), o.y_check.to_numpy(float)])

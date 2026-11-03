@@ -38,7 +38,7 @@ from mmm_core import campaign_catalog as cc
 from mmm_core import campaign_routing as cr
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'campaign_catalog_weekly_joint_v1_20261103'
+CODE_VERSION = 'campaign_catalog_weekly_joint_v2_20261103'
 G = {}
 
 
@@ -81,6 +81,8 @@ def main() -> None:
     ap.add_argument('--roas-scale', default='equal', choices=['equal', 'turnover', 'gamma'], help='the same as the fit')
     ap.add_argument('--media-geo', default='unit', choices=['unit', 'tier'], help='v12: unit = own ROAS deviation per city (v6-v11), tier = cities differ only by size tier and spend per resident; the same as the fit')
     ap.add_argument('--only', default='', help='test: comma-separated campaign numbers')
+    ap.add_argument('--agglo', action='store_true', help='panel v4: Moscow/SPb regional TV and radio over the city and its oblast; the same as the panel')
+    ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -94,7 +96,7 @@ def main() -> None:
     T0 = time.time()
     checks = {}
     # ---- model data, as the fit
-    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units)
+    d = wj.prepare(a.panel, a.national, top_units_per_segment=a.top_units, m_ref_csv=a.m_ref)
     arr = wj.model_arrays(d, adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo)
     log(f'model data: {len(d.ad_units)} units, {len(d.weeks)} weeks, {len(d.obs)} fit rows')
 
@@ -117,11 +119,11 @@ def main() -> None:
     log(f'campaigns: {n}; numbers {json.dumps({k: v for k, v in num_info.items() if k != "old_not_found"}, ensure_ascii=False)}; '
         f'old not found: {len(num_info.get("old_not_found", []))}')
 
-    # ---- routing by campaign (panel v3 rules)
+    # ---- routing by campaign (panel v3 rules; --agglo: panel v4)
     units = cr.load_units(a.targets)
     cmap = pd.read_csv(a.city_map, encoding='utf-8-sig')
     c2o = dict(zip(cmap.city, cmap.oblast))
-    routed, unmod = cr.route_media(led[cr.LEDGER_COLS + ['cat']], units, c2o, ['cat'])
+    routed, unmod = cr.route_media(led[cr.LEDGER_COLS + ['cat']], units, c2o, ['cat'], agglo=a.agglo)
     if a.media_units_daily:
         checks['routing_vs_panel'] = cr.check_against_panel(routed, pd.read_parquet(a.media_units_daily))
         log('routing vs panel:', checks['routing_vs_panel'])
@@ -287,7 +289,7 @@ def main() -> None:
     checks['modeled'] = int(sum(x['modeled'] for x in results.values()))
     meta = dict(code_version=CODE_VERSION, n_campaigns=n, n_draws=D, calc_seconds=round(time.time() - T0),
                 finished_utc=time.strftime('%d.%m.%Y %H:%M', time.gmtime()), adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo,
-                adstock_weeks=camp.L, top_units=a.top_units,
+                agglo=bool(a.agglo), m_ref=a.m_ref, adstock_weeks=camp.L, top_units=a.top_units,
                 inputs={k: dict(path=str(v), sha256=sha(v)) for k, v in
                         (('panel', a.panel), ('national', a.national), ('npz', a.npz), ('ledger', a.ledger),
                          ('targets', a.targets), ('city_map', a.city_map)) if v},
