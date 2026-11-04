@@ -5,8 +5,9 @@ ads minus turnover without this campaign's money, over the model's fit unit-week
 and the average check change over the campaign's zone (its units, from its first week to its last week + adstock);
 ROAS = turnover effect / full ledger budget. Ranges = 10th / 50th / 90th percentile over draws.
 --tail-weeks 7: the carry-over after the last panel week is counted too, as the plan forecast (07) counts 7 weeks after
-a plan (ledger money of 29-30.06.2026 enters the first tail week, no other spend after it; baseline turnover of a tail
-week = the same unit 52 weeks earlier). Default 0 = as before (nothing after 28.06.2026).
+a plan (ledger money of 29-30.06.2026 enters the first tail week; baseline turnover of a tail week = the same unit 52
+weeks earlier; other spend there: --tail-other analog = the model's spend a year earlier, none = no other spend, an
+upper-side estimate). Default 0 = as before (nothing after 28.06.2026).
 
 Checks written to checks.json: routing by campaign == the panel's media_units_daily (to the ruble); campaign money in
 model cells summed over campaigns == the model's spend array; numpy media part == wj.media_contrib_draw; per draw and
@@ -87,6 +88,7 @@ def main() -> None:
     ap.add_argument('--agglo', action='store_true', help='panel v4: Moscow/SPb regional TV and radio over the city and its oblast; the same as the panel')
     ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     ap.add_argument('--tail-weeks', type=int, default=0, help='count the carry-over after the last panel week (7 = as the plan forecast); 0 = as before')
+    ap.add_argument('--tail-other', default='analog', choices=['analog', 'none'], help='other spend in the tail weeks: the same week a year earlier (analog) or none (upper-side)')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -139,14 +141,15 @@ def main() -> None:
         tail = cc.tail_rows(d, arr, a.tail_weeks)
         tail_money = sum(float(g.budget[g.w.to_numpy(int) >= len(d.weeks)].sum()) for g in sp['cells'].values())
         checks['tail'] = dict(weeks=a.tail_weeks, first_week=tail['first_week'], last_week=tail['last_week'],
-                              rows=int(len(tail['T'])), analog_share=tail['analog_share'], ledger_money_in_tail_rub=tail_money)
+                              rows=int(len(tail['T'])), analog_share=tail['analog_share'], ledger_money_in_tail_rub=tail_money,
+                              other_spend=a.tail_other)
         log('tail weeks:', checks['tail'])
     else:
         sp = cc.campaign_spend(routed, units, d, present, n)
     checks['spend_rebuild'] = cc.check_spend_rebuild(sp['cells'], d)
     log('campaign money in model cells vs model spend:', checks['spend_rebuild'])
 
-    camp = cc.Campaigns(d, arr, sp['cells'], n, tail=tail)
+    camp = cc.Campaigns(d, arr, sp['cells'], n, tail=tail, tail_other=a.tail_other)
     log(f'campaign arrays ready, {time.time() - T0:.0f} s')
 
     # ---- posterior draws
@@ -305,6 +308,7 @@ def main() -> None:
     meta = dict(code_version=CODE_VERSION, n_campaigns=n, n_draws=D, calc_seconds=round(time.time() - T0),
                 finished_utc=time.strftime('%d.%m.%Y %H:%M', time.gmtime()), adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo,
                 agglo=bool(a.agglo), m_ref=a.m_ref, adstock_weeks=camp.L, top_units=a.top_units, tail_weeks=a.tail_weeks,
+                tail_other=a.tail_other if a.tail_weeks else '',
                 inputs={k: dict(path=str(v), sha256=sha(v)) for k, v in
                         (('panel', a.panel), ('national', a.national), ('npz', a.npz), ('ledger', a.ledger),
                          ('targets', a.targets), ('city_map', a.city_map)) if v},

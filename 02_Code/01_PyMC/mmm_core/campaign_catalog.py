@@ -10,8 +10,10 @@ log check contributions when the campaign's spend is taken out of the units and 
 campaign_routing). Adstock carries the effect into the following weeks. By default nothing after the last panel week
 (22.06-28.06.2026) is counted; with tail weeks (Campaigns(..., tail=tail_rows(d, 7))) the carry-over of the last weeks
 is counted too, as the plan forecast does (07: plan weeks + 7 carry-over weeks): ledger money of 29-30.06.2026 enters
-the first tail week, no other spend is assumed after it, and the baseline turnover of a tail week is the same unit's
-real turnover 52 weeks earlier (analog year, as 07; July-September 2026 are never read).
+the first tail week, and the baseline turnover of a tail week is the same unit's real turnover 52 weeks earlier
+(analog year, as 07; July-September 2026 are never read). Other spend in the tail weeks (the ledger ends 30.06.2026):
+tail_other='analog' (default) = the model's spend of the same week one year earlier (always-on campaigns go on, so the
+tail is as crowded as a year before); 'none' = no other spend (an upper-side estimate: the tail is unsaturated).
 ROAS = turnover effect / full ledger budget of the campaign (money the model cannot see included).
 """
 from __future__ import annotations
@@ -378,8 +380,10 @@ def beta_draw(arr: dict, draw: dict) -> np.ndarray:
 class Campaigns:
     """Precomputed per-campaign arrays for the counterfactual loop."""
 
-    def __init__(self, d: wj.ModelData, arr: dict, cells: dict, n: int, tail: dict | None = None):
-        """tail (tail_rows): count the carry-over after the last panel week; the cells then carry tail weeks too."""
+    def __init__(self, d: wj.ModelData, arr: dict, cells: dict, n: int, tail: dict | None = None,
+                 tail_other: str = 'analog'):
+        """tail (tail_rows): count the carry-over after the last panel week; the cells then carry tail weeks too.
+        tail_other: other spend in the tail weeks, 'analog' (same week a year earlier) or 'none'."""
         self.n = n
         self.L = int(arr.get('adstock_l', wj.ADSTOCK_L))
         self.pad = bool(arr.get('adstock_pad_steady', False))
@@ -399,8 +403,17 @@ class Campaigns:
         m_ref_a = d.m_ref[seg_a]                                                          # [A, C]
         pop = d.ad_units.pop_k.to_numpy() * 1000.0
         rows_of = pd.Series(np.arange(len(self.T))).groupby(self.a_i).apply(np.asarray).to_dict()
-        # spend of the tail weeks (all campaigns' ledger money there, normalised as the model's spend_norm)
+        # spend of the tail weeks: background (tail_other) + all campaigns' ledger money there, as spend_norm
         self.sn_tail = np.zeros((len(d.ad_units), self.n_tail, len(wj.CHANNELS)))
+        self.tail_other = tail_other if self.n_tail else ''
+        if self.n_tail and tail_other == 'analog':
+            widx = {w: i for i, w in enumerate(d.weeks)}
+            for t in range(self.n_tail):
+                i = widx.get(d.weeks[-1] + pd.Timedelta(weeks=t + 1 - 52))
+                if i is not None:
+                    self.sn_tail[:, t, :] = arr['spend_norm'][:, i, :]
+        elif self.n_tail and tail_other != 'none':
+            raise ValueError(tail_other)
         self.items = []
         for k in range(n):
             g = cells.get(k)
