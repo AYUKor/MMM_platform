@@ -20,6 +20,7 @@ from .model_package import (
     load_gate_policy,
     sha256_file,
 )
+from .weekly_package import WeeklyPackageError, is_weekly_manifest, verify_weekly_package_files
 
 
 class ModelPackageError(RuntimeError):
@@ -211,6 +212,13 @@ class ModelPackage:
 
     def assert_artifact_lineage_current(self) -> None:
         """Fail if config, posterior or gate evidence changed after package generation."""
+        if is_weekly_manifest(self.manifest):
+            # weekly joint packages (weekly_package.py) carry their own file hashes and fingerprint
+            try:
+                verify_weekly_package_files(self.run_dir, self.manifest)
+            except WeeklyPackageError as exc:
+                raise StaleModelPackageError(str(exc)) from exc
+            return
         self.assert_run_config_hash_current()
         expected = self.manifest.get("package_input_fingerprint")
         if not expected:

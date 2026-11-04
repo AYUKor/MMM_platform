@@ -49,6 +49,7 @@ from .forecast_geo_availability import (
 from .model_package import sha256_file
 from .media_history import LAG_MODE, bound_media_history, scaled_history_lags
 from .model_package_reader import ModelPackage
+from .weekly_package import PACKAGE_TYPE as WEEKLY_PACKAGE_TYPE, is_weekly_manifest
 from .serving_semantics import (
     SERVING_CORE_TARGET,
     SERVING_POLICY_VERSION,
@@ -1686,6 +1687,26 @@ def read_daily_flighting(path: str | Path) -> list[dict[str, Any]]:
     return out
 
 
+def load_forecast_engine(
+    model_run_dir: str | Path,
+    *,
+    auto_export: bool = True,
+    validate_package_lineage: bool = True,
+) -> Any:
+    """Engine for the package type: weekly joint packages (weekly_package.py) get WeeklyJointEngine, every other
+    package the daily ForecastEngine exactly as before."""
+    run_dir = resolve_path(model_run_dir)
+    if is_weekly_manifest(read_json(run_dir / "model_manifest.json") or {}):
+        from .weekly_engine import WeeklyJointEngine
+
+        return WeeklyJointEngine.from_run_dir(run_dir, validate_package_lineage=validate_package_lineage)
+    return ForecastEngine.from_run_dir(
+        run_dir,
+        auto_export=auto_export,
+        validate_package_lineage=validate_package_lineage,
+    )
+
+
 def run_forecast_from_flighting(
     model_run_dir: str | Path,
     flighting_path: str | Path,
@@ -1699,7 +1720,7 @@ def run_forecast_from_flighting(
 ) -> dict[str, Any]:
     started_at = datetime.now(timezone.utc)
     started_perf = time.monotonic()
-    engine = ForecastEngine.from_run_dir(
+    engine = load_forecast_engine(
         model_run_dir,
         auto_export=validate_package_lineage,
         validate_package_lineage=validate_package_lineage,
@@ -1737,6 +1758,12 @@ def run_forecast_from_flighting(
         "output_sha256": {name: sha256_file(Path(path)) for name, path in paths.items()},
         "outputs": paths,
     }
+    if getattr(engine, "package_type", "") == WEEKLY_PACKAGE_TYPE:
+        card["model_package_type"] = WEEKLY_PACKAGE_TYPE
+        card["model_name"] = engine.package.manifest.get("model_name")
+        card["roas_level_label"] = engine.package.manifest.get("roas_level_label_ru")
+        card["denominator_analog_year"] = "same_week_52_weeks_earlier"
+        card["runtime_lineage"]["model_artifact_sha256"] = dict(engine.package.manifest.get("files") or {})
     write_json(Path(output_dir) / f"{_safe_id(run_id)}_forecast_run_card.json", card)
     return card
 
