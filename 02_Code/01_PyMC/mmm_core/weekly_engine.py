@@ -30,13 +30,12 @@ from typing import Any, Iterable
 import numpy as np
 import pandas as pd
 
+from .forecast_engine import (SUPPORT_ABS_TOL_RUB, SUPPORT_LEVEL_ELEVATED, SUPPORT_LEVEL_OUTSIDE,
+                              SUPPORT_LEVEL_STRONG, SUPPORT_LEVEL_WITHIN, SUPPORT_REL_TOL, CandidateFeasibilityError,
+                              _robust_support_upper)
 from .weekly_package import (PACKAGE_TYPE, ROAS_LEVEL_LABEL_RU, SERVING_TARGET, WeeklyPackageError,
                              verify_weekly_package_files)
 
-SUPPORT_LEVEL_WITHIN = 'within_p95'
-SUPPORT_LEVEL_ELEVATED = 'p95_to_p99'
-SUPPORT_LEVEL_STRONG = 'p99_to_robust_upper'
-SUPPORT_LEVEL_OUTSIDE = 'outside_historical_support'
 DRAW_CHUNK = 64
 
 
@@ -58,6 +57,50 @@ def adstock_sat_np(spend_norm: np.ndarray, alpha: np.ndarray, lam: np.ndarray, L
         x[:, :, lag:, :] += w[:, lag, None, None, :] * spend_norm[None, :, :W - lag, :]
     sat = 1.0 - np.exp(-x / lam[:, None, None, :])
     return sat, 1.0 - np.exp(-1.0 / lam)
+
+
+def adstock_np(spend_norm: np.ndarray, alpha: np.ndarray, L: int) -> np.ndarray:
+    """Normalized geometric adstock of one weekly series spend_norm [W] for draws alpha [n]: [n, W] (zero before week
+    0), the same weights as adstock_sat_np."""
+    w = alpha[:, None] ** np.arange(L)[None, :]
+    w = w / w.sum(1, keepdims=True)
+    W = len(spend_norm)
+    x = np.zeros((len(alpha), W))
+    for lag in range(min(L, W)):
+        x[:, lag:] += w[:, lag, None] * spend_norm[None, :W - lag]
+    return x
+
+
+@dataclass
+class WeeklyCellKernel:
+    """Turnover response of one segment x geo x channel cell of a campaign to its total budget (the optimizer's
+    search kernel; forecast_engine._CellResponseKernel is the daily one). The cell's weekly profile is kept and scaled:
+
+        response(B) = sum_w base_w * (1 - exp(-beta * (1 - exp(-B * a_w / lam)))),  a_w = adstock(profile / (pop m_ref))
+
+    which is the forecast of the cell alone. The channels of one unit are joint in the model (base * (1 - exp(-sum)));
+    the search treats them as independent (the difference is second order, under 1% in the parity check), and the
+    finalists are rescored with the exact forecast_daily_rows."""
+
+    cell_pos: int
+    segment: str
+    geo: str
+    channel: str
+    base_w: np.ndarray            # [W] baseline turnover of the unit over the campaign horizon
+    beta: np.ndarray              # [n] (R_orders + R_check) * conv of the cell's model channel
+    a_per_rub: np.ndarray         # [n, W] adstocked normalized spend per rub of cell budget, divided by lam
+    _draw_cache: dict[float, np.ndarray] = field(default_factory=dict, repr=False)
+
+    def response_draws(self, budget_rub: float) -> np.ndarray:
+        budget = max(float(budget_rub), 0.0)
+        key = round(budget, 6)
+        hit = self._draw_cache.get(key)
+        if hit is not None:
+            return hit
+        sat = -np.expm1(-budget * self.a_per_rub)
+        out = (self.base_w[None, :] * -np.expm1(-self.beta[:, None] * sat)).sum(axis=1)
+        self._draw_cache[key] = out
+        return out
 
 
 @dataclass
@@ -236,34 +279,169 @@ class WeeklyJointEngine:
         return base, years, (years > 0)
 
     # ------------------------------------------------------------------ support
-    def _support_check(self, segment: str, geo: str, channel: str, weekly: np.ndarray) -> dict[str, Any]:
-        r = self._support_idx.get((segment, geo, channel))
-        future = float(np.max(weekly) / 7.0) if len(weekly) else 0.0
+    def _support_limits(self, segment: str, geo: str, channel: str) -> dict[str, float] | None:
+        """Daily-equivalent spend bounds of a cell (weekly history / 7) and the platform's robust upper boundary
+        (forecast_engine._robust_support_upper on active days = 7 x active weeks)."""
+        r = self._support_idx.get((segment, geo, self.aliases.get(channel, channel)))
         if r is None:
+            return None
+        nonneg = lambda v: float(v) if np.isfinite(float(v)) and float(v) > 0 else 0.0
+        p95 = nonneg(r.daily_spend_p95_rub)
+        p99 = max(nonneg(r.daily_spend_p99_rub), p95)
+        mx = max(nonneg(r.daily_spend_max_rub), p99)
+        days = int(nonneg(r.active_days))
+        return dict(p95=p95, p99=p99, mx=mx, upper=_robust_support_upper(p95, p99, mx, days), active_days=days)
+
+    def _support_check(self, segment: str, geo: str, channel: str, weekly: np.ndarray) -> dict[str, Any]:
+        """ForecastEngine._support_assessment on weekly spend: the plan's largest week / 7 against the bounds."""
+        lim = self._support_limits(segment, geo, channel)
+        future = float(np.max(weekly) / 7.0) if len(weekly) else 0.0
+        if lim is None:
             return dict(level=SUPPORT_LEVEL_OUTSIDE if future > 0 else SUPPORT_LEVEL_WITHIN,
                         flags='NO_HISTORICAL_SUPPORT_ROW', p95=0.0, p99=0.0, mx=0.0, upper=0.0, future=future)
-        p95, p99, mx = float(r.daily_spend_p95_rub), float(r.daily_spend_p99_rub), float(r.daily_spend_max_rub)
-        p99, mx = max(p99, p95), max(mx, p99, p95)
-        upper = mx * 1.25 if int(r.active_weeks) >= 4 else mx
+        p95, p99, upper = lim['p95'], lim['p99'], lim['upper']
+        tol = lambda v: max(SUPPORT_ABS_TOL_RUB, abs(v) * SUPPORT_REL_TOL)
         flags = []
-        if int(r.active_weeks) < 2:
-            flags.append('SPARSE_HISTORICAL_ACTIVE_WEEKS_LT_2')
+        if lim['active_days'] < 10:
+            flags.append('SPARSE_HISTORICAL_ACTIVE_DAYS_LT_10')
         if p95 <= 0 and future > 0:
             flags.append('NO_POSITIVE_HISTORICAL_SPEND_FOR_CELL')
             level = SUPPORT_LEVEL_OUTSIDE
-        elif future <= p95 * 1.0001 + 1.0:
+        elif future <= p95 + tol(p95):
             level = SUPPORT_LEVEL_WITHIN
-        elif future <= p99 * 1.0001 + 1.0:
+        elif future <= p99 + tol(p99):
             level = SUPPORT_LEVEL_ELEVATED
             flags.append('FUTURE_DAILY_SPEND_P95_TO_P99')
-        elif future <= upper * 1.0001 + 1.0:
+        elif future <= upper + tol(upper):
             level = SUPPORT_LEVEL_STRONG
             flags.append('FUTURE_DAILY_SPEND_P99_TO_ROBUST_UPPER')
         else:
             level = SUPPORT_LEVEL_OUTSIDE
             flags.append('FUTURE_DAILY_SPEND_GT_ROBUST_HIST_UPPER')
-        return dict(level=level, flags=';'.join(flags) if flags else 'OK', p95=p95, p99=p99, mx=mx, upper=upper,
-                    future=future)
+        return dict(level=level, flags=';'.join(flags) if flags else 'OK', p95=p95, p99=p99, mx=lim['mx'],
+                    upper=upper, future=future)
+
+    # ------------------------------------------------------------------ optimizer interface
+    def _source_cell_rows(self, plan: pd.DataFrame, cell: pd.Series) -> pd.DataFrame:
+        """Rows of one campaign x segment x geo x channel cell in a flighting (as ForecastEngine._source_cell_rows)."""
+        cols = ['campaign_name', 'segment', 'geo', 'channel']
+        cache = self.__dict__.setdefault('_src_cache', {})
+        if cache.get('plan') is not plan:
+            cache.clear()
+            cache.update(plan=plan, index=plan.groupby(cols, sort=False, observed=True).indices)
+        pos = cache['index'].get(tuple(cell[c] for c in cols))
+        return plan.iloc[pos] if pos is not None else plan.iloc[:0]
+
+    def _metadata_rows(self, name: str, columns: tuple[str, ...], values: tuple[str, ...]) -> pd.DataFrame:
+        """Rows of a package table by key (as ForecastEngine._metadata_rows); support_bounds is the one the
+        optimizer reads."""
+        frame = getattr(self, name)
+        key = tuple(values)
+        m = np.ones(len(frame), bool)
+        for c, v in zip(columns, key):
+            m &= frame[c].astype(str).to_numpy() == str(v)
+        return frame[m]
+
+    def support_cap_rub(self, cell: pd.Series, source_plan: pd.DataFrame, *, limit: str = 'p95') -> float:
+        """Largest total budget of a cell whose peak week stays within the support limit (weekly analogue of
+        forecast_engine._support_cap_rub_for_cell: the support check compares the plan's largest week / 7)."""
+        lim = self._support_limits(str(cell['segment']), str(cell['geo']), str(cell['channel']))
+        if lim is None:
+            return 0.0
+        key = {'p95': 'p95', 'p99': 'p99', 'robust_upper': 'upper'}
+        if limit not in key:
+            raise ValueError(f'Unknown support limit: {limit}')
+        weekly_limit = 7.0 * lim[key[limit]]
+        if weekly_limit <= 0:
+            return 0.0
+        base = self._source_cell_rows(source_plan, cell)
+        if base.empty:
+            return weekly_limit
+        by_week = base.groupby(_monday(pd.Series(pd.to_datetime(base['date']).to_numpy())).to_numpy()).budget_rub.sum()
+        total = float(by_week.sum())
+        if total <= 0:
+            return weekly_limit * max(len(by_week), 1)
+        return weekly_limit / max(float(by_week.max()) / total, 1e-12)
+
+    def serving_inventory(self, *, validate: bool = False) -> dict[str, Any]:
+        """Serving inventory of the package: one joint model serving the four segments (the daily packages have
+        12 research fits and 4 serving ones; serving_semantics.validate_serving_model_inventory checks that)."""
+        from .serving_semantics import SERVING_SEGMENTS_N
+        segs = [str(s) for s in self.segments]
+        inv = dict(research_models_in_package_n=1, active_serving_models_n=len(segs), serving_segments=sorted(segs),
+                   duplicate_serving_segments=sorted({s for s in segs if segs.count(s) > 1}),
+                   missing_serving_segment_labels_n=sum(not s for s in segs), model_time_step='week',
+                   model_package_type=self.package_type)
+        if validate and (len(set(segs)) != SERVING_SEGMENTS_N or inv['duplicate_serving_segments']
+                         or inv['missing_serving_segment_labels_n']):
+            raise WeeklyPackageError(f'Weekly package does not serve the {SERVING_SEGMENTS_N} segments: {inv}')
+        return inv
+
+    def optimizer_plan(self, plan: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+        """The flighting the optimizer works on.
+
+        * Directions stay apart: a campaign with rows in several segments is optimized as one campaign per segment
+          ("<campaign> | <segment>"), so no money moves between store and delivery directions or between networks.
+        * Plan channels the model merged go to the model channel (Indoor -> OOH_Total): the model has one response
+          for both, so the optimizer cannot split money between them."""
+        out = plan.copy()
+        merged = {a: t for a, t in self.aliases.items() if (out['channel'] == a).any()}
+        if merged:
+            out['channel'] = out['channel'].map(lambda c: self.aliases.get(c, c))
+        seg_n = out.groupby('campaign_name')['segment'].nunique()
+        split = sorted(str(c) for c in seg_n[seg_n > 1].index)
+        if split:
+            many = out['campaign_name'].isin(split)
+            out.loc[many, 'campaign_name'] = out.loc[many, 'campaign_name'].astype(str) + ' | ' + out.loc[many, 'segment'].astype(str)
+        keys = [c for c in out.columns if c not in ('budget_rub',)]
+        out = out.groupby(keys, as_index=False, sort=False, dropna=False)['budget_rub'].sum()
+        notes = dict(directions_separate=True, campaigns_split_by_segment=split, channel_aliases_merged=merged,
+                     budget_rub_in=float(plan['budget_rub'].sum()), budget_rub_out=float(out['budget_rub'].sum()))
+        if abs(notes['budget_rub_in'] - notes['budget_rub_out']) > max(1.0, 1e-9 * abs(notes['budget_rub_in'])):
+            raise WeeklyPackageError('optimizer flighting does not keep the plan budget')
+        return out, notes
+
+    def turnover_response_kernels(self, plan: pd.DataFrame, cells: pd.DataFrame, campaign_name: str, *,
+                                  n_samples: int, **_: Any) -> list[WeeklyCellKernel]:
+        """Search kernels of the campaign's cells (cells: segment, geo, channel rows of the campaign, in order)."""
+        cells = cells.reset_index(drop=True)
+        camp = plan[plan['campaign_name'] == campaign_name].copy()
+        if camp.empty:
+            raise CandidateFeasibilityError(f'No source flighting rows for {campaign_name}')
+        camp['week_start'] = _monday(pd.Series(pd.to_datetime(camp['date']).to_numpy())).to_numpy()
+        weeks = pd.date_range(camp.week_start.min(), camp.week_start.max() + pd.Timedelta(weeks=self.L - 1), freq='7D')
+        widx = {w: i for i, w in enumerate(weeks)}
+        idx = self.draw_index(n_samples)
+        kernels: list[WeeklyCellKernel] = []
+        unit_cache: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+        for pos, cell in cells.iterrows():
+            segment, geo, ch = str(cell['segment']), str(cell['geo']), str(cell['channel'])
+            a = self.key.get((segment, geo))
+            mch = self.aliases.get(ch, ch)
+            if a is None or mch not in self.ch_pos:
+                raise CandidateFeasibilityError(f'Optimizer cell is not in the weekly model: {segment}/{geo}/{ch}')
+            j = self.ch_pos[mch]
+            src = camp[(camp.segment == segment) & (camp.geo == geo) & (camp.channel == ch)]
+            prof = np.zeros(len(weeks))
+            for w, v in src.groupby('week_start').budget_rub.sum().items():
+                prof[widx[pd.Timestamp(w)]] += float(v)
+            total = float(prof.sum())
+            if total <= 0:
+                raise CandidateFeasibilityError(f'Optimizer needs a positive source profile for {segment}/{geo}/{ch}')
+            if a not in unit_cache:
+                beta, lam = self.beta_total(idx, np.array([a]))
+                base, _, _ = self.baseline(np.array([a]), weeks)
+                unit_cache[a] = (beta[:, 0, :], lam, base[0])
+            beta, lam, base = unit_cache[a]
+            u = self.units.iloc[a]
+            m_ref = float(self.m_ref_sc[int(u.seg_i), j])
+            if m_ref <= 0 or self.mask_sc[int(u.seg_i), j] == 0:
+                raise CandidateFeasibilityError(f'Channel {ch} has no effect in segment {segment} of the weekly model')
+            shape = prof / total / (float(u.pop_k) * 1000.0 * m_ref)                 # normalized spend per rub
+            x = adstock_np(shape, self.draws['alpha'][idx][:, j], self.L)              # [n, W]
+            kernels.append(WeeklyCellKernel(cell_pos=int(pos), segment=segment, geo=geo, channel=ch, base_w=base,
+                                            beta=beta[:, j], a_per_rub=x / lam[:, j][:, None]))
+        return kernels
 
     # ------------------------------------------------------------------ platform entry point
     def forecast_daily_rows(self, daily_rows: list[dict[str, Any]], *, n_samples: int = 300, seed: int = 42,

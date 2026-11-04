@@ -37,11 +37,17 @@ import numpy as np
 import pandas as pd
 
 PACKAGE_TYPE = 'weekly_joint_v1'
-PACKAGE_SCHEMA_VERSION = '0.3.0'
+PACKAGE_SCHEMA_VERSION = '0.4.0'
 SERVING_TARGET = 'turnover_per_user'          # the platform serving target id; the effect is total extra turnover
 ROAS_LEVEL_LABEL_RU = 'уровень ROAS по отрасли'
 ROAS_LEVEL_FLAG = 'ROAS_LEVEL_INDUSTRY_ANCHOR'
 OOT_FLAG = 'OOT_NOT_SEALED_Q3_PENDING'
+# The pre-registered out-of-time check (train to 28.12.2025 -> Q1 2026, to 29.03.2026 -> Q2 2026) was not passed:
+# total turnover within 1-2% on both cuts, but one segment off by about 10% on each (3 of 4 criteria).
+OOT_PREREG_FLAG = 'OOT_PREREG_NOT_PASSED'
+# National TV is bought for the whole country and the data cannot time it: the optimizer keeps its money as planned.
+NATIONAL_TV_CHANNEL = 'Нац_ТВ'
+NATIONAL_TV_FLAG = 'NATIONAL_TV_FIXED_AT_PLAN'
 PACKAGE_FILES = [
     'run_config.json', 'capability_matrix.csv', 'gate_results.csv', 'risk_registry.csv', 'posterior_index.json',
     'historical_support_bounds.csv', 'fit_design_metadata.json', 'weekly_units.csv', 'weekly_m_ref.csv',
@@ -214,18 +220,26 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
                  'allowed_use', 'forecast_policy', 'optimizer_policy', 'objective_role', 'gate_reason_codes',
                  'marketer_message']
     message = ('Прогноз по недельной модели «%s»: отдача на уровне отраслевого ориентира, распределение по сетям, '
-               'городам и неделям из данных; закрытая проверка на 3 квартале ещё впереди.' % model_name)
+               'городам и неделям из данных. Проверка на отложенных кварталах формально не пройдена: общий оборот '
+               'точен до 1-2%%, но по одному сегменту расхождение около 10%%. Закрытая проверка на 3 квартале впереди.'
+               % model_name)
+    message_natl = message + ' Национальное ТВ покупается на всю страну: оптимизатор оставляет его бюджет как в плане.'
     cap_rows, gate_rows, risk_rows = [], [], []
     for r in m_ref.itertuples(index=False):
         if not r.mask or r.channel == wj.NATIONAL_TV_CROSS:
             continue
         geos_n = int(((units.segment == r.segment)).sum())
         act = spend[(spend.channel == r.channel) & spend.a.isin(units.a[units.segment == r.segment])]
-        reasons = f'{ROAS_LEVEL_FLAG}|{OOT_FLAG}'
+        reasons = f'{ROAS_LEVEL_FLAG}|{OOT_PREREG_FLAG}|{OOT_FLAG}'
+        natl = r.channel == NATIONAL_TV_CHANNEL
+        opt_use = 'fixed_at_plan' if natl else 'optimize'
+        if natl:
+            reasons += f'|{NATIONAL_TV_FLAG}'
+        msg = message_natl if natl else message
         gate_rows.append(dict(segment=r.segment, target=SERVING_TARGET, channel=r.channel, fit_key=fit_key(r.segment),
                               gate_policy_version=PACKAGE_TYPE, fit_allowed_use='primary', allowed_use='primary',
-                              forecast_policy='allowed', optimizer_policy='optimize',
-                              objective_role='primary_objective', gate_reason_codes=reasons, marketer_message=message))
+                              forecast_policy='allowed', optimizer_policy=opt_use,
+                              objective_role='primary_objective', gate_reason_codes=reasons, marketer_message=msg))
         cap_rows.append(dict(segment=r.segment, target=SERVING_TARGET, channel=r.channel, fit_key=fit_key(r.segment),
                              configured=True, posterior_status='present', posterior_file='weekly_media_draws.npz',
                              diagnostics_status='ok', rhat_max=(card.get('max_r_hat_roas_params') or {}).get('lam', ''),
@@ -236,8 +250,8 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
                              pct_nonzero_rows=round(100.0 * len(act) / max(geos_n * len(d.weeks), 1), 3),
                              fixed_saturation_shape=False, gate_reason_codes=reasons, risk_level='medium',
                              allowed_use='primary', allowed_use_reason=ROAS_LEVEL_FLAG, analysis_included=True,
-                             forecast_use='allowed', optimizer_use='optimize', objective_role='primary_objective',
-                             marketer_message=message))
+                             forecast_use='allowed', optimizer_use=opt_use, objective_role='primary_objective',
+                             marketer_message=msg))
         risk_rows.append(dict(scope='channel', segment=r.segment, target=SERVING_TARGET, channel=r.channel,
                               fit_key=fit_key(r.segment), risk_type='roas_level_from_industry_anchor',
                               risk_level='medium', reason=ROAS_LEVEL_LABEL_RU, affects_forecast=True,
@@ -274,7 +288,12 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
     manifest = dict(
         package_type=PACKAGE_TYPE, package_schema_version=PACKAGE_SCHEMA_VERSION, package_stage='posterior_ready',
         activation_status='preprod_restricted',
-        production_blockers=[ROAS_LEVEL_FLAG, OOT_FLAG],
+        production_blockers=[ROAS_LEVEL_FLAG, OOT_PREREG_FLAG, OOT_FLAG],
+        oot_status=dict(flag=OOT_PREREG_FLAG, cuts=['train_to_2025-12-28_test_2026Q1', 'train_to_2026-03-29_test_2026Q2'],
+                        total_turnover_abs_error='1-2%', worst_segment_abs_error='about 10%', criteria_passed='3 of 4',
+                        sealed_q3='pending'),
+        optimizer_rules=dict(directions_separate=True, channel_aliases_merged=True,
+                             fixed_at_plan_channels=[NATIONAL_TV_CHANNEL]),
         model_name=model_name, model_run_id=model_run_id or f'{model_name}_{fit_dir.name}_{profile}',
         roas_level_label_ru=ROAS_LEVEL_LABEL_RU,
         mode='weekly_joint', run_label=fit_dir.name, run_variant=profile,

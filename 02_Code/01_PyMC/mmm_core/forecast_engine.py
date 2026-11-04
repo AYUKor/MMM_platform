@@ -327,6 +327,17 @@ def _runtime_lineage(model_run_dir: str | Path, *, purpose: str) -> dict[str, An
         )
     else:
         raise ValueError(f"Unsupported lineage purpose: {purpose}")
+    manifest = read_json(run_dir / "model_manifest.json") or {}
+    if is_weekly_manifest(manifest):
+        # weekly joint package (weekly_package.py): its own file list, and the weekly engine code
+        code_files.extend(
+            [Path(__file__).with_name("weekly_engine.py").resolve(), Path(__file__).with_name("weekly_package.py").resolve()]
+        )
+        package_files = ["model_manifest.json", *sorted((manifest.get("files") or {}).keys())]
+        return {
+            "code_sha256": {path.name: sha256_file(path) for path in code_files},
+            "model_artifact_sha256": {name: sha256_file(run_dir / name) for name in package_files},
+        }
     package_files = [
         "model_manifest.json",
         "capability_matrix.csv",
@@ -1763,7 +1774,6 @@ def run_forecast_from_flighting(
         card["model_name"] = engine.package.manifest.get("model_name")
         card["roas_level_label"] = engine.package.manifest.get("roas_level_label_ru")
         card["denominator_analog_year"] = "same_week_52_weeks_earlier"
-        card["runtime_lineage"]["model_artifact_sha256"] = dict(engine.package.manifest.get("files") or {})
     write_json(Path(output_dir) / f"{_safe_id(run_id)}_forecast_run_card.json", card)
     return card
 
@@ -2020,6 +2030,9 @@ def _support_cap_rub_for_cell(
     limit: str = "p95",
 ) -> float:
     """Return a total-budget cap consistent with the cell's daily profile."""
+    if hasattr(engine, "support_cap_rub"):
+        # weekly joint package: the cap of the cell's peak week (WeeklyJointEngine.support_cap_rub)
+        return float(engine.support_cap_rub(cell, source_plan, limit=limit))
     rows = engine._metadata_rows(
         "support_bounds", ("segment", "channel", "geo_label", "target"),
         (cell["segment"], cell["channel"], cell["geo"], "turnover_per_user"),
@@ -2645,6 +2658,9 @@ def _build_turnover_response_kernels(
     analog_missing_geo_policy: str,
 ) -> list[_CellResponseKernel]:
     """Compile the exact serving equation into reusable cell-level response kernels."""
+    if hasattr(engine, "turnover_response_kernels"):
+        # weekly joint package: WeeklyJointEngine.turnover_response_kernels (same response_draws interface)
+        return engine.turnover_response_kernels(plan, cells, campaign_name, n_samples=n_samples, seed=seed)
     cells = cells.reset_index(drop=True)
     fit_lookup = {
         (str(meta.get("segment")), str(meta.get("target"))): (fit_key, meta)
@@ -3702,17 +3718,41 @@ def run_optimizer_from_flighting(
         ((workflow_config.get("model_ref") or {}).get("verification_mode"))
         or "full_lineage"
     )
-    engine = ForecastEngine.from_run_dir(
+    engine = load_forecast_engine(
         model_run_dir,
         auto_export=verification_mode == "full_lineage",
         validate_package_lineage=verification_mode == "full_lineage",
     )
-    model_inventory = serving_model_inventory(engine.metadata)
-    if str(decision_policy.get("schema_version") or "").startswith("3."):
-        model_inventory = validate_serving_model_inventory(engine.metadata)
+    weekly = getattr(engine, "package_type", "") == WEEKLY_PACKAGE_TYPE
+    if weekly:
+        model_inventory = engine.serving_inventory(
+            validate=str(decision_policy.get("schema_version") or "").startswith("3.")
+        )
+    else:
+        model_inventory = serving_model_inventory(engine.metadata)
+        if str(decision_policy.get("schema_version") or "").startswith("3."):
+            model_inventory = validate_serving_model_inventory(engine.metadata)
     plan = pd.DataFrame(read_daily_flighting(flighting_path))
     plan["date"] = pd.to_datetime(plan["date"]).dt.date
     output_dir = ensure_dir(output_dir)
+    optimizer_flighting_path = resolve_path(flighting_path)
+    weekly_plan_notes: dict[str, Any] = {}
+    if weekly:
+        # The uploaded total is checked on the uploaded campaigns before they are split by direction.
+        configured_total = budget_cfg.get("total_budget_rub")
+        if configured_total is not None:
+            if plan["campaign_name"].nunique() != 1:
+                raise ValueError("budget.total_budget_rub is ambiguous for a multi-campaign input; use campaign-level budgets")
+            uploaded_total = float(plan["budget_rub"].sum())
+            tolerance = max(BUDGET_RECONCILIATION_ABS_TOL_RUB, abs(uploaded_total) * BUDGET_RECONCILIATION_REL_TOL)
+            if abs(float(configured_total) - uploaded_total) > tolerance:
+                raise ValueError(
+                    f"Configured optimizer budget {float(configured_total):.2f} does not match uploaded campaign budget {uploaded_total:.2f}"
+                )
+            budget_cfg = {key: value for key, value in budget_cfg.items() if key != "total_budget_rub"}
+        plan, weekly_plan_notes = engine.optimizer_plan(plan)
+        optimizer_flighting_path = output_dir / f"{_safe_id(run_id)}_optimizer_flighting_daily.csv"
+        plan.assign(date=pd.to_datetime(plan["date"]).dt.strftime("%Y-%m-%d")).to_csv(optimizer_flighting_path, index=False)
     candidate_summaries: list[dict[str, Any]] = []
     finalist_rows: list[dict[str, Any]] = []
     allocation_rows: list[dict[str, Any]] = []
@@ -4359,6 +4399,8 @@ def run_optimizer_from_flighting(
         "model_activation_status": engine.package.activation_status,
         "model_production_blockers": list(engine.package.manifest.get("production_blockers") or []),
         "runtime_lineage": _runtime_lineage(model_run_dir, purpose="optimizer"),
+        "optimizer_flighting_path": str(optimizer_flighting_path),
+        "optimizer_flighting_sha256": sha256_file(optimizer_flighting_path),
         "outputs": {
             "candidate_scores_csv": str(candidate_path),
             "finalist_summary_csv": str(finalist_path),
@@ -4376,5 +4418,12 @@ def run_optimizer_from_flighting(
             "xlsx": sha256_file(xlsx_path),
         },
     }
+    if weekly:
+        card["model_package_type"] = WEEKLY_PACKAGE_TYPE
+        card["model_name"] = engine.package.manifest.get("model_name")
+        card["roas_level_label"] = engine.package.manifest.get("roas_level_label_ru")
+        card["denominator_analog_year"] = "same_week_52_weeks_earlier"
+        card["weekly_optimizer_plan"] = weekly_plan_notes
+        card["weekly_search_kernel"] = "cell_alone_exact_weekly_response; finalists rescored jointly"
     write_json(output_dir / f"{_safe_id(run_id)}_optimizer_run_card.json", card)
     return card

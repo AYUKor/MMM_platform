@@ -12,11 +12,17 @@
                   for ТС5/Оффлайн, and every effect row belongs to the segment of its own spend;
                4. the package files are unchanged after the run (lineage check);
                5. a plan's Indoor rows go into OOH_Total, as the model merged them (same total when half of the OOH
-                  money is labelled Indoor).
+                  money is labelled Indoor);
+               6. the platform optimizer (run_optimizer_from_flighting + marketer report) on a test plan: the 07 plan
+                  at 40% of its money, a copy for ТС5/Оффлайн and 30% of OOH in three cities labelled Indoor.
+                  The search kernel of a cell equals the forecast of that cell alone; every candidate keeps the
+                  money of its own direction; Indoor is optimized as OOH_Total; national TV is fixed at plan;
+                  the adaptive search runs for each direction.
              Writes check_card.json, the platform forecast outputs and a short CSV per check into --out.
 
 Run: python -I 13_weekly_joint_package.py build --fit-dir FIT --profile production --panel P --national N --out PKG
-     python -I 13_weekly_joint_package.py check --package PKG --plan PLAN.csv --plan-07-dir DIR07 --out OUT
+     python -I 13_weekly_joint_package.py check --package PKG --plan PLAN.csv --plan-07-dir DIR07 --out OUT \
+            [--optimizer-dir DIR_WITH_optimizer_decision_policy_v3.yaml_AND_marketer_report.py]
 """
 from __future__ import annotations
 
@@ -30,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -
 import numpy as np
 import pandas as pd
 
-CODE_VERSION = 'weekly_joint_package_v1_20261105'
+CODE_VERSION = 'weekly_joint_package_v2_20261105'
 
 
 def build(a: argparse.Namespace) -> None:
@@ -43,11 +49,10 @@ def build(a: argparse.Namespace) -> None:
                      ensure_ascii=False, indent=1))
 
 
-def _platform_forecast(pkg: Path, plan_csv: Path, out: Path, run_id: str, n_samples: int) -> dict:
+def _prepare(pkg: Path, plan_csv: Path, work: Path, run_id: str, n_samples: int, purpose: str):
+    """The platform's plan preparation (as ac_forecast.py / budget_optimizer.py): daily flighting of the plan."""
     from mmm_core.campaign_plan import prepare_campaign_from_config
-    from mmm_core.forecast_engine import run_forecast_from_flighting
     from mmm_core.model_package_reader import ModelPackage
-    work = out / run_id
     work.mkdir(parents=True, exist_ok=False)
     config = {'run_id': run_id,
               'paths': {'campaign_brief': str(plan_csv), 'validated_output_dir': str(work / 'validated'),
@@ -56,9 +61,15 @@ def _platform_forecast(pkg: Path, plan_csv: Path, out: Path, run_id: str, n_samp
               'forecast': {'posterior_samples': n_samples, 'random_seed': 42}}
     cfg_path = work / 'config.json'
     cfg_path.write_text(json.dumps(config, ensure_ascii=False, indent=1), encoding='utf-8')
-    package = ModelPackage.from_run_dir(pkg, require_posterior_ready=True, validate_hash=True)
-    package.check_card(purpose='forecast')
-    prep = prepare_campaign_from_config(config, cfg_path, package, work, purpose='forecast')
+    package = ModelPackage.from_run_dir(pkg, require_posterior_ready=purpose == 'forecast', validate_hash=True)
+    package.check_card(purpose=purpose, optimizer_policy='balanced')
+    return prepare_campaign_from_config(config, cfg_path, package, work, purpose=purpose)
+
+
+def _platform_forecast(pkg: Path, plan_csv: Path, out: Path, run_id: str, n_samples: int) -> dict:
+    from mmm_core.forecast_engine import run_forecast_from_flighting
+    work = out / run_id
+    prep = _prepare(pkg, plan_csv, work, run_id, n_samples, 'forecast')
     card = run_forecast_from_flighting(pkg, prep.flighting_path, work, run_id, n_samples=n_samples, seed=42)
     return dict(card=card, flighting=prep.flighting_path, summary=pd.read_csv(card['outputs']['summary_csv']),
                 detail=pd.read_csv(card['outputs']['detail_csv']))
@@ -149,12 +160,107 @@ def check(a: argparse.Namespace) -> None:
                                            passed=bool(abs(t3 / t1 - 1) < 1e-9 and len(ind) > 0))
         print('check 5 channel alias:', res['check5_channel_alias'], flush=True)
 
+    # 6. the platform optimizer
+    res['check6_optimizer'] = _optimizer_check(eng, pkg, plan, out, a)
+    print('check 6 optimizer:', json.dumps(res['check6_optimizer'], ensure_ascii=False, default=float), flush=True)
+
     # 4. lineage
     after = {n: sha256_file(pkg / n) for n in before}
     res['check4_package_unchanged'] = dict(passed=before == after)
     res['passed_all'] = all(v.get('passed') for kk, v in res.items() if kk.startswith('check'))
     (out / 'check_card.json').write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding='utf-8')
     print('ALL PASSED' if res['passed_all'] else 'SOME CHECKS FAILED', flush=True)
+
+
+def _optimizer_check(eng, pkg: Path, plan: pd.DataFrame, out: Path, a: argparse.Namespace) -> dict:
+    from mmm_core.forecast_engine import _campaign_cell_rows, run_optimizer_from_flighting
+    from mmm_core.io import load_config
+    opt_dir = Path(a.optimizer_dir).resolve()
+    sys.path.insert(1, str(opt_dir))
+    from marketer_report import ReportPaths, build_marketer_report
+
+    # test plan: 40% of the 07 money; the same rows for ТС5/Оффлайн where the city is in the model; 30% of OOH in
+    # three cities labelled Indoor
+    base = plan.assign(budget_rub=(plan.budget_rub * a.optimizer_scale).round())
+    off = {g for s_, g in eng.key if s_ == 'ТС5/Оффлайн'}
+    copy = base[(base.segment == 'ТС5/Онлайн') & base.geo.isin(off)].assign(segment='ТС5/Оффлайн')
+    alias, target = next(iter(eng.aliases.items()))
+    m = (base.channel == target) & base.geo.isin(sorted(base.geo.unique())[:3])
+    ind = base[m].assign(channel=alias, budget_rub=(base[m].budget_rub * 0.3).round())
+    base.loc[m, 'budget_rub'] = base.loc[m, 'budget_rub'] - ind.budget_rub.to_numpy()
+    p6 = pd.concat([base, copy, ind], ignore_index=True)
+    p6_path = out / 'plan_optimizer_test.csv'
+    p6.to_csv(p6_path, index=False)
+    work = out / 'optimizer'
+    prep = _prepare(pkg, p6_path, work, 'optimizer_test', a.draws, 'optimizer')
+    wf = dict(decision_policy=load_config(opt_dir / 'optimizer_decision_policy_v3.yaml'),
+              objective=dict(primary='maximize_incremental_turnover_p50', model_risk_policy='balanced', guardrails={}),
+              optimizer=dict(scenario_6=dict(enabled=True, default_method='adaptive_marginal_posterior',
+                                             allocation_quantum_rub=100000, beam_width=8, max_candidate_pool=12,
+                                             transfer_steps_rub=[5_000_000, 1_000_000, 250_000, 50_000],
+                                             support_limits=['p99', 'robust_upper'], final_random_seed=10042)))
+    card = run_optimizer_from_flighting(pkg, prep.flighting_path, work, 'optimizer_test', search_candidates=2048,
+                                        search_samples=128, final_samples=600, seed=42, finalists=6, workflow_config=wf)
+    rep = build_marketer_report(ReportPaths(model_run_dir=pkg, flighting_path=Path(card['optimizer_flighting_path']),
+                                            optimizer_output_dir=work, output_xlsx=work / 'marketer_report.xlsx',
+                                            run_id='optimizer_test'))
+    fl = pd.read_csv(card['optimizer_flighting_path'])
+    fl['date'] = pd.to_datetime(fl['date']).dt.date
+    al = pd.read_csv(card['outputs']['recommended_allocations_csv'])
+    cs = pd.read_csv(card['outputs']['candidate_scores_csv'])
+    fs = pd.read_csv(card['outputs']['finalist_summary_csv'])
+    seg_of = fl.groupby('campaign_name').segment.agg(lambda x: sorted(set(x)))
+    money = fl.groupby('campaign_name').budget_rub.sum()
+
+    # the kernel of a cell == the forecast of the cell alone; all kernels together vs the joint forecast
+    camp = str(seg_of.index[0])
+    cells = _campaign_cell_rows(fl, camp)
+    kern = eng.turnover_response_kernels(fl, cells, camp, n_samples=128)
+    worst = 0.0
+    for k, (_, c) in zip(kern, cells.iterrows()):
+        sub = fl[(fl.campaign_name == camp) & (fl.segment == c.segment) & (fl.geo == c.geo) & (fl.channel == c.channel)]
+        _, _, dr = eng.forecast_daily_rows(sub.to_dict('records'), n_samples=128, return_campaign_draws=True)
+        e = dr.groupby('draw_index').total_effect.sum().to_numpy()
+        worst = max(worst, float(np.max(np.abs(k.response_draws(c.budget_rub) / e - 1))))
+    _, _, dr = eng.forecast_daily_rows(fl[fl.campaign_name == camp].to_dict('records'), n_samples=128,
+                                      return_campaign_draws=True)
+    joint = dr.groupby('draw_index').total_effect.sum().to_numpy()
+    sep = sum(k.response_draws(b) for k, b in zip(kern, cells.budget_rub))
+    sep_rel = float(np.median(sep / joint) - 1)
+
+    # directions: one segment per candidate, its own money; Indoor inside OOH_Total; national TV fixed
+    per = al.groupby(['source_campaign_name', 'candidate_name']).agg(segs=('segment', lambda x: sorted(set(x))),
+                                                                     money=('budget_rub', 'sum'),
+                                                                     status=('scenario_feasibility_status', 'first'))
+    wrong_seg = [i for i, r in per.iterrows() if r.segs != seg_of[i[0]]]
+    full = per[per.status == 'feasible_full']
+    money_gap = float((full.money - full.index.get_level_values(0).map(money)).abs().max()) if len(full) else 0.0
+    natl = [r for r in eng.package.capability_rows if r['channel'] == 'Нац_ТВ']
+    s6 = {c: int(((cs.campaign_name == c) & cs.candidate_name.str.contains('__scenario6_adaptive_marginal')
+                  & (cs.precheck_status == 'scored')).sum()) for c in money.index}
+    # what the optimizer recommends per direction (rank 1 of the reliable order) vs the plan
+    tot = fs[(fs.channel == '__TOTAL__') & (fs.segment == '__ALL__')]
+    rec = {}
+    for c in money.index:
+        t = tot[tot.source_campaign_name == c]
+        plan_p50 = float(t[t.candidate_name.str.endswith('__scenario1_current_plan')].total_effect_p50.iloc[0])
+        best = t.sort_values('optimizer_rank').iloc[0]
+        a_best = al[al.candidate_name == best.candidate_name].groupby('channel').budget_rub.sum()
+        a_plan = fl[fl.campaign_name == c].groupby('channel').budget_rub.sum()
+        rec[c] = dict(best=str(best.candidate_name).split('__', 1)[1], plan_effect_p50=plan_p50,
+                      best_effect_p50=float(best.total_effect_p50), gain=float(best.total_effect_p50 / plan_p50 - 1),
+                      plan_by_channel=a_plan.round(0).to_dict(), best_by_channel=a_best.round(0).to_dict())
+    pd.DataFrame([dict(campaign=c, **{k: v for k, v in r.items() if not isinstance(v, dict)}) for c, r in rec.items()]
+                 ).to_csv(out / 'check6_optimizer_recommendation.csv', index=False)
+    return dict(kernel_alone_max_rel_diff=worst, kernels_sum_vs_joint_median_rel=sep_rel,
+                candidates_with_foreign_segment=len(wrong_seg), full_candidates_money_gap_rub=money_gap,
+                indoor_rows_in_allocations=int((al.channel == alias).sum()),
+                national_tv_rows=len(natl), national_tv_not_fixed=sum(r['optimizer_use'] != 'fixed_at_plan' for r in natl),
+                adaptive_candidates_scored=s6, directions=card['weekly_optimizer_plan'], recommendation=rec,
+                marketer_report=str(rep['output_xlsx']),
+                passed=bool(worst < 1e-9 and abs(sep_rel) < 0.02 and not wrong_seg and money_gap < 1.0
+                            and not (al.channel == alias).any() and all(r['optimizer_use'] == 'fixed_at_plan' for r in natl)
+                            and all(v > 0 for v in s6.values()) and len(money) == 2))
 
 
 def main() -> None:
@@ -175,6 +281,9 @@ def main() -> None:
     c.add_argument('--plan-07-dir', required=True, help='07 output folder of the same model and plan (plan_forecast_by_channel.csv)')
     c.add_argument('--out', required=True)
     c.add_argument('--draws', type=int, default=400, help='as 07 (400)')
+    c.add_argument('--optimizer-dir', default=str(Path(__file__).resolve().parents[1] / '02_Budget_optimizer'),
+                   help='folder with optimizer_decision_policy_v3.yaml and marketer_report.py')
+    c.add_argument('--optimizer-scale', type=float, default=0.4, help='share of the 07 plan money in the optimizer test')
     a = ap.parse_args()
     build(a) if a.cmd == 'build' else check(a)
 
