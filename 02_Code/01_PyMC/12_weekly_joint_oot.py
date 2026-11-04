@@ -42,21 +42,22 @@ log(actual / forecast without ads) on the forecast log ad effect with unit and s
 part is 0.2-0.4% of turnover, so the turnover level cannot confirm or refute ROAS; this looks at the timing and the
 spread of the local channels). With --reuse on a v1 folder only the forecast is recomputed; v1 files stay.
 
-v3 (04.11 evening, after the OOT verdict «не прошла»: the base, not the ads, loses to the simple forecast; the model
-without the industry yardstick fails the same way): options for a base that repeats last year's season instead of
-passing the spring rise to the trend: --knot-every (weeks between trend knots, 7 in v6-v14), --harmonics (yearly
-harmonics of the segment season, 2 in v6-v14; own city waves and the resort season keep 2), --horizon-weeks (score
-only the first weeks after the cut, for a second cut at the end of December), the "+mem" forecast rule (the fitted
-week shock of the same week a year earlier is added to each forecast week), and the project's OOT rule
-(mmm_core.validation.classify_oot_metrics) per segment in the card (oot_gate). The rule and the variants were
-fixed before the new fits (OOT_V3_PREREG.md). With the defaults the fit is exactly «Заноза».
+v3 (04.11 evening). Fix of the hold rules: v2 held the raw hinges but rebuilt the orthogonalised basis with the new
+weeks' Fourier, so the Fourier piece inside the basis went on alone and the 'held' trend fell about 5% over Q2 2026
+(Mac diagnosis: spring 2026 repeated spring 2025 within 1%, and the fitted spring rise of 2025 sat in the season, not in
+the trend). Now the basis itself is held (week_terms_rule). New: the trend52 rule (yearly growth of the trend part),
+the "+mem" rule (the fitted week shock of the same week a year earlier is added to each forecast week),
+--horizon-weeks (a second cut at the end of December), the project's OOT rule per segment for the model and the
+simple forecast (oot_gate in the card), and model options --knot-every / --harmonics (defaults = «Заноза»). Rules,
+cuts and criteria are fixed in OOT_V3_PREREG.md. Per-rule files get the suffix _v3, so --reuse in a v2 folder writes
+new files only.
 
 July-September 2026 are not in the panel and are never read.
 
 Outputs (OUT): panel_fit_window.parquet, multistart_{p}.csv, posterior_all_{p}.npz, oot_fit_diag_{p}.json,
-roas_by_segment_channel_{p}.csv; per trend rule r: oot_rows_{p}_{r}.csv, oot_by_segment_{p}_{r}.csv,
-oot_by_segment_week_{p}_{r}.csv, oot_by_city_group_{p}_{r}.csv, oot_by_unit_{p}_{r}.csv; oot_card_{p}_v3.json
-(v2 runs wrote oot_card_{p}_v2.json).
+roas_by_segment_channel_{p}.csv; per trend rule r: oot_rows_{p}_{r}_v3.csv, oot_by_segment_{p}_{r}_v3.csv,
+oot_by_segment_week_{p}_{r}_v3.csv, oot_by_city_group_{p}_{r}_v3.csv, oot_by_unit_{p}_{r}_v3.csv; oot_card_{p}_v3.json
+(v2 runs wrote the same names without _v3 and oot_card_{p}_v2.json).
 
 Run: python -I 12_weekly_joint_oot.py --panel P.parquet --national N.csv --out OUT --profile fast|pilot
      [--fit-window-end 2026-03-23] [--m-ref m_ref_v3.csv] [model flags as in 05] [--reuse]
@@ -132,25 +133,39 @@ def extend_week_terms(weeks_fit: pd.DatetimeIndex, weeks_all: pd.DatetimeIndex, 
                 hinge_raw=np.maximum(0.0, t_a[:, None] - knots[None, :]), h_mean=h_mean, coef=coef, t_fit_mean=t_f.mean())
 
 
-TREND_RULES = ('continue', 'hold', 'hold4')
+TREND_RULES = ('continue', 'hold', 'hold4', 'trend52')
 
 
 def week_terms_rule(ext: dict, W_f: int, rule: str) -> dict:
-    """Week arrays for the weeks after the cut under a trend rule (v2, after the fast runs of 04.11: continuing the
-    last fitted slope for 13 weeks drove the forecast 30-50% down in delivery and split orders and check apart).
+    """Week arrays for the weeks after the cut under a trend rule.
     continue: the model's own formulas (the line, unit slopes and hinges go on with their last slope);
-    hold: the trend part (segment line, unit slopes, hinges with their linear part) stays at the last fitted week;
-    hold4: it stays at its mean over the last 4 fitted weeks (less weight on one week).
-    Season (Fourier, also inside the orthogonalised hinges), holidays, own city waves, shocks and AR(1) go on."""
+    hold: the whole trend part (segment line, unit slopes and the orthogonalised hinge basis as the model uses it)
+    stays at the last fitted week; hold4: at its mean over the last 4 fitted weeks;
+    trend52 (v3): the trend part goes on from its mean over the last 4 fitted weeks with its average slope over the
+    last 52 fitted weeks (mean of the last 4 against the mean of the 4 weeks a year earlier; fewer weeks: the first 4
+    fitted), the yearly growth that the simple forecast also uses.
+    Season (segment and resort Fourier, holidays, own city waves), shocks and AR(1) go on.
+    v3 fix (04.11 evening, Mac diagnosis): v2 held the raw hinges and rebuilt the basis with the Fourier of the new
+    weeks, so the Fourier piece taken out of the hinges by the orthogonalisation (-F @ coef) went on alone and drew a
+    false wave: the 'held' trend fell by about 5% over Q2 2026 in three segments (fitted spring 2025: hinges and that
+    piece cancel, +0.7%). Now the basis itself is held, as part_trend is."""
     if rule == 'continue':
         return ext
-    n = {'hold': 1, 'hold4': 4}[rule]
-    t_raw = ext['t_raw'].copy()
-    hinge = ext['hinge_raw'].copy()
-    t_raw[W_f:] = t_raw[W_f - n:W_f].mean()
-    hinge[W_f:] = hinge[W_f - n:W_f].mean(0)
-    G = np.column_stack([np.ones_like(t_raw), t_raw - ext['t_fit_mean'], ext['F']])
-    return dict(ext, t=t_raw - ext['t_fit_mean'], basis=hinge - ext['h_mean'] - G @ ext['coef'])
+    t, b = ext['t'].copy(), ext['basis'].copy()
+    if rule in ('hold', 'hold4'):
+        n = {'hold': 1, 'hold4': 4}[rule]
+        t[W_f:] = t[W_f - n:W_f].mean()
+        b[W_f:] = b[W_f - n:W_f].mean(0)
+    elif rule == 'trend52':
+        n, L = 4, min(52, W_f)
+        t_end, t_beg = t[W_f - n:W_f].mean(), t[W_f - L:W_f - L + n].mean()
+        b_end, b_beg = b[W_f - n:W_f].mean(0), b[W_f - L:W_f - L + n].mean(0)
+        g = (b_end - b_beg) / (t_end - t_beg)                       # per year, every basis column
+        b[W_f:] = b_end[None, :] + (ext['t'][W_f:, None] - t_end) * g[None, :]
+        # t goes on as it is: the segment line and the unit slopes keep their fitted slope
+    else:
+        raise ValueError(rule)
+    return dict(ext, t=t, basis=b)
 
 
 def demean2(v: np.ndarray, g1: np.ndarray, g2: np.ndarray, iters: int = 100) -> np.ndarray:
@@ -346,9 +361,16 @@ def oot_gate(fc: pd.DataFrame, T_d: np.ndarray, train: pd.DataFrame, seg_names: 
             m['simple_skill_vs_last_value'] = float(1 - np.mean(np.abs(act[c] - nv[c])) / max(np.mean(np.abs(act[c] - naive[c])), 1e-12))
             m['simple_signed_bias'] = float(np.mean(nv[c] - act[c]) / max(np.mean(np.abs(act[c])), 1e-12))
             m['model_mase_on_simple_rows'] = float(np.mean(np.abs(act[c] - point[c])) / scale)
+        # working rule (OOT_V3_PREREG.md): the simple forecast fails the weekly MASE too, so MASE is replaced by
+        # "not more than 10% worse than the simple forecast" where it exists
+        m['working_pass'] = bool(m['normalized_abs_bias'] <= 0.10 and 0.75 <= m['coverage_90'] <= 0.99
+                                 and m['crps_skill_vs_last_value'] >= -0.05
+                                 and ('simple_mase' not in m or m['model_mase_on_simple_rows'] <= 1.10 * m['simple_mase']))
         out[name] = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in m.items()}
     cls = [out[n]['class'] for n in seg_names if n in out]
     out['passed_all_segments'] = bool(len(cls) == len(seg_names) and all(c in ('primary', 'caution') for c in cls))
+    wk = [out[n]['working_pass'] for n in seg_names if n in out]
+    out['passed_all_segments_working_rule'] = bool(len(wk) == len(seg_names) and all(wk))
     return out
 
 
@@ -379,7 +401,7 @@ def main() -> None:
     ap.add_argument('--harmonics', type=int, default=wj.HARMONICS, help='yearly harmonics of the segment season (v15 option)')
     ap.add_argument('--horizon-weeks', type=int, default=0, help='forecast only this many weeks after the cut (0 = to the panel end)')
     ap.add_argument('--trend-rules', default=','.join(TREND_RULES),
-                    help='trend after the cut, any of continue,hold,hold4; "+mem" (e.g. hold4+mem) adds to each forecast '
+                    help='trend after the cut, any of continue,hold,hold4,trend52; "+mem" (e.g. hold4+mem) adds to each forecast '
                          'week the fitted week shock of the same week a year earlier (52 weeks back)')
     a = ap.parse_args()
     rf = load_05()
@@ -641,7 +663,7 @@ def main() -> None:
         T_d = np.exp(y_fc[:, 0] + y_fc[:, 1])                                          # [D, N]
         O_d = np.exp(y_fc[:, 0])
         T_nomedia = np.exp(y_fc[:, 0] + y_fc[:, 1] - media_fc[:, 0] - media_fc[:, 1])
-        tag = f'{a.profile}_{rule}'
+        tag = f'{a.profile}_{rule}_v3'
 
         rows_out = fc[['segment', 'unit_label', 'mu_key', 'city_group', 'week_start', 'turnover_total', 'orders_cnt',
                        'naive_turnover', 'naive_orders']].copy()
