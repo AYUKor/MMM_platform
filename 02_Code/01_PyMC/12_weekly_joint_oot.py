@@ -376,7 +376,13 @@ def main() -> None:
     assert checks['week_terms_max_abs_diff'] < 1e-9, checks
     aidx_all = {k: i for i, k in enumerate(d_all.ad_units.ad_key)}
     assert all(k in aidx_all for k in d.ad_units.ad_key)
-    sp_all = d_all.spend_pr[[aidx_all[k] for k in d.ad_units.ad_key]]
+    ia = np.array([aidx_all[k] for k in d.ad_units.ad_key])
+    sp_all = d_all.spend_pr[ia]
+    # the fitted weeks keep exactly the spend the fit saw; only the weeks after the cut come from the full panel
+    checks['spend_pr_fit_weeks_max_abs_diff_before_splice'] = float(np.abs(sp_all[:, :W_f] - d.spend_pr).max())
+    checks['ad_units_population_differs'] = int((np.abs(d_all.ad_units.pop_k.to_numpy()[ia]
+                                                        - d.ad_units.pop_k.to_numpy()) > 1e-9).sum())
+    sp_all = np.concatenate([d.spend_pr, sp_all[:, W_f:]], axis=1)
     mr = d.m_ref[d.ad_units.seg_i.to_numpy()]
     spend_norm_all = np.where(mr[:, None, :] > 0, sp_all / np.where(mr > 0, mr, 1.0)[:, None, :], 0.0)
     checks['spend_norm_fit_weeks_max_abs_diff'] = float(np.abs(spend_norm_all[:, :W_f] - arr['spend_norm']).max())
