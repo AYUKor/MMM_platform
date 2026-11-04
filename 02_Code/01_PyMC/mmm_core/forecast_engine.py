@@ -2183,7 +2183,12 @@ def _candidate_policy_bounds(
             engine,
             limit=support_limit,
         )
-        if policy == "optimize":
+        if hasattr(engine, "optimizer_cell_bounds"):
+            # weekly joint package: per-cell corridor around the plan budget (WeeklyJointEngine.optimizer_cell_bounds)
+            lo, hi = engine.optimizer_cell_bounds(
+                cell, current, policy, support_cap, allow_fixed_contraction=allow_fixed_contraction
+            )
+        elif policy == "optimize":
             lo, hi = 0.0, support_cap
         elif policy == "no_increase":
             lo, hi = 0.0, min(current, support_cap)
@@ -3399,6 +3404,12 @@ def _candidate_policy_violations(
             violations.append(f"NO_INCREASE_EXCEEDED:{cell['channel']}:{cell['geo']}")
         elif policy not in {"optimize", "no_increase", "fixed_at_plan"} and value > tolerance:
             violations.append(f"BLOCKED_CELL_FUNDED:{cell['channel']}:{cell['geo']}")
+        if (
+            policy == "fixed_at_plan"
+            and getattr(engine, "fixed_cells_exempt_from_support", False)
+            and abs(value - current) <= tolerance
+        ):
+            continue
         hard_cap = _support_cap_rub_for_cell(cell, source_plan, engine, limit="robust_upper")
         if value > hard_cap + max(SUPPORT_ABS_TOL_RUB, abs(hard_cap) * SUPPORT_REL_TOL):
             violations.append(f"ROBUST_SUPPORT_UPPER_EXCEEDED:{cell['channel']}:{cell['geo']}")
@@ -3751,6 +3762,9 @@ def run_optimizer_from_flighting(
                 )
             budget_cfg = {key: value for key, value in budget_cfg.items() if key != "total_budget_rub"}
         plan, weekly_plan_notes = engine.optimizer_plan(plan)
+        weekly_plan_notes["cell_corridor"] = engine.set_optimizer_corridor(
+            (workflow_config.get("optimizer") or {}).get("weekly_cell_corridor")
+        )
         optimizer_flighting_path = output_dir / f"{_safe_id(run_id)}_optimizer_flighting_daily.csv"
         plan.assign(date=pd.to_datetime(plan["date"]).dt.strftime("%Y-%m-%d")).to_csv(optimizer_flighting_path, index=False)
     candidate_summaries: list[dict[str, Any]] = []

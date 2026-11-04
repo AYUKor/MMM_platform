@@ -37,6 +37,11 @@ from .weekly_package import (PACKAGE_TYPE, ROAS_LEVEL_LABEL_RU, SERVING_TARGET, 
                              verify_weekly_package_files)
 
 DRAW_CHUNK = 64
+# The optimizer moves a cell's money only within this corridor around its plan budget (the per-channel caps of the
+# weekly model): the ROAS level of the channels comes from the industry yardstick and the out-of-time check was not
+# passed, so the model may reshape a plan but not empty one channel into another. Override: workflow config
+# optimizer.weekly_cell_corridor or manifest optimizer_rules.cell_corridor.
+OPTIMIZER_CELL_CORRIDOR = {'max_increase_ratio': 1.5, 'min_keep_ratio': 0.5}
 
 
 def _monday(d: pd.Series) -> pd.Series:
@@ -132,6 +137,10 @@ class WeeklyJointEngine:
     support_bounds: pd.DataFrame
     capability: pd.DataFrame
     package_type: str = PACKAGE_TYPE
+    optimizer_corridor: dict[str, float] = field(default_factory=lambda: dict(OPTIMIZER_CELL_CORRIDOR))
+    # a fixed-at-plan cell (national TV) kept at the uploaded budget is the user's spend, not an optimizer move:
+    # forecast_engine._candidate_policy_violations does not count its support breach against the candidates
+    fixed_cells_exempt_from_support: bool = True
     _base_mat: np.ndarray = field(init=False, repr=False)
     _weeks: pd.DatetimeIndex = field(init=False, repr=False)
 
@@ -180,6 +189,7 @@ class WeeklyJointEngine:
         self._cap = {(r['segment'], r['target'], r['channel']): r for r in self.package.capability_rows}
         if self.media_geo != 'tier' and 'z_unit' not in self.draws:
             raise WeeklyPackageError('media_geo unit needs z_unit draws')
+        self.set_optimizer_corridor((m.get('optimizer_rules') or {}).get('cell_corridor'))
 
     # ------------------------------------------------------------------ loading
     @classmethod
@@ -341,6 +351,35 @@ class WeeklyJointEngine:
         for c, v in zip(columns, key):
             m &= frame[c].astype(str).to_numpy() == str(v)
         return frame[m]
+
+    def set_optimizer_corridor(self, corridor: dict[str, Any] | None) -> dict[str, float]:
+        """Set the corridor (max_increase_ratio >= 1, 0 <= min_keep_ratio <= 1); None keeps the current one."""
+        if corridor:
+            c = dict(self.optimizer_corridor, **{k: float(v) for k, v in corridor.items()})
+            if set(c) != set(OPTIMIZER_CELL_CORRIDOR) or c['max_increase_ratio'] < 1.0 or not 0.0 <= c['min_keep_ratio'] <= 1.0:
+                raise WeeklyPackageError(f'invalid optimizer cell corridor {corridor}')
+            self.optimizer_corridor = c
+        return dict(self.optimizer_corridor)
+
+    def optimizer_cell_bounds(self, cell: pd.Series, current: float, policy: str, support_cap: float, *,
+                              allow_fixed_contraction: bool = False) -> tuple[float, float]:
+        """Budget bounds of a cell for the optimizer (forecast_engine._candidate_policy_bounds asks the engine).
+
+        * optimize: within the corridor around the plan budget and not above the support cap;
+        * no_increase: not above the plan budget or the support cap, not below the corridor floor;
+        * fixed_at_plan (national TV): the plan budget, even above history (the forecast still flags it);
+        * anything else: zero."""
+        up, keep = self.optimizer_corridor['max_increase_ratio'], self.optimizer_corridor['min_keep_ratio']
+        current, support_cap = max(float(current), 0.0), max(float(support_cap), 0.0)
+        if policy == 'optimize':
+            hi = min(support_cap, up * current)
+            return min(keep * current, hi), hi
+        if policy == 'no_increase':
+            hi = min(current, support_cap)
+            return min(keep * current, hi), hi
+        if policy == 'fixed_at_plan':
+            return current, current
+        return 0.0, 0.0
 
     def support_cap_rub(self, cell: pd.Series, source_plan: pd.DataFrame, *, limit: str = 'p95') -> float:
         """Largest total budget of a cell whose peak week stays within the support limit (weekly analogue of

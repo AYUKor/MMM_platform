@@ -14,10 +14,12 @@
                5. a plan's Indoor rows go into OOH_Total, as the model merged them (same total when half of the OOH
                   money is labelled Indoor);
                6. the platform optimizer (run_optimizer_from_flighting + marketer report) on a test plan: the 07 plan
-                  at 40% of its money, a copy for ТС5/Оффлайн and 30% of OOH in three cities labelled Indoor.
-                  The search kernel of a cell equals the forecast of that cell alone; every candidate keeps the
-                  money of its own direction; Indoor is optimized as OOH_Total; national TV is fixed at plan;
-                  the adaptive search runs for each direction.
+                  at 40% of its money, a copy for ТС5/Оффлайн, 30% of OOH in three cities labelled Indoor and national
+                  TV rows in three cities at twice the most ever spent there. The search kernel of a cell equals the
+                  forecast of that cell alone; every candidate keeps the money of its own direction; Indoor is
+                  optimized as OOH_Total; national TV stays at plan in every optimized candidate and does not stop
+                  the search; every optimized cell stays within the corridor around its plan budget; the adaptive
+                  search runs for each direction; the report's sheet 00 carries the model caveats.
              Writes check_card.json, the platform forecast outputs and a short CSV per check into --out.
 
 Run: python -I 13_weekly_joint_package.py build --fit-dir FIT --profile production --panel P --national N --out PKG
@@ -36,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -
 import numpy as np
 import pandas as pd
 
-CODE_VERSION = 'weekly_joint_package_v2_20261105'
+CODE_VERSION = 'weekly_joint_package_v3_20261105'
 
 
 def build(a: argparse.Namespace) -> None:
@@ -188,7 +190,22 @@ def _optimizer_check(eng, pkg: Path, plan: pd.DataFrame, out: Path, a: argparse.
     m = (base.channel == target) & base.geo.isin(sorted(base.geo.unique())[:3])
     ind = base[m].assign(channel=alias, budget_rub=(base[m].budget_rub * 0.3).round())
     base.loc[m, 'budget_rub'] = base.loc[m, 'budget_rub'] - ind.budget_rub.to_numpy()
-    p6 = pd.concat([base, copy, ind], ignore_index=True)
+    # national TV in three cities at twice the most ever spent there (robust upper week x plan weeks x 2): fixed at plan
+    from mmm_core.forecast_engine import _robust_support_upper
+    natl_ch = 'Нац_ТВ'
+    sb = eng.support_bounds.set_index(['segment', 'geo_label', 'channel'])
+    nat_rows = []
+    for g in sorted(base.geo.unique())[:3]:
+        key = ('ТС5/Онлайн', g, natl_ch)
+        if key not in sb.index:
+            continue
+        r = sb.loc[key]
+        up_week = 7.0 * _robust_support_upper(r.daily_spend_p95_rub, r.daily_spend_p99_rub, r.daily_spend_max_rub,
+                                              int(r.active_days))
+        src = base[(base.geo == g) & (base.segment == 'ТС5/Онлайн')].iloc[0]
+        weeks = (pd.Timestamp(src.end_date) - pd.Timestamp(src.start_date)).days / 7.0 + 1
+        nat_rows.append(src.to_frame().T.assign(channel=natl_ch, budget_rub=round(2.0 * up_week * weeks)))
+    p6 = pd.concat([base, copy, ind] + nat_rows, ignore_index=True)
     p6_path = out / 'plan_optimizer_test.csv'
     p6.to_csv(p6_path, index=False)
     work = out / 'optimizer'
@@ -236,31 +253,61 @@ def _optimizer_check(eng, pkg: Path, plan: pd.DataFrame, out: Path, a: argparse.
     full = per[per.status == 'feasible_full']
     money_gap = float((full.money - full.index.get_level_values(0).map(money)).abs().max()) if len(full) else 0.0
     natl = [r for r in eng.package.capability_rows if r['channel'] == 'Нац_ТВ']
+    # optimized candidates (S5, S6): national TV at plan, every optimize cell inside the corridor
+    cur = fl.groupby(['campaign_name', 'segment', 'geo', 'channel']).budget_rub.sum()
+    corr = card['weekly_optimizer_plan']['cell_corridor']
+    opt = al[al.candidate_name.str.contains('__scenario5_|__scenario6_')].copy()
+    opt['plan_rub'] = [cur.get((r.source_campaign_name, r.segment, r.geo, r.channel), 0.0) for r in opt.itertuples()]
+    nat_moved = opt[(opt.channel == natl_ch) & ((opt.budget_rub - opt.plan_rub).abs() > 1.0)]
+    o = opt[opt.optimizer_policy == 'optimize'].copy()
+    # the support cap of the candidate's own limit: a plan cell above history may be cut below the corridor floor
+    o['cap'] = [r.robust_support_cap_rub if 'robust_upper' in r.candidate_name else
+                r.automatic_support_cap_rub if '_p99' in r.candidate_name else r.safe_support_cap_rub
+                for r in o.itertuples()]
+    out_corr = o[(o.budget_rub > np.minimum(corr['max_increase_ratio'] * o.plan_rub, o.cap) + 1.0)
+                 | (o.budget_rub < np.minimum(corr['min_keep_ratio'] * o.plan_rub, o.cap) - 1.0)]
+    nat_plan_rows = int((fl.channel == natl_ch).sum())
+    # the report: recommended candidate per direction and the caveats on sheet 00
+    recs = pd.read_csv(work / 'marketer_report_recommendations.csv')
+    from openpyxl import load_workbook
+    sheet0 = ' '.join(str(c.value) for row in load_workbook(rep['output_xlsx'], read_only=True)
+                      .worksheets[0].iter_rows() for c in row if c.value is not None)
+    caveats = all(w in sheet0 for w in ('отраслев', 'отложенных', 'Вероятность улучшения', 'Ограничения оптимизатора'))
     s6 = {c: int(((cs.campaign_name == c) & cs.candidate_name.str.contains('__scenario6_adaptive_marginal')
                   & (cs.precheck_status == 'scored')).sum()) for c in money.index}
-    # what the optimizer recommends per direction (rank 1 of the reliable order) vs the plan
+    # what the report recommends per direction (and the reliable rank 1) vs the plan
     tot = fs[(fs.channel == '__TOTAL__') & (fs.segment == '__ALL__')]
     rec = {}
     for c in money.index:
         t = tot[tot.source_campaign_name == c]
         plan_p50 = float(t[t.candidate_name.str.endswith('__scenario1_current_plan')].total_effect_p50.iloc[0])
-        best = t.sort_values('optimizer_rank').iloc[0]
-        a_best = al[al.candidate_name == best.candidate_name].groupby('channel').budget_rub.sum()
+        chosen = recs[recs.campaign_name == c]
+        best_name = str(chosen.candidate_name.iloc[0]) if len(chosen) else str(t.sort_values('optimizer_rank').iloc[0].candidate_name)
+        best = t[t.candidate_name == best_name].iloc[0]
+        reliable = t.sort_values('optimizer_rank').iloc[0]
+        a_best = al[al.candidate_name == best_name].groupby('channel').budget_rub.sum()
         a_plan = fl[fl.campaign_name == c].groupby('channel').budget_rub.sum()
-        rec[c] = dict(best=str(best.candidate_name).split('__', 1)[1], plan_effect_p50=plan_p50,
-                      best_effect_p50=float(best.total_effect_p50), gain=float(best.total_effect_p50 / plan_p50 - 1),
-                      plan_by_channel=a_plan.round(0).to_dict(), best_by_channel=a_best.round(0).to_dict())
+        rec[c] = dict(recommended=best_name.split('__', 1)[1],
+                      recommendation_type=str(chosen.recommendation_type.iloc[0]) if len(chosen) and 'recommendation_type' in chosen else '',
+                      plan_effect_p50=plan_p50, recommended_effect_p50=float(best.total_effect_p50),
+                      gain=float(best.total_effect_p50 / plan_p50 - 1),
+                      reliable_rank1=str(reliable.candidate_name).split('__', 1)[1],
+                      reliable_rank1_gain=float(reliable.total_effect_p50 / plan_p50 - 1),
+                      plan_by_channel=a_plan.round(0).to_dict(), recommended_by_channel=a_best.round(0).to_dict())
     pd.DataFrame([dict(campaign=c, **{k: v for k, v in r.items() if not isinstance(v, dict)}) for c, r in rec.items()]
                  ).to_csv(out / 'check6_optimizer_recommendation.csv', index=False)
     return dict(kernel_alone_max_rel_diff=worst, kernels_sum_vs_joint_median_rel=sep_rel,
                 candidates_with_foreign_segment=len(wrong_seg), full_candidates_money_gap_rub=money_gap,
                 indoor_rows_in_allocations=int((al.channel == alias).sum()),
                 national_tv_rows=len(natl), national_tv_not_fixed=sum(r['optimizer_use'] != 'fixed_at_plan' for r in natl),
+                national_tv_plan_rows=nat_plan_rows, national_tv_moved_rows=int(len(nat_moved)),
+                corridor=corr, cells_outside_corridor=int(len(out_corr)), report_caveats_on_sheet0=caveats,
                 adaptive_candidates_scored=s6, directions=card['weekly_optimizer_plan'], recommendation=rec,
                 marketer_report=str(rep['output_xlsx']),
                 passed=bool(worst < 1e-9 and abs(sep_rel) < 0.02 and not wrong_seg and money_gap < 1.0
                             and not (al.channel == alias).any() and all(r['optimizer_use'] == 'fixed_at_plan' for r in natl)
-                            and all(v > 0 for v in s6.values()) and len(money) == 2))
+                            and all(v > 0 for v in s6.values()) and len(money) == 2 and nat_plan_rows > 0
+                            and nat_moved.empty and out_corr.empty and caveats))
 
 
 def main() -> None:
@@ -281,7 +328,9 @@ def main() -> None:
     c.add_argument('--plan-07-dir', required=True, help='07 output folder of the same model and plan (plan_forecast_by_channel.csv)')
     c.add_argument('--out', required=True)
     c.add_argument('--draws', type=int, default=400, help='as 07 (400)')
-    c.add_argument('--optimizer-dir', default=str(Path(__file__).resolve().parents[1] / '02_Budget_optimizer'),
+    c.add_argument('--optimizer-dir', default=str(next((d for d in (Path(__file__).resolve().parent / '02_Budget_optimizer',
+                                                                   Path(__file__).resolve().parents[1] / '02_Budget_optimizer')
+                                                        if d.is_dir()), Path(__file__).resolve().parents[1] / '02_Budget_optimizer')),
                    help='folder with optimizer_decision_policy_v3.yaml and marketer_report.py')
     c.add_argument('--optimizer-scale', type=float, default=0.4, help='share of the 07 plan money in the optimizer test')
     a = ap.parse_args()

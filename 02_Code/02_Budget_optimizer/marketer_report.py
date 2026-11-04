@@ -32,6 +32,7 @@ if str(PYMC_CODE_DIR) not in sys.path:
     sys.path.insert(0, str(PYMC_CODE_DIR))
 
 from mmm_core.forecast_engine import _compile_decision_policy
+from mmm_core.weekly_package import is_weekly_manifest
 from mmm_core.model_package import sha256_file
 
 SCENARIOS = [
@@ -2085,6 +2086,7 @@ def _write_dynamic_workbook(
     allocation: pd.DataFrame,
     model_activation_status: str,
     production_blockers: list[str],
+    model_notes: list[list[str]] | None = None,
 ) -> None:
     paths.output_xlsx.parent.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
@@ -2101,6 +2103,7 @@ def _write_dynamic_workbook(
             ["Рекомендация", "Учитывает надежность, размер прироста, вероятность улучшения и операционный объем перелива бюджета."],
             ["Launch / cancel", "Не определяется автоматически, пока не утвержден ROAS или contribution-margin hurdle."],
             ["Статус модели", f"{model_activation_status}; blockers: {', '.join(production_blockers) if production_blockers else 'нет'}"],
+            *(model_notes or []),
         ],
         columns=["Понятие", "Как читать"],
     )
@@ -2384,6 +2387,40 @@ def _write_dynamic_workbook(
     wb.save(paths.output_xlsx)
 
 
+def _weekly_model_notes(paths: ReportPaths, manifest: dict[str, Any], run_card: dict[str, Any]) -> list[list[str]]:
+    """Plain-language caveats of a weekly joint model package (weekly_package.py) for sheet 00."""
+    if not is_weekly_manifest(manifest):
+        return []
+    cap = _read_csv(paths.model_run_dir / "capability_matrix.csv")
+    messages = (
+        cap.loc[cap.get("optimizer_use", pd.Series(dtype=str)).astype(str).eq("optimize"), "marketer_message"]
+        .dropna().astype(str).unique().tolist()
+        if not cap.empty and "marketer_message" in cap
+        else []
+    )
+    plan_notes = run_card.get("weekly_optimizer_plan") or {}
+    corridor = plan_notes.get("cell_corridor") or {}
+    rules = manifest.get("optimizer_rules") or {}
+    fixed = ", ".join(rules.get("fixed_at_plan_channels") or []) or "нет"
+    notes = [
+        ["Модель", f"«{manifest.get('model_name', '')}», недельная модель заказов и среднего чека; эффект кампании = "
+                   "дополнительный оборот за окно модели (кампания и перенос эффекта на следующие недели)."],
+        ["Уровень ROAS", f"{manifest.get('roas_level_label_ru', '')}: общий уровень отдачи каналов взят из отраслевых "
+                         "ориентиров, данные задают распределение по сетям, городам и неделям."],
+    ]
+    if messages:
+        notes.append(["Оговорка модели", messages[0]])
+    notes.append(["Вероятность улучшения", "Считается внутри модели. Перенос денег между каналами опирается на "
+                  "уровни каналов из отраслевого ориентира, поэтому вероятность около 1 не означает выигрыш, "
+                  "проверенный на данных."])
+    if corridor:
+        notes.append(["Ограничения оптимизатора",
+                      f"Каждая ячейка город × канал меняется от {corridor.get('min_keep_ratio')} до "
+                      f"{corridor.get('max_increase_ratio')} своего бюджета в плане и не выше исторических трат; "
+                      f"деньги не переходят между направлениями (сеть и онлайн/офлайн); как в плане: {fixed}."])
+    return notes
+
+
 def build_marketer_report(paths: ReportPaths) -> dict[str, Any]:
     """Build the workbook strictly from completed optimizer artifacts."""
     flighting = _read_csv(paths.flighting_path)
@@ -2432,6 +2469,7 @@ def build_marketer_report(paths: ReportPaths) -> dict[str, Any]:
         allocation=allocation,
         model_activation_status=str(manifest.get("activation_status") or "unknown"),
         production_blockers=list(manifest.get("production_blockers") or []),
+        model_notes=_weekly_model_notes(paths, manifest, run_card),
     )
 
     scenario_results_path = paths.optimizer_output_dir / "marketer_report_scenario_results.csv"
