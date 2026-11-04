@@ -42,11 +42,21 @@ log(actual / forecast without ads) on the forecast log ad effect with unit and s
 part is 0.2-0.4% of turnover, so the turnover level cannot confirm or refute ROAS; this looks at the timing and the
 spread of the local channels). With --reuse on a v1 folder only the forecast is recomputed; v1 files stay.
 
+v3 (04.11 evening, after the OOT verdict «не прошла»: the base, not the ads, loses to the simple forecast; the model
+without the industry yardstick fails the same way): options for a base that repeats last year's season instead of
+passing the spring rise to the trend: --knot-every (weeks between trend knots, 7 in v6-v14), --harmonics (yearly
+harmonics of the segment season, 2 in v6-v14; own city waves and the resort season keep 2), --horizon-weeks (score
+only the first weeks after the cut, for a second cut at the end of December), the "+mem" forecast rule (the fitted
+week shock of the same week a year earlier is added to each forecast week), and the project's OOT rule
+(mmm_core.validation.classify_oot_metrics) per segment in the card (oot_gate). The rule and the variants were
+fixed before the new fits (OOT_V3_PREREG.md). With the defaults the fit is exactly «Заноза».
+
 July-September 2026 are not in the panel and are never read.
 
 Outputs (OUT): panel_fit_window.parquet, multistart_{p}.csv, posterior_all_{p}.npz, oot_fit_diag_{p}.json,
 roas_by_segment_channel_{p}.csv; per trend rule r: oot_rows_{p}_{r}.csv, oot_by_segment_{p}_{r}.csv,
-oot_by_segment_week_{p}_{r}.csv, oot_by_city_group_{p}_{r}.csv, oot_by_unit_{p}_{r}.csv; oot_card_{p}_v2.json.
+oot_by_segment_week_{p}_{r}.csv, oot_by_city_group_{p}_{r}.csv, oot_by_unit_{p}_{r}.csv; oot_card_{p}_v3.json
+(v2 runs wrote oot_card_{p}_v2.json).
 
 Run: python -I 12_weekly_joint_oot.py --panel P.parquet --national N.csv --out OUT --profile fast|pilot
      [--fit-window-end 2026-03-23] [--m-ref m_ref_v3.csv] [model flags as in 05] [--reuse]
@@ -70,7 +80,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'oot_v2_20261104'
+CODE_VERSION = 'oot_v3_20261104'
 DETERMINISTIC = {'R_orders_seg', 'roas_realized'}
 CITY = {'МОСКВА': 'Москва', 'САНКТ-ПЕТЕРБУРГ': 'Санкт-Петербург'}
 NAIVE_WINDOW_WEEKS = 12      # growth of the last 12 fitted weeks against the same weeks a year earlier
@@ -96,30 +106,25 @@ def sha256(path) -> str:
 
 # ---------------------------------------------------------------- week-level terms at all weeks
 
-def fourier_raw(weeks: pd.DatetimeIndex) -> np.ndarray:
-    doy = (weeks + pd.Timedelta(days=3)).dayofyear.to_numpy() / 365.25
-    return np.column_stack([np.sin(2 * np.pi * doy), np.cos(2 * np.pi * doy),
-                            np.sin(4 * np.pi * doy), np.cos(4 * np.pi * doy)])
-
-
-def extend_week_terms(weeks_fit: pd.DatetimeIndex, weeks_all: pd.DatetimeIndex) -> dict:
+def extend_week_terms(weeks_fit: pd.DatetimeIndex, weeks_all: pd.DatetimeIndex, knot_every: int = wj.KNOT_EVERY_WEEKS,
+                      harmonics: int = wj.HARMONICS) -> dict:
     """The week arrays of wj.prepare() at all weeks, built with the constants of the fitted weeks only (the same
     steps as prepare: hinges at every 7th week but the last, centred; Fourier and holidays centred; hinges made
     orthogonal to [1, t, Fourier] over the fitted weeks; that linear map is then applied to every week)."""
-    k = wj.KNOT_EVERY_WEEKS
+    k = int(knot_every)
     t_f = (weeks_fit - weeks_fit[0]).days.to_numpy() / 365.25
     t_a = (weeks_all - weeks_fit[0]).days.to_numpy() / 365.25
     knot_idx = np.arange(k, len(t_f) - 1, k)
     knots = t_f[knot_idx]
     hinge_f = np.maximum(0.0, t_f[:, None] - knots[None, :])
     h_mean = hinge_f.mean(0)
-    F_f = fourier_raw(weeks_fit)
+    F_f = wj.fourier_matrix(weeks_fit, harmonics)
     f_mean = F_f.mean(0)
     H_f, _ = wj._holiday_matrix(weeks_fit)
     hol_mean = H_f.mean(0)
     G_f = np.column_stack([np.ones_like(t_f), t_f - t_f.mean(), F_f - f_mean])
     coef = np.linalg.lstsq(G_f, hinge_f - h_mean, rcond=None)[0]
-    F_a = fourier_raw(weeks_all) - f_mean
+    F_a = wj.fourier_matrix(weeks_all, harmonics) - f_mean
     G_a = np.column_stack([np.ones_like(t_a), t_a - t_f.mean(), F_a])
     basis_a = np.maximum(0.0, t_a[:, None] - knots[None, :]) - h_mean - G_a @ coef
     H_a = wj._holiday_matrix(weeks_all)[0] - hol_mean
@@ -279,6 +284,74 @@ def wape(fc: np.ndarray, act: np.ndarray) -> float:
     return float(np.abs(fc - act).sum() / act.sum())
 
 
+def _classify_copy(m: dict) -> str:
+    """Same thresholds as mmm_core.validation.classify_oot_metrics (used only if that module cannot be imported)."""
+    if (m['mase'] <= 1.00 and m['crps_skill_vs_last_value'] >= 0.0 and m['normalized_abs_bias'] <= 0.10
+            and 0.80 <= m['coverage_90'] <= 0.98):
+        return 'primary'
+    if (m['mase'] <= 1.10 and m['crps_skill_vs_last_value'] >= -0.05 and m['normalized_abs_bias'] <= 0.15
+            and 0.75 <= m['coverage_90'] <= 0.99):
+        return 'caution'
+    return 'diagnostic'
+
+
+def _crps(samples: np.ndarray, actual: np.ndarray) -> np.ndarray:
+    """Empirical CRPS per row, samples [n, D] (as mmm_core.validation._empirical_crps)."""
+    first = np.mean(np.abs(samples - actual[:, None]), axis=1)
+    ordered = np.sort(samples, axis=1)
+    n = ordered.shape[1]
+    coef = 2 * np.arange(1, n + 1) - n - 1
+    return first - np.sum(ordered * coef[None, :], axis=1) / (n * n)
+
+
+def oot_gate(fc: pd.DataFrame, T_d: np.ndarray, train: pd.DataFrame, seg_names: list) -> dict:
+    """The project's OOT rule per segment on weekly turnover per resident of the model units (v3). As in
+    mmm_core.validation.evaluate_predictive_oot: MASE = MAE of the forecast mean / mean absolute week-to-week change
+    of the training weeks within units; skill = 1 - CRPS / MAE of the last fitted value of each unit; bias =
+    |mean(forecast - actual)| / mean(actual); coverage of the 5-95% band. Classified by classify_oot_metrics."""
+    try:
+        from mmm_core.validation import classify_oot_metrics as classify
+        src = 'mmm_core.validation'
+    except Exception:                      # heavy imports of the platform module; the thresholds are copied above
+        classify, src = _classify_copy, 'copy_of_mmm_core.validation'
+    pop_fc = fc.population_k.to_numpy(float) * 1000
+    act_all = fc.turnover_total.to_numpy(float) / pop_fc
+    tr = train.sort_values(['mu_key', 'week_start']).copy()
+    tr['tpr'] = tr.turnover_total.astype(float) / (tr.population_k.astype(float) * 1000)
+    out = dict(source=src)
+    for s, name in enumerate(seg_names):
+        sel = fc.seg_i.to_numpy() == s
+        trs = tr[tr.seg_i == s]
+        if not sel.any() or trs.empty:
+            continue
+        scale = float(trs.tpr.groupby(trs.mu_key).diff().abs().dropna().mean())
+        last = trs.groupby('mu_key').tpr.last()
+        naive = fc.mu_key[sel].map(last).to_numpy(float)
+        dr = (T_d[:, sel] / pop_fc[sel][None, :]).T                       # [n, D]
+        act = act_all[sel]
+        point = dr.mean(1)
+        p05, p95 = np.percentile(dr, [5, 95], axis=1)
+        m = dict(rows=int(sel.sum()), mase=float(np.mean(np.abs(act - point)) / scale),
+                 crps_skill_vs_last_value=float(1 - np.mean(_crps(dr, act)) / max(np.mean(np.abs(act - naive)), 1e-12)),
+                 normalized_abs_bias=float(abs(np.mean(point - act)) / max(np.mean(np.abs(act)), 1e-12)),
+                 signed_bias=float(np.mean(point - act) / max(np.mean(np.abs(act)), 1e-12)),
+                 coverage_90=float(((act >= p05) & (act <= p95)).mean()),
+                 last_value_mase=float(np.mean(np.abs(act - naive)) / scale))
+        m['class'] = classify(m)
+        nv = fc.naive_turnover.to_numpy(float)[sel] / pop_fc[sel] if 'naive_turnover' in fc else np.full(sel.sum(), np.nan)
+        c = np.isfinite(nv)
+        if c.sum() > 0:                    # the simple forecast on its rows (a point forecast: CRPS = MAE, no band)
+            m['simple_rows'] = int(c.sum())
+            m['simple_mase'] = float(np.mean(np.abs(act[c] - nv[c])) / scale)
+            m['simple_skill_vs_last_value'] = float(1 - np.mean(np.abs(act[c] - nv[c])) / max(np.mean(np.abs(act[c] - naive[c])), 1e-12))
+            m['simple_signed_bias'] = float(np.mean(nv[c] - act[c]) / max(np.mean(np.abs(act[c])), 1e-12))
+            m['model_mase_on_simple_rows'] = float(np.mean(np.abs(act[c] - point[c])) / scale)
+        out[name] = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in m.items()}
+    cls = [out[n]['class'] for n in seg_names if n in out]
+    out['passed_all_segments'] = bool(len(cls) == len(seg_names) and all(c in ('primary', 'caution') for c in cls))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--panel', required=True)
@@ -302,7 +375,12 @@ def main() -> None:
     ap.add_argument('--m-ref', default=None, help='typical spend per resident (m_ref_v3 csv) so lam means the same as in the full fit')
     ap.add_argument('--forecast-draws', type=int, default=500)
     ap.add_argument('--reuse', action='store_true', help='skip the fit when posterior_all_{profile}.npz exists in OUT')
-    ap.add_argument('--trend-rules', default=','.join(TREND_RULES), help='trend after the cut, any of continue,hold,hold4')
+    ap.add_argument('--knot-every', type=int, default=wj.KNOT_EVERY_WEEKS, help='weeks between trend knots (v15 option)')
+    ap.add_argument('--harmonics', type=int, default=wj.HARMONICS, help='yearly harmonics of the segment season (v15 option)')
+    ap.add_argument('--horizon-weeks', type=int, default=0, help='forecast only this many weeks after the cut (0 = to the panel end)')
+    ap.add_argument('--trend-rules', default=','.join(TREND_RULES),
+                    help='trend after the cut, any of continue,hold,hold4; "+mem" (e.g. hold4+mem) adds to each forecast '
+                         'week the fitted week shock of the same week a year earlier (52 weeks back)')
     a = ap.parse_args()
     rf = load_05()
     prof = rf.PROFILES[a.profile]
@@ -321,7 +399,8 @@ def main() -> None:
     if not cut_path.exists():
         p[p.week_start <= fe].to_parquet(cut_path, index=False)
     assert len(pd.read_parquet(cut_path, columns=['week_start'])) == int((p.week_start <= fe).sum()), 'old cut differs'
-    d = wj.prepare(str(cut_path), a.national, top_units_per_segment=prof['top_units'], m_ref_csv=a.m_ref)
+    d = wj.prepare(str(cut_path), a.national, top_units_per_segment=prof['top_units'], m_ref_csv=a.m_ref,
+                   knot_every=a.knot_every, harmonics=a.harmonics)
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, slope_centred=False,
                           wave_scale=a.wave_scale, adstock='short', roas_scale='equal', weaken='', anchor=a.anchor,
                           media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior)
@@ -338,6 +417,7 @@ def main() -> None:
     card = dict(profile=a.profile, code_version=CODE_VERSION, fit_window_end=a.fit_window_end, prior_set=a.prior_set,
                 anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior,
                 city_wave_model=not a.no_city_wave, wave_scale=a.wave_scale, m_ref=a.m_ref, dims_fit=d.dims,
+                knot_every=a.knot_every, harmonics=a.harmonics, horizon_weeks=a.horizon_weeks,
                 inputs=dict(panel=a.panel, panel_sha256=sha256(a.panel), national=a.national,
                             national_sha256=sha256(a.national), m_ref_sha256=sha256(a.m_ref) if a.m_ref else None,
                             panel_fit_window_rows=int((p.week_start <= fe).sum())),
@@ -430,7 +510,7 @@ def main() -> None:
     d_all = wj.prepare(a.panel, a.national, m_ref_csv=a.m_ref)
     W_f, W_a = len(d.weeks), len(d_all.weeks)
     assert (d_all.weeks[:W_f] == d.weeks).all(), 'weeks of the cut are not the first weeks of the panel'
-    ext = extend_week_terms(d.weeks, d_all.weeks)
+    ext = extend_week_terms(d.weeks, d_all.weeks, a.knot_every, a.harmonics)
     checks = dict(week_terms_max_abs_diff=float(max(np.abs(ext['t'][:W_f] - d.t_year).max(),
                                                     np.abs(ext['basis'][:W_f] - d.trend_basis).max(),
                                                     np.abs(ext['F'][:W_f] - d.fourier).max(),
@@ -458,6 +538,8 @@ def main() -> None:
     ybar_m = np.zeros((M, 2))
     ybar_m[arr['m_i']] = arr['ybar']
     fut = d_all.obs[d_all.obs.week_start > fe]
+    if a.horizon_weeks > 0:
+        fut = fut[fut.week_start <= fe + pd.Timedelta(weeks=a.horizon_weeks)]
     keep = fut.mu_key.isin(midx) & fut.ad_key.isin(aidx)
     fc = fut[keep].reset_index(drop=True)
     lost = fut[~keep]
@@ -499,7 +581,7 @@ def main() -> None:
 
     # draws shared by every trend rule: new knots, week shocks, AR(1) path
     rng = np.random.default_rng(a.seed)
-    k = wj.KNOT_EVERY_WEEKS
+    k = int(a.knot_every)
     new_idx = np.arange(ext['knot_idx'][-1] + k, W_a - 1, k)
     hinge_new = np.maximum(0.0, ext['t_raw'][:, None] - ext['t_raw'][new_idx][None, :])      # [W_a, J]
     z_new = rng.standard_normal((D, 2, len(wj.SEGMENTS), len(new_idx)))
@@ -507,6 +589,13 @@ def main() -> None:
     shock_new = np.zeros((D, 2, len(wj.SEGMENTS), W_a))
     shock_new[..., W_f:] = (rng.standard_normal((D, 2, len(wj.SEGMENTS), W_a - W_f))
                             * samp['sig_week'][:, :, :, None] * np.sqrt(R / W_f))
+    # v15 option "+mem": the week shock of a forecast week repeats the fitted shock of the same week a year earlier
+    c_wk = np.asarray(arr['wk_centred'], float)
+    shock_fit = np.einsum('dksr,wr->dksw', samp['v_week'] * (samp['sig_week'] ** (1 - c_wk)[None, None, :])[..., None],
+                          np.asarray(arr['week_basis']))                                   # [D, 2, S, W_f]
+    lag = np.arange(W_f, W_a) - 52
+    shock_mem = np.zeros_like(shock_new)
+    shock_mem[..., W_f + np.flatnonzero(lag >= 0)] = shock_fit[..., lag[lag >= 0]]
     f_rows = rows_of(fc, midx, aidx, np.zeros((len(fc), arr['X'].shape[1])))     # X = 0: weather unknown in advance
     h_fc = f_rows['w_i'] - w_last[f_rows['m_i']]
     assert (h_fc >= 1).all()
@@ -541,10 +630,14 @@ def main() -> None:
 
     by_rule = {}
     for rule in [x.strip() for x in a.trend_rules.split(',') if x.strip()]:
-        wk = week_terms_rule(ext, W_f, rule)
+        trule, _, mem = rule.partition('+')
+        assert mem in ('', 'mem'), rule
+        wk = week_terms_rule(ext, W_f, trule)
         mu_fc, media_fc = predict_parts(rows_arr(arr, f_rows, ybar_m, wk, spend_norm_all, wb_all),
                                         d.dims, a.prior_set, samp)
         y_fc = (mu_fc + trend_new[:, :, s_fc, w_fc] + shock_new[:, :, s_fc, w_fc] + path[:, :, m_fc, h_fc])
+        if mem:
+            y_fc = y_fc + shock_mem[:, :, s_fc, w_fc]
         T_d = np.exp(y_fc[:, 0] + y_fc[:, 1])                                          # [D, N]
         O_d = np.exp(y_fc[:, 0])
         T_nomedia = np.exp(y_fc[:, 0] + y_fc[:, 1] - media_fc[:, 0] - media_fc[:, 1])
@@ -601,6 +694,7 @@ def main() -> None:
             unit_wape_common_naive=round(wape(t_un.common_naive_turnover[full_units].to_numpy(),
                                               t_un.common_actual_turnover[full_units].to_numpy()), 4),
             rows_with_naive_share=round(float(common.mean()), 3),
+            oot_gate=oot_gate(fc, T_d, o, seg_names),
             media_response=media_response(z, rows_out.fc_ads_log_effect_median.to_numpy(), un_codes, sw_codes))
         print(rule, json.dumps(by_rule[rule], ensure_ascii=False, default=str), flush=True)
         print(t_seg.round(3).to_string(), flush=True)
@@ -608,7 +702,7 @@ def main() -> None:
     card |= dict(status='done', checks=checks, by_rule=by_rule, forecast_draws=D,
                  new_trend_knots=[str(d_all.weeks[i].date()) for i in new_idx],
                  week_shock_sd_factor=round(float(np.sqrt(R / W_f)), 3), seconds_total=round(time.time() - t0))
-    (out / f'oot_card_{a.profile}_v2.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
+    (out / f'oot_card_{a.profile}_v3.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
     print(json.dumps({k: v for k, v in card.items() if k != 'by_rule'}, ensure_ascii=False, indent=1, default=str))
 
 if __name__ == '__main__':

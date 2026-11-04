@@ -44,6 +44,9 @@ TARGETS = ['orders', 'check']
 RESORTS = {'СОЧИ', 'АНАПА', 'ГЕЛЕНДЖИК'}
 ADSTOCK_L = 8
 KNOT_EVERY_WEEKS = 7
+HARMONICS = 2         # yearly harmonics of the segment season (v15 option 4: the season follows the weeks of last year)
+WAVE_HARMONICS = 2    # own city waves and the resort season always keep the first two harmonics
+SEASON_HIGH_SD_FACTOR = 0.5   # prior scale of harmonics 3+ relative to the first two
 WEEK_SHOCK_CENTRED_MIN_UNITS = 50   # v6: segments with at least this many units get the centred week shock
 CITY_WAVE_SD = 0.05   # v7: prior scale of a unit's own yearly wave around its segment's (real spread 0.01-0.05)
 # v6: nonworking_share left out: in panel v3 it is the same in every unit each week (national calendar), so after
@@ -165,12 +168,14 @@ class ModelData:
     obs: pd.DataFrame               # observations: indices, targets, controls
     trend_basis: np.ndarray         # [W, K] hinges made orthogonal to [1, t, Fourier] (v6)
     t_year: np.ndarray              # [W]
-    fourier: np.ndarray             # [W, 4]
+    fourier: np.ndarray             # [W, 2 x harmonics] (first 4 columns: the yearly and half-year pairs)
     holidays: np.ndarray            # [W, H]
     holiday_names: list
     controls_mean: np.ndarray = field(default_factory=lambda: np.zeros(0))
     controls_sd: np.ndarray = field(default_factory=lambda: np.zeros(0))
     trend_coef: np.ndarray = field(default_factory=lambda: np.zeros(0))   # basis(t) = hinges(t) - [1, t, F] @ coef
+    knot_every: int = KNOT_EVERY_WEEKS
+    harmonics: int = HARMONICS
 
     @property
     def dims(self) -> dict:
@@ -195,8 +200,18 @@ def _holiday_matrix(weeks: pd.DatetimeIndex) -> tuple[np.ndarray, list]:
     return np.column_stack(list(cols.values())), list(cols)
 
 
+def fourier_matrix(weeks: pd.DatetimeIndex, harmonics: int = HARMONICS) -> np.ndarray:
+    """[W, 2 x harmonics]: sin, cos of the yearly wave, then of the half-year wave, ... (mid-week day of year)."""
+    doy = (weeks + pd.Timedelta(days=3)).dayofyear.to_numpy() / 365.25
+    cols = []
+    for h in range(1, int(harmonics) + 1):
+        cols += [np.sin(2 * np.pi * h * doy), np.cos(2 * np.pi * h * doy)]
+    return np.column_stack(cols)
+
+
 def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None, cross_tv: bool = False,
-            top_units_per_segment: int | None = None, m_ref_csv: str | None = None) -> ModelData:
+            top_units_per_segment: int | None = None, m_ref_csv: str | None = None,
+            knot_every: int = KNOT_EVERY_WEEKS, harmonics: int = HARMONICS) -> ModelData:
     """top_units_per_segment: keep only the N largest units of each segment by turnover (fast/medium stages).
     m_ref_csv (v14): typical spend per resident (segment, channel, m_ref) taken from another panel instead of this one.
     Panel v4 spreads Moscow and SPb regional TV and radio over their oblasts, which moves the typical spend of those
@@ -308,11 +323,11 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
 
     t = (weeks - weeks[0]).days.to_numpy() / 365.25
     t_c = t - t.mean()
-    knots = t[KNOT_EVERY_WEEKS:-1:KNOT_EVERY_WEEKS]          # v6: no knot at the last week (all-zero column)
+    if int(harmonics) < WAVE_HARMONICS:
+        raise ValueError(f'harmonics {harmonics} < {WAVE_HARMONICS}')
+    knots = t[knot_every:-1:knot_every]                      # v6: no knot at the last week (all-zero column)
     basis = np.maximum(0.0, t[:, None] - knots[None, :])
-    doy = (weeks + pd.Timedelta(days=3)).dayofyear.to_numpy() / 365.25
-    fourier = np.column_stack([np.sin(2 * np.pi * doy), np.cos(2 * np.pi * doy),
-                               np.sin(4 * np.pi * doy), np.cos(4 * np.pi * doy)])
+    fourier = fourier_matrix(weeks, harmonics)
     hol, hol_names = _holiday_matrix(weeks)
     # week-level terms are centred over the weeks: they carry no level, the unit level a[k,u] does. Without this
     # the common shift of all unit levels and of the trend is a flat ridge (pilot 02.11: R-hat 6 on level/trend).
@@ -327,7 +342,8 @@ def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = Non
     basis = basis - G @ trend_coef
     return ModelData(weeks=weeks, ad_units=ad, model_units=mu, spend_pr=spend_pr, m_ref=m_ref, chan_mask=chan_mask,
                      obs=o, trend_basis=basis, t_year=t_c, fourier=fourier, holidays=hol, holiday_names=hol_names,
-                     controls_mean=cm, controls_sd=cs, trend_coef=trend_coef)
+                     controls_mean=cm, controls_sd=cs, trend_coef=trend_coef, knot_every=int(knot_every),
+                     harmonics=int(harmonics))
 
 
 # ---------------------------------------------------------------- model (numpyro / JAX)
@@ -543,8 +559,13 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     z_tr = numpyro.sample('z_trend', dist.Normal(0, 1).expand([2, S, K]))
     trend = slope0[:, :, None] * arr['t'][None, None, :] + jnp.einsum('wk,jsk->jsw', arr['basis'], tau_tr[:, None, None] * z_tr)
     s_sd = arr.get('season_sd', 0.3)
-    four = numpyro.sample('fourier', dist.Normal(0, s_sd).expand([2, S, 4]))    # v6: owns the whole yearly wave
-    four_res = numpyro.sample('fourier_resort', dist.Normal(0, s_sd * 2 / 3).expand([2, 4]))
+    nF = arr['F'].shape[1]
+    nW = 2 * WAVE_HARMONICS
+    F_w = arr['F'][:, :nW]                                                      # yearly and half-year pairs
+    # harmonics 3+ (v15 option) get a smaller prior; with 2 harmonics this is the v6-v13 prior exactly
+    f_sd = s_sd * np.where(np.arange(nF) < nW, 1.0, SEASON_HIGH_SD_FACTOR)
+    four = numpyro.sample('fourier', dist.Normal(0, f_sd).expand([2, S, nF]))  # v6: owns the whole yearly wave
+    four_res = numpyro.sample('fourier_resort', dist.Normal(0, s_sd * 2 / 3).expand([2, nW]))
     hol = numpyro.sample('holidays', dist.Normal(0, 0.2).expand([2, S, H]))
     season = jnp.einsum('wf,jsf->jsw', arr['F'], four) + jnp.einsum('wh,jsh->jsw', arr['H'], hol)
     gam = numpyro.sample('gamma', dist.Normal(0, 0.05).expand([2, S, arr['X'].shape[1]]))
@@ -556,7 +577,7 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
     base_sw = trend + season + week_shock                                                # [2, S, W]
     s_i, w_i, m_i = arr['s_i'], arr['w_i'], arr['m_i']
     mu = (arr['ybar'].T + a_m[:, m_i] + slope_u[:, m_i] * arr['t'][w_i][None, :]
-          + base_sw[:, s_i, w_i] + (four_res @ arr['F'][w_i].T) * arr['resort'][None, :]
+          + base_sw[:, s_i, w_i] + (four_res @ F_w[w_i].T) * arr['resort'][None, :]
           + jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']) + media)
     if arr.get('city_wave', False):
         # v7: own yearly wave of every unit, a shrunk deviation from its group's wave (centred within the group)
@@ -568,7 +589,7 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
         else:
             sig_cw = numpyro.sample('sig_city_wave', dist.HalfNormal(CITY_WAVE_SD).expand([2, S]))
             sc = sig_cw[:, arr['seg_m'], None]                                          # [2, M, 1]
-        nf = arr['F'].shape[1]
+        nf = nW
         if arr.get('wave_centred', False):
             # v7b: centred own waves. Real fast v7 (03.11): with the non-centred form sig_city_wave, rho, sig_slope
             # did not mix (R-hat 2.1-2.8, chains in different modes); 78 weeks pin each unit's wave.
@@ -577,17 +598,17 @@ def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
             raw = sc * numpyro.sample('z_city_wave', dist.Normal(0, 1).expand([2, M, nf]))
         g_mean = jnp.einsum('jmf,mg->jgf', raw, arr['wave_grp_onehot_m'] / arr['wave_grp_count_m'][None, :])
         cw = raw - g_mean[:, arr['wave_grp_m'], :]                                       # [2, M, F]
-        mu = mu + jnp.einsum('jnf,nf->jn', cw[:, m_i, :], arr['F'][w_i])
+        mu = mu + jnp.einsum('jnf,nf->jn', cw[:, m_i, :], F_w[w_i])
     if arr.get('emit_parts', False):
         # diagnostics only (08_weekly_joint_injection_absorption.py): the fitted parts of log y per row; never set
         # in sampling runs (these [2, N] sites would be stored with every draw)
         numpyro.deterministic('part_level', arr['ybar'].T + a_m[:, m_i])
         numpyro.deterministic('part_unit_slope', slope_u[:, m_i] * arr['t'][w_i][None, :])
         numpyro.deterministic('part_trend', trend[:, s_i, w_i])
-        numpyro.deterministic('part_season', season[:, s_i, w_i] + (four_res @ arr['F'][w_i].T) * arr['resort'][None, :])
+        numpyro.deterministic('part_season', season[:, s_i, w_i] + (four_res @ F_w[w_i].T) * arr['resort'][None, :])
         numpyro.deterministic('part_week_shock', week_shock[:, s_i, w_i])
         numpyro.deterministic('part_controls', jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']))
-        numpyro.deterministic('part_city_wave', jnp.einsum('jnf,nf->jn', cw[:, m_i, :], arr['F'][w_i])
+        numpyro.deterministic('part_city_wave', jnp.einsum('jnf,nf->jn', cw[:, m_i, :], F_w[w_i])
                               if arr.get('city_wave', False) else jnp.zeros_like(media))
         numpyro.deterministic('part_media', media)
         numpyro.deterministic('part_mu', mu)
@@ -806,7 +827,7 @@ def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26, y: np.ndarray | 
     y [2, N] (optional): use these targets instead of the real ones (a simulated world). Units with fewer than
     min_obs weeks get zeros."""
     o = d.obs
-    M, nf = len(d.model_units), d.fourier.shape[1]
+    M, nf = len(d.model_units), 2 * WAVE_HARMONICS
     m_i, w_i = arr['m_i'], arr['w_i']
     out = np.zeros((2, M, nf))
     for k, col in enumerate(['y_orders', 'y_check']):
@@ -817,7 +838,7 @@ def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26, y: np.ndarray | 
             sel = m_i == m
             if sel.sum() < min_obs:
                 continue
-            Z = np.column_stack([np.ones(sel.sum()), d.t_year[w_i[sel]], d.fourier[w_i[sel]]])
+            Z = np.column_stack([np.ones(sel.sum()), d.t_year[w_i[sel]], d.fourier[w_i[sel], :nf]])
             out[k, m] = np.linalg.lstsq(Z, r[sel], rcond=None)[0][2:]
     return out
 
@@ -883,7 +904,7 @@ def simulate(d: ModelData, arr: dict, truth: dict, seed: int = 0) -> tuple[np.nd
     y = np.vstack(ys) + media
     if truth.get('city_wave', False):
         cw = real_city_waves(d, arr)
-        y = y + np.einsum('jnf,nf->jn', cw[:, arr['m_i'], :], d.fourier[arr['w_i']])
+        y = y + np.einsum('jnf,nf->jn', cw[:, arr['m_i'], :], d.fourier[arr['w_i'], :2 * WAVE_HARMONICS])
     # AR(1) noise per model unit, check innovations correlated with orders innovations
     eps = np.zeros_like(y)
     rho, sig, b = truth['rho'], truth['sigma'], truth['b_check_on_orders']

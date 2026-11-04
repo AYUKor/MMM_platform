@@ -190,6 +190,8 @@ def main() -> None:
                     help='injection check: add a known effect to the real orders, e.g. "Нац_ТВ=2,Digital_Performance=2" '
                          '(ROAS through orders at typical spend; no city deviations, no check part). The fit should find '
                          'its plain real ROAS plus about the injected amount; the truth is in injected_truth_{profile}.csv')
+    ap.add_argument('--knot-every', type=int, default=wj.KNOT_EVERY_WEEKS, help='v15 option: weeks between trend knots (v6-v14: 7)')
+    ap.add_argument('--harmonics', type=int, default=wj.HARMONICS, help='v15 option: yearly harmonics of the segment season (v6-v14: 2)')
     ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
     a = ap.parse_args()
     prof = PROFILES[a.profile]
@@ -203,7 +205,8 @@ def main() -> None:
     numpyro.set_host_device_count(prof['chains'])
 
     t0 = time.time()
-    d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'], m_ref_csv=a.m_ref)
+    d = wj.prepare(a.panel, a.national, fit_window_end=a.fit_window_end, top_units_per_segment=prof['top_units'], m_ref_csv=a.m_ref,
+                   knot_every=a.knot_every, harmonics=a.harmonics)
     if a.placebo:
         if a.inject:
             raise SystemExit('--placebo and --inject together are not a check of anything')
@@ -296,6 +299,7 @@ def main() -> None:
     per_chain.columns = [f'chain{c}' for c in per_chain.columns]
     per_chain.to_csv(out / f'roas_by_chain_{a.profile}.csv')
     card = dict(profile=a.profile, chain_method=a.chain_method, prior_set=a.prior_set, dims=d.dims,
+                knot_every=a.knot_every, harmonics=a.harmonics,
                 fit_window_end=a.fit_window_end, inject=a.inject, placebo=a.placebo, adstock=a.adstock, roas_scale=a.roas_scale, weaken=a.weaken, anchor=a.anchor, media_geo=a.media_geo, check_sd=a.check_sd, lam_prior=a.lam_prior, panel=a.panel, m_ref=a.m_ref, warmup=prof['warmup'], draws=prof['draws'], chains=prof['chains'],
                 fit_seconds=round(fit_s), divergences=int(np.asarray(extra['diverging']).sum()),
                 code_version=CODE_VERSION, city_wave_model=not a.no_city_wave, wave_param=a.wave_param, slope_param=a.slope_param, wave_scale=a.wave_scale,
