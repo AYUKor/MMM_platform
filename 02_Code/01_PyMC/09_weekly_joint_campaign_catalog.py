@@ -42,7 +42,7 @@ from mmm_core import campaign_catalog as cc
 from mmm_core import campaign_routing as cr
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'campaign_catalog_weekly_joint_v3_20261104'
+CODE_VERSION = 'campaign_catalog_weekly_joint_v4_20261104'
 G = {}
 
 
