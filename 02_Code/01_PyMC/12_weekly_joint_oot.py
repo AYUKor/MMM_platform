@@ -32,11 +32,21 @@ moderate, no anchor, --media-geo unit, --check-sd 0.5, no --lam-prior) on the sa
 honest ones (card: lam_median). If one differs by more than 10% from LAM_DATA_ONLY, refit with
 --lam-prior "C=median:0.1,...".
 
+v2 (04.11, after the fast runs): the fast runs showed that continuing the last fitted slope for 13 weeks drives
+the forecast down (delivery -30..-50% by June) and pulls orders and check apart; the last knot (16.03) has one
+fitted week after it and the week shock cannot take a segment-wide move of the last week (it is orthogonal to the
+hinges), so that week sets the last slope. The fit is not affected; the forecast is now made under three trend
+rules side by side (--trend-rules): continue (the model's own formulas), hold (trend part held at the last fitted
+week), hold4 (held at its mean over the last 4 fitted weeks). Also added: the ad response check, a regression of
+log(actual / forecast without ads) on the forecast log ad effect with unit and segment-week fixed effects (the ad
+part is 0.2-0.4% of turnover, so the turnover level cannot confirm or refute ROAS; this looks at the timing and the
+spread of the local channels). With --reuse on a v1 folder only the forecast is recomputed; v1 files stay.
+
 July-September 2026 are not in the panel and are never read.
 
-Outputs (OUT): panel_fit_window.parquet, multistart_{p}.csv, posterior_all_{p}.npz, roas_by_segment_channel_{p}.csv,
-oot_rows_{p}.csv, oot_by_segment_{p}.csv, oot_by_segment_week_{p}.csv, oot_by_city_group_{p}.csv,
-oot_by_unit_{p}.csv, oot_card_{p}.json.
+Outputs (OUT): panel_fit_window.parquet, multistart_{p}.csv, posterior_all_{p}.npz, oot_fit_diag_{p}.json,
+roas_by_segment_channel_{p}.csv; per trend rule r: oot_rows_{p}_{r}.csv, oot_by_segment_{p}_{r}.csv,
+oot_by_segment_week_{p}_{r}.csv, oot_by_city_group_{p}_{r}.csv, oot_by_unit_{p}_{r}.csv; oot_card_{p}_v2.json.
 
 Run: python -I 12_weekly_joint_oot.py --panel P.parquet --national N.csv --out OUT --profile fast|pilot
      [--fit-window-end 2026-03-23] [--m-ref m_ref_v3.csv] [model flags as in 05] [--reuse]
@@ -60,7 +70,7 @@ import pandas as pd
 
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'oot_v1_20261104'
+CODE_VERSION = 'oot_v2_20261104'
 DETERMINISTIC = {'R_orders_seg', 'roas_realized'}
 CITY = {'МОСКВА': 'Москва', 'САНКТ-ПЕТЕРБУРГ': 'Санкт-Петербург'}
 NAIVE_WINDOW_WEEKS = 12      # growth of the last 12 fitted weeks against the same weeks a year earlier
@@ -113,7 +123,55 @@ def extend_week_terms(weeks_fit: pd.DatetimeIndex, weeks_all: pd.DatetimeIndex) 
     G_a = np.column_stack([np.ones_like(t_a), t_a - t_f.mean(), F_a])
     basis_a = np.maximum(0.0, t_a[:, None] - knots[None, :]) - h_mean - G_a @ coef
     H_a = wj._holiday_matrix(weeks_all)[0] - hol_mean
-    return dict(t=t_a - t_f.mean(), t_raw=t_a, basis=basis_a, F=F_a, H=H_a, knot_idx=knot_idx)
+    return dict(t=t_a - t_f.mean(), t_raw=t_a, basis=basis_a, F=F_a, H=H_a, knot_idx=knot_idx,
+                hinge_raw=np.maximum(0.0, t_a[:, None] - knots[None, :]), h_mean=h_mean, coef=coef, t_fit_mean=t_f.mean())
+
+
+TREND_RULES = ('continue', 'hold', 'hold4')
+
+
+def week_terms_rule(ext: dict, W_f: int, rule: str) -> dict:
+    """Week arrays for the weeks after the cut under a trend rule (v2, after the fast runs of 04.11: continuing the
+    last fitted slope for 13 weeks drove the forecast 30-50% down in delivery and split orders and check apart).
+    continue: the model's own formulas (the line, unit slopes and hinges go on with their last slope);
+    hold: the trend part (segment line, unit slopes, hinges with their linear part) stays at the last fitted week;
+    hold4: it stays at its mean over the last 4 fitted weeks (less weight on one week).
+    Season (Fourier, also inside the orthogonalised hinges), holidays, own city waves, shocks and AR(1) go on."""
+    if rule == 'continue':
+        return ext
+    n = {'hold': 1, 'hold4': 4}[rule]
+    t_raw = ext['t_raw'].copy()
+    hinge = ext['hinge_raw'].copy()
+    t_raw[W_f:] = t_raw[W_f - n:W_f].mean()
+    hinge[W_f:] = hinge[W_f - n:W_f].mean(0)
+    G = np.column_stack([np.ones_like(t_raw), t_raw - ext['t_fit_mean'], ext['F']])
+    return dict(ext, t=t_raw - ext['t_fit_mean'], basis=hinge - ext['h_mean'] - G @ ext['coef'])
+
+
+def demean2(v: np.ndarray, g1: np.ndarray, g2: np.ndarray, iters: int = 100) -> np.ndarray:
+    """v minus two sets of group means (alternating projections)."""
+    v = v.astype(float).copy()
+    n1, n2 = g1.max() + 1, g2.max() + 1
+    for _ in range(iters):
+        v -= (np.bincount(g1, v, n1) / np.bincount(g1, minlength=n1))[g1]
+        v -= (np.bincount(g2, v, n2) / np.bincount(g2, minlength=n2))[g2]
+    return v
+
+
+def media_response(z: np.ndarray, x: np.ndarray, unit: np.ndarray, segweek: np.ndarray) -> dict:
+    """Slope of z = log(actual / forecast without ads) on x = forecast log ad effect, with unit and segment-week
+    fixed effects (national TV timing and the common week go into the fixed effects; the local channels' timing
+    and spread across cities is left). Slope near 1: the forecast ad response matches the actual weeks; near 0: it
+    does not. SE clustered by unit."""
+    zd, xd = demean2(z, unit, segweek), demean2(x, unit, segweek)
+    sxx = float((xd ** 2).sum())
+    if sxx <= 0:
+        return dict(slope=None)
+    b = float((xd * zd).sum() / sxx)
+    e = zd - b * xd
+    se = float(np.sqrt((np.bincount(unit, xd * e) ** 2).sum()) / sxx)
+    return dict(slope=round(b, 3), se_cluster_unit=round(se, 3), n=int(len(z)), sd_x_after_fe=float(np.round(xd.std(), 5)),
+                sd_x_raw=float(np.round(x.std(), 5)), sd_resid=float(np.round(e.std(), 4)))
 
 
 def rows_arr(base: dict, rows: dict, ybar_m: np.ndarray, weeks: dict, spend_norm: np.ndarray,
@@ -244,6 +302,7 @@ def main() -> None:
     ap.add_argument('--m-ref', default=None, help='typical spend per resident (m_ref_v3 csv) so lam means the same as in the full fit')
     ap.add_argument('--forecast-draws', type=int, default=500)
     ap.add_argument('--reuse', action='store_true', help='skip the fit when posterior_all_{profile}.npz exists in OUT')
+    ap.add_argument('--trend-rules', default=','.join(TREND_RULES), help='trend after the cut, any of continue,hold,hold4')
     a = ap.parse_args()
     rf = load_05()
     prof = rf.PROFILES[a.profile]
@@ -259,7 +318,9 @@ def main() -> None:
     p = pd.read_parquet(a.panel)
     assert p.week_start.max() <= pd.Timestamp('2026-06-22'), 'панель выходит за 28.06.2026'
     cut_path = out / 'panel_fit_window.parquet'
-    p[p.week_start <= fe].to_parquet(cut_path, index=False)
+    if not cut_path.exists():
+        p[p.week_start <= fe].to_parquet(cut_path, index=False)
+    assert len(pd.read_parquet(cut_path, columns=['week_start'])) == int((p.week_start <= fe).sum()), 'old cut differs'
     d = wj.prepare(str(cut_path), a.national, top_units_per_segment=prof['top_units'], m_ref_csv=a.m_ref)
     arr = wj.model_arrays(d, city_wave=not a.no_city_wave, wave_centred=True, slope_centred=False,
                           wave_scale=a.wave_scale, adstock='short', roas_scale='equal', weaken='', anchor=a.anchor,
@@ -358,7 +419,8 @@ def main() -> None:
     # ROAS of the cut fit (fitted weeks), as 05 reports it
     est = rf.roas_draws(d, arr, flat, turnover, prof['chains'])
     seg = rf.segment_table(est, turnover_by_seg)
-    seg.to_csv(out / f'roas_by_segment_channel_{a.profile}.csv', index=False)
+    if not (out / f'roas_by_segment_channel_{a.profile}.csv').exists():
+        seg.to_csv(out / f'roas_by_segment_channel_{a.profile}.csv', index=False)
     ch = est.groupby(['channel', 'draw'])[['effect_rub', 'spend_rub']].sum()
     ch = (ch.effect_rub / ch.spend_rub).groupby('channel')
     card['roas_channel'] = {c: [round(float(g.quantile(0.05)), 3), round(float(g.median()), 3),
@@ -435,12 +497,8 @@ def main() -> None:
     implied = sig[:, :, seg_m, tier_m] / np.sqrt(1 - rho[:, :, seg_m] ** 2)          # [D, 2, M]
     checks['last_residual_sd_over_model_sd'] = np.round(r_last.std(axis=(0, 2)) / np.median(implied, axis=(0, 2)), 3).tolist()
 
-    # model parts at the forecast rows (X = 0: weather unknown in advance)
-    f_rows = rows_of(fc, midx, aidx, np.zeros((len(fc), arr['X'].shape[1])))
-    mu_fc, media_fc = predict_parts(rows_arr(arr, f_rows, ybar_m, ext, spend_norm_all, wb_all),
-                                    d.dims, a.prior_set, samp)
+    # draws shared by every trend rule: new knots, week shocks, AR(1) path
     rng = np.random.default_rng(a.seed)
-    # new trend knots after the last fitted knot
     k = wj.KNOT_EVERY_WEEKS
     new_idx = np.arange(ext['knot_idx'][-1] + k, W_a - 1, k)
     hinge_new = np.maximum(0.0, ext['t_raw'][:, None] - ext['t_raw'][new_idx][None, :])      # [W_a, J]
@@ -449,7 +507,7 @@ def main() -> None:
     shock_new = np.zeros((D, 2, len(wj.SEGMENTS), W_a))
     shock_new[..., W_f:] = (rng.standard_normal((D, 2, len(wj.SEGMENTS), W_a - W_f))
                             * samp['sig_week'][:, :, :, None] * np.sqrt(R / W_f))
-    # AR(1) path from the last fitted residual
+    f_rows = rows_of(fc, midx, aidx, np.zeros((len(fc), arr['X'].shape[1])))     # X = 0: weather unknown in advance
     h_fc = f_rows['w_i'] - w_last[f_rows['m_i']]
     assert (h_fc >= 1).all()
     H = int(h_fc.max())
@@ -463,82 +521,95 @@ def main() -> None:
         r = rho_m * r + np.stack([eo, ec], 1)
         path[..., h] = r
     s_fc, w_fc, m_fc = f_rows['s_i'], f_rows['w_i'], f_rows['m_i']
-    y_fc = (mu_fc + trend_new[:, :, s_fc, w_fc] + shock_new[:, :, s_fc, w_fc] + path[:, :, m_fc, h_fc])
-    T_d = np.exp(y_fc[:, 0] + y_fc[:, 1])                                              # [D, N]
-    O_d = np.exp(y_fc[:, 0])
-    T_nomedia = np.exp(y_fc[:, 0] + y_fc[:, 1] - media_fc[:, 0] - media_fc[:, 1])
 
-    # ------------------------------------------------------------ scoring
     nv = naive_forecast(p, fc, fe)
     fc = pd.concat([fc, nv], axis=1)
     common = fc.naive_turnover.notna().to_numpy()
     fc['city_group'] = np.where(fc.unit_label.isin(list(CITY)), fc.unit_label.map(CITY),
                                 fc.size_tier.fillna('other').astype(str))
-    rows_out = fc[['segment', 'unit_label', 'mu_key', 'city_group', 'week_start', 'turnover_total', 'orders_cnt',
-                   'naive_turnover', 'naive_orders']].copy()
-    for kk, v in q(T_d).items():
-        rows_out[f'fc_turnover_{kk}'] = v
-    rows_out['fc_orders_median'] = np.median(O_d, 0)
-    rows_out['fc_media_effect_median'] = np.median(T_d - T_nomedia, 0)
-    rows_out.to_csv(out / f'oot_rows_{a.profile}.csv', index=False)
-
-    seg_names = wj.SEGMENTS
-    t_seg = group_table(fc.seg_i.to_numpy(), seg_names, T_d, O_d, fc, common)
-    tot = group_table(np.zeros(len(fc), int), ['Всего'], T_d, O_d, fc, common)
-    t_seg = pd.concat([t_seg, tot], ignore_index=True)
     spend_rub = (sp_all[f_rows['a_i'], w_fc, :] * (d.ad_units.pop_k.to_numpy()[f_rows['a_i']] * 1000)[:, None]
                  * d.chan_mask[s_fc]).sum(1)
-    inc = T_d - T_nomedia
+    seg_names = wj.SEGMENTS
     oh_s = np.eye(len(seg_names))[fc.seg_i.to_numpy()]
-    inc_s = np.concatenate([inc @ oh_s, inc.sum(1, keepdims=True)], 1)
-    t_seg['media_spend_rub'] = np.append(spend_rub @ oh_s, spend_rub.sum())
-    t_seg['media_effect_median'] = np.median(inc_s, 0)
-    t_seg['media_effect_pct_of_fc'] = 100 * t_seg.media_effect_median / t_seg.fc_turnover_median
-    t_seg.to_csv(out / f'oot_by_segment_{a.profile}.csv', index=False)
-
     sw = fc.segment + ' | ' + fc.week_start.dt.strftime('%Y-%m-%d')
     sw_names = sorted(sw.unique())
-    t_sw = group_table(sw.map({n: i for i, n in enumerate(sw_names)}).to_numpy(), sw_names, T_d, O_d, fc, common)
-    t_sw.to_csv(out / f'oot_by_segment_week_{a.profile}.csv', index=False)
+    sw_codes = sw.map({n: i for i, n in enumerate(sw_names)}).to_numpy()
     cg = fc.segment + ' | ' + fc.city_group
     cg_names = sorted(cg.unique())
-    t_cg = group_table(cg.map({n: i for i, n in enumerate(cg_names)}).to_numpy(), cg_names, T_d, O_d, fc, common)
-    t_cg.to_csv(out / f'oot_by_city_group_{a.profile}.csv', index=False)
     un_names = sorted(fc.mu_key.unique())
-    t_un = group_table(fc.mu_key.map({n: i for i, n in enumerate(un_names)}).to_numpy(), un_names, T_d, O_d, fc, common)
-    t_un.to_csv(out / f'oot_by_unit_{a.profile}.csv', index=False)
+    un_codes = fc.mu_key.map({n: i for i, n in enumerate(un_names)}).to_numpy()
 
-    full_units = t_un.common_share_of_turnover > 0.999
-    metrics = dict(
-        total=t_seg.iloc[-1][['actual_turnover', 'fc_turnover_median', 'fc_turnover_q05', 'fc_turnover_q95',
-                              'err_turnover_pct', 'inside_90', 'err_orders_pct', 'err_check_pct',
-                              'common_share_of_turnover', 'common_err_model_pct', 'common_err_naive_pct',
-                              'media_effect_pct_of_fc']].to_dict(),
-        by_segment=t_seg.set_index('group')[['err_turnover_pct', 'inside_90', 'err_orders_pct', 'err_check_pct',
-                                             'common_err_model_pct', 'common_err_naive_pct']].round(2).to_dict('index'),
-        segment_week_wape_model=round(wape(t_sw.fc_turnover_median.to_numpy(), t_sw.actual_turnover.to_numpy()), 4),
-        segment_week_inside_90=round(float(t_sw.inside_90.mean()), 3),
-        segment_week_wape_common_model=round(wape(t_sw.common_fc_turnover_median.to_numpy(),
-                                                  t_sw.common_actual_turnover.to_numpy()), 4),
-        segment_week_wape_common_naive=round(wape(t_sw.common_naive_turnover.to_numpy(),
-                                                  t_sw.common_actual_turnover.to_numpy()), 4),
-        unit_wape_model=round(wape(t_un.fc_turnover_median.to_numpy(), t_un.actual_turnover.to_numpy()), 4),
-        unit_inside_90=round(float(t_un.inside_90.mean()), 3),
-        unit_inside_90_turnover_weighted=round(float((t_un.inside_90 * t_un.actual_turnover).sum()
-                                                     / t_un.actual_turnover.sum()), 3),
-        units_with_naive_all_weeks=int(full_units.sum()),
-        unit_wape_common_model=round(wape(t_un.common_fc_turnover_median[full_units].to_numpy(),
-                                          t_un.common_actual_turnover[full_units].to_numpy()), 4),
-        unit_wape_common_naive=round(wape(t_un.common_naive_turnover[full_units].to_numpy(),
-                                          t_un.common_actual_turnover[full_units].to_numpy()), 4),
-        rows_with_naive_share=round(float(common.mean()), 3))
-    card |= dict(status='done', checks=checks, metrics=metrics, forecast_draws=D,
+    by_rule = {}
+    for rule in [x.strip() for x in a.trend_rules.split(',') if x.strip()]:
+        wk = week_terms_rule(ext, W_f, rule)
+        mu_fc, media_fc = predict_parts(rows_arr(arr, f_rows, ybar_m, wk, spend_norm_all, wb_all),
+                                        d.dims, a.prior_set, samp)
+        y_fc = (mu_fc + trend_new[:, :, s_fc, w_fc] + shock_new[:, :, s_fc, w_fc] + path[:, :, m_fc, h_fc])
+        T_d = np.exp(y_fc[:, 0] + y_fc[:, 1])                                          # [D, N]
+        O_d = np.exp(y_fc[:, 0])
+        T_nomedia = np.exp(y_fc[:, 0] + y_fc[:, 1] - media_fc[:, 0] - media_fc[:, 1])
+        tag = f'{a.profile}_{rule}'
+
+        rows_out = fc[['segment', 'unit_label', 'mu_key', 'city_group', 'week_start', 'turnover_total', 'orders_cnt',
+                       'naive_turnover', 'naive_orders']].copy()
+        for kk, v in q(T_d).items():
+            rows_out[f'fc_turnover_{kk}'] = v
+        rows_out['fc_orders_median'] = np.median(O_d, 0)
+        rows_out['fc_turnover_no_ads_median'] = np.median(T_nomedia, 0)
+        rows_out['fc_ads_log_effect_median'] = np.median(media_fc[:, 0] + media_fc[:, 1], 0)
+        rows_out['fc_media_effect_median'] = np.median(T_d - T_nomedia, 0)
+        rows_out.to_csv(out / f'oot_rows_{tag}.csv', index=False)
+
+        t_seg = group_table(fc.seg_i.to_numpy(), seg_names, T_d, O_d, fc, common)
+        tot = group_table(np.zeros(len(fc), int), ['Всего'], T_d, O_d, fc, common)
+        t_seg = pd.concat([t_seg, tot], ignore_index=True)
+        inc = T_d - T_nomedia
+        inc_s = np.concatenate([inc @ oh_s, inc.sum(1, keepdims=True)], 1)
+        t_seg['media_spend_rub'] = np.append(spend_rub @ oh_s, spend_rub.sum())
+        t_seg['media_effect_median'] = np.median(inc_s, 0)
+        t_seg['media_effect_pct_of_fc'] = 100 * t_seg.media_effect_median / t_seg.fc_turnover_median
+        t_seg.to_csv(out / f'oot_by_segment_{tag}.csv', index=False)
+        t_sw = group_table(sw_codes, sw_names, T_d, O_d, fc, common)
+        t_sw.to_csv(out / f'oot_by_segment_week_{tag}.csv', index=False)
+        t_cg = group_table(cg.map({n: i for i, n in enumerate(cg_names)}).to_numpy(), cg_names, T_d, O_d, fc, common)
+        t_cg.to_csv(out / f'oot_by_city_group_{tag}.csv', index=False)
+        t_un = group_table(un_codes, un_names, T_d, O_d, fc, common)
+        t_un.to_csv(out / f'oot_by_unit_{tag}.csv', index=False)
+
+        full_units = t_un.common_share_of_turnover > 0.999
+        z = np.log(fc.turnover_total.to_numpy(float)) - np.log(rows_out.fc_turnover_no_ads_median.to_numpy())
+        by_rule[rule] = dict(
+            total=t_seg.iloc[-1][['actual_turnover', 'fc_turnover_median', 'fc_turnover_q05', 'fc_turnover_q95',
+                                  'err_turnover_pct', 'inside_90', 'err_orders_pct', 'err_check_pct',
+                                  'common_share_of_turnover', 'common_err_model_pct', 'common_err_naive_pct',
+                                  'media_effect_pct_of_fc']].to_dict(),
+            by_segment=t_seg.set_index('group')[['err_turnover_pct', 'inside_90', 'err_orders_pct', 'err_check_pct',
+                                                 'common_err_model_pct', 'common_err_naive_pct']].round(2).to_dict('index'),
+            segment_week_wape_model=round(wape(t_sw.fc_turnover_median.to_numpy(), t_sw.actual_turnover.to_numpy()), 4),
+            segment_week_inside_90=round(float(t_sw.inside_90.mean()), 3),
+            segment_week_wape_common_model=round(wape(t_sw.common_fc_turnover_median.to_numpy(),
+                                                      t_sw.common_actual_turnover.to_numpy()), 4),
+            segment_week_wape_common_naive=round(wape(t_sw.common_naive_turnover.to_numpy(),
+                                                      t_sw.common_actual_turnover.to_numpy()), 4),
+            unit_wape_model=round(wape(t_un.fc_turnover_median.to_numpy(), t_un.actual_turnover.to_numpy()), 4),
+            unit_inside_90=round(float(t_un.inside_90.mean()), 3),
+            unit_inside_90_turnover_weighted=round(float((t_un.inside_90 * t_un.actual_turnover).sum()
+                                                         / t_un.actual_turnover.sum()), 3),
+            units_with_naive_all_weeks=int(full_units.sum()),
+            unit_wape_common_model=round(wape(t_un.common_fc_turnover_median[full_units].to_numpy(),
+                                              t_un.common_actual_turnover[full_units].to_numpy()), 4),
+            unit_wape_common_naive=round(wape(t_un.common_naive_turnover[full_units].to_numpy(),
+                                              t_un.common_actual_turnover[full_units].to_numpy()), 4),
+            rows_with_naive_share=round(float(common.mean()), 3),
+            media_response=media_response(z, rows_out.fc_ads_log_effect_median.to_numpy(), un_codes, sw_codes))
+        print(rule, json.dumps(by_rule[rule], ensure_ascii=False, default=str), flush=True)
+        print(t_seg.round(3).to_string(), flush=True)
+
+    card |= dict(status='done', checks=checks, by_rule=by_rule, forecast_draws=D,
                  new_trend_knots=[str(d_all.weeks[i].date()) for i in new_idx],
                  week_shock_sd_factor=round(float(np.sqrt(R / W_f)), 3), seconds_total=round(time.time() - t0))
-    (out / f'oot_card_{a.profile}.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
-    print(json.dumps(card, ensure_ascii=False, indent=1, default=str))
-    print(t_seg.round(3).to_string())
-
+    (out / f'oot_card_{a.profile}_v2.json').write_text(json.dumps(card, ensure_ascii=False, indent=2, default=str))
+    print(json.dumps({k: v for k, v in card.items() if k != 'by_rule'}, ensure_ascii=False, indent=1, default=str))
 
 if __name__ == '__main__':
     main()
