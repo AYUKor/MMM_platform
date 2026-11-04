@@ -2387,7 +2387,62 @@ def _write_dynamic_workbook(
     wb.save(paths.output_xlsx)
 
 
-def _weekly_model_notes(paths: ReportPaths, manifest: dict[str, Any], run_card: dict[str, Any]) -> list[list[str]]:
+def _weekly_corridor_edge_notes(
+    recommendations: pd.DataFrame | None,
+    allocation: pd.DataFrame | None,
+    flighting: pd.DataFrame | None,
+    corridor: dict[str, Any],
+) -> list[list[str]]:
+    """Per recommended plan: how many optimized cells sit on the corridor bounds (weekly joint package)."""
+    if recommendations is None or allocation is None or flighting is None or not corridor:
+        return []
+    need_a = {"candidate_name", "source_campaign_name", "segment", "geo", "channel", "budget_rub", "optimizer_policy"}
+    if recommendations.empty or allocation.empty or flighting.empty or not need_a.issubset(allocation.columns):
+        return []
+    up, keep = float(corridor.get("max_increase_ratio", 0.0)), float(corridor.get("min_keep_ratio", 0.0))
+    plan = flighting.groupby(["campaign_name", "segment", "geo", "channel"])["budget_rub"].sum()
+    rows: list[list[str]] = []
+    for _, rec in recommendations.iterrows():
+        cells = allocation[
+            (allocation["candidate_name"].astype(str) == str(rec.get("candidate_name")))
+            & (allocation["optimizer_policy"].astype(str) == "optimize")
+        ].copy()
+        if cells.empty:
+            continue
+        cells["plan_rub"] = [
+            float(plan.get((r.source_campaign_name, r.segment, r.geo, r.channel), 0.0)) for r in cells.itertuples()
+        ]
+        cells = cells[cells["plan_rub"] > 0]
+        if cells.empty:
+            continue
+        ratio = cells["budget_rub"].astype(float) / cells["plan_rub"]
+        cells["at_up"] = (ratio - up).abs() <= 2e-3
+        cells["at_keep"] = (ratio - keep).abs() <= 2e-3
+        on_edge = int((cells["at_up"] | cells["at_keep"]).sum())
+        if not on_edge:
+            continue
+        by_ch = cells.groupby("channel")[["at_up", "at_keep"]].all()
+        all_up = [str(c) for c in by_ch.index[by_ch["at_up"]]]
+        all_keep = [str(c) for c in by_ch.index[by_ch["at_keep"]]]
+        text = f"{on_edge} из {len(cells)} ячеек на границах"
+        if all_up:
+            text += f"; везде ×{up:g}: {', '.join(all_up)}"
+        if all_keep:
+            text += f"; везде ×{keep:g}: {', '.join(all_keep)}"
+        text += (". Выигрыш этой рекомендации задан границами." if all_up or all_keep
+                 else ". Часть выигрыша задана границами.")
+        rows.append([f"Упор в границы: {rec.get('campaign_name')}", text])
+    return rows
+
+
+def _weekly_model_notes(
+    paths: ReportPaths,
+    manifest: dict[str, Any],
+    run_card: dict[str, Any],
+    recommendations: pd.DataFrame | None = None,
+    allocation: pd.DataFrame | None = None,
+    flighting: pd.DataFrame | None = None,
+) -> list[list[str]]:
     """Plain-language caveats of a weekly joint model package (weekly_package.py) for sheet 00."""
     if not is_weekly_manifest(manifest):
         return []
@@ -2426,6 +2481,7 @@ def _weekly_model_notes(paths: ReportPaths, manifest: dict[str, Any], run_card: 
                       "размер выигрыша задан шириной этих границ, а не найден по данным: при других границах "
                       "будет другое число. Направление переноса показывает, какой канал модель считает "
                       "более отдающим."])
+        notes.extend(_weekly_corridor_edge_notes(recommendations, allocation, flighting, corridor))
     blocker_ru = {
         "ROAS_LEVEL_INDUSTRY_ANCHOR": "уровень ROAS из отраслевого ориентира",
         "OOT_PREREG_NOT_PASSED": "проверка на отложенных кварталах формально не пройдена",
@@ -2485,7 +2541,7 @@ def build_marketer_report(paths: ReportPaths) -> dict[str, Any]:
         allocation=allocation,
         model_activation_status=str(manifest.get("activation_status") or "unknown"),
         production_blockers=list(manifest.get("production_blockers") or []),
-        model_notes=_weekly_model_notes(paths, manifest, run_card),
+        model_notes=_weekly_model_notes(paths, manifest, run_card, recommendations, allocation, flighting),
     )
 
     scenario_results_path = paths.optimizer_output_dir / "marketer_report_scenario_results.csv"
