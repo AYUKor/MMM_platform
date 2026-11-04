@@ -3550,10 +3550,47 @@ def _candidate_support_warnings(summary: pd.DataFrame) -> int:
     return int(pd.to_numeric(sub[warning_column], errors="coerce").fillna(0).max())
 
 
-def _candidate_hard_support_warnings(detail: pd.DataFrame, candidate_name: str) -> int:
+def _candidate_hard_support_warnings(
+    detail: pd.DataFrame,
+    candidate_name: str,
+    exempt_keys: set[tuple[str, str, str]] | None = None,
+) -> int:
     if detail.empty:
         return 0
+    if exempt_keys and {"segment", "geo", "channel"}.issubset(detail.columns):
+        detail = detail[detail["campaign_name"] == candidate_name]
+        keys = zip(detail["segment"].astype(str), detail["geo"].astype(str), detail["channel"].astype(str))
+        detail = detail[[key not in exempt_keys for key in keys]]
     return _candidate_support_level_warnings(detail, candidate_name, {SUPPORT_LEVEL_OUTSIDE})
+
+
+def _fixed_at_plan_support_exempt_keys(
+    candidate: pd.DataFrame,
+    current_cells: pd.DataFrame,
+    engine: ForecastEngine,
+) -> set[tuple[str, str, str]]:
+    """Cells (segment, geo, channel) whose support breach does not count against a candidate.
+
+    Only for engines with fixed_cells_exempt_from_support (weekly joint package): a fixed-at-plan cell kept at the
+    uploaded budget (national TV) is the user's spend, not an optimizer move. The forecast still flags it."""
+    if not getattr(engine, "fixed_cells_exempt_from_support", False) or candidate is None or candidate.empty:
+        return set()
+    keys = ["segment", "geo", "channel"]
+    current_by_key = {
+        tuple(str(row[key]) for key in keys): float(row["budget_rub"])
+        for _, row in current_cells.iterrows()
+    }
+    exempt: set[tuple[str, str, str]] = set()
+    for _, cell in candidate.iterrows():
+        key = tuple(str(cell[name]) for name in keys)
+        capability = engine._capability_row(key[0], "turnover_per_user", key[2])
+        if str(capability.get("optimizer_use") or "") != "fixed_at_plan":
+            continue
+        current = current_by_key.get(key, 0.0)
+        tolerance = max(BUDGET_RECONCILIATION_ABS_TOL_RUB, abs(current) * BUDGET_RECONCILIATION_REL_TOL)
+        if abs(float(cell["budget_rub"]) - current) <= tolerance:
+            exempt.add(key)
+    return exempt
 
 
 def _candidate_support_level_warnings(
@@ -4001,7 +4038,9 @@ def run_optimizer_from_flighting(
             score = _candidate_score(cand_summary, objective_contract)
             downside_score = _candidate_downside_score(cand_summary, objective_contract)
             support_warnings = _candidate_support_warnings(cand_summary)
-            hard_support_warnings = _candidate_hard_support_warnings(search_detail, cand_name)
+            hard_support_warnings = _candidate_hard_support_warnings(
+                search_detail, cand_name, _fixed_at_plan_support_exempt_keys(cand_cells, cells, engine)
+            )
             elevated_support_warnings = _candidate_support_level_warnings(
                 search_detail,
                 cand_name,
@@ -4217,7 +4256,11 @@ def run_optimizer_from_flighting(
                         cand_name,
                         {SUPPORT_LEVEL_STRONG},
                     ),
-                    "hard_support_warnings_n": _candidate_hard_support_warnings(finalist_detail, cand_name),
+                    "hard_support_warnings_n": _candidate_hard_support_warnings(
+                        finalist_detail,
+                        cand_name,
+                        _fixed_at_plan_support_exempt_keys(cand_by_name[cand_name], cells, engine),
+                    ),
                     "diagnostic_target_rows": diagnostic_rows,
                     "caution_target_rows": caution_rows,
                     "risk_policy_violations_n": risk_policy_violations,

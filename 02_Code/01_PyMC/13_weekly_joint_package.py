@@ -17,8 +17,9 @@
                   at 40% of its money, a copy for ТС5/Оффлайн, 30% of OOH in three cities labelled Indoor and national
                   TV rows in three cities at twice the most ever spent there. The search kernel of a cell equals the
                   forecast of that cell alone; every candidate keeps the money of its own direction; Indoor is
-                  optimized as OOH_Total; national TV stays at plan in every optimized candidate and does not stop
-                  the search; every optimized cell stays within the corridor around its plan budget; the adaptive
+                  optimized as OOH_Total; national TV stays at plan in every optimized candidate and neither stops
+                  the search nor counts as a support warning against the optimized finalists; every optimized cell
+                  stays within the corridor around its plan budget; the adaptive
                   search runs for each direction; the report's sheet 00 carries the model caveats.
              Writes check_card.json, the platform forecast outputs and a short CSV per check into --out.
 
@@ -38,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -
 import numpy as np
 import pandas as pd
 
-CODE_VERSION = 'weekly_joint_package_v3_20261105'
+CODE_VERSION = 'weekly_joint_package_v4_20261105'
 
 
 def build(a: argparse.Namespace) -> None:
@@ -272,11 +273,15 @@ def _optimizer_check(eng, pkg: Path, plan: pd.DataFrame, out: Path, a: argparse.
     from openpyxl import load_workbook
     sheet0 = ' '.join(str(c.value) for row in load_workbook(rep['output_xlsx'], read_only=True)
                       .worksheets[0].iter_rows() for c in row if c.value is not None)
-    caveats = all(w in sheet0 for w in ('отраслев', 'отложенных', 'Вероятность улучшения', 'Ограничения оптимизатора'))
+    caveats = all(w in sheet0 for w in ('отраслев', 'отложенных', 'Вероятность улучшения', 'Ограничения оптимизатора',
+                                        'Границы и выигрыш', 'Ограничения статуса'))
     s6 = {c: int(((cs.campaign_name == c) & cs.candidate_name.str.contains('__scenario6_adaptive_marginal')
                   & (cs.precheck_status == 'scored')).sum()) for c in money.index}
     # what the report recommends per direction (and the reliable rank 1) vs the plan
     tot = fs[(fs.channel == '__TOTAL__') & (fs.segment == '__ALL__')]
+    # optimized finalists keep every cell within history, and national TV at plan is not a warning against them
+    opt_hard = tot[tot.candidate_name.str.contains('__scenario5_|__scenario6_')
+                   & (pd.to_numeric(tot.hard_support_warnings_n, errors='coerce').fillna(0) > 0)]
     rec = {}
     for c in money.index:
         t = tot[tot.source_campaign_name == c]
@@ -302,12 +307,13 @@ def _optimizer_check(eng, pkg: Path, plan: pd.DataFrame, out: Path, a: argparse.
                 national_tv_rows=len(natl), national_tv_not_fixed=sum(r['optimizer_use'] != 'fixed_at_plan' for r in natl),
                 national_tv_plan_rows=nat_plan_rows, national_tv_moved_rows=int(len(nat_moved)),
                 corridor=corr, cells_outside_corridor=int(len(out_corr)), report_caveats_on_sheet0=caveats,
+                optimized_finalists_with_hard_support_warnings=int(len(opt_hard)),
                 adaptive_candidates_scored=s6, directions=card['weekly_optimizer_plan'], recommendation=rec,
                 marketer_report=str(rep['output_xlsx']),
                 passed=bool(worst < 1e-9 and abs(sep_rel) < 0.02 and not wrong_seg and money_gap < 1.0
                             and not (al.channel == alias).any() and all(r['optimizer_use'] == 'fixed_at_plan' for r in natl)
                             and all(v > 0 for v in s6.values()) and len(money) == 2 and nat_plan_rows > 0
-                            and nat_moved.empty and out_corr.empty and caveats))
+                            and nat_moved.empty and out_corr.empty and caveats and opt_hard.empty))
 
 
 def main() -> None:
