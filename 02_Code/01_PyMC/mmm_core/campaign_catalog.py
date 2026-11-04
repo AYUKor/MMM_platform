@@ -7,7 +7,11 @@ without spend starts a new campaign, a continuous period longer than 365 days is
 Effect of a campaign for one posterior draw = turnover with all ads minus turnover without this campaign's money, over
 the fit unit-weeks of the model (as the model's own channel ROAS): T * (1 - exp(-dM)), dM = drop of the log orders and
 log check contributions when the campaign's spend is taken out of the units and weeks it was routed to (panel v3 rules,
-campaign_routing). Adstock carries the effect into the following weeks; nothing after 28.06.2026 is counted.
+campaign_routing). Adstock carries the effect into the following weeks. By default nothing after the last panel week
+(22.06-28.06.2026) is counted; with tail weeks (Campaigns(..., tail=tail_rows(d, 7))) the carry-over of the last weeks
+is counted too, as the plan forecast does (07: plan weeks + 7 carry-over weeks): ledger money of 29-30.06.2026 enters
+the first tail week, no other spend is assumed after it, and the baseline turnover of a tail week is the same unit's
+real turnover 52 weeks earlier (analog year, as 07; July-September 2026 are never read).
 ROAS = turnover effect / full ledger budget of the campaign (money the model cannot see included).
 """
 from __future__ import annotations
@@ -237,15 +241,55 @@ def present_cells(panel_path: str, d: wj.ModelData) -> np.ndarray:
     return out
 
 
-def campaign_spend(routed: pd.DataFrame, units: pd.DataFrame, d: wj.ModelData, present: np.ndarray, n: int) -> dict:
+def tail_weeks(d: wj.ModelData, n_tail: int) -> pd.DatetimeIndex:
+    """The panel weeks plus n_tail Monday weeks after the last one."""
+    last = d.weeks[-1]
+    return d.weeks.append(pd.DatetimeIndex([last + pd.Timedelta(weeks=i) for i in range(1, n_tail + 1)]))
+
+
+def present_tail(present: np.ndarray, n_tail: int) -> np.ndarray:
+    """[A, W + n_tail]: a unit present in the last panel week stays present in the tail weeks."""
+    return np.concatenate([present, np.repeat(present[:, -1:], n_tail, axis=1)], axis=1)
+
+
+def tail_rows(d: wj.ModelData, arr: dict, n_tail: int) -> dict:
+    """Rows of the tail weeks after the panel: one per model unit with a fit row in the last panel week, weeks W ..
+    W + n_tail - 1. Baseline turnover, orders and buyers = the same model unit 52 weeks earlier (analog year, no growth,
+    as 07); a unit without that week takes its median fit week."""
+    o = d.obs
+    W = len(d.weeks)
+    weeks = tail_weeks(d, n_tail)
+    last = o[o.w_i.to_numpy() == W - 1]
+    hist = o.set_index(['mu_key', 'week_start'])[['turnover_total', 'orders_cnt', 'buyers_daily_sum']]
+    med = o.groupby('mu_key')[['turnover_total', 'orders_cnt', 'buyers_daily_sum']].median()
+    rows = []
+    for r in last.itertuples(index=False):
+        for t in range(n_tail):
+            wk = weeks[W + t]
+            key = (r.mu_key, wk - pd.Timedelta(weeks=52))
+            if key in hist.index:
+                v, analog = hist.loc[key], True
+            else:
+                v, analog = med.loc[r.mu_key], False
+            rows.append((int(r.a_i), W + t, int(r.seg_i), float(v.turnover_total), float(v.orders_cnt),
+                         float(v.buyers_daily_sum), analog))
+    a, w, s, T, O, B, an = (np.array(x) for x in zip(*rows)) if rows else (np.zeros(0, int),) * 7
+    return dict(n_tail=n_tail, a_i=a.astype(int), w_i=w.astype(int), s_i=s.astype(int), T=T.astype(float),
+                O=O.astype(float), B=B.astype(float), analog_share=float(np.mean(an)) if len(an) else 0.0,
+                first_week=str(weeks[W].date()) if n_tail else '', last_week=str(weeks[-1].date()) if n_tail else '')
+
+
+def campaign_spend(routed: pd.DataFrame, units: pd.DataFrame, d: wj.ModelData, present: np.ndarray, n: int,
+                   weeks: pd.DatetimeIndex | None = None) -> dict:
     """Per campaign (column cat = 0..n-1) the money in model cells, as (a, w, c, rub) lists.
 
     Present unit-weeks get the routed money (as the panel); weeks before a unit existed get the campaign's national
     money per 1000 residents x the unit's population (as wj.prepare). Money on units or weeks the model does not have
-    is counted per campaign as not seen."""
+    is counted per campaign as not seen. weeks (default: the panel weeks) may add tail weeks after the panel
+    (tail_weeks; present then has the same number of columns, present_tail)."""
     C = len(wj.CHANNELS)
     aidx = {k: i for i, k in enumerate(d.ad_units.ad_key)}
-    widx = {w: i for i, w in enumerate(d.weeks)}
+    widx = {w: i for i, w in enumerate(d.weeks if weeks is None else weeks)}
     r = routed.copy()
     r['week_start'] = r.date - pd.to_timedelta(r.date.dt.dayofweek, unit='D')
     r['segment'] = r.network + '/' + r.channel
@@ -292,6 +336,7 @@ def check_spend_rebuild(cells: dict, d: wj.ModelData) -> dict:
     A, W, C = d.spend_pr.shape
     tot = np.zeros((A, W, C))
     for g in cells.values():
+        g = g[g.w.to_numpy(int) < W]                  # tail weeks after the panel are not in the model's array
         np.add.at(tot, (g.a.to_numpy(int), g.w.to_numpy(int), g.j.to_numpy(int)), g.budget.to_numpy(float))
     ref = d.spend_pr * (d.ad_units.pop_k.to_numpy()[:, None, None] * 1000.0)
     k = len(wj.CHANNELS) - 1          # the offline-TV-in-online channel is not a ledger channel (off in the model)
@@ -333,19 +378,29 @@ def beta_draw(arr: dict, draw: dict) -> np.ndarray:
 class Campaigns:
     """Precomputed per-campaign arrays for the counterfactual loop."""
 
-    def __init__(self, d: wj.ModelData, arr: dict, cells: dict, n: int):
+    def __init__(self, d: wj.ModelData, arr: dict, cells: dict, n: int, tail: dict | None = None):
+        """tail (tail_rows): count the carry-over after the last panel week; the cells then carry tail weeks too."""
         self.n = n
         self.L = int(arr.get('adstock_l', wj.ADSTOCK_L))
         self.pad = bool(arr.get('adstock_pad_steady', False))
         o = d.obs
-        self.T = (o.turnover_total.to_numpy(float))
-        self.O = o.orders_cnt.to_numpy(float)
-        self.B = o.buyers_daily_sum.to_numpy(float)
-        self.a_i, self.w_i, self.s_i = arr['a_i'], arr['w_i'], arr['s_i']
+        self.n_fit = len(o)
+        self.n_tail = int(tail['n_tail']) if tail else 0
+        tl = tail if tail else dict(T=[], O=[], B=[], a_i=[], w_i=[], s_i=[])
+        cat = lambda x, y, t: np.concatenate([np.asarray(x, t), np.asarray(y, t)])
+        self.T = cat(o.turnover_total.to_numpy(float), tl['T'], float)
+        self.O = cat(o.orders_cnt.to_numpy(float), tl['O'], float)
+        self.B = cat(o.buyers_daily_sum.to_numpy(float), tl['B'], float)
+        self.a_i = cat(arr['a_i'], tl['a_i'], int)
+        self.w_i = cat(arr['w_i'], tl['w_i'], int)
+        self.s_i = cat(arr['s_i'], tl['s_i'], int)
+        Wx = len(d.weeks) + self.n_tail
         seg_a = d.ad_units.seg_i.to_numpy()
         m_ref_a = d.m_ref[seg_a]                                                          # [A, C]
         pop = d.ad_units.pop_k.to_numpy() * 1000.0
-        rows_of = pd.Series(np.arange(len(o))).groupby(self.a_i).apply(np.asarray).to_dict()
+        rows_of = pd.Series(np.arange(len(self.T))).groupby(self.a_i).apply(np.asarray).to_dict()
+        # spend of the tail weeks (all campaigns' ledger money there, normalised as the model's spend_norm)
+        self.sn_tail = np.zeros((len(d.ad_units), self.n_tail, len(wj.CHANNELS)))
         self.items = []
         for k in range(n):
             g = cells.get(k)
@@ -354,12 +409,14 @@ class Campaigns:
                 continue
             units = np.unique(g.a.to_numpy(int))
             loc = {a: i for i, a in enumerate(units)}
-            dn = np.zeros((len(units), len(d.weeks), len(wj.CHANNELS)))
+            dn = np.zeros((len(units), Wx, len(wj.CHANNELS)))
             a = g.a.to_numpy(int)
             j = g.j.to_numpy(int)
             v = g.budget.to_numpy(float) / pop[a]
             v = np.where(m_ref_a[a, j] > 0, v / np.where(m_ref_a[a, j] > 0, m_ref_a[a, j], 1.0), 0.0)
             np.add.at(dn, (np.array([loc[x] for x in a]), g.w.to_numpy(int), j), v)
+            if self.n_tail:
+                self.sn_tail[units] += dn[:, len(d.weeks):, :]
             rows = np.concatenate([rows_of.get(x, np.zeros(0, int)) for x in units]).astype(int)
             wk = g.w.to_numpy(int)
             lo, hi = wk.min(), wk.max() + self.L - 1
@@ -374,14 +431,18 @@ class Campaigns:
         alpha, lam = np.asarray(draw['alpha']), np.asarray(draw['lam'])
         beta = beta_draw(arr, draw)                                                       # [2, A, C]
         sn = arr['spend_norm']
-        sat = adstock_sat_np(sn, alpha, lam, self.L, self.pad)                           # [A, W, C]
-        cfull = (beta[0][self.a_i] + beta[1][self.a_i]) * sat[self.a_i, self.w_i]        # [N, C]
+        if self.n_tail:
+            sn = np.concatenate([sn, self.sn_tail], axis=1)                               # [A, W + tail, C]
+        sat = adstock_sat_np(sn, alpha, lam, self.L, self.pad)                           # [A, W(+tail), C]
+        cfull = (beta[0][self.a_i] + beta[1][self.a_i]) * sat[self.a_i, self.w_i]        # [N(+tail rows), C]
         inc = self.T[:, None] * (1 - np.exp(-cfull))
-        full_sc = np.zeros((S, C))
-        np.add.at(full_sc, self.s_i, inc)
+        full_sc = np.zeros((S, C))                                                        # fit rows: the model table
+        np.add.at(full_sc, self.s_i[:self.n_fit], inc[:self.n_fit])
+        full_sc_all = full_sc.copy()                                                      # with the tail rows
+        np.add.at(full_sc_all, self.s_i[self.n_fit:], inc[self.n_fit:])
         ks = range(self.n) if k_list is None else k_list
         out = dict(turn=np.zeros(self.n), orders=np.zeros(self.n), check_num=np.zeros(self.n),
-                   by_sc=np.zeros((self.n, S, C)), full_sc=full_sc)
+                   by_sc=np.zeros((self.n, S, C)), full_sc=full_sc, full_sc_all=full_sc_all)
         for k in ks:
             it = self.items[k]
             if it is None:

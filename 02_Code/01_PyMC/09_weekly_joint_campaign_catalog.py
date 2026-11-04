@@ -4,6 +4,9 @@ For each campaign of the ledger (name + period, names directory rules) and each 
 ads minus turnover without this campaign's money, over the model's fit unit-weeks; incremental orders per 1000 buyers
 and the average check change over the campaign's zone (its units, from its first week to its last week + adstock);
 ROAS = turnover effect / full ledger budget. Ranges = 10th / 50th / 90th percentile over draws.
+--tail-weeks 7: the carry-over after the last panel week is counted too, as the plan forecast (07) counts 7 weeks after
+a plan (ledger money of 29-30.06.2026 enters the first tail week, no other spend after it; baseline turnover of a tail
+week = the same unit 52 weeks earlier). Default 0 = as before (nothing after 28.06.2026).
 
 Checks written to checks.json: routing by campaign == the panel's media_units_daily (to the ruble); campaign money in
 model cells summed over campaigns == the model's spend array; numpy media part == wj.media_contrib_draw; per draw and
@@ -38,7 +41,7 @@ from mmm_core import campaign_catalog as cc
 from mmm_core import campaign_routing as cr
 from mmm_core import weekly_joint as wj
 
-CODE_VERSION = 'campaign_catalog_weekly_joint_v2_20261103'
+CODE_VERSION = 'campaign_catalog_weekly_joint_v3_20261104'
 G = {}
 
 
@@ -83,6 +86,7 @@ def main() -> None:
     ap.add_argument('--only', default='', help='test: comma-separated campaign numbers')
     ap.add_argument('--agglo', action='store_true', help='panel v4: Moscow/SPb regional TV and radio over the city and its oblast; the same as the panel')
     ap.add_argument('--m-ref', default=None, help='v14: typical spend per resident from panel v3 (m_ref_v3 csv); the same as the fit')
+    ap.add_argument('--tail-weeks', type=int, default=0, help='count the carry-over after the last panel week (7 = as the plan forecast); 0 = as before')
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -128,11 +132,21 @@ def main() -> None:
         checks['routing_vs_panel'] = cr.check_against_panel(routed, pd.read_parquet(a.media_units_daily))
         log('routing vs panel:', checks['routing_vs_panel'])
     present = cc.present_cells(a.panel, d)
-    sp = cc.campaign_spend(routed, units, d, present, n)
+    tail = None
+    if a.tail_weeks > 0:
+        sp = cc.campaign_spend(routed, units, d, cc.present_tail(present, a.tail_weeks), n,
+                               weeks=cc.tail_weeks(d, a.tail_weeks))
+        tail = cc.tail_rows(d, arr, a.tail_weeks)
+        tail_money = sum(float(g.budget[g.w.to_numpy(int) >= len(d.weeks)].sum()) for g in sp['cells'].values())
+        checks['tail'] = dict(weeks=a.tail_weeks, first_week=tail['first_week'], last_week=tail['last_week'],
+                              rows=int(len(tail['T'])), analog_share=tail['analog_share'], ledger_money_in_tail_rub=tail_money)
+        log('tail weeks:', checks['tail'])
+    else:
+        sp = cc.campaign_spend(routed, units, d, present, n)
     checks['spend_rebuild'] = cc.check_spend_rebuild(sp['cells'], d)
     log('campaign money in model cells vs model spend:', checks['spend_rebuild'])
 
-    camp = cc.Campaigns(d, arr, sp['cells'], n)
+    camp = cc.Campaigns(d, arr, sp['cells'], n, tail=tail)
     log(f'campaign arrays ready, {time.time() - T0:.0f} s')
 
     # ---- posterior draws
@@ -149,7 +163,7 @@ def main() -> None:
     D = len(idx)
     S, C = len(wj.SEGMENTS), len(wj.CHANNELS)
     turn = np.zeros((D, n)); orders = np.zeros((D, n)); check_num = np.zeros((D, n))
-    by_sc = np.zeros((D, n, S, C), np.float32); full_sc = np.zeros((D, S, C))
+    by_sc = np.zeros((D, n, S, C), np.float32); full_sc = np.zeros((D, S, C)); full_all = np.zeros((D, S, C))
     pos = {int(i): t for t, i in enumerate(idx)}
     chunks = [list(map(int, c)) for c in np.array_split(idx, max(1, min(len(idx), a.procs * 8)))]
     T1 = time.time()
@@ -158,7 +172,7 @@ def main() -> None:
             for i, r in zip(ch, res):
                 t = pos[i]
                 turn[t], orders[t], check_num[t] = r['turn'], r['orders'], r['check_num']
-                by_sc[t], full_sc[t] = r['by_sc'], r['full_sc']
+                by_sc[t], full_sc[t], full_all[t] = r['by_sc'], r['full_sc'], r['full_sc_all']
             if m % max(1, len(chunks) // 10) == 0:
                 log(f'draws {m}/{len(chunks)} chunks, {time.time() - T1:.0f} s')
     log(f'{D} draws x {n} campaigns: {time.time() - T1:.0f} s')
@@ -171,9 +185,9 @@ def main() -> None:
     checks['media_part_vs_model_max_rel'] = float(np.abs(mine - ref).max() / max(np.abs(ref).max(), 1e-12))
     # ---- check: diminishing returns, sum of campaign effects <= full effect per segment x channel and draw
     sum_sc = by_sc.astype(float).sum(1)
-    viol = sum_sc > full_sc * (1 + 1e-6) + 1.0
+    viol = sum_sc > full_all * (1 + 1e-6) + 1.0          # full effect over the same rows (with the tail rows if any)
     checks['sum_campaigns_le_full'] = dict(violations=int(viol.sum()), cells=int(viol.size),
-                                           max_ratio=float(np.nanmax(np.where(full_sc > 0, sum_sc / np.where(full_sc > 0, full_sc, 1), 0))))
+                                           max_ratio=float(np.nanmax(np.where(full_all > 0, sum_sc / np.where(full_all > 0, full_all, 1), 0))))
 
     # ---- money per campaign x segment x channel: ledger and seen by the model
     led['segment'] = led.network + '/' + led.channel
@@ -269,6 +283,7 @@ def main() -> None:
     tab = []
     med_sum = np.median(sum_sc, 0)
     med_full = np.median(full_sc, 0)
+    med_full_all = np.median(full_all, 0)
     for s_i, s in enumerate(wj.SEGMENTS):
         for j, ch in enumerate(wj.CHANNELS):
             seen_tot = sum(v for (kk, ss, cch), v in seen_sc.items() if ss == s and cch == ch)
@@ -276,7 +291,7 @@ def main() -> None:
                 continue
             tab.append(dict(segment=s, channel=ch, model_roas_fit_rows=med_full[s_i, j] / spend_fit[s_i, j] if spend_fit[s_i, j] else np.nan,
                             catalog_roas_seen_money=med_sum[s_i, j] / seen_tot if seen_tot else np.nan,
-                            sum_campaign_effect_over_full=med_sum[s_i, j] / med_full[s_i, j] if med_full[s_i, j] else np.nan,
+                            sum_campaign_effect_over_full=med_sum[s_i, j] / med_full_all[s_i, j] if med_full_all[s_i, j] else np.nan,
                             model_spend_fit_rows_mln=spend_fit[s_i, j] / 1e6, campaigns_seen_money_mln=seen_tot / 1e6,
                             ledger_money_mln=float(bud_seg_ch.get((s, ch), 0.0)) / 1e6))
     tab = pd.DataFrame(tab)
@@ -289,7 +304,7 @@ def main() -> None:
     checks['modeled'] = int(sum(x['modeled'] for x in results.values()))
     meta = dict(code_version=CODE_VERSION, n_campaigns=n, n_draws=D, calc_seconds=round(time.time() - T0),
                 finished_utc=time.strftime('%d.%m.%Y %H:%M', time.gmtime()), adstock=a.adstock, roas_scale=a.roas_scale, media_geo=a.media_geo,
-                agglo=bool(a.agglo), m_ref=a.m_ref, adstock_weeks=camp.L, top_units=a.top_units,
+                agglo=bool(a.agglo), m_ref=a.m_ref, adstock_weeks=camp.L, top_units=a.top_units, tail_weeks=a.tail_weeks,
                 inputs={k: dict(path=str(v), sha256=sha(v)) for k, v in
                         (('panel', a.panel), ('national', a.national), ('npz', a.npz), ('ledger', a.ledger),
                          ('targets', a.targets), ('city_map', a.city_map)) if v},
