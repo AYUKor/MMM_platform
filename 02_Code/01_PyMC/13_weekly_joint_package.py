@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -
 import numpy as np
 import pandas as pd
 
-CODE_VERSION = 'weekly_joint_package_v5_20261105'
+CODE_VERSION = 'weekly_joint_package_v6_20261105'
 
 
 def build(a: argparse.Namespace) -> None:

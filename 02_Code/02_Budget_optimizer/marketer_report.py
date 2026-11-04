@@ -2415,22 +2415,34 @@ def _weekly_corridor_edge_notes(
         cells = cells[cells["plan_rub"] > 0]
         if cells.empty:
             continue
-        ratio = cells["budget_rub"].astype(float) / cells["plan_rub"]
+        budget = cells["budget_rub"].astype(float)
+        ratio = budget / cells["plan_rub"]
         cells["at_up"] = (ratio - up).abs() <= 2e-3
         cells["at_keep"] = (ratio - keep).abs() <= 2e-3
-        on_edge = int((cells["at_up"] | cells["at_keep"]).sum())
-        if not on_edge:
+        on_edge = cells["at_up"] | cells["at_keep"]
+        # the history limit of the candidate (p95 / p99 / robust upper), when the corridor is not the binding bound
+        cap_col = {"p95": "safe_support_cap_rub", "p99": "automatic_support_cap_rub",
+                   "robust_upper": "robust_support_cap_rub"}.get(str(cells.get("support_limit_policy",
+                                                                                pd.Series([""])).iloc[0]))
+        at_hist = pd.Series(False, index=cells.index)
+        if cap_col and cap_col in cells:
+            cap = pd.to_numeric(cells[cap_col], errors="coerce")
+            at_hist = ((budget - cap).abs() <= np.maximum(1000.0, 2e-3 * cap.abs())).fillna(False) & ~on_edge
+        n_edge, n_hist = int(on_edge.sum()), int(at_hist.sum())
+        if not n_edge and not n_hist:
             continue
         by_ch = cells.groupby("channel")[["at_up", "at_keep"]].all()
         all_up = [str(c) for c in by_ch.index[by_ch["at_up"]]]
         all_keep = [str(c) for c in by_ch.index[by_ch["at_keep"]]]
-        text = f"{on_edge} из {len(cells)} ячеек на границах"
+        text = (f"Из {len(cells)} ячеек: {n_edge} на границах коридора, {n_hist} на пределе исторических трат, "
+                f"свободно {len(cells) - n_edge - n_hist}")
         if all_up:
             text += f"; везде ×{up:g}: {', '.join(all_up)}"
         if all_keep:
             text += f"; везде ×{keep:g}: {', '.join(all_keep)}"
-        text += (". Выигрыш этой рекомендации задан границами." if all_up or all_keep
-                 else ". Часть выигрыша задана границами.")
+        bound = all_up or all_keep or n_edge + n_hist >= 0.8 * len(cells)
+        text += (". Выигрыш этой рекомендации задан ограничениями, а не найден по данным." if bound
+                 else ". Часть выигрыша задана ограничениями.")
         rows.append([f"Упор в границы: {rec.get('campaign_name')}", text])
     return rows
 
