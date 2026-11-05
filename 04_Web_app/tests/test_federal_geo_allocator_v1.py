@@ -442,6 +442,18 @@ class FederalGeoAllocatorFailureTest(unittest.TestCase):
             [_row(), _row(budget=1.0)],
         )
 
+    def test_one_source_row_on_several_local_geos_the_same_day(self) -> None:
+        """A weekly package routes one oblast row to several model units; each keeps the plan row's id."""
+
+        first, second = sorted(self.context.geo_by_label)[:2]
+        result = self.allocator.allocate(
+            [_row(geo=first, budget=60.0), _row(geo=second, budget=40.0)]
+        )
+        self.assertEqual(
+            sorted((row["geo"], row["allocated_spend_rub"]) for row in result.expanded_rows),
+            [(first, 60.0), (second, 40.0)],
+        )
+
     def test_missing_source_row_id(self) -> None:
         self._assert_code("MISSING_SOURCE_ROW_ID", [_row(source_row_id="")])
 

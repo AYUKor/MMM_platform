@@ -524,7 +524,9 @@ class FederalGeoAllocator:
         eligibility_audit_by_source_row_id: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> FederalGeoAllocationResult:
         source = [dict(row) for row in daily_rows]
-        seen_keys: set[tuple[str, str]] = set()
+        # one daily row per source row, date and geography: a weekly package routes one plan row on an oblast to
+        # several model units, which keep the plan row's id (for the daily packages the geography adds nothing)
+        seen_keys: set[tuple[str, str, str]] = set()
         federal_groups: set[tuple[str, str, str]] = set()
         local_groups: set[tuple[str, str, str]] = set()
 
@@ -533,7 +535,7 @@ class FederalGeoAllocator:
             source_id = str(row.get("source_row_id") or "").strip()
             if not source_id:
                 raise FederalGeoAllocationError("MISSING_SOURCE_ROW_ID")
-            key = (source_id, str(row.get("date") or ""))
+            key = (source_id, str(row.get("date") or ""), str(row.get("geo") or "").strip())
             if key in seen_keys:
                 raise FederalGeoAllocationError("DUPLICATE_SOURCE_ROW_ID")
             seen_keys.add(key)
