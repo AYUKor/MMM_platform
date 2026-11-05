@@ -383,6 +383,20 @@ describe("business semantics v2 production claim", () => {
     expect(() => parseModelOverviewV2(value)).toThrow(UnsupportedBusinessSemanticsContractError);
   });
 
+  it("accepts the weekly joint inventory (one model serving four segments) and rejects any other count", () => {
+    const weeklyPassport = passport() as unknown as MutableRecord;
+    (weeklyPassport.serving as MutableRecord).research_models_in_package_n = 1;
+    expect(parseActiveModelPassportV2(weeklyPassport).serving.research_models_in_package_n).toBe(1);
+    const weeklyOverview = overview() as unknown as MutableRecord;
+    (weeklyOverview.serving as MutableRecord).research_models_in_package_n = 1;
+    expect(parseModelOverviewV2(weeklyOverview).serving.research_models_in_package_n).toBe(1);
+    for (const count of [4, 3, 0, "1"]) {
+      const value = passport() as unknown as MutableRecord;
+      (value.serving as MutableRecord).research_models_in_package_n = count;
+      expect(() => parseActiveModelPassportV2(value)).toThrow(UnsupportedBusinessSemanticsContractError);
+    }
+  });
+
   it.each(["true", 1, null])("rejects a non-boolean production claim %s", (claim) => {
     const passportValue = productionPassport();
     (passportValue.serving as MutableRecord).production_claim_allowed = claim;

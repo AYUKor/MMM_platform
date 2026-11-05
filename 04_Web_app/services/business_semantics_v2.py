@@ -30,6 +30,7 @@ from contracts.business_semantics_v2 import (  # noqa: E402
     SCHEMA_VERSION,
     SCENARIO_MEDIA_PLAN_CONTRACT,
     VALIDATION_RESULT_CONTRACT,
+    WEEKLY_JOINT_RESEARCH_MODELS_N,
     WORKSPACE_GEO_BUDGET_CONTRACT,
     validate_geo_catalog_v1,
     validate_job_result_view_v2,
@@ -50,6 +51,7 @@ from mmm_core.serving_semantics import (  # noqa: E402
     channel_identity,
 )
 from mmm_core.federal_geo_allocator import ERROR_TEXTS as FEDERAL_ERROR_TEXTS  # noqa: E402
+from mmm_core.weekly_package import PACKAGE_TYPE as WEEKLY_PACKAGE_TYPE  # noqa: E402
 from services.job_result_view import (  # noqa: E402
     SCENARIO_COPY,
     _Evidence,
@@ -737,6 +739,24 @@ def build_validation_result_v2(
     return payload
 
 
+def _is_weekly_joint_passport(passport_v1: Mapping[str, Any]) -> bool:
+    """A weekly joint package names its type as the gate policy and carries the weekly caveat.
+
+    Both signals come from the package manifest; if only one of them is present the
+    passport is inconsistent and the model page fails closed.
+    """
+
+    gate_policy = str((passport_v1.get("package") or {}).get("gate_policy_version") or "")
+    weekly_caveat = any(
+        str(row.get("code") or "") == "weekly_model"
+        for row in passport_v1.get("caveats") or []
+        if isinstance(row, Mapping)
+    )
+    if (gate_policy == WEEKLY_PACKAGE_TYPE) != weekly_caveat:
+        raise ValueError("Active model passport is inconsistent about the weekly package type")
+    return weekly_caveat
+
+
 def build_model_passport_v2(passport_v1: Mapping[str, Any]) -> dict[str, Any]:
     coverage = passport_v1.get("coverage") or {}
     segments = [str(value) for value in coverage.get("segments") or []]
@@ -745,16 +765,31 @@ def build_model_passport_v2(passport_v1: Mapping[str, Any]) -> dict[str, Any]:
         for row in coverage.get("targets") or []
         if str(row.get("target") or "")
     ]
-    measured_research_models = len(segments) * len(set(research_targets))
-    measured_serving_models = (
-        len(segments) if SERVING_CORE_TARGET in research_targets else 0
-    )
-    if passport_v1.get("record_origin") == "verified_model_package" and (
-        measured_research_models != RESEARCH_MODELS_N
+    verified = passport_v1.get("record_origin") == "verified_model_package"
+    if verified and _is_weekly_joint_passport(passport_v1):
+        # One joint model of orders and average check serves every segment; turnover
+        # is its only served target.
+        if set(research_targets) != {SERVING_CORE_TARGET} or len(set(segments)) != len(segments):
+            raise ValueError(
+                "Active weekly model package does not expose the approved turnover serving inventory"
+            )
+        measured_research_models = WEEKLY_JOINT_RESEARCH_MODELS_N
+        measured_serving_models = len(segments)
+        expected_research_models = WEEKLY_JOINT_RESEARCH_MODELS_N
+    else:
+        measured_research_models = len(segments) * len(set(research_targets))
+        measured_serving_models = (
+            len(segments) if SERVING_CORE_TARGET in research_targets else 0
+        )
+        expected_research_models = RESEARCH_MODELS_N
+    if verified and (
+        measured_research_models != expected_research_models
         or measured_serving_models != ACTIVE_SERVING_MODELS_N
     ):
         raise ValueError(
             "Active model package does not expose the approved 12-to-4 serving inventory"
+            if expected_research_models == RESEARCH_MODELS_N
+            else "Active weekly model package does not serve the approved four segments"
         )
     policies = []
     for row in coverage.get("channel_policies") or []:

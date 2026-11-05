@@ -135,6 +135,11 @@ jobs.
 - `active_serving_models_n=4` describes the four turnover fits available to
   application serving; `research_models_in_package_n=12` does not make the
   eight diagnostic fits application KPIs;
+- a weekly joint package (`weekly_joint_v1`, «Заноза») publishes
+  `research_models_in_package_n=1` with `active_serving_models_n=4`: one joint
+  model of orders and average check serves the four segments, and turnover is
+  its only served target. These two pairs, (12, 4) and (1, 4), are the only
+  accepted inventories;
 - channel policy rows in v2 contain both `channel_id` and approved
   `channel_display_name`;
 - orders and average basket must not be recovered from v1 or local files when

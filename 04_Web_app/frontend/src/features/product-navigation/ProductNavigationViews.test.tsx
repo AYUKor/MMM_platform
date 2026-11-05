@@ -307,6 +307,24 @@ describe("Phase D product-navigation views", () => {
     expect(container).not.toHaveTextContent("preprod_restricted");
   });
 
+  it("describes the weekly joint package as one model serving four directions", () => {
+    const passport = createModelPassportV2Fixture();
+    passport.serving.research_models_in_package_n = 1;
+    const overview = createModelOverviewV2Fixture(passport);
+    renderInRouter(
+      <ModelOverviewView passport={passport} overview={overview} onRefresh={vi.fn()} />,
+    );
+
+    expect(screen.getByText("Направлений в расчете").parentElement as HTMLElement).toHaveTextContent("4");
+    expect(screen.getByText("Совместных моделей в пакете").parentElement as HTMLElement).toHaveTextContent("1");
+    expect(screen.getByText(/одну совместную недельную модель заказов и среднего чека/)).toBeInTheDocument();
+    expect(screen.getByText("Недельные данные")).toBeInTheDocument();
+    expect(screen.queryByText("Дневные данные")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Модели заказов и среднего чека сохранены для исследований/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Активных serving-моделей")).not.toBeInTheDocument();
+    expect(screen.queryByText("Исследовательских моделей в пакете")).not.toBeInTheDocument();
+  });
+
   it("shows a production-ready record as ready without research or preprod labels", () => {
     const passport = createModelPassportV2Fixture();
     passport.record_origin = "verified_model_package";
