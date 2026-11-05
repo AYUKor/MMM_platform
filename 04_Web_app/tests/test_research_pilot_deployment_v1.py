@@ -22,7 +22,7 @@ PACKAGE_ID = "pkg_0123456789abcdef_fedcba9876543210"
 
 
 class ResearchPilotDeploymentTest(unittest.TestCase):
-    def _model_tree(self, root: Path) -> tuple[Path, Path]:
+    def _model_tree(self, root: Path, *, weekly: bool = False, skip: str = "") -> tuple[Path, Path]:
         panel = root / "00_Data" / "panel.parquet"
         panel.parent.mkdir(parents=True)
         panel.write_bytes(b"private-training-panel")
@@ -30,9 +30,11 @@ class ResearchPilotDeploymentTest(unittest.TestCase):
         run_dir.mkdir(parents=True)
         model_manifest = run_dir / "model_manifest.json"
         model_manifest.write_text(json.dumps({"package_input_fingerprint": "a" * 64}), encoding="utf-8")
-        posterior = run_dir / "posterior_test.nc"
-        posterior.write_bytes(b"posterior")
-        for filename in sorted(deployment.SERVING_RUNTIME_REQUIRED_FILES - {"model_manifest.json"}):
+        required = deployment.WEEKLY_SERVING_REQUIRED_FILES if weekly else deployment.SERVING_RUNTIME_REQUIRED_FILES
+        if not weekly:
+            posterior = run_dir / "posterior_test.nc"
+            posterior.write_bytes(b"posterior")
+        for filename in sorted(required - {"model_manifest.json", skip}):
             path = run_dir / filename
             if filename.endswith(".json"):
                 path.write_text("{}", encoding="utf-8")
@@ -124,6 +126,51 @@ class ResearchPilotDeploymentTest(unittest.TestCase):
             self.assertEqual(first["installed_files_n"], len(manifest["files"]))
             self.assertEqual(second["unchanged_files_n"], len(manifest["files"]))
             self.assertFalse((target / panel.relative_to(root)).exists())
+
+    def test_weekly_package_bundle_needs_no_netcdf_and_installs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            root.mkdir()
+            registry, panel = self._model_tree(root, weekly=True)
+            bundle = Path(temporary) / "model.tar.gz"
+            result = deployment.package_model(
+                root,
+                registry,
+                bundle,
+                channel="preprod",
+                expected_package_id=PACKAGE_ID,
+            )
+            self.assertFalse(result["source_panel_included"])
+            manifest = deployment.verify_model_bundle(bundle)
+            names = {Path(row["path"]).name for row in manifest["files"] if row["role"] == "model_inventory"}
+            self.assertEqual(names, deployment.WEEKLY_SERVING_REQUIRED_FILES)
+            target = Path(temporary) / "installed"
+            first = deployment.install_model_bundle(bundle, target)
+            self.assertEqual(first["installed_files_n"], len(manifest["files"]))
+            self.assertFalse((target / panel.relative_to(root)).exists())
+
+    def test_weekly_package_missing_a_serving_file_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            root.mkdir()
+            registry, _ = self._model_tree(root, weekly=True, skip="weekly_geo_routing.csv")
+            with self.assertRaisesRegex(ValueError, "weekly_geo_routing.csv"):
+                deployment.package_model(
+                    root,
+                    registry,
+                    Path(temporary) / "model.tar.gz",
+                    channel="preprod",
+                    expected_package_id=PACKAGE_ID,
+                )
+
+    def test_weekly_serving_files_match_the_weekly_package_definition(self) -> None:
+        pymc_dir = WEB_APP_DIR.parent / "02_Code" / "01_PyMC"
+        if str(pymc_dir) not in sys.path:
+            sys.path.insert(0, str(pymc_dir))
+        from mmm_core.weekly_package import PACKAGE_FILES
+
+        self.assertEqual(deployment.WEEKLY_SERVING_REQUIRED_FILES, {"model_manifest.json", *PACKAGE_FILES})
+        self.assertIn(deployment.WEEKLY_DRAWS_FILE, PACKAGE_FILES)
 
     def test_archive_verification_detects_payload_tamper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

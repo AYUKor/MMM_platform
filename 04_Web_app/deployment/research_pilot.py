@@ -51,6 +51,28 @@ SERVING_RUNTIME_REQUIRED_FILES = {
     "historical_support_bounds.csv",
     "adstock_warm_start.csv",
 }
+# The weekly joint package (02_Code/01_PyMC/mmm_core/weekly_package.py, type weekly_joint_v1) serves from its own
+# file set: the posterior is a draws archive, not NetCDF. Its model_manifest.json lists these files with hashes.
+WEEKLY_DRAWS_FILE = "weekly_media_draws.npz"
+WEEKLY_SERVING_REQUIRED_FILES = {
+    "model_manifest.json",
+    "run_config.json",
+    "capability_matrix.csv",
+    "gate_results.csv",
+    "risk_registry.csv",
+    "posterior_index.json",
+    "historical_support_bounds.csv",
+    "fit_design_metadata.json",
+    "weekly_units.csv",
+    "weekly_m_ref.csv",
+    WEEKLY_DRAWS_FILE,
+    "weekly_baseline_turnover.csv",
+    "weekly_history_spend.csv",
+    "model_roas_table.csv",
+    "target_denominator_metadata.csv",
+    "weekly_geo_routing.csv",
+    "weekly_city_oblast_map.csv",
+}
 TERMINAL_STATUSES = {
     "uploads": {"parsed", "rejected"},
     "validations": {"valid", "invalid"},
@@ -261,6 +283,19 @@ def verify_archive(path: Path, *, expected_kind: str) -> dict[str, Any]:
     return manifest
 
 
+def _serving_completeness_issue(model_names: set[str], subject: str) -> str | None:
+    """Why a set of package-local model files cannot serve, or None when it can (daily or weekly package)."""
+    if WEEKLY_DRAWS_FILE in model_names:
+        missing = sorted(WEEKLY_SERVING_REQUIRED_FILES - model_names)
+        return f"{subject} is not serving-complete. Missing: {missing}" if missing else None
+    missing = sorted(SERVING_RUNTIME_REQUIRED_FILES - model_names)
+    if missing:
+        return f"{subject} is not serving-complete. Missing: {missing}"
+    if not any(name.startswith("posterior_") and name.endswith(".nc") for name in model_names):
+        return f"{subject} is not serving-complete: no posterior NetCDF files"
+    return None
+
+
 def verify_model_bundle(path: Path) -> dict[str, Any]:
     manifest = verify_archive(path, expected_kind=MODEL_BUNDLE_KIND)
     package_id = str(manifest.get("package_id") or "")
@@ -282,11 +317,9 @@ def verify_model_bundle(path: Path) -> dict[str, Any]:
         for row in rows
         if isinstance(row, dict) and row.get("role") == "model_inventory"
     }
-    missing = sorted(SERVING_RUNTIME_REQUIRED_FILES - model_names)
-    if missing:
-        raise ValueError(f"Model bundle is not serving-complete. Missing: {missing}")
-    if not any(name.startswith("posterior_") and name.endswith(".nc") for name in model_names):
-        raise ValueError("Model bundle is not serving-complete: no posterior NetCDF files")
+    issue = _serving_completeness_issue(model_names, "Model bundle")
+    if issue:
+        raise ValueError(issue)
     return manifest
 
 
@@ -339,11 +372,9 @@ def collect_model_payload(
     inventory = registration.get("inventory_sha256")
     if not isinstance(inventory, dict) or not inventory:
         raise ValueError("Registration has no serving inventory")
-    missing = sorted(SERVING_RUNTIME_REQUIRED_FILES - set(inventory))
-    if missing:
-        raise ValueError(f"Registered package is not serving-complete. Missing: {missing}")
-    if not any(name.startswith("posterior_") and name.endswith(".nc") for name in inventory):
-        raise ValueError("Registered package is not serving-complete: no posterior NetCDF files")
+    issue = _serving_completeness_issue(set(inventory), "Registered package")
+    if issue:
+        raise ValueError(issue)
     payload: list[PayloadFile] = []
     for filename, expected_sha in sorted(inventory.items()):
         safe_name = _safe_relative(str(filename))
