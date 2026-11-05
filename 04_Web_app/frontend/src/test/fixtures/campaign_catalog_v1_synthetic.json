@@ -1,6 +1,6 @@
 {
  "contract_name": "campaign_catalog_v1",
- "schema_version": "1.0.0",
+ "schema_version": "1.1.0",
  "record_origin": "verified_model_package_artifact",
  "status": "available",
  "title": "Прошлые кампании",
@@ -8,7 +8,7 @@
  "package_id": "pkg_abababababababab_2222222222222222",
  "model_version": "synthetic_model_run",
  "model_display_name": "Заноза",
- "artifact_id": "artifact_cc7821227d4749a4c5740c07",
+ "artifact_id": "artifact_cdb1cfbfdd987624a69659e7",
  "catalog_version": "synthetic_catalog_v1",
  "period_start": "2025-01-06",
  "period_end": "2026-06-28",
@@ -26,8 +26,8 @@
  },
  "download": {
   "file_name": "Каталог_прошлых_кампаний_Заноза_20261105.xlsx",
-  "size_bytes": 16023,
-  "sha256": "6b3d00c713ae0a805d4882afd95237d52c144979d4d46097186651b0c8f72688",
+  "size_bytes": 19674,
+  "sha256": "bd216447b426ede1e98b53fcedb784f054eda45a4bdc07ae928f5bd170d45c1d",
   "download_path": "/api/v1/campaign-catalog/download",
   "sheets": [
    "Тех. информация",
@@ -109,7 +109,30 @@
     "high": 3.574588647550045
    },
    "overlaps_n": 4,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 405991006.2978142,
+    "kept_share": 0.20099999999999998,
+    "own_saturation_share": 0.625819,
+    "overlap_share": 0.173181,
+    "first_ruble_roas": 1.884971435056229,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Москва"
+    ],
+    "overlap_cities": [
+     "Санкт-Петербург"
+    ],
+    "reasons": [
+     {
+      "code": "weak_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,6 раза меньше оборота, чем в среднем по тем же каналам."
+     }
+    ]
+   }
   },
   {
    "number": 2,
@@ -171,7 +194,25 @@
     "high": 3.0514776939070933
    },
    "overlaps_n": 2,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 35468232.65580667,
+    "kept_share": 0.452915,
+    "own_saturation_share": 0.532407,
+    "overlap_share": 0.014678,
+    "first_ruble_roas": 3.4757701036826756,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Санкт-Петербург"
+    ],
+    "overlap_cities": [
+     "Казань"
+    ],
+    "reasons": []
+   }
   },
   {
    "number": 3,
@@ -234,7 +275,23 @@
     "high": 3.433385366307082
    },
    "overlaps_n": 3,
-   "reliable": 0
+   "reliable": 0,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 552601489.5460382,
+    "kept_share": 0.29422599999999993,
+    "own_saturation_share": 0.600605,
+    "overlap_share": 0.105169,
+    "first_ruble_roas": 3.71550374970498,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Казань"
+    ],
+    "overlap_cities": [],
+    "reasons": []
+   }
   },
   {
    "number": 4,
@@ -285,7 +342,38 @@
     "high": 3.5486209135359124
    },
    "overlaps_n": 4,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 505445987.74722606,
+    "kept_share": 0.16835499999999998,
+    "own_saturation_share": 0.621182,
+    "overlap_share": 0.210463,
+    "first_ruble_roas": 4.169675749538271,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.18,
+    "own_saturation_cities": [
+     "Москва"
+    ],
+    "overlap_cities": [
+     "Санкт-Петербург"
+    ],
+    "reasons": [
+     {
+      "code": "overlap",
+      "display_text": "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 21% эффекта, обычно у всех кампаний каталога 11%. Больше всего рядом шло «Тестовая кампания 5»: 2,3 млн ₽ в те же недели и города."
+     },
+     {
+      "code": "strong_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,4 раза больше оборота, чем в среднем по тем же каналам."
+     },
+     {
+      "code": "tail_forecast",
+      "display_text": "Кампания шла до конца данных: 18% эффекта досчитано прогнозом на 7 недель вперёд."
+     }
+    ]
+   }
   },
   {
    "number": 5,
@@ -328,7 +416,8 @@
    "avg_basket_increment_rub": null,
    "roas": null,
    "overlaps_n": 0,
-   "reliable": 0
+   "reliable": 0,
+   "explanation": null
   },
   {
    "number": 7,
@@ -389,7 +478,32 @@
     "high": 0.7996275079758566
    },
    "overlaps_n": 2,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 76905925.99311762,
+    "kept_share": 0.520397,
+    "own_saturation_share": 0.130291,
+    "overlap_share": 0.349312,
+    "first_ruble_roas": 1.7847696624425775,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Казань"
+    ],
+    "overlap_cities": [],
+    "reasons": [
+     {
+      "code": "overlap",
+      "display_text": "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 35% эффекта, обычно у всех кампаний каталога 11%. Больше всего рядом шло «Тестовая кампания 8»: 3,5 млн ₽ в те же недели и города."
+     },
+     {
+      "code": "weak_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,7 раза меньше оборота, чем в среднем по тем же каналам."
+     }
+    ]
+   }
   },
   {
    "number": 8,
@@ -438,7 +552,28 @@
     "high": 2.9154037754015842
    },
    "overlaps_n": 0,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 107555217.99871162,
+    "kept_share": 0.47810199999999997,
+    "own_saturation_share": 0.508108,
+    "overlap_share": 0.01379,
+    "first_ruble_roas": 5.34837505296376,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Москва"
+    ],
+    "overlap_cities": [],
+    "reasons": [
+     {
+      "code": "strong_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,8 раза больше оборота, чем в среднем по тем же каналам."
+     }
+    ]
+   }
   },
   {
    "number": 9,
@@ -497,7 +632,30 @@
     "high": 3.5424275339236733
    },
    "overlaps_n": 3,
-   "reliable": 0
+   "reliable": 0,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 578344678.8700782,
+    "kept_share": 0.270112,
+    "own_saturation_share": 0.620076,
+    "overlap_share": 0.109812,
+    "first_ruble_roas": 3.458180230104553,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.12,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Санкт-Петербург"
+    ],
+    "overlap_cities": [
+     "Казань"
+    ],
+    "reasons": [
+     {
+      "code": "money_outside_model",
+      "display_text": "12% бюджета ушло в города и недели, где модель не видит продаж: эти деньги эффекта не дают, поэтому ROAS ниже."
+     }
+    ]
+   }
   },
   {
    "number": 10,
@@ -568,7 +726,34 @@
     "high": 1.5565297016294957
    },
    "overlaps_n": 1,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 222363902.3276779,
+    "kept_share": 0.30457399999999996,
+    "own_saturation_share": 0.265452,
+    "overlap_share": 0.429974,
+    "first_ruble_roas": 2.158410307342232,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Казань"
+    ],
+    "overlap_cities": [
+     "Екатеринбург"
+    ],
+    "reasons": [
+     {
+      "code": "overlap",
+      "display_text": "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 43% эффекта, обычно у всех кампаний каталога 11%. Больше всего рядом шло «Тестовая кампания 11»: 6,2 млн ₽ в те же недели и города."
+     },
+     {
+      "code": "weak_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,4 раза меньше оборота, чем в среднем по тем же каналам."
+     }
+    ]
+   }
   },
   {
    "number": 11,
@@ -619,7 +804,30 @@
     "high": 3.1271149931907085
    },
    "overlaps_n": 1,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 23361704.4536828,
+    "kept_share": 0.41834400000000005,
+    "own_saturation_share": 0.545913,
+    "overlap_share": 0.035743,
+    "first_ruble_roas": 4.908678441140495,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Москва"
+    ],
+    "overlap_cities": [
+     "Нижегородская область"
+    ],
+    "reasons": [
+     {
+      "code": "strong_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,6 раза больше оборота, чем в среднем по тем же каналам."
+     }
+    ]
+   }
   },
   {
    "number": 12,
@@ -679,7 +887,34 @@
     "high": 1.1833209155508753
    },
    "overlaps_n": 0,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 55169010.53319347,
+    "kept_share": 0.40405900000000006,
+    "own_saturation_share": 0.198807,
+    "overlap_share": 0.397134,
+    "first_ruble_roas": 4.508269967729485,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Санкт-Петербург"
+    ],
+    "overlap_cities": [
+     "Казань"
+    ],
+    "reasons": [
+     {
+      "code": "overlap",
+      "display_text": "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 40% эффекта, обычно у всех кампаний каталога 11%. Больше всего рядом шло «Тестовая кампания 13»: 6,7 млн ₽ в те же недели."
+     },
+     {
+      "code": "strong_geo",
+      "display_text": "В городах и неделях кампании тот же рубль рекламы даёт в 1,5 раза больше оборота, чем в среднем по тем же каналам."
+     }
+    ]
+   }
   },
   {
    "number": 13,
@@ -747,7 +982,25 @@
     "high": 0.9314365157382446
    },
    "overlaps_n": 5,
-   "reliable": 1
+   "reliable": 1,
+   "explanation": {
+    "rules_version": "campaign_reasons_v3_20261105",
+    "potential_turnover_rub": 58368967.21177728,
+    "kept_share": 0.7974260000000001,
+    "own_saturation_share": 0.153828,
+    "overlap_share": 0.048746,
+    "first_ruble_roas": 3.2445779556570202,
+    "typical_first_ruble_roas": 3.0,
+    "unseen_budget_share": 0.0,
+    "tail_share": 0.0,
+    "own_saturation_cities": [
+     "Казань"
+    ],
+    "overlap_cities": [
+     "Екатеринбург"
+    ],
+    "reasons": []
+   }
   }
  ],
  "updated_at_utc": "2026-11-05T05:00:00+00:00"

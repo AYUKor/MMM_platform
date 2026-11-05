@@ -31,7 +31,7 @@ function card(number = 1): Json {
   const item = campaigns(source).find((row) => row.number === number);
   return {
     contract_name: "campaign_card_v1",
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     record_origin: "verified_model_package_artifact",
     package_id: source.package_id,
     model_version: source.model_version,
@@ -50,7 +50,7 @@ function card(number = 1): Json {
 function unavailable(): Json {
   return {
     contract_name: "campaign_catalog_v1",
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     record_origin: "model_package_artifact_unavailable",
     status: "unavailable",
     title: "Прошлые кампании",
@@ -159,12 +159,37 @@ describe("campaign catalog contract", () => {
     ["a main channel the campaign did not use", (value) => {
       campaigns(value)[0].main_channel_id = "Рег_ТВ";
     }],
+    ["reasons whose parts do not add up to the whole effect", (value) => {
+      const reasons = campaigns(value)[0].explanation as Json;
+      reasons.kept_share = (reasons.kept_share as number) + 0.1;
+    }],
+    ["reasons with more than three sentences", (value) => {
+      const reasons = campaigns(value)[0].explanation as Json;
+      reasons.reasons = ["one", "two", "three", "four"].map((code) => ({ code: `extra_${code}`, display_text: "Ещё причина." }));
+    }],
+    ["reasons without a rule file version", (value) => {
+      (campaigns(value)[0].explanation as Json).rules_version = "";
+    }],
+    ["reasons for a campaign without an estimate", (value) => {
+      const row = campaigns(value).find((item) => item.status === "not_computed") as Json;
+      row.explanation = campaigns(value)[0].explanation;
+    }],
   ];
 
   it.each(broken)("rejects %s", (_name, mutate) => {
     const value = catalog();
     mutate(value);
     expect(() => parseCampaignCatalogV1(value)).toThrow(UnsupportedCampaignCatalogContractError);
+  });
+
+  it("accepts a catalog built before the reasons existed only without reasons", () => {
+    const value = catalog();
+    for (const row of campaigns(value)) row.explanation = null;
+    expect(parseCampaignCatalogV1(value).campaigns.every((row) => row.explanation === null)).toBe(true);
+
+    const missing = catalog();
+    delete campaigns(missing)[0].explanation;
+    expect(() => parseCampaignCatalogV1(missing)).toThrow(UnsupportedCampaignCatalogContractError);
   });
 
   it("accepts a card only for the requested campaign", () => {

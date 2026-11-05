@@ -22,11 +22,14 @@ const TITLE = "Прошлые кампании";
 const WORKBOOK_SHEETS = ["Тех. информация", "Кампании до 120 дней", "Кампании длиннее 120 дней"] as const;
 const CATALOG_KEYS = ["contract_name", "schema_version", "record_origin", "status", "title", "display_text", "package_id", "model_version", "model_display_name", "artifact_id", "catalog_version", "period_start", "period_end", "roas_level_label", "summary", "download", "notes", "campaigns", "updated_at_utc"] as const;
 const CARD_KEYS = ["contract_name", "schema_version", "record_origin", "package_id", "model_version", "model_display_name", "artifact_id", "catalog_version", "period_start", "period_end", "roas_level_label", "notes", "campaign", "updated_at_utc"] as const;
-const CAMPAIGN_KEYS = ["number", "name", "directions", "start_date", "end_date", "days_n", "duration_group", "budget_rub", "channels", "main_channel_id", "cities", "nationwide_channels", "status", "status_display_text", "turnover_increment_rub", "orders_per_1000_buyers", "avg_basket_increment_rub", "roas", "overlaps_n", "reliable"] as const;
+const CAMPAIGN_KEYS = ["number", "name", "directions", "start_date", "end_date", "days_n", "duration_group", "budget_rub", "channels", "main_channel_id", "cities", "nationwide_channels", "status", "status_display_text", "turnover_increment_rub", "orders_per_1000_buyers", "avg_basket_increment_rub", "roas", "overlaps_n", "reliable", "explanation"] as const;
 const SUMMARY_KEYS = ["campaigns_n", "computed_n", "reliable_n", "up_to_120_days_n", "longer_120_days_n", "budget_rub", "computed_budget_rub", "turnover_increment_rub", "weighted_roas"] as const;
 const DOWNLOAD_KEYS = ["file_name", "size_bytes", "sha256", "download_path", "sheets"] as const;
 const CHANNEL_KEYS = ["channel_id", "display_name", "budget_rub", "nationwide"] as const;
 const RANGE_KEYS = ["estimate", "low", "high"] as const;
+const EXPLANATION_KEYS = ["rules_version", "potential_turnover_rub", "kept_share", "own_saturation_share", "overlap_share", "first_ruble_roas", "typical_first_ruble_roas", "unseen_budget_share", "tail_share", "own_saturation_cities", "overlap_cities", "reasons"] as const;
+const SCHEMA_VERSION = "1.1.0";
+const SHARE_SUM_TOLERANCE = 1e-6;
 const EFFECT_KEYS = ["turnover_increment_rub", "orders_per_1000_buyers", "avg_basket_increment_rub", "roas"] as const;
 const PACKAGE_ID = /^pkg_[A-Za-z0-9._-]{8,128}$/;
 const ARTIFACT_ID = /^artifact_[0-9a-f]{24}$/;
@@ -91,6 +94,19 @@ function channel(value: unknown): boolean {
   return display !== undefined && value.display_name === display && nonNegative(value.budget_rub) && typeof value.nationwide === "boolean";
 }
 
+function share(value: unknown): value is number { return finite(value) && value >= 0 && value <= 1; }
+/** Why the campaign got its number: kept + own saturation + overlap is the whole first-ruble potential. */
+function explanation(value: unknown): boolean {
+  if (!record(value) || !exact(value, EXPLANATION_KEYS) || !text(value.rules_version)) return false;
+  if (!nonNegative(value.potential_turnover_rub) || !nonNegative(value.first_ruble_roas) || !nonNegative(value.typical_first_ruble_roas)) return false;
+  if (!share(value.kept_share) || !share(value.own_saturation_share) || !share(value.overlap_share)
+    || !share(value.unseen_budget_share) || !share(value.tail_share)) return false;
+  if (Math.abs(value.kept_share + value.own_saturation_share + value.overlap_share - 1) > SHARE_SUM_TOLERANCE) return false;
+  if (!uniqueTexts(value.own_saturation_cities) || value.own_saturation_cities.length > 2
+    || !uniqueTexts(value.overlap_cities) || value.overlap_cities.length > 2) return false;
+  return notes(value.reasons) && (value.reasons as unknown[]).length <= 3;
+}
+
 function campaign(value: unknown): value is Campaign {
   if (!record(value) || !exact(value, CAMPAIGN_KEYS)) return false;
   if (!nonNegativeInteger(value.number) || value.number < 1 || !text(value.name)) return false;
@@ -109,10 +125,12 @@ function campaign(value: unknown): value is Campaign {
   if (!uniqueTexts(value.cities) || !uniqueTexts(value.nationwide_channels)) return false;
   if (!nonNegativeInteger(value.overlaps_n) || (value.reliable !== 0 && value.reliable !== 1)) return false;
   if (value.status === "computed") {
-    return value.status_display_text === null && EFFECT_KEYS.every((key) => range(value[key]));
+    return value.status_display_text === null && EFFECT_KEYS.every((key) => range(value[key]))
+      && (value.explanation === null || explanation(value.explanation));
   }
   if (value.status === "not_computed") {
-    return text(value.status_display_text) && value.reliable === 0 && EFFECT_KEYS.every((key) => value[key] === null);
+    return text(value.status_display_text) && value.reliable === 0 && EFFECT_KEYS.every((key) => value[key] === null)
+      && value.explanation === null;
   }
   return false;
 }
@@ -167,7 +185,7 @@ function boundIdentity(value: JsonRecord): boolean {
 
 export function parseCampaignCatalogV1(value: unknown): CampaignCatalogV1 {
   if (!record(value) || !exact(value, CATALOG_KEYS) || value.contract_name !== "campaign_catalog_v1"
-    || value.schema_version !== "1.0.0" || value.title !== TITLE || !text(value.display_text)
+    || value.schema_version !== SCHEMA_VERSION || value.title !== TITLE || !text(value.display_text)
     || hasUnsafePath(value)) throw new UnsupportedCampaignCatalogContractError();
   if (value.status === "unavailable") {
     if (value.record_origin !== "model_package_artifact_unavailable"
@@ -188,7 +206,7 @@ export function parseCampaignCatalogV1(value: unknown): CampaignCatalogV1 {
 
 export function parseCampaignCardV1(value: unknown, number: number): CampaignCardV1 {
   if (!record(value) || !exact(value, CARD_KEYS) || value.contract_name !== "campaign_card_v1"
-    || value.schema_version !== "1.0.0" || value.record_origin !== "verified_model_package_artifact"
+    || value.schema_version !== SCHEMA_VERSION || value.record_origin !== "verified_model_package_artifact"
     || hasUnsafePath(value) || !boundIdentity(value) || !campaign(value.campaign)
     || value.campaign.number !== number) throw new UnsupportedCampaignCatalogContractError();
   return value as unknown as CampaignCardV1;

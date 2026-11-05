@@ -111,6 +111,9 @@ class CampaignCatalogServiceTest(unittest.TestCase):
         self.assertEqual(payload["status"], "available")
         self.assertEqual(payload["record_origin"], "verified_model_package_artifact")
         self.assertEqual(payload["campaigns"], data["campaigns"])
+        self.assertEqual(payload["schema_version"], "1.1.0")
+        self.assertTrue(any(row["explanation"] for row in payload["campaigns"]))
+        self.assertTrue(all(row["explanation"] is None for row in payload["campaigns"] if row["status"] != "computed"))
         self.assertEqual(payload["summary"], data["summary"])
         self.assertEqual(payload["artifact_id"], metadata["artifact_id"])
         self.assertEqual(payload["roas_level_label"], "уровень ROAS по отрасли")
@@ -134,6 +137,28 @@ class CampaignCatalogServiceTest(unittest.TestCase):
         body, file_name = service.campaign_catalog_workbook(registry_root=self.registry, package_id=PACKAGE_ID)
         self.assertEqual(hashlib.sha256(body).hexdigest(), metadata["workbook"]["sha256"])
         self.assertEqual(file_name, metadata["workbook"]["download_file_name"])
+
+    def test_catalog_published_before_reasons_is_served_without_them(self) -> None:
+        """A catalog written as data schema 1.0.0 (no explanations) stays valid: every card gets explanation null."""
+
+        self._publish()
+        data_path = self.extension_dir / DATA_FILENAME
+        metadata_path = self.extension_dir / METADATA_FILENAME
+        data = json.loads(data_path.read_text(encoding="utf-8"))
+        data["data_schema_version"] = "1.0.0"
+        data["campaigns"] = [{k: v for k, v in row.items() if k != "explanation"} for row in data["campaigns"]]
+        body = (json.dumps(data, ensure_ascii=False, indent=1, sort_keys=False) + "\n").encode("utf-8")
+        data_path.write_bytes(body)
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata["data"]["sha256"] = hashlib.sha256(body).hexdigest()
+        metadata["data"]["size_bytes"] = len(body)
+        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+        payload = service.build_campaign_catalog_v1(registry_root=self.registry, package_id=PACKAGE_ID)
+        self.assertEqual(payload["status"], "available")
+        self.assertTrue(all(row["explanation"] is None for row in payload["campaigns"]))
+        number = data["campaigns"][0]["number"]
+        card = service.build_campaign_card_v1(registry_root=self.registry, package_id=PACKAGE_ID, number=number)
+        self.assertIsNone(card["campaign"]["explanation"])
 
     def test_catalog_of_another_package_or_run_is_refused(self) -> None:
         self._publish(model_run_id="another_model_run")

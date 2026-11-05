@@ -36,14 +36,20 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from .catalog_text import geo_display, split_percents
+
 
 ARTIFACT_VERSION = "campaign_catalog_v1"
-DATA_SCHEMA_VERSION = "1.0.0"
+DATA_SCHEMA_VERSION = "1.1.0"
+# 1.0.0: records without "explanation" (catalogs published before 05.11.2026 19:30 Da Nang); still served.
+LEGACY_DATA_SCHEMA_VERSION = "1.0.0"
+DATA_SCHEMA_VERSIONS = (LEGACY_DATA_SCHEMA_VERSION, DATA_SCHEMA_VERSION)
 METADATA_SCHEMA_VERSION = "1.0.0"
 DATA_FILENAME = "campaign_catalog_v1.json"
 WORKBOOK_FILENAME = "campaign_catalog_v1.xlsx"
 METADATA_FILENAME = "campaign_catalog_v1.metadata.json"
 EXTENSION_FILES = (DATA_FILENAME, WORKBOOK_FILENAME, METADATA_FILENAME)
+SHARE_FORMAT = '[=0]0%;[<0.005]"меньше 1%";0%'  # a share that rounds to 0% but is not zero: «меньше 1%», as on the card
 PACKAGE_ID_RE = re.compile(r"^pkg_[0-9a-f]{16}_[0-9a-f]{16}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 LONG_DAYS = 120
@@ -217,6 +223,78 @@ class SourceCatalog:
     source_files: tuple[dict[str, Any], ...]
 
 
+@dataclass(frozen=True)
+class SourceReasons:
+    """Finished output of 14_weekly_joint_campaign_reasons.py for the same catalog run (read-only)."""
+
+    reasons_dir: Path
+    campaigns: Mapping[int, Mapping[str, Any]]
+    meta: Mapping[str, Any]
+    source_files: tuple[dict[str, Any], ...]
+
+
+def load_source_reasons(reasons_dir: Path, source: "SourceCatalog") -> SourceReasons:
+    """Read catalog_reasons.json and its checks; they must be green and bound to this catalog run."""
+
+    root = reasons_dir.expanduser().resolve()
+    names = {"catalog_reasons": "catalog_reasons.json", "reasons_checks": "checks.json",
+             "catalog_reasons_table": "catalog_reasons.csv", "typical_first_ruble": "typical_first_ruble.csv",
+             "reason_norms": "reason_norms.csv"}
+    missing = [name for name in names.values() if not (root / name).is_file()]
+    if missing:
+        raise CampaignCatalogExtensionError(f"Reasons folder lacks {missing}")
+    run_checks = json.loads((root / names["reasons_checks"]).read_text(encoding="utf-8"))
+    if run_checks.get("failed"):
+        raise CampaignCatalogExtensionError(f"Reasons run has failed checks: {run_checks.get('failed')}")
+    raw = json.loads((root / names["catalog_reasons"]).read_text(encoding="utf-8"))
+    meta = raw.get("meta") or {}
+    catalog_sha = next(row["sha256"] for row in source.source_files if row["role"] == "catalog_results")
+    if meta.get("catalog_results_sha256") != catalog_sha:
+        raise CampaignCatalogExtensionError("Reasons were computed for another catalog run")
+    if not str(meta.get("rules_version") or "").strip():
+        raise CampaignCatalogExtensionError("Reasons carry no rules version")
+    campaigns = raw.get("campaigns")
+    if not isinstance(campaigns, Mapping) or not campaigns:
+        raise CampaignCatalogExtensionError("catalog_reasons.json has no campaigns")
+    by_number = {int(key): value for key, value in campaigns.items()}
+    numbers = {int(row["id"]) for row in source.results}
+    if set(by_number) != numbers:
+        raise CampaignCatalogExtensionError("Reasons and catalog list different campaigns")
+    source_files = tuple(
+        {"role": role, "file_name": file_name, "sha256": sha256_file(root / file_name),
+         "size_bytes": (root / file_name).stat().st_size}
+        for role, file_name in names.items()
+    )
+    return SourceReasons(reasons_dir=root, campaigns=by_number, meta=meta, source_files=source_files)
+
+
+def explanation_from_reasons(entry: Mapping[str, Any] | None, rules_version: str) -> dict[str, Any] | None:
+    """One catalog_reasons.json campaign -> the "explanation" of its card record (None when not modeled).
+    A campaign with nothing specific to say has no reasons: the card shows the bar only."""
+
+    if not entry or not entry.get("modeled") or not entry.get("factors"):
+        return None
+    f = entry["factors"]
+    typical = f.get("typical_first_ruble_roas")
+    if typical is None or not math.isfinite(float(typical)):
+        return None
+    clip = lambda value: min(1.0, max(0.0, float(value)))  # noqa: E731
+    return {
+        "rules_version": rules_version,
+        "potential_turnover_rub": float(f["potential_turnover_rub"]),
+        "kept_share": float(f["kept_share"]),
+        "own_saturation_share": float(f["own_loss_share"]),
+        "overlap_share": float(f["overlap_loss_share"]),
+        "first_ruble_roas": float(f["first_ruble_roas"]),
+        "typical_first_ruble_roas": float(typical),
+        "unseen_budget_share": clip(f["unseen_share"]),
+        "tail_share": clip(f["tail_share"]),
+        "own_saturation_cities": [geo_display(name) for name in entry.get("own_loss_cities") or []],
+        "overlap_cities": [geo_display(name) for name in entry.get("overlap_loss_cities") or []],
+        "reasons": [{"code": str(row["code"]), "display_text": str(row["display_text"])} for row in entry["reasons"]],
+    }
+
+
 def _read_csv(path: Path) -> tuple[dict[str, str], ...]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         return tuple(dict(row) for row in csv.DictReader(handle))
@@ -270,8 +348,8 @@ def _main_channel(channels: Sequence[Mapping[str, Any]]) -> str:
     )["channel_id"]
 
 
-def normalize_campaign(source: Mapping[str, Any]) -> dict[str, Any]:
-    """One catalog_results.json row -> the card record of the portal and the Excel."""
+def normalize_campaign(source: Mapping[str, Any], explanation: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """One catalog_results.json row (+ its reasons) -> the card record of the portal and the Excel."""
 
     number = source.get("id")
     if isinstance(number, bool) or not isinstance(number, int) or number < 1:
@@ -323,7 +401,7 @@ def normalize_campaign(source: Mapping[str, Any]) -> dict[str, Any]:
         "budget_rub": budget,
         "channels": channels,
         "main_channel_id": _main_channel(channels),
-        "cities": [str(city) for city in card.get("cities") or []],
+        "cities": [geo_display(city) for city in card.get("cities") or []],
         "nationwide_channels": [str(name) for name in card.get("federal") or []],
         "status": "computed" if modeled else "not_computed",
         "status_display_text": None if modeled else NOT_COMPUTED_TEXT,
@@ -333,6 +411,7 @@ def normalize_campaign(source: Mapping[str, Any]) -> dict[str, Any]:
         "roas": roas,
         "overlaps_n": int(source.get("overlap") or 0),
         "reliable": int(source.get("flag") or 0),
+        "explanation": dict(explanation) if modeled and explanation else None,
     }
     validate_campaign_record(record)
     return record
@@ -362,8 +441,25 @@ _RECORD_KEYS = (
     "roas",
     "overlaps_n",
     "reliable",
+    "explanation",
 )
+_LEGACY_RECORD_KEYS = _RECORD_KEYS[:-1]
 _CHANNEL_KEYS = ("channel_id", "display_name", "budget_rub", "nationwide")
+_EXPLANATION_KEYS = (
+    "rules_version",
+    "potential_turnover_rub",
+    "kept_share",
+    "own_saturation_share",
+    "overlap_share",
+    "first_ruble_roas",
+    "typical_first_ruble_roas",
+    "unseen_budget_share",
+    "tail_share",
+    "own_saturation_cities",
+    "overlap_cities",
+    "reasons",
+)
+_REASON_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 _RANGE_KEYS = ("estimate", "low", "high")
 
 
@@ -380,10 +476,46 @@ def _validate_range(value: Any, field: str) -> None:
         raise CampaignCatalogExtensionError(f"{field} must satisfy low <= estimate <= high")
 
 
-def validate_campaign_record(record: Mapping[str, Any]) -> None:
-    """Semantic checks of one card record (shared by the builder and the portal service)."""
+def _validate_explanation(value: Any, field: str) -> None:
+    if not isinstance(value, Mapping) or tuple(value) != _EXPLANATION_KEYS:
+        raise CampaignCatalogExtensionError(f"{field} keys differ")
+    _text(value["rules_version"], f"{field}.rules_version")
+    for key in ("potential_turnover_rub", "first_ruble_roas", "typical_first_ruble_roas"):
+        if _finite(value[key], f"{field}.{key}") < 0:
+            raise CampaignCatalogExtensionError(f"{field}.{key} must be non-negative")
+    for key in ("kept_share", "own_saturation_share", "overlap_share", "unseen_budget_share", "tail_share"):
+        if not 0.0 <= _finite(value[key], f"{field}.{key}") <= 1.0:
+            raise CampaignCatalogExtensionError(f"{field}.{key} must be a share")
+    if abs(value["kept_share"] + value["own_saturation_share"] + value["overlap_share"] - 1.0) > 1e-6:
+        raise CampaignCatalogExtensionError(f"{field} shares do not add up to the potential")
+    for key in ("own_saturation_cities", "overlap_cities"):
+        names = value[key]
+        if (not isinstance(names, list) or len(names) > 2 or len(set(names)) != len(names)
+                or any(not isinstance(name, str) or not name.strip() for name in names)):
+            raise CampaignCatalogExtensionError(f"{field}.{key} must hold up to two names")
+    reasons = value["reasons"]
+    if not isinstance(reasons, list) or len(reasons) > 3:
+        raise CampaignCatalogExtensionError(f"{field}.reasons must hold zero to three reasons")
+    codes = []
+    for row in reasons:
+        if not isinstance(row, Mapping) or tuple(row) != ("code", "display_text"):
+            raise CampaignCatalogExtensionError(f"{field}.reasons rows must be code + display_text")
+        if not isinstance(row["code"], str) or not _REASON_CODE_RE.fullmatch(row["code"]):
+            raise CampaignCatalogExtensionError(f"{field}.reasons code is invalid")
+        _text(row["display_text"], f"{field}.reasons.display_text")
+        codes.append(row["code"])
+    if len(set(codes)) != len(codes):
+        raise CampaignCatalogExtensionError(f"{field}.reasons repeat a code")
 
-    if tuple(record) != _RECORD_KEYS:
+
+def validate_campaign_record(record: Mapping[str, Any], data_schema_version: str = DATA_SCHEMA_VERSION) -> None:
+    """Semantic checks of one card record (shared by the builder and the portal service). Records of a catalog
+    published as data schema 1.0.0 carry no "explanation"."""
+
+    if data_schema_version not in DATA_SCHEMA_VERSIONS:
+        raise CampaignCatalogExtensionError("Unknown catalog data schema version")
+    legacy = data_schema_version == LEGACY_DATA_SCHEMA_VERSION
+    if tuple(record) != (_LEGACY_RECORD_KEYS if legacy else _RECORD_KEYS):
         raise CampaignCatalogExtensionError("Campaign record keys differ from campaign_catalog_v1")
     number = record["number"]
     if isinstance(number, bool) or not isinstance(number, int) or number < 1:
@@ -469,6 +601,10 @@ def validate_campaign_record(record: Mapping[str, Any]) -> None:
         raise CampaignCatalogExtensionError(f"{field}.overlaps_n must be a non-negative integer")
     if record["reliable"] not in (0, 1) or isinstance(record["reliable"], bool):
         raise CampaignCatalogExtensionError(f"{field}.reliable must be 0 or 1")
+    if not legacy and record["explanation"] is not None:
+        if status != "computed":
+            raise CampaignCatalogExtensionError(f"{field} not computed campaign cannot carry an explanation")
+        _validate_explanation(record["explanation"], f"{field}.explanation")
 
 
 def catalog_summary(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -514,7 +650,7 @@ def validate_catalog_data(data: Mapping[str, Any]) -> None:
 
     if tuple(data) != _DATA_KEYS:
         raise CampaignCatalogExtensionError("Catalog data keys differ from campaign_catalog_v1")
-    if data["artifact_version"] != ARTIFACT_VERSION or data["data_schema_version"] != DATA_SCHEMA_VERSION:
+    if data["artifact_version"] != ARTIFACT_VERSION or data["data_schema_version"] not in DATA_SCHEMA_VERSIONS:
         raise CampaignCatalogExtensionError("Catalog data version differs")
     if not isinstance(data["package_id"], str) or not PACKAGE_ID_RE.fullmatch(data["package_id"]):
         raise CampaignCatalogExtensionError("Catalog data package_id is invalid")
@@ -548,7 +684,7 @@ def validate_catalog_data(data: Mapping[str, Any]) -> None:
     if len(numbers) != len(campaigns) or numbers != sorted(set(numbers)):
         raise CampaignCatalogExtensionError("Campaign numbers must be unique and ascending")
     for row in campaigns:
-        validate_campaign_record(row)
+        validate_campaign_record(row, data["data_schema_version"])
     expected = catalog_summary(campaigns)
     summary = data["summary"]
     if not isinstance(summary, Mapping) or tuple(summary) != tuple(expected):
@@ -563,6 +699,29 @@ def validate_catalog_data(data: Mapping[str, Any]) -> None:
 
 
 # ------------------------------------------------------------------------------------------------ Excel
+
+
+def _split_cells(explanation: Mapping[str, Any]) -> tuple[float, float, float]:
+    """The three shares as written to the Excel: whole percents that add up to 100%, as on the card. A share that is
+    not zero but rounds to 0% keeps its own small value, so that SHARE_FORMAT writes it «меньше 1%»."""
+    shares = (explanation["kept_share"], explanation["own_saturation_share"], explanation["overlap_share"])
+    parts = split_percents(*shares)
+    kept, own, overlap = (float(share) if part == 0 and share > 0 else part / 100.0 for part, share in zip(parts, shares))
+    return kept, own, overlap
+
+
+def _reasons_row_height(text: Any, column_width: float) -> float:
+    """Row height in points that fits the wrapped reasons text (Excel does not grow rows by itself)."""
+    if not text:
+        return 20.0
+    per_line = max(int(column_width * 0.95), 20)
+    lines = sum(max(1, math.ceil(len(part) / per_line)) for part in str(text).split("\n"))
+    return max(20.0, 13.0 * lines + 6.0)
+
+
+def _reasons_text(explanation: Mapping[str, Any]) -> str | None:
+    """The reasons as one cell; an empty cell when the campaign has none."""
+    return " ".join(str(row["display_text"]) for row in explanation["reasons"]) or None
 
 
 def _fmt_cities(record: Mapping[str, Any]) -> str:
@@ -606,10 +765,10 @@ def write_catalog_workbook(
         "A": 5, "B": 44, "C": 24, "D": 11.5, "E": 11.5, "F": 7, "G": 52, "H": 56,
         "I": 12, "J": 12, "K": 10, "L": 10, "M": 15, "N": 15, "O": 12,
         "P": 11, "Q": 9, "R": 9, "S": 11, "T": 9, "U": 9, "V": 11, "W": 9, "X": 9,
-        "Y": 9, "Z": 9, "AA": 9, "AB": 15, "AC": 12,
+        "Y": 9, "Z": 9, "AA": 9, "AB": 15, "AC": 12, "AD": 12, "AE": 12, "AF": 13, "AG": 110,
     }
     channel_columns = dict(zip((channel_id for channel_id, _, _ in CHANNELS), "IJKLMN"))
-    group_start = {"I", "P", "S", "V", "Y", "AB", "AC"}
+    group_start = {"I", "P", "S", "V", "Y", "AB", "AC", "AD"}
 
     def campaign_sheet(ws: Any, title: str, rows: Sequence[Mapping[str, Any]]) -> tuple[int, int]:
         ws.sheet_view.showGridLines = False
@@ -629,6 +788,7 @@ def write_catalog_workbook(
             ("S4:U4", "Заказы, прирост на 1000 покупателей"),
             ("V4:X4", "Средний чек, прирост, ₽"),
             ("Y4:AA4", "ROAS"),
+            ("AD4:AG4", "Почему такая цифра"),
         ):
             ws.merge_cells(cell_range)
             ws[cell_range.split(":")[0]] = label
@@ -638,6 +798,7 @@ def write_catalog_workbook(
             "P": "оценка", "Q": "от", "R": "до", "S": "оценка", "T": "от", "U": "до",
             "V": "оценка", "W": "от", "X": "до", "Y": "оценка", "Z": "от", "AA": "до",
             "AB": "Пересечения (кампаний)", "AC": "Надёжность",
+            "AD": "досталось кампании", "AE": "съело своё насыщение", "AF": "съела другая реклама", "AG": "причины",
         }
         for column, (_, display, _) in zip("IJKLMN", CHANNELS):
             heads[column] = display
@@ -677,6 +838,10 @@ def write_catalog_workbook(
                     ws.cell(row=r, column=column + step, value=round(value, 6) if scale != 1.0 else value)
             ws[f"AB{r}"] = record["overlaps_n"]
             ws[f"AC{r}"] = record["reliable"]
+            explanation = record.get("explanation")
+            if explanation:
+                ws[f"AD{r}"], ws[f"AE{r}"], ws[f"AF{r}"] = _split_cells(explanation)
+                ws[f"AG{r}"] = _reasons_text(explanation)
             for column in widths:
                 cell = ws[f"{column}{r}"]
                 cell.font = f_body
@@ -707,6 +872,12 @@ def write_catalog_workbook(
             ws[f"AC{r}"].number_format = "0"
             ws[f"AC{r}"].font = f_bold
             ws[f"AC{r}"].alignment = Alignment(horizontal="center", vertical="center")
+            for column in ("AD", "AE", "AF"):
+                ws[f"{column}{r}"].number_format = SHARE_FORMAT
+                ws[f"{column}{r}"].alignment = Alignment(horizontal="center", vertical="center")
+            ws[f"AD{r}"].font = f_bold
+            ws[f"AG{r}"].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+            ws.row_dimensions[r].height = _reasons_row_height(ws[f"AG{r}"].value, widths["AG"])
         last = first + len(rows) - 1
         if rows:
             green = PatternFill("solid", bgColor="E2F0D9", fgColor="E2F0D9")
@@ -719,7 +890,7 @@ def write_catalog_workbook(
                 f"AC{first}:AC{last}",
                 CellIsRule(operator="equal", formula=["0"], fill=amber, font=Font(name=font, bold=True, color="843C0C")),
             )
-            ws.auto_filter.ref = f"A5:AC{last}"
+            ws.auto_filter.ref = f"A5:AG{last}"
         ws.freeze_panes = "C6"
         note_row = max(last, 5) + 2
         notes = (
@@ -730,6 +901,11 @@ def write_catalog_workbook(
             "по городам и неделям. Средний чек модель почти не даёт рекламе менять (так задумано), эффект идёт в "
             "основном через заказы.",
             "Пустые ячейки: деньги кампании пришлись на города или недели, которых нет в модели, оценки нет.",
+            "Почему такая цифра: эффект, который дали бы деньги кампании без насыщения, делится на три части: что "
+            "досталось кампании, что съело её своё насыщение (много денег в те же города и недели) и что съела "
+            "другая реклама того же направления в те же недели и города, с эхом прошлых недель. Причины пишутся, "
+            "только когда есть что сказать про саму кампанию; иначе ячейка пустая. «Обычно» — медиана кампаний с тем "
+            "же основным каналом. Доли считает та же модель, что и ROAS; уровень отдачи рублей задан по отрасли.",
         )
         for step, text in enumerate(notes):
             ws[f"A{note_row + step}"] = text
@@ -848,6 +1024,11 @@ def verify_catalog_workbook(path: Path, records: Sequence[Mapping[str, Any]]) ->
                 "AB": record["overlaps_n"],
                 "AC": record["reliable"],
             }
+            explanation = record.get("explanation")
+            expected.update(
+                {**dict(zip(("AD", "AE", "AF"), _split_cells(explanation))), "AG": _reasons_text(explanation)}
+                if explanation else {"AD": None, "AE": None, "AF": None, "AG": None}
+            )
             for channel_id, column in channel_columns.items():
                 budgets = [row["budget_rub"] for row in record["channels"] if row["channel_id"] == channel_id]
                 expected[column] = round(budgets[0] / 1e6, 6) if budgets else None
@@ -1147,6 +1328,7 @@ def tech_rows_from_source(
     *,
     catalog_version: str,
     generated_at: datetime,
+    reasons: SourceReasons | None = None,
 ) -> list[tuple[str, str]]:
     """Rows of «Тех. информация» (same texts as the catalog Excel of 05.11, without draft marks)."""
 
@@ -1256,9 +1438,58 @@ def tech_rows_from_source(
             "Бюджет и оборот — млн ₽. Заказы — прирост на 1000 покупателей. Средний чек — прирост в рублях. "
             "ROAS = прирост оборота / весь бюджет кампании.",
         ),
+    ] + _reason_tech_rows(reasons) + [
         ("§", "Файл"),
         ("Файл сформирован", generated_at.astimezone(DA_NANG).strftime("%d.%m.%Y %H:%M") + " (Дананг)"),
     ]
+
+
+def _reason_tech_rows(reasons: SourceReasons | None) -> list[tuple[str, str]]:
+    if reasons is None:
+        return []
+    meta = reasons.meta
+    return [
+        ("§", "Почему такая цифра"),
+        (
+            "Разложение",
+            "Для каждой кампании и набора параметров модели считаются три эффекта: первых рублей (без насыщения), "
+            "только денег кампании (без другой рекламы) и эффект каталога. Разница первых двух — насыщение самой "
+            "кампанией, разница вторых двух — другая реклама в те же недели и города (с эхом прошлых недель). "
+            "Цифры каталога не меняются.",
+        ),
+        (
+            "Причины словами",
+            "Только то, что говорит про саму кампанию, иначе причин нет и остаётся полоса. Сначала насыщение по "
+            "сравнению с кампаниями того же основного канала (медиана этой сборки каталога): своё насыщение или "
+            "другая реклама заметно выше обычного, или деньги растянуты и насыщения заметно меньше обычного. Потом "
+            "особые случаи: тот же рубль в городах и неделях кампании даёт заметно больше или меньше, деньги вне "
+            "модели, досчёт прогнозом. Всего до трёх.",
+        ),
+        (
+            "Факты журнала",
+            "К насыщению добавляются факты из журнала размещений: какая доля бюджета в одном месте, во сколько раз денег "
+            "на город в неделю (у национальных каналов в неделю) больше или меньше обычного для того же основного "
+            "канала (у цифровой рекламы не сравнивается), какая доля бюджета ушла за две недели подряд, какая "
+            "кампания того же направления вложила больше всего денег в те же недели и города.",
+        ),
+        ("Версия справочника причин", f"{meta.get('rules_version')}, SHA-256 {meta.get('rules_sha256')}"),
+        ("Версия кода причин", str(meta.get("code_version") or "")),
+    ]
+
+
+def normalized_records(source: SourceCatalog, reasons: SourceReasons | None = None) -> list[dict[str, Any]]:
+    """Card records sorted by number; with reasons, every modeled campaign carries its explanation."""
+
+    rules_version = str((reasons.meta if reasons else {}).get("rules_version") or "")
+    records = [
+        normalize_campaign(
+            row,
+            explanation_from_reasons(reasons.campaigns.get(int(row["id"])), rules_version) if reasons else None,
+        )
+        for row in source.results
+    ]
+    records.sort(key=lambda row: row["number"])
+    return records
 
 
 def build_extension(
@@ -1271,8 +1502,10 @@ def build_extension(
     period_start: str = "2025-01-06",
     period_end: str = "2026-06-28",
     download_file_name: str | None = None,
+    reasons: SourceReasons | None = None,
 ) -> dict[str, Any]:
-    """Write the three extension files into a new folder named campaign_catalog_v1 and return the metadata."""
+    """Write the three extension files into a new folder named campaign_catalog_v1 and return the metadata.
+    ``reasons`` (14_weekly_joint_campaign_reasons.py of the same catalog run) fills each record's "explanation"."""
 
     generated = datetime.fromisoformat(generated_at_utc.replace("Z", "+00:00"))
     if generated.tzinfo is None:
@@ -1283,8 +1516,7 @@ def build_extension(
         raise CampaignCatalogExtensionError(f"Extension folder must be named {ARTIFACT_VERSION}")
     if output.exists():
         raise FileExistsError(f"Extension folder already exists (new versions only): {output}")
-    records = [normalize_campaign(row) for row in source.results]
-    records.sort(key=lambda row: row["number"])
+    records = normalized_records(source, reasons)
     data = {
         "artifact_version": ARTIFACT_VERSION,
         "data_schema_version": DATA_SCHEMA_VERSION,
@@ -1312,7 +1544,8 @@ def build_extension(
     write_catalog_workbook(
         temporary_workbook,
         records,
-        tech_rows_from_source(source, identity, catalog_version=catalog_version, generated_at=generated),
+        tech_rows_from_source(source, identity, catalog_version=catalog_version, generated_at=generated,
+                              reasons=reasons),
     )
     os.replace(temporary_workbook, workbook_path)
     workbook_report = verify_catalog_workbook(workbook_path, records)
@@ -1359,7 +1592,7 @@ def build_extension(
         "computed_n": data["summary"]["computed_n"],
         "budget_rub": data["summary"]["budget_rub"],
         "turnover_increment_rub": data["summary"]["turnover_increment_rub"],
-        "source_files": list(source.source_files),
+        "source_files": list(source.source_files) + (list(reasons.source_files) if reasons else []),
         "identity_source": identity.source,
         "checks": checks,
         "generated_at_utc": generated.isoformat(),
@@ -1437,6 +1670,12 @@ def failed_checks(metadata: Mapping[str, Any]) -> list[str]:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--catalog-dir", required=True, type=Path)
+    parser.add_argument(
+        "--reasons-dir",
+        required=True,
+        type=Path,
+        help="output of 14_weekly_joint_campaign_reasons.py for the same catalog run (reasons on every card)",
+    )
     parser.add_argument("--package-dir", required=True, type=Path)
     parser.add_argument("--package-id", required=True)
     parser.add_argument("--catalog-version", required=True)
@@ -1449,12 +1688,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     source = load_source_catalog(args.catalog_dir)
+    reasons = load_source_reasons(args.reasons_dir, source)
     identity = package_identity_from_dir(args.package_dir, args.package_id)
     run_config = json.loads((args.package_dir / "run_config.json").read_text(encoding="utf-8"))
     if identity.npz_sha256 is None:
         identity = PackageIdentity(**{**identity.__dict__, "npz_sha256": _find_npz_sha(run_config)})
-    records = [normalize_campaign(row) for row in source.results]
-    precheck = catalog_checks(sorted(records, key=lambda row: row["number"]), source, identity)
+    records = normalized_records(source, reasons)
+    precheck = catalog_checks(records, source, identity)
     failed = [row for row in precheck if row["status"] != "passed"]
     if failed and not args.allow_failed_checks:
         print(json.dumps({"status": "failed", "checks": failed}, ensure_ascii=False, indent=1, default=str))
@@ -1465,6 +1705,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         out_dir=args.out_dir,
         catalog_version=args.catalog_version,
         generated_at_utc=args.generated_at_utc or datetime.now(timezone.utc).isoformat(),
+        reasons=reasons,
     )
     print(json.dumps({key: metadata[key] for key in ("artifact_id", "package_id", "campaigns_n", "computed_n",
                                                       "data", "workbook", "checks")}, ensure_ascii=False, indent=1,
@@ -1473,6 +1714,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = [
+    "geo_display",
+    "split_percents",
     "ARTIFACT_VERSION",
     "CampaignCatalogExtensionError",
     "DATA_FILENAME",
@@ -1481,6 +1724,9 @@ __all__ = [
     "WORKBOOK_FILENAME",
     "build_extension",
     "catalog_summary",
+    "explanation_from_reasons",
+    "load_source_reasons",
+    "normalized_records",
     "failed_checks",
     "load_source_catalog",
     "normalize_campaign",

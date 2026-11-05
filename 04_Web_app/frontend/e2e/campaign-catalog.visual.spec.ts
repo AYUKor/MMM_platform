@@ -55,7 +55,7 @@ function card(number: number): Json | null {
   if (!campaign) return null;
   return {
     contract_name: "campaign_card_v1",
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     record_origin: "verified_model_package_artifact",
     package_id: source.package_id,
     model_version: source.model_version,
@@ -74,7 +74,7 @@ function card(number: number): Json | null {
 function unpublished(): Json {
   return {
     contract_name: "campaign_catalog_v1",
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     record_origin: "model_package_artifact_unavailable",
     status: "unavailable",
     title: "Прошлые кампании",
@@ -184,7 +184,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("table").getByRole("link", { name: "Тестовая кампания 7" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "Тестовая кампания 7" })).toBeVisible();
     await expect(page).toHaveURL(/\/campaigns\/7\?tab=long&q=/);
-    await expect(page.getByRole("heading", { name: /Как читать оценку · уровень ROAS по отрасли/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Как читать оценку/ })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Почему такая цифра" })).toBeVisible();
     await expectCleanScreen(page);
     await capture(page, `03-card-${theme}.png`);
 

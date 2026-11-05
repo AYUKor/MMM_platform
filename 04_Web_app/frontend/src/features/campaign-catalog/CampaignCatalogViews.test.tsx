@@ -21,7 +21,7 @@ function cardFor(number: number): CampaignCardV1 {
   if (!campaign) throw new Error(`no campaign ${number}`);
   return {
     contract_name: "campaign_card_v1",
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     record_origin: "verified_model_package_artifact",
     package_id: catalog.package_id,
     model_version: catalog.model_version as string,
@@ -212,6 +212,63 @@ describe("past campaign card", () => {
     render(<MemoryRouter><CampaignCardView card={cardFor(1)} backLink="/campaigns" /></MemoryRouter>);
     expect(screen.queryByRole("heading", { name: /Как читать оценку/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/остальные кампании оставить/)).not.toBeInTheDocument();
+  });
+
+  it("explains the number: what the campaign kept, what saturation and other ads took, and why", () => {
+    render(<MemoryRouter><CampaignCardView card={cardFor(4)} backLink="/campaigns" /></MemoryRouter>);
+    const reasons = screen.getByRole("heading", { name: "Почему такая цифра" }).closest("section") as HTMLElement;
+    expect(reasons).toHaveTextContent("вся полоса: эффект без насыщения, 505,4 млн ₽");
+    expect(within(reasons).getByRole("img")).toHaveAccessibleName(
+      "Досталось кампании: 17%; Съело своё насыщение: 62%; Съела другая реклама: 21%",
+    );
+    const items = within(reasons).getAllByRole("listitem").map((item) => item.textContent);
+    expect(items.slice(0, 3)).toEqual([
+      "Досталось кампании17%",
+      "Съело своё насыщение62%",
+      "Съела другая реклама21%",
+    ]);
+    const sentences = within(reasons).getAllByRole("listitem").slice(3).map((item) => item.textContent);
+    expect(sentences).toEqual([
+      "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 21% эффекта, обычно у всех кампаний каталога 11%. Больше всего рядом шло «Тестовая кампания 5»: 2,3 млн ₽ в те же недели и города.",
+      "В городах и неделях кампании тот же рубль рекламы даёт в 1,4 раза больше оборота, чем в среднем по тем же каналам.",
+      "Кампания шла до конца данных: 18% эффекта досчитано прогнозом на 7 недель вперёд.",
+    ]);
+    expect(reasons).toHaveTextContent("«Обычно» значит медиана кампаний с тем же основным каналом.");
+    expect(reasons).toHaveTextContent("уровень отдачи рублей задан по отрасли.");
+  });
+
+  it("shows the bar only when there is nothing specific to say about the campaign", () => {
+    render(<MemoryRouter><CampaignCardView card={cardFor(2)} backLink="/campaigns" /></MemoryRouter>);
+    const reasons = screen.getByRole("heading", { name: "Почему такая цифра" }).closest("section") as HTMLElement;
+    expect(within(reasons).getByRole("img")).toBeInTheDocument();
+    expect(within(reasons).getAllByRole("listitem")).toHaveLength(3);
+    expect(reasons.querySelector("ol")).toBeNull();
+    expect(reasons).not.toHaveTextContent("Обычно");
+    expect(reasons).toHaveTextContent("Доли считает та же модель, что и ROAS; уровень отдачи рублей задан по отрасли.");
+  });
+
+  it("writes a share that rounds to 0% but is not zero as «меньше 1%»", () => {
+    const card = cardFor(2);
+    const explanation = card.campaign.explanation;
+    if (!explanation) throw new Error("card 2 has an explanation in the fixture");
+    card.campaign = { ...card.campaign, explanation: { ...explanation, kept_share: 0.0011, own_saturation_share: 0.6062, overlap_share: 0.3927 } };
+    render(<MemoryRouter><CampaignCardView card={card} backLink="/campaigns" /></MemoryRouter>);
+    const reasons = screen.getByRole("heading", { name: "Почему такая цифра" }).closest("section") as HTMLElement;
+    expect(within(reasons).getByRole("img")).toHaveAccessibleName(
+      "Досталось кампании: меньше 1%; Съело своё насыщение: 61%; Съела другая реклама: 39%",
+    );
+    expect(within(reasons).getAllByRole("listitem")[0]).toHaveTextContent("Досталось кампаниименьше 1%");
+  });
+
+  it("keeps the card without the reasons block for a catalog built before reasons and for no estimate", () => {
+    const old = cardFor(1);
+    old.campaign = { ...old.campaign, explanation: null };
+    const { unmount } = render(<MemoryRouter><CampaignCardView card={old} backLink="/campaigns" /></MemoryRouter>);
+    expect(screen.queryByRole("heading", { name: "Почему такая цифра" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ROAS" })).toBeInTheDocument();
+    unmount();
+    render(<MemoryRouter><CampaignCardView card={cardFor(5)} backLink="/campaigns" /></MemoryRouter>);
+    expect(screen.queryByRole("heading", { name: "Почему такая цифра" })).not.toBeInTheDocument();
   });
 
   it("splits the budget by channel and marks nationwide channels", () => {

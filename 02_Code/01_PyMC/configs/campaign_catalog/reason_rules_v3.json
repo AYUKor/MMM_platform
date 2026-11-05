@@ -1,0 +1,311 @@
+{
+  "contract_name": "campaign_reason_rules",
+  "version": "campaign_reasons_v3_20261105",
+  "description": "Справочник причин цифры кампании в каталоге прошлых кампаний. Каждая сборка каталога (14_weekly_joint_campaign_reasons.py) размечает кампании по этим правилам. Причина показывается, только если она говорит что-то про саму кампанию: насыщение или другая реклама заметно выше или ниже обычного для её основного канала (с фактами из журнала размещений: где и как плотно шли деньги, кто шёл рядом), особая отдача её городов и недель, деньги вне модели, досчёт прогнозом. Если таких причин нет, у кампании остаётся только полоса. Правило срабатывает, когда выполнены все его условия; порядок: ранг, внутри ранга самые весомые; до трёх причин. Обычно: медиана по кампаниям той же сборки с тем же основным каналом (по всем кампаниям, если таких меньше min_group). Доли: kept_share досталось кампании, own_loss_share съело своё насыщение, overlap_loss_share съела другая реклама; *_vs_norm разница с обычным. Факты журнала: n_geo мест с региональными деньгами, top_geo_share доля самого крупного места, density_ratio денег на место в неделю (для национальных каналов в неделю) к обычному, burn_2w_share наибольшая доля бюджета за две недели подряд, weeks_n недель от первой до последней. Менять формулировки и пороги только новой версией файла.",
+  "max_reasons": 3,
+  "norms": {
+    "group_by": "main_channel",
+    "statistic": "median",
+    "min_group": 5
+  },
+  "channel_phrases": {
+    "Цифровая реклама": "в цифровой рекламе",
+    "Наружная реклама": "в наружной рекламе",
+    "Indoor": "в Indoor",
+    "Радио": "на радио",
+    "Национальное ТВ": "на национальном ТВ",
+    "Региональное ТВ": "на региональном ТВ"
+  },
+  "notes": {
+    "own_note": {
+      "max_items": 2,
+      "items": [
+        {
+          "conditions": [
+            {
+              "field": "main_nationwide",
+              "op": "<",
+              "threshold": 0.5
+            },
+            {
+              "field": "top_geo_share",
+              "op": ">=",
+              "threshold": 0.9995
+            }
+          ],
+          "text": "весь бюджет в одном месте: {top_geo}"
+        },
+        {
+          "conditions": [
+            {
+              "field": "main_nationwide",
+              "op": "<",
+              "threshold": 0.5
+            },
+            {
+              "field": "top_geo_share",
+              "op": ">=",
+              "threshold": 0.5
+            },
+            {
+              "field": "top_geo_share",
+              "op": "<",
+              "threshold": 0.9995
+            }
+          ],
+          "text": "{top_geo_pct} бюджета в одном месте: {top_geo}"
+        },
+        {
+          "conditions": [
+            {
+              "field": "main_nationwide",
+              "op": "<",
+              "threshold": 0.5
+            },
+            {
+              "field": "main_digital",
+              "op": "<",
+              "threshold": 0.5
+            },
+            {
+              "field": "density_ratio",
+              "op": ">=",
+              "threshold": 3.0
+            }
+          ],
+          "text": "денег на город в неделю в {dense_x} больше обычного"
+        },
+        {
+          "conditions": [
+            {
+              "field": "main_nationwide",
+              "op": ">=",
+              "threshold": 0.5
+            },
+            {
+              "field": "density_ratio",
+              "op": ">=",
+              "threshold": 3.0
+            }
+          ],
+          "text": "денег в неделю в {dense_x} больше обычного"
+        },
+        {
+          "conditions": [
+            {
+              "field": "weeks_n",
+              "op": ">=",
+              "threshold": 4
+            },
+            {
+              "field": "burn_2w_share",
+              "op": ">=",
+              "threshold": 0.6
+            }
+          ],
+          "text": "{burn_pct} бюджета ушло за две недели из {weeks_n}"
+        }
+      ],
+      "otherwise": [
+        {
+          "conditions": [
+            {
+              "field": "own_cities_n",
+              "op": ">=",
+              "threshold": 1
+            }
+          ],
+          "text": "больше всего потерь: {own_cities}"
+        }
+      ]
+    },
+    "overlap_note": {
+      "max_items": 1,
+      "items": [
+        {
+          "conditions": [
+            {
+              "field": "main_nationwide",
+              "op": "<",
+              "threshold": 0.5
+            },
+            {
+              "field": "neighbor_rub",
+              "op": ">",
+              "threshold": 0
+            }
+          ],
+          "text": "больше всего рядом шло «{neighbor_name}»: {neighbor_mln} млн ₽ в те же недели и города"
+        },
+        {
+          "conditions": [
+            {
+              "field": "main_nationwide",
+              "op": ">=",
+              "threshold": 0.5
+            },
+            {
+              "field": "neighbor_rub",
+              "op": ">",
+              "threshold": 0
+            }
+          ],
+          "text": "больше всего рядом шло «{neighbor_name}»: {neighbor_mln} млн ₽ в те же недели"
+        }
+      ],
+      "otherwise": [
+        {
+          "conditions": [
+            {
+              "field": "overlap_cities_n",
+              "op": ">=",
+              "threshold": 1
+            }
+          ],
+          "text": "больше всего потерь: {overlap_cities}"
+        }
+      ]
+    }
+  },
+  "rules": [
+    {
+      "code": "own_saturation",
+      "rank": 1,
+      "conditions": [
+        {
+          "field": "saturation_loss_share",
+          "op": ">=",
+          "threshold": 0.2
+        },
+        {
+          "field": "own_vs_norm",
+          "op": ">=",
+          "threshold": 0.1
+        }
+      ],
+      "weight_field": "own_vs_norm",
+      "text": "Кампания упёрлась в насыщение: оно съело {own_loss_pct} эффекта, обычно {norm_group} {norm_own_pct}.{own_note}"
+    },
+    {
+      "code": "overlap",
+      "rank": 1,
+      "conditions": [
+        {
+          "field": "saturation_loss_share",
+          "op": ">=",
+          "threshold": 0.2
+        },
+        {
+          "field": "overlap_vs_norm",
+          "op": ">=",
+          "threshold": 0.1
+        }
+      ],
+      "weight_field": "overlap_vs_norm",
+      "text": "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела {overlap_loss_pct} эффекта, обычно {norm_group} {norm_overlap_pct}.{overlap_note}"
+    },
+    {
+      "code": "spread_thin",
+      "rank": 1,
+      "conditions": [
+        {
+          "field": "main_nationwide",
+          "op": "<",
+          "threshold": 0.5
+        },
+        {
+          "field": "main_digital",
+          "op": "<",
+          "threshold": 0.5
+        },
+        {
+          "field": "own_vs_norm",
+          "op": "<=",
+          "threshold": -0.05
+        },
+        {
+          "field": "density_ratio",
+          "op": "<=",
+          "threshold": 0.3334
+        }
+      ],
+      "weight_field": "own_below_norm",
+      "text": "Деньги растянуты: на город в неделю в {thin_x} меньше обычного, поэтому своё насыщение съело {own_loss_pct} эффекта, обычно {norm_group} {norm_own_pct}."
+    },
+    {
+      "code": "spread_thin_national",
+      "rank": 1,
+      "conditions": [
+        {
+          "field": "main_nationwide",
+          "op": ">=",
+          "threshold": 0.5
+        },
+        {
+          "field": "own_vs_norm",
+          "op": "<=",
+          "threshold": -0.05
+        },
+        {
+          "field": "density_ratio",
+          "op": "<=",
+          "threshold": 0.3334
+        }
+      ],
+      "weight_field": "own_below_norm",
+      "text": "Деньги растянуты: в неделю в {thin_x} меньше обычного, поэтому своё насыщение съело {own_loss_pct} эффекта, обычно {norm_group} {norm_own_pct}."
+    },
+    {
+      "code": "strong_geo",
+      "rank": 2,
+      "conditions": [
+        {
+          "field": "geo_factor",
+          "op": ">=",
+          "threshold": 1.25
+        }
+      ],
+      "weight_field": "geo_weight",
+      "text": "В городах и неделях кампании тот же рубль рекламы даёт в {geo_x} больше оборота, чем в среднем по тем же каналам."
+    },
+    {
+      "code": "weak_geo",
+      "rank": 2,
+      "conditions": [
+        {
+          "field": "geo_factor",
+          "op": "<=",
+          "threshold": 0.8
+        }
+      ],
+      "weight_field": "geo_weight",
+      "text": "В городах и неделях кампании тот же рубль рекламы даёт в {geo_x} меньше оборота, чем в среднем по тем же каналам."
+    },
+    {
+      "code": "money_outside_model",
+      "rank": 2,
+      "conditions": [
+        {
+          "field": "unseen_share",
+          "op": ">=",
+          "threshold": 0.05
+        }
+      ],
+      "weight_field": "unseen_share",
+      "text": "{unseen_pct} бюджета ушло в города и недели, где модель не видит продаж: эти деньги эффекта не дают, поэтому ROAS ниже."
+    },
+    {
+      "code": "tail_forecast",
+      "rank": 2,
+      "conditions": [
+        {
+          "field": "tail_share",
+          "op": ">=",
+          "threshold": 0.1
+        }
+      ],
+      "weight_field": "tail_share",
+      "text": "Кампания шла до конца данных: {tail_pct} эффекта досчитано прогнозом на {tail_weeks_text} вперёд."
+    }
+  ]
+}

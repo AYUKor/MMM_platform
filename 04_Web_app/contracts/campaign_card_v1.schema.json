@@ -26,7 +26,7 @@
       "const": "campaign_card_v1"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "record_origin": {
       "const": "verified_model_package_artifact"
@@ -188,7 +188,8 @@
         "avg_basket_increment_rub",
         "roas",
         "overlaps_n",
-        "reliable"
+        "reliable",
+        "explanation"
       ],
       "properties": {
         "number": {
@@ -301,6 +302,104 @@
             0,
             1
           ]
+        },
+        "explanation": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/explanation"
+            }
+          ]
+        }
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "description": "Why the campaign got its number: the first-ruble potential split into kept effect, loss to the campaign's own saturation and loss to other ads in the same weeks and cities, plus up to three reasons from the versioned rule file, only when something specific to the campaign can be said (none otherwise: the card shows the split only). Explains the catalog numbers, never changes them.",
+      "additionalProperties": false,
+      "required": [
+        "rules_version",
+        "potential_turnover_rub",
+        "kept_share",
+        "own_saturation_share",
+        "overlap_share",
+        "first_ruble_roas",
+        "typical_first_ruble_roas",
+        "unseen_budget_share",
+        "tail_share",
+        "own_saturation_cities",
+        "overlap_cities",
+        "reasons"
+      ],
+      "properties": {
+        "rules_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "potential_turnover_rub": {
+          "type": "number",
+          "minimum": 0
+        },
+        "kept_share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "own_saturation_share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "overlap_share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "first_ruble_roas": {
+          "type": "number",
+          "minimum": 0
+        },
+        "typical_first_ruble_roas": {
+          "type": "number",
+          "minimum": 0
+        },
+        "unseen_budget_share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tail_share": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "own_saturation_cities": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "overlap_cities": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/$defs/note"
+          }
         }
       }
     }

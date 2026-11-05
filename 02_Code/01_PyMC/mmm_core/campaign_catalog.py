@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 
 from . import campaign_routing as cr
+from .catalog_text import geo_display
 from . import weekly_joint as wj
 
 PAUSE_DAYS = 30
@@ -69,6 +70,7 @@ def pretty_geo(label: str) -> str:
         w = '-'.join(hy)
         parts.append(w.lower() if w.lower() in LOWER_WORDS else w)
     out = ' '.join(parts)
+    out = geo_display(out)  # «(кроме городов)»
     return out[:1].upper() + out[1:]
 
 

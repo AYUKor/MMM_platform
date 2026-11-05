@@ -24,7 +24,7 @@ function card(number: number): Json | null {
   if (!campaign) return null;
   return {
     contract_name: "campaign_card_v1",
-    schema_version: "1.0.0",
+    schema_version: "1.1.0",
     record_origin: "verified_model_package_artifact",
     package_id: source.package_id,
     model_version: source.model_version,
@@ -122,7 +122,7 @@ describe("past campaigns pages", () => {
   it("shows the not-published state from the server", async () => {
     stubServer({
       contract_name: "campaign_catalog_v1",
-      schema_version: "1.0.0",
+      schema_version: "1.1.0",
       record_origin: "model_package_artifact_unavailable",
       status: "unavailable",
       title: "Прошлые кампании",
