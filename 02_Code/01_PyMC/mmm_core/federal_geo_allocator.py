@@ -12,15 +12,23 @@ import csv
 import hashlib
 import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from .model_package import sha256_file
 from .model_package_reader import ModelPackage
+from .weekly_package import is_weekly_manifest
 
 
 POLICY_VERSION = "FEDERAL_GEO_ALLOCATION_V1"
+# A weekly joint package carries its units' population per direction (weekly_geo_routing.csv): the panel spread the
+# agency's federal rows by that population over the units of the direction, and a plan's federal rows follow it. A
+# rest-of-oblast unit holds the oblast without the model's cities of that direction, so its population differs
+# between directions and is not in the shared population reference.
+WEEKLY_POPULATION_FILE = "weekly_geo_routing.csv"
+POPULATION_SOURCE_REFERENCE = "population_reference_file"
+POPULATION_SOURCE_WEEKLY = "weekly_package_unit_population_by_direction"
 CONSERVATION_TOLERANCE_RUB = 0.01
 TURNOVER_TARGET = "turnover_per_user"
 SUPPORTED_CHANNELS = frozenset(
@@ -180,6 +188,8 @@ class FederalGeoAllocationContext:
     capability_pairs: frozenset[tuple[str, str]]
     geo_by_label: Mapping[str, EligibleGeo]
     eligible_geo_set_checksums: Mapping[str, str]
+    population_source: str = POPULATION_SOURCE_REFERENCE
+    weekly_population_source_sha256: str = ""
 
     @classmethod
     def from_package(
@@ -210,6 +220,9 @@ class FederalGeoAllocationContext:
             "historical_support_bounds.csv": support_path,
             "capability_matrix.csv": capability_path,
         }
+        weekly = is_weekly_manifest(getattr(package, "manifest", None) or {})
+        if weekly:
+            paths[WEEKLY_POPULATION_FILE] = package.run_dir / WEEKLY_POPULATION_FILE
         actual_hashes: dict[str, str] = {}
         for name, path in paths.items():
             expected = str(registered_inventory_sha256.get(name) or "")
@@ -317,6 +330,21 @@ class FederalGeoAllocationContext:
                     technical_details=f"Support crosscheck differs for direction {direction}",
                 )
 
+        weekly_population: dict[tuple[str, str], float] = {}
+        if weekly:
+            for row in _read_csv(paths[WEEKLY_POPULATION_FILE]):
+                key = (
+                    str(row.get("segment") or "").strip(),
+                    str(row.get("unit_label") or "").strip(),
+                )
+                try:
+                    value = float(row.get("population_k") or "")
+                except (TypeError, ValueError):
+                    value = math.nan
+                if key in weekly_population:
+                    value = math.nan  # a duplicated unit of a direction is not trusted
+                weekly_population[key] = value
+
         all_supported = set().union(*denominator_sets.values())
         missing_catalog = all_supported - set(catalog)
         if missing_catalog:
@@ -330,23 +358,43 @@ class FederalGeoAllocationContext:
             | (duplicate_population & all_supported)
         )
 
+        def _valid(value: float) -> float:
+            return value if math.isfinite(value) and value > 0 else math.nan
+
+        def _direction_population(direction: str, label: str) -> float:
+            if weekly:
+                return _valid(weekly_population.get((direction, label), math.nan))
+            return (
+                math.nan
+                if label in invalid_or_missing_population
+                else population[label]
+            )
+
+        # geo_by_label serves local pass-through rows; its population is shown only. For a weekly package it is the
+        # unit's population in the first direction (sorted) that has the unit.
+        label_direction = {
+            label: next(d for d in sorted(denominator_sets) if label in denominator_sets[d])
+            for label in all_supported
+        }
         geo_by_label = {
             label: EligibleGeo(
                 geo_id=catalog[label][0],
                 geo_label=label,
                 geo_display_name=catalog[label][1],
-                population_k=(
-                    math.nan
-                    if label in invalid_or_missing_population
-                    else population[label]
-                ),
+                population_k=_direction_population(label_direction[label], label),
             )
             for label in all_supported
         }
         eligible_by_direction = {
             direction: tuple(
                 sorted(
-                    (geo_by_label[label] for label in labels),
+                    (
+                        replace(
+                            geo_by_label[label],
+                            population_k=_direction_population(direction, label),
+                        )
+                        for label in labels
+                    ),
                     key=lambda item: item.geo_id,
                 )
             )
@@ -385,6 +433,10 @@ class FederalGeoAllocationContext:
             capability_pairs=capability_pairs,
             geo_by_label=geo_by_label,
             eligible_geo_set_checksums=checksums,
+            population_source=(
+                POPULATION_SOURCE_WEEKLY if weekly else POPULATION_SOURCE_REFERENCE
+            ),
+            weekly_population_source_sha256=actual_hashes.get(WEEKLY_POPULATION_FILE, ""),
         )
 
     def eligible_geos(
@@ -445,6 +497,8 @@ class FederalGeoAllocationContext:
             "population_source_sha256": self.population_source_sha256,
             "geo_catalog_sha256": self.geo_catalog_sha256,
             "eligible_geo_set_checksums": dict(self.eligible_geo_set_checksums),
+            "population_source": self.population_source,
+            "weekly_population_source_sha256": self.weekly_population_source_sha256,
         }
 
 

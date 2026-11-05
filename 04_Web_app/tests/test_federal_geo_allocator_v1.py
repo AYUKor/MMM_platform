@@ -47,7 +47,7 @@ POPULATION_SHA256 = (
     "b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b"
 )
 CATALOG_SHA256 = (
-    "a25547d2582c2000465f5fbbad7c4e7ecd20fb6c9311b745699764f62b6bed61"
+    "87859ba9b43dade2f4e78c923419311ba216d618d97f7ae0471cfd67cb045172"
 )
 PACKAGE_ID = "pkg_807d3ddbae57a52a_9aacd3beb350725b"
 # The v2 reference (220 geographies) stays in the repository as the point the first

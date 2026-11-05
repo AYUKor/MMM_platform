@@ -39,12 +39,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))     # run with python -
 import numpy as np
 import pandas as pd
 
-CODE_VERSION = 'weekly_joint_package_v6_20261105'
+CODE_VERSION = 'weekly_joint_package_v7_20261105'
 
 
 def build(a: argparse.Namespace) -> None:
     from mmm_core.weekly_package import build_weekly_package
-    m = build_weekly_package(a.fit_dir, a.profile, a.panel, a.national, a.out, model_name=a.model_name,
+    m = build_weekly_package(a.fit_dir, a.profile, a.panel, a.national, a.out, city_oblast_map=a.city_oblast_map,
+                             model_name=a.model_name,
                              model_run_id=a.model_run_id, source_code_version=a.source_code_version,
                              builder_code_version=CODE_VERSION)
     print(json.dumps({k: m[k] for k in ('package_type', 'model_name', 'model_run_id', 'n_draws', 'fit_weeks',
@@ -325,6 +326,7 @@ def main() -> None:
     b.add_argument('--profile', default='production')
     b.add_argument('--panel', required=True)
     b.add_argument('--national', required=True)
+    b.add_argument('--city-oblast-map', required=True, help='city -> oblast map of the panel (city_oblast_map_v8.csv)')
     b.add_argument('--out', required=True)
     b.add_argument('--model-name', default='Заноза')
     b.add_argument('--model-run-id', default=None)

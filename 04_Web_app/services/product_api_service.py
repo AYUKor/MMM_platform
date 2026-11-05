@@ -34,6 +34,7 @@ from contracts.product_api_v1 import (  # noqa: E402
 )
 from mmm_core.model_package import OOT_BASIS_INHERITED  # noqa: E402
 from mmm_core.model_package_reader import ModelPackage  # noqa: E402
+from mmm_core.weekly_package import is_weekly_manifest  # noqa: E402
 
 
 TERMINAL_JOB_STATUSES = {"succeeded", "failed", "cancelled", "timed_out"}
@@ -201,6 +202,18 @@ def _channel_policies(rows: Iterable[Mapping[str, str]]) -> list[dict[str, Any]]
     return output
 
 
+def _training_period(manifest: Mapping[str, Any]) -> dict[str, str]:
+    """Training dates of the package; a weekly package without them spans its fit weeks (Monday..Sunday)."""
+
+    start = str(manifest.get("train_start") or "")
+    end = str(manifest.get("train_end") or "")
+    weeks = manifest.get("fit_weeks") or []
+    if is_weekly_manifest(manifest) and (not start or not end) and len(weeks) == 2:
+        start = str(weeks[0])
+        end = (datetime.fromisoformat(str(weeks[1])) + timedelta(days=6)).date().isoformat()
+    return {"start_date": start, "end_date": end}
+
+
 def build_model_passport(
     resolved: Mapping[str, Any],
     *,
@@ -238,7 +251,14 @@ def build_model_passport(
     blocker_text = {
         "MISSING_OR_FAILED_OOT_VALIDATION": (
             "Sealed OOT пока недоступен из-за отсутствия нового полного периода данных."
-        )
+        ),
+        # weekly joint package (Заноза)
+        "ROAS_LEVEL_INDUSTRY_ANCHOR": "Уровень ROAS задан отраслевым ориентиром, данные его не проверяют.",
+        "OOT_PREREG_NOT_PASSED": (
+            "Проверка на отложенных кварталах формально не пройдена: общий оборот точен до 1-2%, "
+            "но один сегмент в каждом срезе ошибается примерно на 10%."
+        ),
+        "OOT_NOT_SEALED_Q3_PENDING": "Закрытая проверка на третьем квартале 2026 года впереди.",
     }
     blockers = [
         {
@@ -266,6 +286,18 @@ def build_model_passport(
             {
                 "code": "research_model",
                 "display_text": "Результаты предназначены для исследовательского прогнозирования и планирования бюджета.",
+            }
+        )
+    if is_weekly_manifest(manifest):
+        caveats.append(
+            {
+                "code": "weekly_model",
+                "display_text": (
+                    "Модель обучена на недельных данных: дневной план суммируется в недели "
+                    "с понедельника по воскресенье. Строки на область и «РФ» разносятся "
+                    "по единицам модели по тем же правилам, что при сборке данных; "
+                    f"{manifest.get('roas_level_label_ru') or 'уровень ROAS по отрасли'}."
+                ),
             }
         )
     caveats.extend(
@@ -312,10 +344,7 @@ def build_model_passport(
         },
         "data": {
             "grain": "daily",
-            "training_period": {
-                "start_date": str(manifest.get("train_start") or ""),
-                "end_date": str(manifest.get("train_end") or ""),
-            },
+            "training_period": _training_period(manifest),
             "development_shadow_period": {
                 "start_date": manifest.get("holdout_start"),
                 "end_date": manifest.get("holdout_end"),

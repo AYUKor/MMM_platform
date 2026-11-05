@@ -251,14 +251,18 @@ allocation/forecast contracts were unchanged by the later test-only harness fixe
 
 - Canonical catalog: `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` plus explicit
   aliases.
-- Catalog version: `geo_catalog_v1_2026_10_27`, based on a GeoNames RU snapshot
+- Catalog version: `geo_catalog_v1_2026_11_05`, based on a GeoNames RU snapshot
   of 2026-10-27, WGS84, CC BY 4.0. The first revision `geo_catalog_v1_2026_07_18`
   held 220 geographies; the 2026-10-27 revision adds the three geographies of the
-  Q2 model roster and re-verified all earlier coordinates as identical.
-- Verified coverage: 223 catalog geographies, 223 complete unique coordinate
-  pairs, 408 explicit unique aliases.
+  Q2 model roster and re-verified all earlier coordinates as identical; the
+  2026-11-05 revision adds the 57 rest-of-oblast units of the weekly joint package
+  (each placed at its oblast's catalog point).
+- Verified coverage: 280 catalog geographies, 280 complete coordinate pairs
+  (the 57 rest-of-oblast units share their oblast's point), 465 explicit unique
+  aliases.
 - Active turnover serving guard requires full coverage of the serving package
-  roster (223/223 for the Q2 roster) and fails closed.
+  roster (223/223 for the daily Q2 roster, 217/217 for the weekly roster) and
+  fails closed.
 - No runtime geocoding, fuzzy match, nearest-neighbour guess or external map API.
   Unknown/ambiguous geo retains budget and null coordinates.
 - Frontend uses a bundled Natural Earth outline and a fixed Albers projection.

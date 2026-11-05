@@ -14,6 +14,7 @@ from typing import Any, Iterator
 from .io import project_root, read_json, resolve_path, write_json
 from .model_package import OOT_BASIS_INHERITED, inherited_oot_issues_for_run_dir, sha256_file
 from .model_package_reader import ModelPackage
+from .weekly_package import is_weekly_manifest
 
 
 REGISTRY_SCHEMA_VERSION = "1.0.0"
@@ -115,7 +116,20 @@ def _registry_lock(registry_root: Path) -> Iterator[None]:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _weekly_manifest(run_dir: Path) -> dict[str, Any] | None:
+    manifest = read_json(run_dir / "model_manifest.json", {}) or {}
+    return manifest if is_weekly_manifest(manifest) else None
+
+
 def _inventory(run_dir: Path) -> dict[str, str]:
+    weekly = _weekly_manifest(run_dir)
+    if weekly is not None:
+        # weekly joint package (weekly_package.py): its manifest lists every serving file with its hash
+        names = ["model_manifest.json", *sorted(weekly.get("files") or {})]
+        missing = [name for name in names if not (run_dir / name).exists()]
+        if missing:
+            raise FileNotFoundError(f"Model registration is missing required artifacts: {missing}")
+        return {name: sha256_file(run_dir / name) for name in names}
     files: list[Path] = []
     for name in CORE_INVENTORY_FILES:
         path = run_dir / name
@@ -137,6 +151,8 @@ def _registration_payload(run_dir: Path, *, registered_by: str, reason: str) -> 
         raise ValueError(f"Legacy package schema {schema} cannot be registered; minimum is 0.3.0")
     run_config = read_json(run_dir / "run_config.json", {}) or {}
     panel_raw = run_config.get("panel_path") or manifest.get("panel_path")
+    if not panel_raw and is_weekly_manifest(manifest):
+        panel_raw = (run_config.get("fit_card") or {}).get("panel")
     if not panel_raw:
         raise ValueError("Model package has no panel path")
     panel_path = resolve_path(panel_raw)
@@ -228,6 +244,13 @@ def _assert_serving_inventory_complete(registration: dict[str, Any]) -> None:
     inventory = registration.get("inventory_sha256")
     if not isinstance(inventory, dict):
         raise ValueError("Registered serving inventory is missing")
+    run_dir = _resolve_recorded_path(str(registration.get("run_dir") or ""))
+    weekly = _weekly_manifest(run_dir) if run_dir.exists() else None
+    if weekly is not None:
+        missing = sorted({"model_manifest.json", *(weekly.get("files") or {})} - set(inventory))
+        if missing:
+            raise ValueError(f"Registered weekly package is not serving-complete. Missing: {missing}")
+        return
     missing = sorted(SERVING_RUNTIME_REQUIRED_FILES - set(inventory))
     if missing:
         raise ValueError(f"Registered package is not serving-complete. Missing: {missing}")

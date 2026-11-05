@@ -20,10 +20,17 @@ The package is self-contained: the serving side needs numpy and pandas only (no 
     weekly_baseline_turnover.csv   observed weekly turnover per ad unit (sum of its model units), fit weeks only
     weekly_history_spend.csv       weekly spend per ad unit x channel in the fit window (rub)
     model_roas_table.csv           ROAS by segment x channel of the source fit (the parity reference)
+    target_denominator_metadata.csv  per segment x ad unit x fit week: population, buyers, orders (the platform's
+                                   denominator format, weekly dates; geo availability and federal allocation read it)
+    weekly_geo_routing.csv         per segment x ad unit: kind (city / rest_of_oblast / region / district), its oblast
+                                   and population: how media-plan rows on an oblast or a city outside the model reach
+                                   the model units (weekly_plan_routing.py, the panel v3 rules)
+    weekly_city_oblast_map.csv     city -> oblast dictionary of the panel (city_oblast_map_v8)
 
 Build (on the Mac, read-only for the fit folder; the output folder must not exist):
 
-    python -I 13_weekly_joint_package.py build --fit-dir FIT --profile production --panel P --national N --out PKG
+    python -I 13_weekly_joint_package.py build --fit-dir FIT --profile production --panel P --national N \
+        --city-oblast-map MAP --out PKG
 """
 from __future__ import annotations
 
@@ -37,7 +44,7 @@ import numpy as np
 import pandas as pd
 
 PACKAGE_TYPE = 'weekly_joint_v1'
-PACKAGE_SCHEMA_VERSION = '0.4.0'
+PACKAGE_SCHEMA_VERSION = '0.5.0'
 SERVING_TARGET = 'turnover_per_user'          # the platform serving target id; the effect is total extra turnover
 ROAS_LEVEL_LABEL_RU = 'уровень ROAS по отрасли'
 ROAS_LEVEL_FLAG = 'ROAS_LEVEL_INDUSTRY_ANCHOR'
@@ -52,7 +59,16 @@ PACKAGE_FILES = [
     'run_config.json', 'capability_matrix.csv', 'gate_results.csv', 'risk_registry.csv', 'posterior_index.json',
     'historical_support_bounds.csv', 'fit_design_metadata.json', 'weekly_units.csv', 'weekly_m_ref.csv',
     'weekly_media_draws.npz', 'weekly_baseline_turnover.csv', 'weekly_history_spend.csv', 'model_roas_table.csv',
+    'target_denominator_metadata.csv', 'weekly_geo_routing.csv', 'weekly_city_oblast_map.csv',
 ]
+# How plan rows reach the model units (panel v3, campaign_routing.py): physical outdoor on an oblast -> the rest of the
+# oblast; TV, radio, digital on an oblast -> by population over its cities and the rest; a city outside the model ->
+# the rest of its oblast; РФ -> federal allocation over the units. Panel v4 agglomeration (Moscow / SPb broadcast over
+# the oblast too) is not part of the v13 panel.
+PLAN_ROUTING = dict(rules_version='panel_v3_plan_routing_v1', physical_channels=['OOH_Total', 'Indoor'], agglo=False)
+PANEL_ROUTING_COLUMNS = ['segment', 'unit_label', 'geo_label', 'unit_kind', 'week_start', 'target_valid_week',
+                         'population_k', 'buyers_daily_sum', 'n_days_valid', 'orders_cnt', 'turnover_total',
+                         'size_tier']
 # Media-plan channels the model merged into one of its own (panel v3: Indoor, АЗС and trains are inside OOH_Total).
 # The package carries the grouping, so the platform maps a plan's Indoor row to the model channel it was fitted as.
 CHANNEL_ALIASES = {'Indoor': 'OOH_Total'}
@@ -112,7 +128,7 @@ def _support_rows(units: pd.DataFrame, spend: pd.DataFrame, channels: list[str],
                 continue
             v = grp.get((u.a, c), np.zeros(0))
             rows.append(dict(segment=u.segment, target=SERVING_TARGET, channel=c, fit_key=fit_key(u.segment),
-                             geo_label=u.unit_label, market_size_tier=u.tier,
+                             scope='geo', geo_label=u.unit_label, market_size_tier=u.tier,
                              daily_spend_p95_rub=float(np.percentile(v, 95)) if len(v) else 0.0,
                              daily_spend_p99_rub=float(np.percentile(v, 99)) if len(v) else 0.0,
                              daily_spend_max_rub=float(v.max()) if len(v) else 0.0,
@@ -126,8 +142,36 @@ def fit_key(segment: str) -> str:
     return f'{segment}|{SERVING_TARGET}'
 
 
+def _routing_and_denominators(panel: str, units: pd.DataFrame, c2o: dict[str, str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Unit kinds / oblasts of the ad units and their weekly denominators (fit weeks) from the panel."""
+    p = pd.read_parquet(panel, columns=PANEL_ROUTING_COLUMNS)
+    p = p.merge(units[['segment', 'unit_label']], on=['segment', 'unit_label'], how='inner')
+    kind = p.groupby(['segment', 'unit_label'], as_index=False).agg(unit_kind=('unit_kind', 'first'),
+                                                                   geo_label=('geo_label', 'first'),
+                                                                   kinds_n=('unit_kind', 'nunique'))
+    if (kind.kinds_n > 1).any():
+        raise WeeklyPackageError('an ad unit has more than one unit kind in the panel')
+    routing = units[['segment', 'unit_label', 'pop_k']].merge(kind.drop(columns='kinds_n'), on=['segment', 'unit_label'],
+                                                             how='left')
+    if routing.unit_kind.isna().any():
+        raise WeeklyPackageError(f'ad units missing in the panel: {routing[routing.unit_kind.isna()].unit_label.tolist()[:5]}')
+    routing['oblast_label'] = np.where(routing.unit_kind.isin(['rest_of_oblast', 'region']), routing.geo_label,
+                                       routing.geo_label.map(c2o).fillna(''))
+    routing = routing.rename(columns={'pop_k': 'population_k'})[
+        ['segment', 'unit_label', 'unit_kind', 'geo_label', 'oblast_label', 'population_k']]
+    v = p[p.target_valid_week.astype(bool)].copy()
+    v['unique_users'] = v.buyers_daily_sum / v.n_days_valid.clip(lower=1)
+    den = pd.DataFrame(dict(segment=v.segment, geo_label=v.unit_label,
+                            date=pd.to_datetime(v.week_start).dt.strftime('%Y-%m-%d'),
+                            population_k=v.population_k, market_size_tier=v.size_tier.fillna('').astype(str),
+                            unique_users=v.unique_users, orders_cnt=v.orders_cnt, turnover_total=v.turnover_total,
+                            avg_basket=v.turnover_total / v.orders_cnt.where(v.orders_cnt > 0)))
+    den = den.sort_values(['segment', 'geo_label', 'date']).reset_index(drop=True)
+    return routing, den
+
+
 def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national: str, out_dir: str | Path, *,
-                         model_name: str = 'Заноза', model_run_id: str | None = None,
+                         city_oblast_map: str | Path, model_name: str = 'Заноза', model_run_id: str | None = None,
                          source_code_version: str = '', builder_code_version: str = '') -> dict[str, Any]:
     from . import weekly_joint as wj                       # numpy / pandas only; JAX is imported lazily there
 
@@ -137,9 +181,12 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
     card_path = fit_dir / f'fit_card_{profile}.json'
     npz_path = fit_dir / f'posterior_roas_params_{profile}.npz'
     table_path = fit_dir / f'roas_by_segment_channel_{profile}.csv'
-    for p in (card_path, npz_path, table_path):
+    for p in (card_path, npz_path, table_path, Path(city_oblast_map)):
         if not p.exists():
             raise WeeklyPackageError(f'missing {p}')
+    cmap = pd.read_csv(city_oblast_map, encoding='utf-8-sig')
+    if list(cmap.columns[:2]) != ['city', 'oblast'] or cmap.city.duplicated().any():
+        raise WeeklyPackageError('city -> oblast map: columns city, oblast and one row per city expected')
     card = json.loads(card_path.read_text(encoding='utf-8'))
     for key in ('inject', 'placebo'):
         if card.get(key):
@@ -183,6 +230,7 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
                               geo_ratio=np.asarray(arr['geo_ratio_a'], float)))
     if units.duplicated(['segment', 'unit_label']).any():
         raise WeeklyPackageError('ad unit labels repeat within a segment')
+    routing, denominators = _routing_and_denominators(panel, units, dict(zip(cmap.city, cmap.oblast)))
     m_ref = pd.DataFrame([dict(segment=s, channel=c, m_ref=float(d.m_ref[i, j]), mask=int(d.chan_mask[i, j]))
                           for i, s in enumerate(S) for j, c in enumerate(C)])
     o = d.obs
@@ -199,7 +247,8 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
     run_config = dict(source_fit_dir=str(fit_dir), profile=profile, fit_card=card, panel=str(panel),
                       national=str(national), panel_sha256=sha256_file(Path(panel)),
                       national_sha256=sha256_file(Path(national)), npz_sha256=sha256_file(npz_path),
-                      roas_table_sha256=sha256_file(table_path), source_code_version=source_code_version,
+                      roas_table_sha256=sha256_file(table_path), city_oblast_map=str(city_oblast_map),
+                      city_oblast_map_sha256=sha256_file(Path(city_oblast_map)), source_code_version=source_code_version,
                       builder_code_version=builder_code_version)
     (out_dir / 'run_config.json').write_text(json.dumps(run_config, ensure_ascii=False, indent=2, default=str),
                                              encoding='utf-8')
@@ -212,6 +261,9 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
         out_dir / 'weekly_history_spend.csv', index=False)
     table = pd.read_csv(table_path)
     table.to_csv(out_dir / 'model_roas_table.csv', index=False)
+    routing.to_csv(out_dir / 'weekly_geo_routing.csv', index=False)
+    denominators.to_csv(out_dir / 'target_denominator_metadata.csv', index=False)
+    cmap[['city', 'oblast']].to_csv(out_dir / 'weekly_city_oblast_map.csv', index=False)
 
     mask_idx = m_ref.set_index(['segment', 'channel'])
     support = _support_rows(units, spend, C, mask_idx)
@@ -288,12 +340,14 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
     manifest = dict(
         package_type=PACKAGE_TYPE, package_schema_version=PACKAGE_SCHEMA_VERSION, package_stage='posterior_ready',
         activation_status='preprod_restricted',
+        gate_policy_version=PACKAGE_TYPE,                   # the capability rows' gate (all primary, see capability_matrix)
         production_blockers=[ROAS_LEVEL_FLAG, OOT_PREREG_FLAG, OOT_FLAG],
         oot_status=dict(flag=OOT_PREREG_FLAG, cuts=['train_to_2025-12-28_test_2026Q1', 'train_to_2026-03-29_test_2026Q2'],
                         total_turnover_abs_error='1-2%', worst_segment_abs_error='about 10%', criteria_passed='3 of 4',
                         sealed_q3='pending'),
         optimizer_rules=dict(directions_separate=True, channel_aliases_merged=True,
                              fixed_at_plan_channels=[NATIONAL_TV_CHANNEL]),
+        plan_routing=dict(PLAN_ROUTING, unit_kinds=routing.unit_kind.value_counts().to_dict()),
         model_name=model_name, model_run_id=model_run_id or f'{model_name}_{fit_dir.name}_{profile}',
         roas_level_label_ru=ROAS_LEVEL_LABEL_RU,
         mode='weekly_joint', run_label=fit_dir.name, run_variant=profile,
@@ -302,6 +356,8 @@ def build_weekly_package(fit_dir: str | Path, profile: str, panel: str, national
         time_step='week', week_anchor='monday', adstock_l_weeks=int(arr['adstock_l']),
         roas_scale=arr['roas_scale'], media_geo=arr['media_geo'],
         fit_weeks=[str(d.weeks[0].date()), str(d.weeks[-1].date())], n_draws=n_draws,
+        train_start=str(d.weeks[0].date()),                # first day of the first fit week (Monday)
+        train_end=str((d.weeks[-1] + pd.Timedelta(days=6)).date()),   # last day of the last fit week (Sunday)
         panel_weeks=[str(w.date()) for w in d.weeks],       # the adstock runs over every panel week
         baseline_rule='same_week_52_weeks_earlier_per_ad_unit_else_unit_median',
         counterfactual='plan_spend_only_no_campaign',

@@ -227,7 +227,7 @@ def build_settings(
         ),
         geo_catalog_sha256=str(
             model.get("geo_catalog_sha256")
-            or "a25547d2582c2000465f5fbbad7c4e7ecd20fb6c9311b745699764f62b6bed61"
+            or "87859ba9b43dade2f4e78c923419311ba216d618d97f7ae0471cfd67cb045172"
         ),
         timeout_seconds=_positive_number(
             worker.get("timeout_seconds", 7200),
