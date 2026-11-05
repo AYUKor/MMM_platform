@@ -16,6 +16,7 @@ import {
   formatRoas,
   formatShare,
   formatSigned,
+  splitPercents,
   geographyLabel,
   isRegionName,
   matchesSearch,
@@ -115,6 +116,19 @@ describe("catalog list", () => {
 });
 
 describe("catalog text", () => {
+  it("rounds the three parts of the effect to whole percents that add up to 100, like the catalog build", () => {
+    expect(splitPercents([0.335, 0.335, 0.33])).toEqual([34, 33, 33]);
+    expect(splitPercents([0.201, 0.625819, 0.173181])).toEqual([20, 63, 17]);
+    expect(splitPercents([0.125, 0.125, 0.75])).toEqual([13, 12, 75]);
+    expect(splitPercents([0, 0, 0])).toEqual([0, 0, 0]);
+    for (const row of catalog.campaigns) {
+      const parts = row.explanation;
+      if (!parts) continue;
+      const percents = splitPercents([parts.kept_share, parts.own_saturation_share, parts.overlap_share]);
+      expect(percents.reduce((sum, value) => sum + value, 0)).toBe(100);
+    }
+  });
+
   it("uses Russian plural forms", () => {
     expect([1, 2, 5, 11, 21, 22, 25, 111].map((value) => plural(value, "день", "дня", "дней")))
       .toEqual(["день", "дня", "дней", "дней", "день", "дня", "дней", "дней"]);

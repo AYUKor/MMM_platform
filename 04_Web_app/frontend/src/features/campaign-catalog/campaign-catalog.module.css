@@ -147,6 +147,7 @@
 .section { display: grid; gap: 14px; padding: 22px; }
 .section h2 { margin: 0; font-size: clamp(1.05rem, 2vw, 1.3rem); letter-spacing: -0.025em; }
 .sectionHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sectionHead h2 { flex: none; }
 .sectionHead span { color: var(--text-secondary); font-size: 0.8rem; }
 
 .channelHead,
@@ -168,6 +169,18 @@
 .overlapBig { display: flex; align-items: baseline; gap: 12px; }
 .overlapBig b { font-size: 2.2rem; line-height: 1; letter-spacing: -0.04em; }
 .overlapBig span { color: var(--text-secondary); font-size: 0.86rem; }
+
+.split { display: flex; height: 14px; overflow: hidden; border-radius: 8px; background: var(--surface-secondary); }
+.split i { height: 100%; }
+.splitKept { background: var(--accent-strong); }
+.splitOwn { background: var(--warning); }
+.splitOverlap { background: var(--text-tertiary); }
+.splitLegend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0; list-style: none; color: var(--text-secondary); font-size: 0.8rem; }
+.splitLegend li { display: inline-flex; align-items: center; }
+.splitLegend i { width: 10px; height: 10px; margin-right: 7px; border-radius: 3px; }
+.splitLegend b { margin-left: 6px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.reasons { display: grid; gap: 10px; margin: 0; padding-left: 1.25rem; font-size: 0.92rem; line-height: 1.45; }
+.reasons li::marker { color: var(--text-tertiary); font-weight: 700; }
 
 @media (max-width: 1000px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

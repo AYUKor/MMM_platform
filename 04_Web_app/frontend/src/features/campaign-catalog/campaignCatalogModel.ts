@@ -232,6 +232,20 @@ export function formatShare(value: number): string {
   return `${F0.format(value * 100)}%`;
 }
 
+/** Whole percents of parts that always add up to 100 (largest remainder, ties by order).
+ * Same rule as split_percents in the catalog build, so the bar, the reason text and the Excel agree. */
+export function splitPercents(values: readonly number[]): number[] {
+  const raw = values.map((value) => 100 * Math.max(value, 0));
+  const total = raw.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return values.map(() => 0);
+  const scaled = raw.map((value) => (value * 100) / total);
+  const out = scaled.map((value) => Math.floor(value));
+  const left = 100 - out.reduce((sum, value) => sum + value, 0);
+  const order = scaled.map((_, index) => index).sort((a, b) => (scaled[b] - out[b]) - (scaled[a] - out[a]) || a - b);
+  for (const index of order.slice(0, left)) out[index] += 1;
+  return out;
+}
+
 export function formatCount(value: number, one: string, few: string, many: string): string {
   return `${F0.format(value)} ${plural(value, one, few, many)}`;
 }

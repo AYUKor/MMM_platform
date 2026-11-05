@@ -20,6 +20,7 @@ from mmm_core.campaign_catalog_synthetic import (  # noqa: E402
     synthetic_results,
     write_synthetic_catalog_dir,
     write_synthetic_package_dir,
+    write_synthetic_reasons_dir,
 )
 
 GENERATED_AT = "2026-11-05T05:00:00+00:00"
@@ -35,14 +36,20 @@ class CampaignCatalogExtensionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _build(self, out_name: str = "first") -> tuple[dict, Path]:
+    def _reasons_dir(self, name: str = "reasons") -> Path:
+        return write_synthetic_reasons_dir(self.root / name, self.catalog_dir)
+
+    def _build(self, out_name: str = "first", with_reasons: bool = True) -> tuple[dict, Path]:
         out_dir = self.root / out_name / extension.ARTIFACT_VERSION
+        source = extension.load_source_catalog(self.catalog_dir)
+        reasons = extension.load_source_reasons(self._reasons_dir(f"reasons_{out_name}"), source) if with_reasons else None
         metadata = extension.build_extension(
-            source=extension.load_source_catalog(self.catalog_dir),
+            source=source,
             identity=extension.package_identity_from_dir(self.package_dir, self.package_id),
             out_dir=out_dir,
             catalog_version="synthetic_catalog_v1",
             generated_at_utc=GENERATED_AT,
+            reasons=reasons,
         )
         return metadata, out_dir
 
@@ -244,6 +251,7 @@ class CampaignCatalogExtensionTests(unittest.TestCase):
         out_dir = self.root / "cli" / extension.ARTIFACT_VERSION
         arguments = [
             "--catalog-dir", str(self.catalog_dir),
+            "--reasons-dir", str(self._reasons_dir()),
             "--package-dir", str(self.package_dir),
             "--package-id", self.package_id,
             "--catalog-version", "synthetic_catalog_v1",
@@ -261,6 +269,7 @@ class CampaignCatalogExtensionTests(unittest.TestCase):
             code = extension.main(
                 [
                     "--catalog-dir", str(self.catalog_dir),
+                    "--reasons-dir", str(self._reasons_dir()),
                     "--package-dir", str(self.package_dir),
                     "--package-id", self.package_id,
                     "--catalog-version", "synthetic_catalog_v1",
@@ -272,6 +281,89 @@ class CampaignCatalogExtensionTests(unittest.TestCase):
         printed = json.loads(output.getvalue())
         self.assertEqual(printed["package_id"], self.package_id)
         self.assertTrue((out_dir / extension.METADATA_FILENAME).is_file())
+
+    def test_reasons_fill_cards_and_excel(self) -> None:
+        from openpyxl import load_workbook
+
+        metadata, out_dir = self._build()
+        data = json.loads((out_dir / extension.DATA_FILENAME).read_text(encoding="utf-8"))
+        self.assertEqual(data["data_schema_version"], "1.1.0")
+        computed = [row for row in data["campaigns"] if row["status"] == "computed"]
+        self.assertTrue(computed and all(row["explanation"] for row in computed))
+        self.assertTrue(all(row["explanation"] is None for row in data["campaigns"] if row["status"] != "computed"))
+        first = computed[0]["explanation"]
+        self.assertTrue(first["rules_version"].startswith("campaign_reasons_v3"))
+        self.assertAlmostEqual(first["kept_share"] + first["own_saturation_share"] + first["overlap_share"], 1.0)
+        self.assertIn("catalog_reasons", {row["role"] for row in metadata["source_files"]})
+        workbook = load_workbook(out_dir / extension.WORKBOOK_FILENAME)
+        sheet = workbook["Кампании до 120 дней"]
+        self.assertEqual(sheet["AD4"].value, "Почему такая цифра")
+        self.assertEqual(sheet["AG5"].value, "причины")
+        texts = [sheet[f"AG{r}"].value for r in range(6, sheet.max_row + 1) if isinstance(sheet[f"A{r}"].value, int)]
+        self.assertTrue(any(texts))
+        # a campaign with nothing specific to say keeps its split and gets an empty reasons cell
+        quiet = [row for row in computed if not row["explanation"]["reasons"]]
+        self.assertTrue(quiet)
+        rows = {sheet[f"A{r}"].value: r for r in range(6, sheet.max_row + 1) if isinstance(sheet[f"A{r}"].value, int)}
+        if quiet[0]["number"] in rows:
+            r = rows[quiet[0]["number"]]
+            self.assertIsNotNone(sheet[f"AD{r}"].value)
+            self.assertIsNone(sheet[f"AG{r}"].value)
+        tech = [value for row in workbook["Тех. информация"].iter_rows(values_only=True) for value in row]
+        self.assertIn("Почему такая цифра", tech)
+        self.assertIn("Версия справочника причин", tech)
+        if computed[0]["number"] in rows:
+            self.assertEqual(sheet[f"AD{rows[computed[0]['number']]}"].number_format, extension.SHARE_FORMAT)
+        # whole percents as on the card; a share that rounds to 0% keeps its small value («меньше 1%» by the format)
+        tiny = extension._split_cells({"kept_share": 0.0011, "own_saturation_share": 0.6062, "overlap_share": 0.3927})
+        self.assertEqual(tiny, (0.0011, 0.61, 0.39))
+        self.assertEqual(extension._split_cells({"kept_share": 0.0, "own_saturation_share": 0.6, "overlap_share": 0.4}),
+                         (0.0, 0.6, 0.4))
+
+    def test_reasons_must_belong_to_the_same_catalog_run(self) -> None:
+        reasons_dir = self._reasons_dir()
+        write_synthetic_catalog_dir(self.catalog_dir, npz_sha256="e" * 64)
+        with self.assertRaises(extension.CampaignCatalogExtensionError):
+            extension.load_source_reasons(reasons_dir, extension.load_source_catalog(self.catalog_dir))
+
+    def test_reasons_with_failed_checks_are_refused(self) -> None:
+        reasons_dir = self._reasons_dir()
+        checks = json.loads((reasons_dir / "checks.json").read_text(encoding="utf-8"))
+        checks["failed"] = ["kept_vs_catalog_turnover_max_rel"]
+        (reasons_dir / "checks.json").write_text(json.dumps(checks), encoding="utf-8")
+        with self.assertRaises(extension.CampaignCatalogExtensionError):
+            extension.load_source_reasons(reasons_dir, extension.load_source_catalog(self.catalog_dir))
+
+    def test_explanation_validation(self) -> None:
+        _, out_dir = self._build()
+        data = json.loads((out_dir / extension.DATA_FILENAME).read_text(encoding="utf-8"))
+        record = next(row for row in data["campaigns"] if row["explanation"])
+        broken = json.loads(json.dumps(record))
+        broken["explanation"]["kept_share"] += 0.1
+        with self.assertRaises(extension.CampaignCatalogExtensionError):
+            extension.validate_campaign_record(broken)
+        quiet = json.loads(json.dumps(record))
+        quiet["explanation"]["reasons"] = []
+        extension.validate_campaign_record(quiet)  # nothing specific to say: the split only
+        broken = json.loads(json.dumps(record))
+        broken["explanation"]["reasons"] = broken["explanation"]["reasons"] * 4 or [{"code": "x", "display_text": "y"}] * 4
+        with self.assertRaises(extension.CampaignCatalogExtensionError):
+            extension.validate_campaign_record(broken)
+        not_computed = next(row for row in data["campaigns"] if row["status"] != "computed")
+        broken = json.loads(json.dumps(not_computed))
+        broken["explanation"] = record["explanation"]
+        with self.assertRaises(extension.CampaignCatalogExtensionError):
+            extension.validate_campaign_record(broken)
+
+    def test_catalog_published_before_reasons_is_still_valid(self) -> None:
+        _, out_dir = self._build(with_reasons=False)
+        data = json.loads((out_dir / extension.DATA_FILENAME).read_text(encoding="utf-8"))
+        legacy = dict(data)
+        legacy["data_schema_version"] = extension.LEGACY_DATA_SCHEMA_VERSION
+        legacy["campaigns"] = [{k: v for k, v in row.items() if k != "explanation"} for row in data["campaigns"]]
+        extension.validate_catalog_data(legacy)
+        with self.assertRaises(extension.CampaignCatalogExtensionError):
+            extension.validate_catalog_data({**legacy, "data_schema_version": extension.DATA_SCHEMA_VERSION})
 
     def test_metadata_validation_and_failed_checks(self) -> None:
         metadata, _ = self._build()

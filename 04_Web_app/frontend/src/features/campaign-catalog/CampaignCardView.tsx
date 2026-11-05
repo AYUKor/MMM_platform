@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { CampaignCardV1, Range } from "../../shared/api/generated/campaign-card-v1";
+import type { CampaignCardV1, Explanation, Range } from "../../shared/api/generated/campaign-card-v1";
 import {
   SHORT_CHANNEL_NAMES,
   basketBelowKopeck,
@@ -10,6 +10,7 @@ import {
   geographyLabel,
   measureFormat,
   plural,
+  splitPercents,
   trackGeometry,
   type Measure,
 } from "./campaignCatalogModel";
@@ -61,6 +62,40 @@ function Metric({ title, value, unit, measure, reference, referenceLabel, rangeN
           <i className={styles.trackReference} style={{ left: `${geometry.reference}%` }}><b>{referenceLabel}</b></i>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+/** Why the campaign got its number: the first-ruble potential split three ways, then the typical reasons. */
+function Reasons({ explanation }: { explanation: Explanation }) {
+  const [kept, own, overlap] = splitPercents([explanation.kept_share, explanation.own_saturation_share, explanation.overlap_share]);
+  const parts = [
+    { key: "kept", label: "Досталось кампании", value: kept, share: explanation.kept_share, className: styles.splitKept },
+    { key: "own", label: "Съело своё насыщение", value: own, share: explanation.own_saturation_share, className: styles.splitOwn },
+    { key: "overlap", label: "Съела другая реклама", value: overlap, share: explanation.overlap_share, className: styles.splitOverlap },
+  ];
+  // a share that is not zero but rounds to 0% is written in words, as in the reasons
+  const shareText = (part: (typeof parts)[number]) => (part.value === 0 && part.share > 0 ? "меньше 1%" : `${part.value}%`);
+  const summary = parts.map((part) => `${part.label}: ${shareText(part)}`).join("; ");
+  return (
+    <section className={`${styles.panel} ${styles.section}`} aria-labelledby="campaign-reasons-title">
+      <div className={styles.sectionHead}>
+        <h2 id="campaign-reasons-title">Почему такая цифра</h2>
+        <span>вся полоса: эффект без насыщения, {formatMln(explanation.potential_turnover_rub)} млн ₽</span>
+      </div>
+      <div className={styles.split} role="img" aria-label={summary}>
+        {parts.map((part) => <i key={part.key} className={part.className} style={{ width: `${part.value}%` }} />)}
+      </div>
+      <ul className={styles.splitLegend}>
+        {parts.map((part) => (
+          <li key={part.key}><i className={part.className} aria-hidden="true" />{part.label}<b>{shareText(part)}</b></li>
+        ))}
+      </ul>
+      {explanation.reasons.length > 0 ? (
+        <ol className={styles.reasons}>
+          {explanation.reasons.map((reason) => <li key={reason.code}>{reason.display_text}</li>)}
+        </ol>
+      ) : null}
     </section>
   );
 }
@@ -138,6 +173,8 @@ export function CampaignCardView({ card, backLink }: CampaignCardViewProps) {
           <p>{item.status_display_text}</p>
         </div>
       )}
+
+      {computed && item.explanation ? <Reasons explanation={item.explanation} /> : null}
 
       <div className={styles.cardGrid}>
         <section className={`${styles.panel} ${styles.section}`} aria-labelledby="campaign-channels-title">

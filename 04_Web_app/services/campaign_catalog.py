@@ -171,6 +171,14 @@ def load_campaign_catalog_evidence(*, registry_root: Path, package_id: str) -> C
     return evidence
 
 
+def _served_record(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A card record as served: catalogs published before the reasons (data schema 1.0.0) carry none."""
+
+    record = dict(row)
+    record.setdefault("explanation", None)
+    return record
+
+
 def _model_version(registry_root: Path, package_id: str) -> str | None:
     try:
         return load_registry_package_identity(registry_root.expanduser().resolve(), package_id).model_run_id
@@ -240,7 +248,7 @@ def build_campaign_catalog_v1(*, registry_root: Path, package_id: str) -> dict[s
             "sheets": list(WORKBOOK_SHEETS),
         },
         "notes": [dict(row) for row in data["notes"]],
-        "campaigns": [dict(row) for row in data["campaigns"]],
+        "campaigns": [_served_record(row) for row in data["campaigns"]],
         "updated_at_utc": data["generated_at_utc"],
     }
     validate_campaign_catalog_v1(payload)
@@ -271,7 +279,7 @@ def build_campaign_card_v1(*, registry_root: Path, package_id: str, number: int)
         "period_end": data["period_end"],
         "roas_level_label": data["roas_level_label"],
         "notes": [dict(row) for row in data["notes"]],
-        "campaign": dict(matches[0]),
+        "campaign": _served_record(matches[0]),
         "updated_at_utc": data["generated_at_utc"],
     }
     validate_campaign_card_v1(payload)

@@ -7,7 +7,7 @@ export type OptionalRange = null | Range;
  */
 export interface CampaignCatalogV1 {
   contract_name: "campaign_catalog_v1";
-  schema_version: "1.0.0";
+  schema_version: "1.1.0";
   record_origin: "verified_model_package_artifact" | "model_package_artifact_unavailable";
   status: "available" | "unavailable";
   title: "Прошлые кампании";
@@ -82,6 +82,7 @@ export interface Campaign {
   roas: OptionalRange;
   overlaps_n: number;
   reliable: 0 | 1;
+  explanation: null | Explanation;
 }
 export interface Channel {
   channel_id: "Digital_Performance" | "OOH_Total" | "Indoor" | "Радио" | "Нац_ТВ" | "Рег_ТВ";
@@ -93,4 +94,31 @@ export interface Range {
   estimate: number;
   low: number;
   high: number;
+}
+/**
+ * Why the campaign got its number: the first-ruble potential split into kept effect, loss to the campaign's own saturation and loss to other ads in the same weeks and cities, plus up to three reasons from the versioned rule file, only when something specific to the campaign can be said (none otherwise: the card shows the split only). Explains the catalog numbers, never changes them.
+ */
+export interface Explanation {
+  rules_version: string;
+  potential_turnover_rub: number;
+  kept_share: number;
+  own_saturation_share: number;
+  overlap_share: number;
+  first_ruble_roas: number;
+  typical_first_ruble_roas: number;
+  unseen_budget_share: number;
+  tail_share: number;
+  /**
+   * @maxItems 2
+   */
+  own_saturation_cities: [] | [string] | [string, string];
+  /**
+   * @maxItems 2
+   */
+  overlap_cities: [] | [string] | [string, string];
+  /**
+   * @minItems 0
+   * @maxItems 3
+   */
+  reasons: [] | [Note] | [Note, Note] | [Note, Note, Note];
 }

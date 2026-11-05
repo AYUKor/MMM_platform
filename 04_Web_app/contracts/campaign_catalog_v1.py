@@ -17,7 +17,7 @@ from typing import Any, Mapping
 
 CATALOG_CONTRACT_NAME = "campaign_catalog_v1"
 CARD_CONTRACT_NAME = "campaign_card_v1"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 TITLE = "Прошлые кампании"
 DOWNLOAD_PATH = "/api/v1/campaign-catalog/download"
 WORKBOOK_SHEETS = ("Тех. информация", "Кампании до 120 дней", "Кампании длиннее 120 дней")
@@ -90,6 +90,21 @@ CAMPAIGN_KEYS = (
     "roas",
     "overlaps_n",
     "reliable",
+    "explanation",
+)
+EXPLANATION_KEYS = (
+    "rules_version",
+    "potential_turnover_rub",
+    "kept_share",
+    "own_saturation_share",
+    "overlap_share",
+    "first_ruble_roas",
+    "typical_first_ruble_roas",
+    "unseen_budget_share",
+    "tail_share",
+    "own_saturation_cities",
+    "overlap_cities",
+    "reasons",
 )
 SUMMARY_KEYS = (
     "campaigns_n",
@@ -202,6 +217,34 @@ def _range(value: Any, field: str) -> Mapping[str, float] | None:
     return value
 
 
+def _validate_explanation(value: Any, field: str) -> None:
+    """Why the campaign got its number: kept + own saturation + overlap is the whole first-ruble potential."""
+
+    _exact(value, EXPLANATION_KEYS, field)
+    _text(value["rules_version"], f"{field}.rules_version")
+    for key in ("potential_turnover_rub", "first_ruble_roas", "typical_first_ruble_roas"):
+        if _number(value[key], f"{field}.{key}") < 0:
+            _fail(f"{field}.{key} must be non-negative")
+    for key in ("kept_share", "own_saturation_share", "overlap_share", "unseen_budget_share", "tail_share"):
+        if not 0.0 <= _number(value[key], f"{field}.{key}") <= 1.0:
+            _fail(f"{field}.{key} must be a share")
+    if abs(value["kept_share"] + value["own_saturation_share"] + value["overlap_share"] - 1.0) > 1e-6:
+        _fail(f"{field} shares do not add up to the potential")
+    for key in ("own_saturation_cities", "overlap_cities"):
+        names = value[key]
+        if (
+            not isinstance(names, list)
+            or len(names) > 2
+            or any(not isinstance(item, str) or not item.strip() for item in names)
+            or len(set(names)) != len(names)
+        ):
+            _fail(f"{field}.{key} must hold up to two names")
+    reasons = value["reasons"]
+    if not isinstance(reasons, list) or len(reasons) > 3:
+        _fail(f"{field}.reasons must hold zero to three reasons")
+    _validate_notes(reasons, f"{field}.reasons")
+
+
 def validate_campaign_record(record: Any, field: str = "campaign") -> Mapping[str, Any]:
     """One campaign of the catalog: fields, dates, channel budgets, effects and ROAS = turnover / budget."""
 
@@ -284,17 +327,23 @@ def validate_campaign_record(record: Any, field: str = "campaign") -> Mapping[st
     _integer(record["overlaps_n"], f"{field}.overlaps_n")
     if record["reliable"] not in (0, 1) or isinstance(record["reliable"], bool):
         _fail(f"{field}.reliable must be 0 or 1")
+    if record["explanation"] is not None:
+        if status != "computed":
+            _fail(f"{field} not computed campaign cannot carry an explanation")
+        _validate_explanation(record["explanation"], f"{field}.explanation")
     return record
 
 
-def _validate_notes(notes: Any) -> None:
+def _validate_notes(notes: Any, field: str = "notes") -> None:
     if not isinstance(notes, list):
-        _fail("notes must be a list")
+        _fail(f"{field} must be a list")
     for index, row in enumerate(notes):
-        _exact(row, ("code", "display_text"), f"notes[{index}]")
+        _exact(row, ("code", "display_text"), f"{field}[{index}]")
         if not isinstance(row["code"], str) or not _NOTE_CODE_RE.fullmatch(row["code"]):
-            _fail(f"notes[{index}].code is invalid")
-        _text(row["display_text"], f"notes[{index}].display_text")
+            _fail(f"{field}[{index}].code is invalid")
+        _text(row["display_text"], f"{field}[{index}].display_text")
+    if len({row["code"] for row in notes}) != len(notes):
+        _fail(f"{field} repeat a code")
 
 
 def _validate_summary(summary: Any, campaigns: list[Mapping[str, Any]]) -> None:
