@@ -76,6 +76,23 @@ describe("Sidebar active navigation", () => {
     expect(screen.getByRole("link", { name: "Главная" })).not.toHaveAttribute("aria-current");
   });
 
+  it("keeps Campaigns active on a past campaign card and marks the tab as new", () => {
+    renderSidebar("/campaigns/12?tab=long");
+
+    const campaigns = screen.getByRole("link", { name: "Кампании" });
+    expect(campaigns).toHaveAttribute("aria-current", "page");
+    expect(campaigns).toHaveAttribute("href", "/campaigns");
+    expect(campaigns).toHaveTextContent("новое");
+    expect(screen.getByRole("link", { name: "Модель" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("hides Campaigns without model.read", () => {
+    authMock.permissions = ["workspace.read", "help.read"];
+    renderSidebar("/");
+
+    expect(screen.queryByRole("link", { name: "Кампании" })).not.toBeInTheDocument();
+  });
+
   it("builds product and admin navigation only from returned permissions", () => {
     authMock.permissions = ["workspace.read", "admin.system.read"];
     renderSidebar("/admin/system");
