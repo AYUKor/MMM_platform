@@ -127,6 +127,20 @@ describe("past campaigns list", () => {
     expect(within(missing).getByTitle("Смотреть с осторожностью")).toHaveTextContent("0");
   });
 
+  it("writes small effects with enough decimals and a basket change under a kopeck in words", () => {
+    renderCatalog();
+    const small = within(table()).getByRole("link", { name: "Тестовая кампания 11" }).closest("tr") as HTMLElement;
+    expect(within(small).getByText("+0,003")).toBeInTheDocument();
+    expect(within(small).getByText("+0,002 … +0,005")).toBeInTheDocument();
+    expect(within(small).getByText("+0,10")).toBeInTheDocument();
+    expect(within(small).getByText("+0,04 … +0,17")).toBeInTheDocument();
+    expect(small).toHaveTextContent("География: Москва, Нижегородская область, Республика Татарстан");
+
+    const flat = within(table()).getByRole("link", { name: "Тестовая кампания 10" }).closest("tr") as HTMLElement;
+    expect(within(flat).getByText("меньше копейки")).toBeInTheDocument();
+    expect(within(flat).getByText("+8,0")).toBeInTheDocument();
+  });
+
   it("highlights a searched city and keeps the rest as a count", () => {
     renderCatalog({ filters: { search: "Самара" } });
     const row = within(table()).getByRole("link", { name: "Тестовая кампания 10" }).closest("tr") as HTMLElement;
@@ -176,9 +190,15 @@ describe("past campaign card", () => {
     expect(turnover).toHaveTextContent("от 57,1");
     expect(turnover).toHaveTextContent("до 114,2");
 
+    const orders = screen.getByRole("heading", { name: "Заказы, прирост" }).closest("section") as HTMLElement;
+    expect(within(orders).getByText("+1,2")).toBeInTheDocument();
+    expect(orders).toHaveTextContent("от +0,9");
+    expect(orders).toHaveTextContent("до +1,7");
+
     const basket = screen.getByRole("heading", { name: "Средний чек, прирост" }).closest("section") as HTMLElement;
-    expect(within(basket).getByText("+1,4")).toBeInTheDocument();
-    expect(basket).toHaveTextContent("от −1,9");
+    expect(within(basket).getByText("0,00")).toBeInTheDocument();
+    expect(basket).toHaveTextContent("меньше копейки в любую сторону");
+    expect(basket).not.toHaveTextContent("от ");
 
     const roas = screen.getByRole("heading", { name: "ROAS" }).closest("section") as HTMLElement;
     expect(within(roas).getByText("2,55")).toBeInTheDocument();
@@ -204,12 +224,29 @@ describe("past campaign card", () => {
     expect(within(channels).getByText("вся страна")).toBeInTheDocument();
     expect(channels).toHaveTextContent("Бюджет кампании60,9");
 
-    const cities = screen.getByRole("heading", { name: "Города" }).closest("section") as HTMLElement;
+    const cities = screen.getByRole("heading", { name: "География" }).closest("section") as HTMLElement;
     expect(cities).toHaveTextContent("9 городов и вся страна");
     expect(cities).toHaveTextContent("Вся страна · Нац. ТВ");
 
     const overlaps = screen.getByRole("heading", { name: "Пересечения" }).closest("section") as HTMLElement;
     expect(overlaps).toHaveTextContent("1кампания того же направления шла в те же дни и города");
+  });
+
+  it("counts regions apart from cities and keeps small effects readable", () => {
+    render(<MemoryRouter><CampaignCardView card={cardFor(11)} backLink="/campaigns" /></MemoryRouter>);
+    const geography = screen.getByRole("heading", { name: "География" }).closest("section") as HTMLElement;
+    expect(geography).toHaveTextContent("1 город и 2 региона");
+    expect(within(geography).getByText("Нижегородская область")).toBeInTheDocument();
+
+    const orders = screen.getByRole("heading", { name: "Заказы, прирост" }).closest("section") as HTMLElement;
+    expect(within(orders).getByText("+0,003")).toBeInTheDocument();
+    expect(orders).toHaveTextContent("от +0,002");
+    expect(orders).toHaveTextContent("до +0,005");
+
+    const basket = screen.getByRole("heading", { name: "Средний чек, прирост" }).closest("section") as HTMLElement;
+    expect(within(basket).getByText("+0,10")).toBeInTheDocument();
+    expect(basket).toHaveTextContent("от +0,04");
+    expect(basket).toHaveTextContent("до +0,17");
   });
 
   it("explains a campaign without an estimate instead of showing numbers", () => {

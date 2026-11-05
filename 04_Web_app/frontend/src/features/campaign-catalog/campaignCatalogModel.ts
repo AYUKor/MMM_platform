@@ -54,9 +54,16 @@ export const DIRECTION_OPTIONS: readonly Direction[] = CAMPAIGN_DIRECTIONS;
 const SORTS: ReadonlySet<string> = new Set(SORT_OPTIONS.map((item) => item.value));
 const CHANNEL_IDS: ReadonlySet<string> = new Set(Object.keys(CAMPAIGN_CHANNEL_DISPLAY_NAMES));
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
-const fixed = (digits: number) => new Intl.NumberFormat("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const FORMATS = new Map<number, Intl.NumberFormat>();
+function fixed(digits: number): Intl.NumberFormat {
+  let format = FORMATS.get(digits);
+  if (!format) {
+    format = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    FORMATS.set(digits, format);
+  }
+  return format;
+}
 const F0 = fixed(0);
-const F1 = fixed(1);
 const F2 = fixed(2);
 
 /* ------------------------------------------------------------------ filters in the address bar */
@@ -167,12 +174,24 @@ export function formatPeriod(start: string, end: string): string {
     : `${day(start)} ${month(start)} ${year(start)} – ${day(end)} ${month(end)} ${year(end)}`;
 }
 
-export function formatMln(value: number): string {
-  return F1.format(value / 1e6);
+/**
+ * Decimals that keep about two significant digits of the largest number shown together, within [min, max].
+ * Real campaigns differ by thousands of times (orders per 1000 buyers from 0.0004 to 10), so one fixed
+ * number of decimals would print most small campaigns as zero.
+ */
+export function decimalsFor(values: readonly number[], min: number, max: number): number {
+  const peak = Math.max(0, ...values.map((value) => Math.abs(value)).filter(Number.isFinite));
+  if (peak === 0) return min;
+  return Math.min(max, Math.max(min, 1 - Math.floor(Math.log10(peak))));
+}
+
+/** Money in millions of rubles: one decimal for large sums, up to four for a few thousand rubles. */
+export function formatMln(value: number, digits = decimalsFor([value / 1e6], 1, 4)): string {
+  return fixed(digits).format(value / 1e6);
 }
 
 export function formatSigned(value: number, digits = 1): string {
-  const formatter = digits === 2 ? F2 : digits === 0 ? F0 : F1;
+  const formatter = fixed(digits);
   const rounded = Number(value.toFixed(digits));
   if (rounded === 0) return formatter.format(0);
   return `${rounded > 0 ? "+" : "−"}${formatter.format(Math.abs(rounded))}`;
@@ -180,6 +199,33 @@ export function formatSigned(value: number, digits = 1): string {
 
 export function formatRoas(value: number): string {
   return F2.format(value);
+}
+
+/** What a range measures: the estimate and both ends of one range are written with the same decimals. */
+export type Measure = "mln" | "orders" | "basket" | "roas";
+
+const MEASURE_DECIMALS: Readonly<Record<Exclude<Measure, "roas">, readonly [number, number]>> = {
+  mln: [1, 4],
+  orders: [1, 3],
+  // rubles of the average basket: kopecks are the finest step worth showing
+  basket: [1, 2],
+};
+
+function measureDecimals(measure: Exclude<Measure, "roas">, value: Range): number {
+  const [min, max] = MEASURE_DECIMALS[measure];
+  const scale = measure === "mln" ? 1e6 : 1;
+  return decimalsFor([value.estimate / scale, value.low / scale, value.high / scale], min, max);
+}
+
+export function measureFormat(measure: Measure, value: Range): (number: number) => string {
+  if (measure === "roas") return formatRoas;
+  const digits = measureDecimals(measure, value);
+  return measure === "mln" ? (number) => formatMln(number, digits) : (number) => formatSigned(number, digits);
+}
+
+/** The average basket of most campaigns moves by less than half a kopeck: say so instead of «0,00 … 0,00». */
+export function basketBelowKopeck(value: Range): boolean {
+  return Math.max(Math.abs(value.estimate), Math.abs(value.low), Math.abs(value.high)) < 0.005;
 }
 
 export function formatShare(value: number): string {
@@ -214,11 +260,25 @@ export function citiesLine(item: Campaign, search = "", limit = 4): CitiesLine {
   };
 }
 
+const REGION_WORDS = /област|край|республик|автономн|округ|район/i;
+const REGION_ABBREVIATION = /(?:^|[\s(])АО(?:$|[\s)])/;
+
+/** The campaign geography holds cities and regions (for example «Нижегородская область»). */
+export function isRegionName(name: string): boolean {
+  return REGION_WORDS.test(name) || REGION_ABBREVIATION.test(name);
+}
+
 export function geographyLabel(item: Campaign): string {
   const nationwide = item.channels.some((row) => row.nationwide);
-  if (!item.cities.length) return nationwide ? "вся страна" : "города не указаны";
-  const cities = formatCount(item.cities.length, "город", "города", "городов");
-  return nationwide ? `${cities} и вся страна` : cities;
+  const regions = item.cities.filter(isRegionName).length;
+  const cities = item.cities.length - regions;
+  const parts = [
+    ...(cities ? [formatCount(cities, "город", "города", "городов")] : []),
+    ...(regions ? [formatCount(regions, "регион", "региона", "регионов")] : []),
+    ...(nationwide ? ["вся страна"] : []),
+  ];
+  if (!parts.length) return "география не указана";
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} и ${parts[parts.length - 1]}`;
 }
 
 /* ------------------------------------------------------------------ range tracks */

@@ -72,12 +72,20 @@ def synthetic_results(campaigns_n: int = 12) -> list[dict[str, Any]]:
         cities_n = 1 + int(_unit(index + 200) * 9)
         has_regional = any(not row["federal"] for row in channels)
         cities = list(CITIES[index % 3: index % 3 + cities_n]) if has_regional else []
+        if index == 9 and cities:
+            # the real geography lists regions next to cities (money of the region outside its big cities)
+            cities += ["Нижегородская область", "Республика Татарстан"]
         directions = sorted({SEGMENTS[index % 4]} | ({SEGMENTS[(index + 1) % 4]} if index % 4 == 3 else set()))
         modeled = index != 4
         roas_mid = 0.25 + 2.4 * _unit(index + 300)
         turnover = (0.7 * roas_mid * budget, roas_mid * budget, 1.4 * roas_mid * budget) if modeled else (0.0, 0.0, 0.0)
-        orders = (0.4 + _unit(index + 400), 1.2 + 2 * _unit(index + 400), 2.4 + 3 * _unit(index + 400))
-        basket = (-2.0 + _unit(index + 500), 1.0 + 4 * _unit(index + 500), 6.0 + 8 * _unit(index + 500))
+        # Magnitudes as in the real catalog of 05.11.2026: orders per 1000 buyers from thousandths to about ten
+        # (median 0.06); the average basket moves by fractions of a kopeck with a range around zero, a few
+        # campaigns by tens of kopecks.
+        orders_mid = 10 ** (-3 + 4 * _unit(index + 400))
+        orders = (0.7 * orders_mid, orders_mid, 1.4 * orders_mid)
+        basket_mid = 10 ** (-4 + 3.5 * _unit(index + 500))
+        basket = (0.4 * basket_mid, basket_mid, 1.8 * basket_mid) if basket_mid > 0.05 else (-2 * basket_mid, basket_mid, 4 * basket_mid)
         rows.append(
             {
                 "id": number,

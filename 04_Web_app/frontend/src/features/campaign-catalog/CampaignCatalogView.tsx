@@ -6,6 +6,7 @@ import {
   DEFAULT_FILTERS,
   DIRECTION_OPTIONS,
   SORT_OPTIONS,
+  basketBelowKopeck,
   citiesLine,
   filterCampaigns,
   formatCount,
@@ -13,7 +14,7 @@ import {
   formatMln,
   formatPeriod,
   formatRoas,
-  formatSigned,
+  measureFormat,
   miniRoasGeometry,
   shortChannels,
   tabCounts,
@@ -22,6 +23,7 @@ import {
   type ChannelId,
   type Direction,
   type DurationTab,
+  type Measure,
   type ReliabilityFilter,
 } from "./campaignCatalogModel";
 import styles from "./campaign-catalog.module.css";
@@ -71,7 +73,7 @@ function CitiesText({ item, search }: { item: Campaign; search: string }) {
   ));
   return (
     <div className={styles.citiesLine} title={item.cities.join(", ") || undefined}>
-      <span className={styles.citiesLabel}>Города:</span>{" "}
+      <span className={styles.citiesLabel}>География:</span>{" "}
       {parts}
       {line.rest > 0 ? ` и ещё ${line.rest}` : null}
       {line.nationwide ? `${line.shown.length ? " · " : ""}${line.nationwide}` : null}
@@ -80,15 +82,24 @@ function CitiesText({ item, search }: { item: Campaign; search: string }) {
   );
 }
 
-function RangeCell({ value, format, mini = false }: { value: Range | null; format: (number: number) => string; mini?: boolean }) {
+interface RangeCellProps {
+  value: Range | null;
+  measure: Measure;
+  mini?: boolean;
+  note?: (value: Range) => string | null;
+}
+
+function RangeCell({ value, measure, mini = false, note }: RangeCellProps) {
   if (value === null) {
     return <td className={styles.right}><span className={styles.noEstimate}>нет оценки</span></td>;
   }
+  const format = measureFormat(measure, value);
   const geometry = mini ? miniRoasGeometry(value) : null;
+  const rangeNote = note?.(value) ?? null;
   return (
     <td className={styles.right}>
       <span className={styles.value}>{format(value.estimate)}</span>
-      <span className={styles.range}>{format(value.low)} … {format(value.high)}</span>
+      <span className={styles.range}>{rangeNote ?? `${format(value.low)} … ${format(value.high)}`}</span>
       {geometry ? (
         <span className={styles.mini} aria-hidden="true">
           <i className={styles.trackRange} style={{ left: `${geometry.left}%`, width: `${geometry.width}%` }} />
@@ -100,8 +111,7 @@ function RangeCell({ value, format, mini = false }: { value: Range | null; forma
   );
 }
 
-const mln = (value: number) => formatMln(value);
-const signed = (value: number) => formatSigned(value, 1);
+const basketNote = (value: Range) => (basketBelowKopeck(value) ? "меньше копейки" : null);
 
 function CampaignRow({ item, search, cardLink, onOpen }: { item: Campaign; search: string; cardLink: string; onOpen: () => void }) {
   return (
@@ -114,10 +124,10 @@ function CampaignRow({ item, search, cardLink, onOpen }: { item: Campaign; searc
         <CitiesText item={item} search={search} />
       </td>
       <td className={styles.right}><span className={styles.value}>{formatMln(item.budget_rub)}</span></td>
-      <RangeCell value={item.turnover_increment_rub} format={mln} />
-      <RangeCell value={item.orders_per_1000_buyers} format={signed} />
-      <RangeCell value={item.avg_basket_increment_rub} format={signed} />
-      <RangeCell value={item.roas} format={formatRoas} mini />
+      <RangeCell value={item.turnover_increment_rub} measure="mln" />
+      <RangeCell value={item.orders_per_1000_buyers} measure="orders" />
+      <RangeCell value={item.avg_basket_increment_rub} measure="basket" note={basketNote} />
+      <RangeCell value={item.roas} measure="roas" mini />
       <td className={styles.center}><span className={styles.value}>{item.overlaps_n}</span></td>
       <td className={styles.center}><ReliabilityPill value={item.reliable} /></td>
     </tr>
@@ -142,7 +152,7 @@ function CampaignMobileCard({ item, search, cardLink, onOpen }: { item: Campaign
       <CitiesText item={item} search={search} />
       <div className={styles.mobileGrid}>
         <div><span>Бюджет, млн ₽</span><b>{formatMln(item.budget_rub)}</b></div>
-        <div><span>Оборот, млн ₽</span><b>{item.turnover_increment_rub ? formatMln(item.turnover_increment_rub.estimate) : "нет оценки"}</b></div>
+        <div><span>Оборот, млн ₽</span><b>{item.turnover_increment_rub ? measureFormat("mln", item.turnover_increment_rub)(item.turnover_increment_rub.estimate) : "нет оценки"}</b></div>
         <div><span>ROAS</span><b>{item.roas ? formatRoas(item.roas.estimate) : "нет оценки"}</b></div>
         <div><span>Пересечения</span><b>{item.overlaps_n}</b></div>
       </div>

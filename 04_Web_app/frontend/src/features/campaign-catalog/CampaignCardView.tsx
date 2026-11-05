@@ -2,15 +2,16 @@ import { Link } from "react-router-dom";
 import type { CampaignCardV1, Range } from "../../shared/api/generated/campaign-card-v1";
 import {
   SHORT_CHANNEL_NAMES,
+  basketBelowKopeck,
   formatCount,
   formatMln,
   formatPeriod,
-  formatRoas,
   formatShare,
-  formatSigned,
   geographyLabel,
+  measureFormat,
   plural,
   trackGeometry,
+  type Measure,
 } from "./campaignCatalogModel";
 import styles from "./campaign-catalog.module.css";
 
@@ -31,21 +32,27 @@ interface MetricProps {
   title: string;
   value: Range;
   unit: string;
-  format: (value: number) => string;
+  measure: Measure;
   reference: number | null;
   referenceLabel?: string;
+  rangeNote?: string | null;
 }
 
-function Metric({ title, value, unit, format, reference, referenceLabel }: MetricProps) {
+function Metric({ title, value, unit, measure, reference, referenceLabel, rangeNote = null }: MetricProps) {
   const geometry = trackGeometry(value, reference);
+  const format = measureFormat(measure, value);
   return (
     <section className={`${styles.panel} ${styles.metric}`}>
       <h2>{title}</h2>
       <div className={styles.metricValue}>{format(value.estimate)}</div>
       <div className={styles.metricUnit}>{unit}</div>
       <div className={styles.rangeValues}>
-        <span>от <b>{format(value.low)}</b></span>
-        <span>до <b>{format(value.high)}</b></span>
+        {rangeNote ? <span>{rangeNote}</span> : (
+          <>
+            <span>от <b>{format(value.low)}</b></span>
+            <span>до <b>{format(value.high)}</b></span>
+          </>
+        )}
       </div>
       <div className={styles.track} aria-hidden="true">
         <i className={styles.trackRange} style={{ left: `${geometry.left}%`, width: `${geometry.width}%` }} />
@@ -97,14 +104,14 @@ export function CampaignCardView({ card, backLink }: CampaignCardViewProps) {
             title="Оборот, прирост"
             value={item.turnover_increment_rub}
             unit="млн ₽"
-            format={formatMln}
+            measure="mln"
             reference={null}
           />
           <Metric
             title="Заказы, прирост"
             value={item.orders_per_1000_buyers}
             unit="на 1000 покупателей"
-            format={(value) => formatSigned(value, 1)}
+            measure="orders"
             reference={0}
             referenceLabel="0"
           />
@@ -112,15 +119,16 @@ export function CampaignCardView({ card, backLink }: CampaignCardViewProps) {
             title="Средний чек, прирост"
             value={item.avg_basket_increment_rub}
             unit="₽ к среднему чеку"
-            format={(value) => formatSigned(value, 1)}
+            measure="basket"
             reference={0}
             referenceLabel="0"
+            rangeNote={basketBelowKopeck(item.avg_basket_increment_rub) ? "меньше копейки в любую сторону" : null}
           />
           <Metric
             title="ROAS"
             value={item.roas}
             unit={`оборот ÷ бюджет ${formatMln(item.budget_rub)} млн ₽`}
-            format={formatRoas}
+            measure="roas"
             reference={1}
             referenceLabel="1,0"
           />
@@ -169,7 +177,7 @@ export function CampaignCardView({ card, backLink }: CampaignCardViewProps) {
         <div className={styles.sideColumn}>
           <section className={`${styles.panel} ${styles.section}`} aria-labelledby="campaign-cities-title">
             <div className={styles.sectionHead}>
-              <h2 id="campaign-cities-title">Города</h2>
+              <h2 id="campaign-cities-title">География</h2>
               <span>{geographyLabel(item)}</span>
             </div>
             <div className={styles.cities}>

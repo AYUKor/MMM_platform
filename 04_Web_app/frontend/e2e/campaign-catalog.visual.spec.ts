@@ -206,6 +206,20 @@ test("campaign without an estimate, light", async ({ page }) => {
   await capture(page, "04-card-no-estimate-light.png");
 });
 
+test("card with small effects and regions next to cities, light", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await setTheme(page, "light");
+  await installCatalogRoutes(page);
+
+  await page.goto("/campaigns/11");
+  await expect(page.getByRole("heading", { level: 1, name: "Тестовая кампания 11" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "География" })).toBeVisible();
+  await expect(page.getByText("1 город и 2 региона").first()).toBeVisible();
+  await expect(page.getByText("+0,003", { exact: true })).toBeVisible();
+  await expectCleanScreen(page);
+  await capture(page, "08-card-small-effects-light.png");
+});
+
 test("phone width keeps the list and the card readable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await setTheme(page, "light");
