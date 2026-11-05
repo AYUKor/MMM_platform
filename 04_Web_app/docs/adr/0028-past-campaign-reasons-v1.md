@@ -2,10 +2,12 @@
 
 ## Status
 
-Proposed on 2026-11-05. The model owner saw a first version on sample cards
+Accepted on 2026-11-05. The model owner saw a first version on sample cards
 and asked to drop general sentences: a reason is shown only when it says
 something about the campaign itself, otherwise the card keeps the bar alone.
-The catalog with reasons is published only after the owner's explicit word.
+On five sample campaigns he then asked for short phrases (for example
+«Достигнут предел насыщения: весь бюджет в одном месте») and no caption under
+the bar, and approved the release.
 
 ## Context
 
@@ -44,16 +46,19 @@ active model. It can be split, draw by draw, without changing any number:
    same direction with the most money in the same weeks and places.
 3. The wording lives in a versioned rule file,
    `02_Code/01_PyMC/configs/campaign_catalog/reason_rules_v3.json`
-   (`campaign_reasons_v3_20261105`). A reason appears only when it is specific
-   to the campaign: its own saturation or other advertising clearly above the
-   norm of its main channel (with the ledger facts that show why), money
-   spread clearly thinner than usual, a clearly different return of its
-   cities and weeks, money outside the model, or effect counted by the
-   forecast. The norm is the median of campaigns of the same build with the
-   same main channel; a channel with fewer than five campaigns is compared
-   with the whole catalog (money density is then not compared). At most three
-   reasons; none is fine. Changing a sentence or a threshold means a new rule
-   file version.
+   (`campaign_reasons_v3_20261105`). Each reason is one short phrase; the
+   shares themselves are on the bar. A reason appears only when it is
+   specific to the campaign: its own saturation or other advertising clearly
+   above the norm of its main channel (with one ledger fact that shows why, or
+   the neighbour campaign), money spread clearly thinner than usual, clearly
+   fewer losses than usual (only when nothing else pulls the number down:
+   most of the effect kept, no weak cities, no money outside the model), a
+   clearly different return of its cities and weeks, money outside the model,
+   or effect counted by the forecast after the end of the data. The norm is
+   the median of campaigns of the same build with the same main channel; a
+   channel with fewer than five campaigns is compared with the whole catalog
+   (money density is then not compared). At most three reasons; none is fine.
+   Changing a sentence or a threshold means a new rule file version.
 4. `--relabel-from <earlier reasons folder>` applies a new rule version to the
    numbers of an earlier green run in seconds (with `--ledger` when that run
    has no ledger facts); it refuses a run that belongs to another catalog or
@@ -68,10 +73,12 @@ active model. It can be split, draw by draw, without changing any number:
    a sentence, and the rule version); `schema_version` becomes `1.1.0`. A
    published `1.0.0` catalog is still served, with `explanation: null`, and the
    card then shows no reasons block.
-7. The card shows a three-part bar, the reasons when there are any, and one
-   line saying that the shares come from the same model as ROAS and that the
-   level of the ruble return is set by industry values. The Excel sheets gain
-   four columns: the three shares and the reasons text (empty when none).
+7. The card shows a three-part bar and the reasons when there are any, with
+   no caption below. A share that rounds to 0% but is not zero reads
+   «меньше 1%». The Excel sheets gain four columns: the three shares and the
+   reasons text (empty when none); the technical sheet says that the shares
+   come from the same model as ROAS and that the level of the ruble return is
+   set by industry values.
 
 ## Consequences
 

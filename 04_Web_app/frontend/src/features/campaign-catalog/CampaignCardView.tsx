@@ -96,10 +96,6 @@ function Reasons({ explanation }: { explanation: Explanation }) {
           {explanation.reasons.map((reason) => <li key={reason.code}>{reason.display_text}</li>)}
         </ol>
       ) : null}
-      <p className={styles.reasonsNote}>
-        {explanation.reasons.length > 0 ? "«Обычно» значит медиана кампаний с тем же основным каналом. " : ""}
-        Доли считает та же модель, что и ROAS; уровень отдачи рублей задан по отрасли.
-      </p>
     </section>
   );
 }

@@ -181,7 +181,6 @@
 .splitLegend b { margin-left: 6px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .reasons { display: grid; gap: 10px; margin: 0; padding-left: 1.25rem; font-size: 0.92rem; line-height: 1.45; }
 .reasons li::marker { color: var(--text-tertiary); font-weight: 700; }
-.reasonsNote { margin: 12px 0 0; color: var(--text-tertiary); font-size: 0.8rem; line-height: 1.4; }
 
 @media (max-width: 1000px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

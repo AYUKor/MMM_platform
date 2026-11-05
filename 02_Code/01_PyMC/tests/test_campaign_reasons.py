@@ -166,7 +166,7 @@ class RuleTests(unittest.TestCase):
         for entry in entries.values():
             self.assertEqual(entry['reasons'], [])
 
-    def test_own_saturation_with_the_campaign_facts(self) -> None:
+    def test_own_saturation_with_the_campaign_fact(self) -> None:
         rows = self.neutral('Региональное ТВ') + [('Региональное ТВ', False, dict(
             kept_share=0.2, own_loss_share=0.55, overlap_loss_share=0.25, saturation_loss_share=0.8), ['Москва'],
             dict(n_geo=1, top_geo='ЕКАТЕРИНБУРГ', top_geo_share=1.0, density_regional_rub=420.0))]
@@ -174,28 +174,34 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(norms, [dict(main_channel='Региональное ТВ', campaigns_n=6, own_norm=1,
                                       norm_group='у кампаний на региональном ТВ', norm_kept_share=0.5,
                                       norm_own_loss_share=0.2, norm_overlap_loss_share=0.3, norm_density_rub=100.0)])
+        # one short phrase, one fact (the first that holds): the shares are on the bar
         self.assertEqual(entries['6']['reasons'], [dict(
             code='own_saturation', weight=entries['6']['reasons'][0]['weight'],
-            display_text='Кампания упёрлась в насыщение: оно съело 55% эффекта, обычно у кампаний на региональном ТВ '
-                         '20%. Весь бюджет в одном месте: Екатеринбург. Денег на город в неделю в 4,2 раза больше '
-                         'обычного.')])
+            display_text='Достигнут предел насыщения: весь бюджет в одном месте (Екатеринбург).')])
 
-    def test_own_saturation_without_facts_names_the_cities_with_most_loss(self) -> None:
+    def test_own_saturation_without_facts_is_said_plainly(self) -> None:
         rows = self.neutral('Наружная реклама') + [('Наружная реклама', False, dict(
             kept_share=0.2, own_loss_share=0.5, overlap_loss_share=0.3, saturation_loss_share=0.8),
             ['Краснодарский край (кроме Городов)'])]
         entries, _ = self.label(rows)
         self.assertEqual(entries['6']['own_loss_cities'], ['Краснодарский край (кроме городов)'])
-        self.assertTrue(entries['6']['reasons'][0]['display_text'].endswith(
-            'Больше всего потерь: Краснодарский край (кроме городов).'))
+        self.assertEqual(entries['6']['reasons'][0]['display_text'], 'Достигнут предел насыщения.')
 
-    def test_fast_burn_and_one_large_place(self) -> None:
+    def test_dense_money_before_a_large_place_and_fast_spend(self) -> None:
         rows = self.neutral('Радио') + [('Радио', False, dict(
             kept_share=0.2, own_loss_share=0.5, overlap_loss_share=0.3, saturation_loss_share=0.8), [],
             dict(n_geo=4, top_geo='МОСКВА', top_geo_share=0.54, weeks_n=4, burn_2w_share=0.67))]
         entries, _ = self.label(rows)
-        self.assertTrue(entries['6']['reasons'][0]['display_text'].endswith(
-            ' 54% бюджета в одном месте: Москва. 67% бюджета ушло за две недели из 4.'))
+        self.assertEqual(entries['6']['reasons'][0]['display_text'],
+                         'Достигнут предел насыщения: 54% бюджета в одном месте (Москва).')
+        rows[-1][4].update(density_regional_rub=420.0)
+        entries, _ = self.label(rows)
+        self.assertEqual(entries['6']['reasons'][0]['display_text'],
+                         'Достигнут предел насыщения: денег на город в неделю в 4,2 раза больше обычного.')
+        rows[-1][4].update(density_regional_rub=100.0, top_geo_share=0.3)
+        entries, _ = self.label(rows)
+        self.assertEqual(entries['6']['reasons'][0]['display_text'],
+                         'Достигнут предел насыщения: 67% бюджета за две недели.')
 
     def test_nationwide_campaign_compares_money_per_week(self) -> None:
         rows = self.neutral('Национальное ТВ', True) + [('Национальное ТВ', True, dict(
@@ -204,8 +210,7 @@ class RuleTests(unittest.TestCase):
         entries, _ = self.label(rows)
         first = entries['6']['reasons'][0]
         self.assertEqual(first['code'], 'own_saturation')
-        self.assertTrue(first['display_text'].endswith('Денег в неделю в 5 раз больше обычного.'))
-        self.assertNotIn('Москва', first['display_text'])
+        self.assertEqual(first['display_text'], 'Достигнут предел насыщения: денег в неделю в 5 раз больше обычного.')
 
     def test_overlap_only_above_the_channel_norm_with_the_neighbour(self) -> None:
         # most Indoor campaigns lose 80% to other ads: for Indoor that is the norm, not a reason
@@ -220,38 +225,45 @@ class RuleTests(unittest.TestCase):
         reason = entries['6']['reasons'][0]
         self.assertEqual(reason['code'], 'overlap')
         self.assertEqual(reason['display_text'],
-                         'Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 55% '
-                         'эффекта, обычно у кампаний на радио 30%. Больше всего рядом шло «Промо 2025»: 12,3 млн ₽ в '
-                         'те же недели и города.')
+                         'Спрос уже насыщен другой рекламой: больше всего «Промо 2025» (12,3 млн ₽).')
+        entries, _ = self.label(high)  # no name for the neighbour: no neighbour in the text
+        self.assertEqual(entries['6']['reasons'][0]['display_text'], 'Спрос уже насыщен другой рекламой.')
 
-    def test_national_campaign_names_the_neighbour_by_weeks_and_tiny_shares_in_words(self) -> None:
-        rows = self.neutral('Национальное ТВ', True) + [('Национальное ТВ', True, dict(
-            kept_share=0.25, own_loss_share=0.2, overlap_loss_share=0.55, saturation_loss_share=0.75), [],
-            dict(neighbor_number=2, neighbor_rub=140_123_456.0))]
-        entries, _ = self.label(rows, names={'2': 'Супергерои'})
-        self.assertTrue(entries['6']['reasons'][0]['display_text'].endswith(
-            'Больше всего рядом шло «Супергерои»: 140 млн ₽ в те же недели.'))
-        thin = self.neutral('Национальное ТВ', True) + [('Национальное ТВ', True, dict(
-            kept_share=0.797, own_loss_share=0.003, overlap_loss_share=0.2, saturation_loss_share=0.203), [],
-            dict(density_national_rub=10.0))]
-        entries, _ = self.label(thin)
-        self.assertEqual(entries['6']['reasons'][0]['display_text'],
-                         'Деньги растянуты: в неделю в 10 раз меньше обычного, поэтому своё насыщение съело меньше 1% '
-                         'эффекта, обычно у кампаний на национальном ТВ 20%.')
-
-    def test_money_spread_thin_explains_a_high_share(self) -> None:
+    def test_money_spread_thin_and_tiny_shares(self) -> None:
         rows = self.neutral('Наружная реклама') + [('Наружная реклама', False, dict(
-            kept_share=0.8, own_loss_share=0.05, overlap_loss_share=0.15, saturation_loss_share=0.2), [],
+            kept_share=0.65, own_loss_share=0.05, overlap_loss_share=0.3, saturation_loss_share=0.35), [],
             dict(density_regional_rub=10.0))]
         entries, _ = self.label(rows)
-        self.assertEqual(entries['6']['reasons'][0]['display_text'],
-                         'Деньги растянуты: на город в неделю в 10 раз меньше обычного, поэтому своё насыщение съело '
-                         '5% эффекта, обычно у кампаний в наружной рекламе 20%.')
+        self.assertEqual([r['display_text'] for r in entries['6']['reasons']],
+                         ['Потерь меньше обычного: насыщения и другой рекламы меньше, чем у похожих кампаний.',
+                          'Насыщение ниже обычного: денег на город в неделю в 10 раз меньше.'])
         digital = self.neutral('Цифровая реклама') + [('Цифровая реклама', False, dict(
-            kept_share=0.8, own_loss_share=0.05, overlap_loss_share=0.15, saturation_loss_share=0.2), [],
+            kept_share=0.6, own_loss_share=0.05, overlap_loss_share=0.35, saturation_loss_share=0.4), [],
             dict(density_regional_rub=10.0))]
         entries, _ = self.label(digital)
         self.assertEqual(entries['6']['reasons'], [])  # digital money per city says little: no comparison
+        thin = self.neutral('Национальное ТВ', True) + [('Национальное ТВ', True, dict(
+            kept_share=0.647, own_loss_share=0.003, overlap_loss_share=0.35, saturation_loss_share=0.353), [],
+            dict(density_national_rub=10.0))]
+        entries, _ = self.label(thin)
+        self.assertEqual([r['display_text'] for r in entries['6']['reasons']],
+                         ['Насыщение ниже обычного: денег в неделю в 10 раз меньше.'])
+        self.assertEqual(cre.text_values(dict(entries['6']['factors']))['own_loss_pct'], 'меньше 1%')
+
+    def test_low_loss_only_when_nothing_else_pulls_the_number_down(self) -> None:
+        good = ('Цифровая реклама', False, dict(kept_share=0.8, own_loss_share=0.05, overlap_loss_share=0.15,
+                                                saturation_loss_share=0.2), [])
+        entries, _ = self.label(self.neutral('Цифровая реклама') + [good])
+        self.assertEqual([r['code'] for r in entries['6']['reasons']], ['low_loss'])
+        for over, code in ((dict(geo_factor=0.5, geo_weight=float(abs(np.log(0.5)))), 'weak_geo'),
+                           (dict(unseen_share=0.3), 'money_outside_model')):
+            entries, _ = self.label(self.neutral('Цифровая реклама') + [(*good[:2], {**good[2], **over}, [])])
+            self.assertEqual([r['code'] for r in entries['6']['reasons']], [code])
+        # most of the effect lost even if less than usual for the channel: not «меньше обычного»
+        indoor = self.neutral('Indoor') + [('Indoor', False, dict(
+            kept_share=0.45, own_loss_share=0.1, overlap_loss_share=0.45, saturation_loss_share=0.55), [])]
+        entries, _ = self.label(indoor)
+        self.assertNotIn('low_loss', [r['code'] for r in entries['6']['reasons']])
 
     def test_small_channel_is_compared_with_the_whole_catalog(self) -> None:
         rows = self.neutral('Цифровая реклама') + [('Радио', False, dict(
@@ -260,9 +272,8 @@ class RuleTests(unittest.TestCase):
         entries, norms = self.label(rows)
         radio = next(row for row in norms if row['main_channel'] == 'Радио')
         self.assertEqual((radio['own_norm'], radio['norm_group']), (0, 'у всех кампаний каталога'))
-        text = entries['6']['reasons'][0]['display_text']
-        self.assertIn('обычно у всех кампаний каталога 20%', text)
-        self.assertNotIn('больше обычного', text)  # money density is compared only inside the same channel
+        # own loss 65% against the catalog's 20%; money density is compared only inside the same channel
+        self.assertEqual(entries['6']['reasons'][0]['display_text'], 'Достигнут предел насыщения.')
 
     def test_saturation_first_then_special_cases_at_most_three(self) -> None:
         rows = self.neutral('Наружная реклама') + [('Наружная реклама', False, dict(
@@ -273,15 +284,15 @@ class RuleTests(unittest.TestCase):
         # rank 1 (saturation) by weight: overlap +0.20, own +0.20 (order breaks the tie); then the heaviest special case
         self.assertEqual(got, ['own_saturation', 'overlap', 'strong_geo'])
 
-    def test_weak_cities_and_tail_weeks_come_from_the_build(self) -> None:
+    def test_weak_cities_and_the_forecast_tail(self) -> None:
         rows = self.neutral('Цифровая реклама') + [('Цифровая реклама', False, dict(
             kept_share=0.5, own_loss_share=0.2, overlap_loss_share=0.3, saturation_loss_share=0.5, geo_factor=0.5,
             geo_weight=float(abs(np.log(0.5))), tail_share=0.3), [])]
         entries, _ = self.label(rows, tail_weeks=5)
         got = {r['code']: r['display_text'] for r in entries['6']['reasons']}
-        self.assertEqual(got['weak_geo'], 'В городах и неделях кампании тот же рубль рекламы даёт в 2 раза меньше '
-                                          'оборота, чем в среднем по тем же каналам.')
-        self.assertIn('прогнозом на 5 недель вперёд', got['tail_forecast'])
+        self.assertEqual(got['weak_geo'],
+                         'Низкая отдача: в городах и неделях кампании рубль рекламы даёт в 2 раза меньше среднего.')
+        self.assertEqual(got['tail_forecast'], 'Эффект выходит за конец данных: 30% досчитано прогнозом.')
 
     def test_at_most_three_reasons_and_saturation_before_special_cases(self) -> None:
         rng = np.random.default_rng(11)
@@ -353,6 +364,7 @@ class RuleTests(unittest.TestCase):
             lambda r: r.update(norms={'group_by': 'segment', 'statistic': 'median', 'min_group': 5}),
             lambda r: r.update(fallback={'code': r['rules'][0]['code'], 'text': 'x'}),
             lambda r: r['notes']['own_note'].update(max_items=0),
+            lambda r: r['notes']['own_note'].update(style='list'),
             lambda r: r['notes']['own_note']['items'][0].update(text='{own_note}'),
             lambda r: r['notes']['own_note']['items'][0]['conditions'].append({'field': 'n_geo', 'op': '='}),
             lambda r: r['notes'].update(top_geo={'max_items': 1, 'items': [{'conditions': [], 'text': 'x'}]}),

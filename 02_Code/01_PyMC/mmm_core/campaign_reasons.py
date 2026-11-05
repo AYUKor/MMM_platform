@@ -130,8 +130,12 @@ def _check_conditions(conditions: Any, where: str, *, allow_empty: bool = False)
             raise CampaignReasonsError(f'{where}: threshold must be a number')
 
 
+NOTE_STYLES = ('sentences', 'clause')
+
+
 def _check_notes(notes: Any) -> list[str]:
-    """Notes are short facts appended to a rule text through a placeholder of the same name ({own_note})."""
+    """Notes are short facts appended to a rule text through a placeholder of the same name ({own_note}): as
+    sentences (style 'sentences', the default) or as one clause after a colon (style 'clause')."""
     if notes is None:
         return []
     if not isinstance(notes, Mapping):
@@ -143,6 +147,8 @@ def _check_notes(notes: Any) -> list[str]:
             raise CampaignReasonsError(f'reason note {name}: max_items must be a positive integer')
         if not isinstance(spec.get('items'), list) or not spec['items']:
             raise CampaignReasonsError(f'reason note {name}: items must be a non-empty list')
+        if spec.get('style', 'sentences') not in NOTE_STYLES:
+            raise CampaignReasonsError(f'reason note {name}: style must be one of {", ".join(NOTE_STYLES)}')
         for part in ('items', 'otherwise'):
             for item in spec.get(part) or []:
                 if not isinstance(item, Mapping) or set(item) != {'conditions', 'text'}:
@@ -279,7 +285,7 @@ def _holds(f: Mapping[str, Any], cond: Mapping[str, Any]) -> bool:
 
 def _notes(f: Mapping[str, Any], rules: Mapping[str, Any], values: Mapping[str, str]) -> dict[str, str]:
     """Each note: its items whose conditions hold (at most max_items, in file order), else its 'otherwise'
-    items; written as sentences that follow the rule text."""
+    items; written as sentences that follow the rule text, or as one clause after a colon (style 'clause')."""
     out = {}
     for name, spec in (rules.get('notes') or {}).items():
         texts = []
@@ -288,7 +294,10 @@ def _notes(f: Mapping[str, Any], rules: Mapping[str, Any], values: Mapping[str, 
                      if all(_holds(f, cond) for cond in item['conditions'])][:int(spec['max_items'])]
             if texts:
                 break
-        out[name] = ''.join(f' {_cap(t)}.' for t in texts)
+        if spec.get('style', 'sentences') == 'clause':
+            out[name] = ': ' + ', '.join(texts) if texts else ''
+        else:
+            out[name] = ''.join(f' {_cap(t)}.' for t in texts)
     return out
 
 

@@ -229,12 +229,12 @@ describe("past campaign card", () => {
     ]);
     const sentences = within(reasons).getAllByRole("listitem").slice(3).map((item) => item.textContent);
     expect(sentences).toEqual([
-      "Спрос уже насытила другая реклама этого направления в те же недели и города: она съела 21% эффекта, обычно у всех кампаний каталога 11%. Больше всего рядом шло «Тестовая кампания 5»: 2,3 млн ₽ в те же недели и города.",
-      "В городах и неделях кампании тот же рубль рекламы даёт в 1,4 раза больше оборота, чем в среднем по тем же каналам.",
-      "Кампания шла до конца данных: 18% эффекта досчитано прогнозом на 7 недель вперёд.",
+      "Спрос уже насыщен другой рекламой: больше всего «Тестовая кампания 5» (2,3 млн ₽).",
+      "Высокая отдача: в городах и неделях кампании рубль рекламы даёт в 1,4 раза больше среднего.",
+      "Эффект выходит за конец данных: 18% досчитано прогнозом.",
     ]);
-    expect(reasons).toHaveTextContent("«Обычно» значит медиана кампаний с тем же основным каналом.");
-    expect(reasons).toHaveTextContent("уровень отдачи рублей задан по отрасли.");
+    expect(reasons).not.toHaveTextContent("Обычно");
+    expect(reasons).not.toHaveTextContent("Доли считает");
   });
 
   it("shows the bar only when there is nothing specific to say about the campaign", () => {
@@ -243,8 +243,7 @@ describe("past campaign card", () => {
     expect(within(reasons).getByRole("img")).toBeInTheDocument();
     expect(within(reasons).getAllByRole("listitem")).toHaveLength(3);
     expect(reasons.querySelector("ol")).toBeNull();
-    expect(reasons).not.toHaveTextContent("Обычно");
-    expect(reasons).toHaveTextContent("Доли считает та же модель, что и ROAS; уровень отдачи рублей задан по отрасли.");
+    expect(reasons.querySelector("p")).toBeNull();
   });
 
   it("writes a share that rounds to 0% but is not zero as «меньше 1%»", () => {
