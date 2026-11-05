@@ -208,12 +208,10 @@ describe("past campaign card", () => {
     expect(screen.getByRole("link", { name: "Все кампании" })).toHaveAttribute("href", "/campaigns?tab=long");
   });
 
-  it("explains how to read the estimate with the industry ROAS level", () => {
+  it("shows no reading-guide block on the campaign card", () => {
     render(<MemoryRouter><CampaignCardView card={cardFor(1)} backLink="/campaigns" /></MemoryRouter>);
-    const explain = screen.getByRole("heading", { name: /Как читать оценку/ }).closest("section") as HTMLElement;
-    expect(explain).toHaveTextContent("уровень ROAS по отрасли");
-    expect(within(explain).getAllByRole("listitem")).toHaveLength(3);
-    expect(explain).toHaveTextContent("остальные кампании оставить");
+    expect(screen.queryByRole("heading", { name: /Как читать оценку/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/остальные кампании оставить/)).not.toBeInTheDocument();
   });
 
   it("splits the budget by channel and marks nationwide channels", () => {

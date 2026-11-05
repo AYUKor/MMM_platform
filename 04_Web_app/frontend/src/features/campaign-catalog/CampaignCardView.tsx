@@ -69,7 +69,6 @@ export function CampaignCardView({ card, backLink }: CampaignCardViewProps) {
   const item = card.campaign;
   const computed = item.status === "computed";
   const nationwide = item.channels.filter((row) => row.nationwide).map((row) => SHORT_CHANNEL_NAMES[row.channel_id]);
-  const explain = card.notes.filter((note) => ["roas_industry_level", "campaign_effect_leave_one_out", "range_p10_p90"].includes(note.code));
 
   return (
     <section className={styles.page} aria-labelledby="campaign-card-title">
@@ -201,14 +200,6 @@ export function CampaignCardView({ card, backLink }: CampaignCardViewProps) {
         </div>
       </div>
 
-      {explain.length ? (
-        <section className={`${styles.panel} ${styles.explain}`} aria-labelledby="campaign-explain-title">
-          <h2 id="campaign-explain-title">Как читать оценку · {card.roas_level_label}</h2>
-          <ul>
-            {explain.map((note) => <li key={note.code}>{note.display_text}</li>)}
-          </ul>
-        </section>
-      ) : null}
     </section>
   );
 }
