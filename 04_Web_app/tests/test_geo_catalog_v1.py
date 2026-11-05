@@ -117,7 +117,7 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
 
     def test_static_catalog_is_complete_deterministic_and_reviewed(self) -> None:
         entries = self.catalog.entries
-        self.assertEqual(len(entries), 280)
+        self.assertEqual(len(entries), 281)
         self.assertEqual(len({row["geo_id"] for row in entries}), len(entries))
         self.assertEqual(
             len({row["geo_normalized_name"] for row in entries}), len(entries)
@@ -373,8 +373,8 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
     def test_active_serving_coverage_guard_fails_closed(self) -> None:
         active = [row["geo_normalized_name"] for row in self.catalog.entries]
         coverage = assert_active_serving_geo_coverage(active, self.catalog)
-        self.assertEqual(coverage["active_serving_geographies_n"], 280)
-        self.assertEqual(coverage["covered_geographies_n"], 280)
+        self.assertEqual(coverage["active_serving_geographies_n"], 281)
+        self.assertEqual(coverage["covered_geographies_n"], 281)
         with self.assertRaisesRegex(GeoCatalogError, "missing canonical coordinates"):
             assert_active_serving_geo_coverage([*active, "НЕИЗВЕСТНОЕ ГЕО"], self.catalog)
 
@@ -445,11 +445,15 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
         )
 
     def test_rest_of_oblast_units_sit_at_their_oblast_point(self) -> None:
-        """The 57 weekly-package units «<ОБЛАСТЬ> (КРОМЕ ГОРОДОВ)» copy the oblast's GeoNames record."""
+        """The 58 weekly-panel units «<ОБЛАСТЬ> (КРОМЕ ГОРОДОВ)» copy the oblast's GeoNames record.
+
+        57 are units of the weekly model; Республика Бурятия (кроме городов) has panel spend but no model unit
+        and is in the catalog for the historical budget map.
+        """
 
         entries = {row["geo_normalized_name"]: row for row in self.catalog.entries}
         rest = [row for row in entries.values() if row["geo_type"] == "rest_of_oblast"]
-        self.assertEqual(len(rest), 57)
+        self.assertEqual(len(rest), 58)
         suffix = " (КРОМЕ ГОРОДОВ)"
         for row in rest:
             with self.subTest(geo=row["geo_normalized_name"]):
@@ -577,8 +581,8 @@ class CanonicalGeoCatalogV1Test(unittest.TestCase):
         payload = build_geo_catalog(catalog=self.catalog)
         self.assertEqual(payload["catalog_version"], GEO_CATALOG_VERSION)
         self.assertEqual(payload["status"], "available")
-        self.assertEqual(payload["geographies_n"], 280)
-        self.assertEqual(payload["coverage"]["located_geographies_n"], 280)
+        self.assertEqual(payload["geographies_n"], 281)
+        self.assertEqual(payload["coverage"]["located_geographies_n"], 281)
 
 
 if __name__ == "__main__":

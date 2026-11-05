@@ -36,7 +36,7 @@ does not call a geocoder, aggregate job history or infer a location.
 | Catalog path | `04_Web_app/data/geo_catalog/geo_catalog_v1.csv` |
 | Alias path | `04_Web_app/data/geo_catalog/geo_aliases_v1.csv` |
 | Catalog version | `geo_catalog_v1_2026_11_05` (earlier: `geo_catalog_v1_2026_07_18` with 220 geographies and 402 aliases; `geo_catalog_v1_2026_10_27` with 223 and 408) |
-| Canonical geographies | 280 (223 + 57 rest-of-oblast units of the weekly package) |
+| Canonical geographies | 281 (223 + 58 rest-of-oblast units of the weekly panel) |
 | Alias rows | 465 |
 | Coordinate system | WGS84 point latitude/longitude |
 | Coordinate source | GeoNames Russia dump `RU.zip`, 2026-10-27 |

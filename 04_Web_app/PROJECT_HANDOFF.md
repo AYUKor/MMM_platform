@@ -338,11 +338,11 @@ not an allowed fallback for v2 business KPIs.
 
 ### 11.1 Canonical geo policy
 
-The catalog in `04_Web_app/data/geo_catalog/` contains 280 canonical geographies,
-all with WGS84 coordinates, plus 465 explicit aliases. Its version is
+The catalog in `04_Web_app/data/geo_catalog/` contains 281 canonical geographies,
+all with WGS84 coordinates, plus 466 explicit aliases. Its version is
 `geo_catalog_v1_2026_11_05` (earlier revisions: `geo_catalog_v1_2026_07_18` with
-220 geographies, `geo_catalog_v1_2026_10_27` with 223; the latest adds the 57
-rest-of-oblast units of the weekly joint package at their oblast's point); source
+220 geographies, `geo_catalog_v1_2026_10_27` with 223; the latest adds the 58
+rest-of-oblast units of the weekly joint panel at their oblast's point); source
 attribution is a GeoNames RU snapshot under CC BY 4.0.
 
 Normalization is explicit. There is no runtime geocoder, fuzzy matching, external

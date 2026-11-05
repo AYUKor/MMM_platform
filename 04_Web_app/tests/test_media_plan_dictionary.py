@@ -26,7 +26,7 @@ from services.media_plan_dictionary import build_media_plan_dictionary  # noqa: 
 class MediaPlanDictionaryTest(unittest.TestCase):
     def test_workbook_is_generated_from_context_and_canonical_catalog(self) -> None:
         catalog = load_canonical_geo_catalog()
-        self.assertEqual(catalog.geographies_n, 280)
+        self.assertEqual(catalog.geographies_n, 281)
         eligible = tuple(
             EligibleGeo(
                 geo_id=str(row["geo_id"]),

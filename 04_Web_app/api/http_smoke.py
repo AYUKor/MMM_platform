@@ -270,7 +270,7 @@ class HttpSmokeSettings:
         "b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b"
     )
     geo_catalog_sha256: str = (
-        "87859ba9b43dade2f4e78c923419311ba216d618d97f7ae0471cfd67cb045172"
+        "7ce0f8e85985b39653b11d79f0e3a9fbe1b2f28d299f7612d237296cb7077cca"
     )
     timeout_seconds: float = 7200.0
     max_workers: int = 1

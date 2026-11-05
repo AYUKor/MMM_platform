@@ -255,10 +255,11 @@ allocation/forecast contracts were unchanged by the later test-only harness fixe
   of 2026-10-27, WGS84, CC BY 4.0. The first revision `geo_catalog_v1_2026_07_18`
   held 220 geographies; the 2026-10-27 revision adds the three geographies of the
   Q2 model roster and re-verified all earlier coordinates as identical; the
-  2026-11-05 revision adds the 57 rest-of-oblast units of the weekly joint package
-  (each placed at its oblast's catalog point).
-- Verified coverage: 280 catalog geographies, 280 complete coordinate pairs
-  (the 57 rest-of-oblast units share their oblast's point), 465 explicit unique
+  2026-11-05 revision adds the 58 rest-of-oblast units of the weekly joint panel
+  (57 model units and Республика Бурятия (кроме городов), which has panel spend
+  but no model unit; each placed at its oblast's catalog point).
+- Verified coverage: 281 catalog geographies, 281 complete coordinate pairs
+  (the 58 rest-of-oblast units share their oblast's point), 466 explicit unique
   aliases.
 - Active turnover serving guard requires full coverage of the serving package
   roster (223/223 for the daily Q2 roster, 217/217 for the weekly roster) and
