@@ -118,6 +118,14 @@ from services.historical_model_geo_budget import (  # noqa: E402
     HistoricalModelGeoBudgetError,
     build_historical_model_geo_budget_v1,
 )
+from services.campaign_catalog import (  # noqa: E402
+    XLSX_MEDIA_TYPE as CAMPAIGN_CATALOG_XLSX_MEDIA_TYPE,
+    CampaignCatalogUnavailableError,
+    CampaignNotFoundError,
+    build_campaign_card_v1,
+    build_campaign_catalog_v1,
+    campaign_catalog_workbook,
+)
 from services.auth_admin import (  # noqa: E402
     AUDIT_EVENT_TYPES,
     ROLE_IDS,
@@ -167,6 +175,9 @@ _SCHEMA_PATH_RE = re.compile(
 _ADMIN_USER_PATH_RE = re.compile(
     r"^/api/v1/admin/users/(?P<user_id>usr_[0-9a-f]{24})(?:/(?P<action>disable|enable|sessions/revoke))?$"
 )
+CAMPAIGN_CATALOG_PATH = "/api/v1/campaign-catalog"
+CAMPAIGN_CATALOG_DOWNLOAD_PATH = "/api/v1/campaign-catalog/download"
+_CAMPAIGN_CARD_PATH_RE = re.compile(r"^/api/v1/campaign-catalog/(?P<number>[1-9][0-9]{0,3})$")
 _CONTRACT_SCHEMA_FILES = {
     "application-lifecycle-v1": WEB_APP_DIR / "contracts" / "application_lifecycle_v1.schema.json",
     "decision-result-v1": WEB_APP_DIR / "contracts" / "decision_result_v1.schema.json",
@@ -195,6 +206,8 @@ _CONTRACT_SCHEMA_FILES = {
     "geo-catalog-v1": WEB_APP_DIR / "contracts" / "geo_catalog_v1.schema.json",
     "workspace-geo-budget-v1": WEB_APP_DIR / "contracts" / "workspace_geo_budget_v1.schema.json",
     "historical-model-geo-budget-v1": WEB_APP_DIR / "contracts" / "historical_model_geo_budget_v1.schema.json",
+    "campaign-catalog-v1": WEB_APP_DIR / "contracts" / "campaign_catalog_v1.schema.json",
+    "campaign-card-v1": WEB_APP_DIR / "contracts" / "campaign_card_v1.schema.json",
     "scenario-media-plan-v2": WEB_APP_DIR / "contracts" / "scenario_media_plan_v2.schema.json",
 }
 
@@ -1204,6 +1217,50 @@ class HttpSmokeApplication:
             package_id=package_id,
         )
 
+    def _campaign_catalog_location(self) -> tuple[Path, str]:
+        """Registry and active package, resolved the same way as the historical aggregate."""
+
+        registry_root = (
+            self.settings.registry_root
+            or self.settings.project_root
+            / "03_Outputs"
+            / "01_PyMC_outputs"
+            / "00_Model_registry"
+        ).expanduser().resolve()
+        passport_package = (
+            (self.model_passport or {}).get("package")
+            if isinstance(self.model_passport, Mapping)
+            else {}
+        ) or {}
+        package_id = str(
+            self.settings.expected_package_id
+            or passport_package.get("package_id")
+            or "pkg_unavailable_model"
+        )
+        return registry_root, package_id
+
+    def campaign_catalog(self) -> dict[str, Any]:
+        """Past-campaign catalog published for the active package, or its "not published yet" state."""
+
+        registry_root, package_id = self._campaign_catalog_location()
+        return build_campaign_catalog_v1(registry_root=registry_root, package_id=package_id)
+
+    def campaign_card(self, number: int) -> dict[str, Any]:
+        """One campaign of the published catalog, the same record as in the list."""
+
+        registry_root, package_id = self._campaign_catalog_location()
+        return build_campaign_card_v1(
+            registry_root=registry_root,
+            package_id=package_id,
+            number=number,
+        )
+
+    def campaign_catalog_download(self) -> tuple[bytes, str]:
+        """Published Excel of the catalog (hash re-checked) and its download file name."""
+
+        registry_root, package_id = self._campaign_catalog_location()
+        return campaign_catalog_workbook(registry_root=registry_root, package_id=package_id)
+
     def validation_view_v2(self, validation_id: str) -> dict[str, Any]:
         """Separate file validity from grouped turnover-model limitations."""
 
@@ -1653,6 +1710,10 @@ def _required_permission(method: str, path: str) -> str | None:
     if method == "GET":
         if path in {"/api/v1/workspace/home", "/api/v1/workspace/geo-budget"}:
             return "workspace.read"
+        if path == CAMPAIGN_CATALOG_DOWNLOAD_PATH:
+            return "report.download"
+        if path == CAMPAIGN_CATALOG_PATH or _CAMPAIGN_CARD_PATH_RE.fullmatch(path):
+            return "model.read"
         if path in {
             "/api/v1/models/active",
             "/api/v1/models/active-v2",
@@ -2776,6 +2837,58 @@ def make_handler(application: HttpSmokeApplication) -> type[BaseHTTPRequestHandl
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         "HISTORICAL_MODEL_GEO_BUDGET_UNAVAILABLE",
                         "Исторические расходы активной модели временно недоступны.",
+                    )
+                    return
+                self._json(HTTPStatus.OK, payload)
+                return
+            campaign_card_match = _CAMPAIGN_CARD_PATH_RE.fullmatch(path)
+            if (
+                path in {CAMPAIGN_CATALOG_PATH, CAMPAIGN_CATALOG_DOWNLOAD_PATH}
+                or campaign_card_match
+            ):
+                if request_url.query:
+                    self._error(
+                        HTTPStatus.BAD_REQUEST,
+                        "INVALID_QUERY",
+                        "Этот запрос не поддерживает параметры.",
+                    )
+                    return
+                try:
+                    if path == CAMPAIGN_CATALOG_DOWNLOAD_PATH:
+                        workbook, workbook_name = application.campaign_catalog_download()
+                    elif campaign_card_match:
+                        payload = application.campaign_card(
+                            int(campaign_card_match.group("number"))
+                        )
+                    else:
+                        payload = application.campaign_catalog()
+                except CampaignCatalogUnavailableError:
+                    self._error(
+                        HTTPStatus.NOT_FOUND,
+                        "CAMPAIGN_CATALOG_NOT_PUBLISHED",
+                        "Каталог прошлых кампаний для активной модели пока не опубликован.",
+                    )
+                    return
+                except CampaignNotFoundError:
+                    self._error(
+                        HTTPStatus.NOT_FOUND,
+                        "CAMPAIGN_NOT_FOUND",
+                        "Кампании с таким номером нет в каталоге активной модели.",
+                    )
+                    return
+                except Exception:
+                    self._error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "CAMPAIGN_CATALOG_UNAVAILABLE",
+                        "Каталог прошлых кампаний временно недоступен.",
+                    )
+                    return
+                if path == CAMPAIGN_CATALOG_DOWNLOAD_PATH:
+                    self._binary(
+                        HTTPStatus.OK,
+                        workbook,
+                        media_type=CAMPAIGN_CATALOG_XLSX_MEDIA_TYPE,
+                        filename=workbook_name,
                     )
                     return
                 self._json(HTTPStatus.OK, payload)

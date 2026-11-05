@@ -22,6 +22,7 @@ import server_release as deployment  # noqa: E402
 PACKAGE_ID = "pkg_0123456789abcdef_fedcba9876543210"
 RELEASE_ID = "release_0123456789ab_0123456789ab_fedcba987654_aabbccddeeff"
 RUN_DIR = Path("03_Outputs/01_PyMC_outputs/test_run/package")
+MODEL_RUN_ID = "synthetic_release_run"
 REGISTRY = Path("03_Outputs/01_PyMC_outputs/00_Model_registry")
 
 
@@ -35,6 +36,8 @@ def _write_json(path: Path, payload: object) -> None:
 
 
 class ServerReleaseMaterializationTest(unittest.TestCase):
+    WITH_CAMPAIGN_CATALOG = False
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -112,6 +115,7 @@ class ServerReleaseMaterializationTest(unittest.TestCase):
         panel_sha = "7" * 64
         registration = {
             "package_id": PACKAGE_ID,
+            "model_run_id": MODEL_RUN_ID,
             "run_dir": RUN_DIR.as_posix(),
             "package_input_fingerprint": fingerprint,
             "panel": {"sha256": panel_sha},
@@ -255,6 +259,11 @@ class ServerReleaseMaterializationTest(unittest.TestCase):
                 REGISTRY / "package_artifacts" / PACKAGE_ID / "historical_geo_budget_v1/historical_model_geo_budget_v1.sample.json"
             ),
         }
+        if self.WITH_CAMPAIGN_CATALOG:
+            for name in self._write_campaign_catalog(extension / "campaign_catalog_v1", fingerprint):
+                extension_targets[f"model/package_extensions/campaign_catalog_v1/{name}"] = (
+                    REGISTRY / "package_artifacts" / PACKAGE_ID / "campaign_catalog_v1" / name
+                )
         for source, target in extension_targets.items():
             self._add_mapping(rows, "PACKAGE_EXTENSIONS", source, target.as_posix())
 
@@ -338,6 +347,56 @@ class ServerReleaseMaterializationTest(unittest.TestCase):
             },
         )
 
+    def _write_campaign_catalog(self, folder: Path, fingerprint: str) -> tuple[str, ...]:
+        """Synthetic past-campaign catalog files bound to the fixture package (three files)."""
+
+        folder.mkdir(parents=True)
+        identity = {
+            "package_id": PACKAGE_ID,
+            "package_input_fingerprint": fingerprint,
+            "model_run_id": MODEL_RUN_ID,
+        }
+        data_path = folder / "campaign_catalog_v1.json"
+        _write_json(
+            data_path,
+            {
+                **identity,
+                "catalog_version": "synthetic_catalog_v1",
+                "summary": {"campaigns_n": 2, "computed_n": 1},
+                "campaigns": [{"number": 1}, {"number": 2}],
+            },
+        )
+        workbook_path = folder / "campaign_catalog_v1.xlsx"
+        workbook_path.write_bytes(b"synthetic catalog workbook")
+        _write_json(
+            folder / "campaign_catalog_v1.metadata.json",
+            {
+                "artifact_id": "artifact_" + "c" * 24,
+                "artifact_version": "campaign_catalog_v1",
+                **identity,
+                "catalog_version": "synthetic_catalog_v1",
+                "data": {
+                    "relative_path": "campaign_catalog_v1.json",
+                    "sha256": _sha256(data_path),
+                    "size_bytes": data_path.stat().st_size,
+                },
+                "workbook": {
+                    "relative_path": "campaign_catalog_v1.xlsx",
+                    "sha256": _sha256(workbook_path),
+                    "size_bytes": workbook_path.stat().st_size,
+                    "download_file_name": "Каталог.xlsx",
+                },
+                "campaigns_n": 2,
+                "computed_n": 1,
+                "checks": [{"check_id": "numbers_unique", "status": "passed"}],
+            },
+        )
+        return (
+            "campaign_catalog_v1.json",
+            "campaign_catalog_v1.metadata.json",
+            "campaign_catalog_v1.xlsx",
+        )
+
     def _materialize(self, attempt: int) -> tuple[Path, deployment.ReleaseContract]:
         releases = self.root / "releases"
         releases.mkdir(exist_ok=True)
@@ -350,7 +409,13 @@ class ServerReleaseMaterializationTest(unittest.TestCase):
     def test_correct_fin_preserves_package_id_and_verifies_five_extensions(self) -> None:
         candidate, contract = self._materialize(1)
         verification = deployment.verify_materialized_candidate(candidate, contract)
-        self.assertEqual(verification["extensions"]["files"], 5)
+        self.assertEqual(
+            verification["extensions"]["files"], 8 if self.WITH_CAMPAIGN_CATALOG else 5
+        )
+        if self.WITH_CAMPAIGN_CATALOG:
+            self.assertEqual(verification["extensions"]["campaign_catalog"]["campaigns_n"], 2)
+        else:
+            self.assertIsNone(verification["extensions"]["campaign_catalog"])
         self.assertEqual(verification["extensions"]["unexpected"], 0)
         self.assertTrue(
             (
@@ -485,6 +550,45 @@ class ServerReleaseMaterializationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "business-state gate failed"):
             deployment.assert_historical_business_state(unavailable, expected)
         self.assertEqual(contract.package_id, PACKAGE_ID)
+
+
+class ServerReleaseWithCampaignCatalogTest(ServerReleaseMaterializationTest):
+    """Same release checks with the optional past-campaign catalog shipped next to the package."""
+
+    WITH_CAMPAIGN_CATALOG = True
+
+    def _catalog_file(self, candidate: Path, name: str) -> Path:
+        return candidate / REGISTRY / "package_artifacts" / PACKAGE_ID / "campaign_catalog_v1" / name
+
+    def test_catalog_workbook_change_fails(self) -> None:
+        candidate, contract = self._materialize(21)
+        self._catalog_file(candidate, "campaign_catalog_v1.xlsx").write_bytes(b"synthetic catalog workbooX")
+        with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+            deployment.verify_materialized_candidate(candidate, contract)
+
+    def test_catalog_of_another_model_run_fails(self) -> None:
+        candidate, contract = self._materialize(22)
+        metadata_path = self._catalog_file(candidate, "campaign_catalog_v1.metadata.json")
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata["model_run_id"] = "another_run"
+        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            deployment._verify_extension_semantics(candidate, contract)
+
+    def test_catalog_with_a_failed_check_fails(self) -> None:
+        candidate, contract = self._materialize(23)
+        metadata_path = self._catalog_file(candidate, "campaign_catalog_v1.metadata.json")
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        metadata["checks"][0]["status"] = "failed"
+        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "checks did not all pass"):
+            deployment._verify_extension_semantics(candidate, contract)
+
+    def test_partial_catalog_fails(self) -> None:
+        candidate, contract = self._materialize(24)
+        self._catalog_file(candidate, "campaign_catalog_v1.json").unlink()
+        with self.assertRaises(ValueError):
+            deployment._verify_extension_semantics(candidate, contract)
 
 
 if __name__ == "__main__":

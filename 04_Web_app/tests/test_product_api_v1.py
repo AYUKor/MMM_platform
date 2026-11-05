@@ -100,6 +100,9 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/workspace/home", document["paths"])
         self.assertIn("/api/v1/workspace/geo-budget", document["paths"])
         self.assertIn("/api/v1/model/historical-geo-budget", document["paths"])
+        self.assertIn("/api/v1/campaign-catalog", document["paths"])
+        self.assertIn("/api/v1/campaign-catalog/download", document["paths"])
+        self.assertIn("/api/v1/campaign-catalog/{campaign_number}", document["paths"])
         self.assertIn("/api/v1/calculations/history", document["paths"])
         self.assertIn("/api/v1/model/overview", document["paths"])
         self.assertIn("/api/v1/model/overview-v2", document["paths"])
@@ -111,7 +114,7 @@ class ProductApiContractTest(unittest.TestCase):
         self.assertIn("/api/v1/templates/campaign-plan.xlsx", document["paths"])
         self.assertIn("/api/v1/templates/media-plan-dictionary", document["paths"])
         self.assertIn("/ready", document["paths"])
-        self.assertEqual(document["info"]["version"], "1.12.0")
+        self.assertEqual(document["info"]["version"], "1.13.0")
         self.assertIn("/api/v1/auth/register", document["paths"])
         for schema_name in (
             "JobResultViewV2",
@@ -121,6 +124,8 @@ class ProductApiContractTest(unittest.TestCase):
             "GeoCatalogV1",
             "WorkspaceGeoBudgetV1",
             "HistoricalModelGeoBudgetV1",
+            "CampaignCatalogV1",
+            "CampaignCardV1",
             "ScenarioMediaPlanV2",
         ):
             self.assertRegex(
