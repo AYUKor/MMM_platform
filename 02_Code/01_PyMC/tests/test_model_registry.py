@@ -189,6 +189,14 @@ class ModelRegistryTests(unittest.TestCase):
                     verification_mode="serving_bundle",
                 )
 
+    def test_weekly_package_panel_comes_from_the_builder_record(self) -> None:
+        weekly = {"package_type": "weekly_joint_v1"}
+        # the production package records only run_config "panel"; older smoke builds also had fit_card.panel
+        self.assertEqual(registry._recorded_panel({"panel": "/data/p.parquet", "fit_card": {}}, weekly), "/data/p.parquet")
+        self.assertEqual(registry._recorded_panel({"fit_card": {"panel": "/data/q.parquet"}}, weekly), "/data/q.parquet")
+        self.assertIsNone(registry._recorded_panel({"panel": "/data/p.parquet"}, {"package_type": "daily"}))
+        self.assertEqual(registry._recorded_panel({"panel_path": "a.parquet", "panel": "b.parquet"}, weekly), "a.parquet")
+
     def test_legacy_schema_is_rejected(self) -> None:
         run_dir, manifest = self._package("legacy", fingerprint="b" * 64, schema="0.2.0")
         manifests = {run_dir.resolve(): manifest}

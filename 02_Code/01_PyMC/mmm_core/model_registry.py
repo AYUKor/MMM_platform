@@ -143,6 +143,15 @@ def _inventory(run_dir: Path) -> dict[str, str]:
     return {path.name: sha256_file(path) for path in files}
 
 
+def _recorded_panel(run_config: dict[str, Any], manifest: dict[str, Any]) -> str | None:
+    """The training panel path a package records (daily packages: panel_path; weekly packages: the builder's panel)."""
+    panel_raw = run_config.get("panel_path") or manifest.get("panel_path")
+    if not panel_raw and is_weekly_manifest(manifest):
+        # the weekly package builder records the fit panel as run_config "panel" (with panel_sha256)
+        panel_raw = run_config.get("panel") or (run_config.get("fit_card") or {}).get("panel")
+    return panel_raw or None
+
+
 def _registration_payload(run_dir: Path, *, registered_by: str, reason: str) -> dict[str, Any]:
     package = ModelPackage.from_run_dir(run_dir, require_posterior_ready=True, validate_hash=True)
     manifest = package.manifest
@@ -150,9 +159,7 @@ def _registration_payload(run_dir: Path, *, registered_by: str, reason: str) -> 
     if _version_tuple(schema) < MIN_PACKAGE_SCHEMA:
         raise ValueError(f"Legacy package schema {schema} cannot be registered; minimum is 0.3.0")
     run_config = read_json(run_dir / "run_config.json", {}) or {}
-    panel_raw = run_config.get("panel_path") or manifest.get("panel_path")
-    if not panel_raw and is_weekly_manifest(manifest):
-        panel_raw = (run_config.get("fit_card") or {}).get("panel")
+    panel_raw = _recorded_panel(run_config, manifest)
     if not panel_raw:
         raise ValueError("Model package has no panel path")
     panel_path = resolve_path(panel_raw)
