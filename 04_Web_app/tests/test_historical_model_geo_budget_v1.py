@@ -30,6 +30,7 @@ from mmm_core.historical_geo_budget import (  # noqa: E402
 from services.historical_model_geo_budget import (  # noqa: E402
     HistoricalModelGeoBudgetError,
     SPEND_POLICY_PATH,
+    WEEKLY_SPEND_POLICY_PATH,
     build_historical_model_geo_budget_v1,
 )
 
@@ -68,6 +69,7 @@ def _write_package_artifact(
         ("МОСКВА", 75.0, 0.75),
         ("СПБ", 25.0, 0.25),
     ),
+    policy_path: Path = SPEND_POLICY_PATH,
 ) -> tuple[Path, dict]:
     registration = {
         "registry_schema_version": "1.0.0",
@@ -96,7 +98,7 @@ def _write_package_artifact(
         registration,
     )
 
-    policy = load_spend_columns_policy(SPEND_POLICY_PATH)
+    policy = load_spend_columns_policy(policy_path)
     artifact_root = registry / "package_artifacts" / PACKAGE_ID
     artifact_dir = artifact_root / ARTIFACT_VERSION
     artifact_dir.mkdir(parents=True)
@@ -212,6 +214,31 @@ class HistoricalModelGeoBudgetServiceTest(unittest.TestCase):
         self.assertNotIn("campaigns_n", serialized)
         self.assertNotIn("/Users/", serialized)
         self.assertNotIn("/mnt/data", serialized)
+
+    def test_weekly_package_artifact_uses_the_weekly_policy_and_rest_units(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            registry = Path(temporary) / "registry"
+            _write_package_artifact(
+                registry,
+                geographies=(("МОСКВА", 60.0, 0.6), ("АЛТАЙСКИЙ КРАЙ (КРОМЕ ГОРОДОВ)", 40.0, 0.4)),
+                policy_path=WEEKLY_SPEND_POLICY_PATH,
+            )
+            payload = build_historical_model_geo_budget_v1(registry_root=registry, package_id=PACKAGE_ID)
+        validate_historical_model_geo_budget_v1(payload)
+        self.assertEqual(payload["status"], "available")
+        self.assertEqual(payload["coverage"]["unlocated_budget_rub"], 0.0)
+        self.assertIn("Алтайский край (кроме городов)", {row["geo_display_name"] for row in payload["rows"]})
+
+    def test_unknown_spend_policy_version_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            registry = Path(temporary) / "registry"
+            policy = Path(temporary) / "policy.json"
+            payload = json.loads(WEEKLY_SPEND_POLICY_PATH.read_text(encoding="utf-8"))
+            payload["spend_columns_version"] = "historical_geo_budget_spend_columns_unapproved"
+            policy.write_text(json.dumps(payload), encoding="utf-8")
+            _write_package_artifact(registry, policy_path=policy)
+            with self.assertRaises(HistoricalModelGeoBudgetError):
+                build_historical_model_geo_budget_v1(registry_root=registry, package_id=PACKAGE_ID)
 
     def test_partial_projection_keeps_unknown_geography_and_budget(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

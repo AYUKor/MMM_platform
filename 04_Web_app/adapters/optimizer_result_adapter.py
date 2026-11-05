@@ -78,6 +78,7 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
         "Выше p99, требуется ручная проверка": "above_p99_within_robust_upper",
         "Вне надежной наблюдаемой зоны": "above_robust_upper",
         "Не оценено": "not_evaluated",
+        "Не оценено для Scenario 6": "not_evaluated",
     },
     "optimizer_status": {
         "Автоматический план доступен": "best_safe_available",
@@ -114,6 +115,8 @@ STATUS_DISPLAY_TO_CODE: dict[str, dict[str, str]] = {
         "Сохранить загруженный план для проверки": "keep_uploaded_plan",
         "Перераспределить ради надежности": "reallocate_for_reliability",
         "Перераспределить ради эффекта": "reallocate_for_effect",
+        "Перераспределить ради эффективности": "reallocate_for_effect",
+        "Надежный support-safe план": "reallocate_for_reliability",
         "Частичный безопасный план": "partial_safe_plan",
         "Требуется ручное решение": "manual_review",
     },

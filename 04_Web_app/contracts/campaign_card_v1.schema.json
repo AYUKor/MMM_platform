@@ -1,0 +1,308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmm-platform.local/contracts/campaign_card_v1.schema.json",
+  "title": "CampaignCardV1",
+  "description": "One past campaign of the active package's catalog (the same record as in campaign_catalog_v1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_name",
+    "schema_version",
+    "record_origin",
+    "package_id",
+    "model_version",
+    "model_display_name",
+    "artifact_id",
+    "catalog_version",
+    "period_start",
+    "period_end",
+    "roas_level_label",
+    "notes",
+    "campaign",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "contract_name": {
+      "const": "campaign_card_v1"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "record_origin": {
+      "const": "verified_model_package_artifact"
+    },
+    "package_id": {
+      "type": "string",
+      "pattern": "^pkg_[A-Za-z0-9._-]{8,128}$"
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_display_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{24}$"
+    },
+    "catalog_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "roas_level_label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/note"
+      }
+    },
+    "campaign": {
+      "$ref": "#/$defs/campaign"
+    },
+    "updated_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "display_text"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{2,63}$"
+        },
+        "display_text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimate",
+        "low",
+        "high"
+      ],
+      "properties": {
+        "estimate": {
+          "type": "number"
+        },
+        "low": {
+          "type": "number"
+        },
+        "high": {
+          "type": "number"
+        }
+      }
+    },
+    "optionalRange": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/range"
+        }
+      ]
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel_id",
+        "display_name",
+        "budget_rub",
+        "nationwide"
+      ],
+      "properties": {
+        "channel_id": {
+          "enum": [
+            "Digital_Performance",
+            "OOH_Total",
+            "Indoor",
+            "Радио",
+            "Нац_ТВ",
+            "Рег_ТВ"
+          ]
+        },
+        "display_name": {
+          "enum": [
+            "Цифровая реклама",
+            "Наружная реклама",
+            "Indoor",
+            "Радио",
+            "Национальное ТВ",
+            "Региональное ТВ"
+          ]
+        },
+        "budget_rub": {
+          "type": "number",
+          "minimum": 0
+        },
+        "nationwide": {
+          "type": "boolean"
+        }
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "name",
+        "directions",
+        "start_date",
+        "end_date",
+        "days_n",
+        "duration_group",
+        "budget_rub",
+        "channels",
+        "main_channel_id",
+        "cities",
+        "nationwide_channels",
+        "status",
+        "status_display_text",
+        "turnover_increment_rub",
+        "orders_per_1000_buyers",
+        "avg_basket_increment_rub",
+        "roas",
+        "overlaps_n",
+        "reliable"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "directions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ТС5/Онлайн",
+              "ТС5/Оффлайн",
+              "ТСХ/Онлайн",
+              "ТСХ/Оффлайн"
+            ]
+          }
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "days_n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_group": {
+          "enum": [
+            "up_to_120_days",
+            "120_days_and_longer"
+          ]
+        },
+        "budget_rub": {
+          "type": "number",
+          "minimum": 0
+        },
+        "channels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/channel"
+          }
+        },
+        "main_channel_id": {
+          "enum": [
+            "Digital_Performance",
+            "OOH_Total",
+            "Indoor",
+            "Радио",
+            "Нац_ТВ",
+            "Рег_ТВ"
+          ]
+        },
+        "cities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "nationwide_channels": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "status": {
+          "enum": [
+            "computed",
+            "not_computed"
+          ]
+        },
+        "status_display_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "turnover_increment_rub": {
+          "$ref": "#/$defs/optionalRange"
+        },
+        "orders_per_1000_buyers": {
+          "$ref": "#/$defs/optionalRange"
+        },
+        "avg_basket_increment_rub": {
+          "$ref": "#/$defs/optionalRange"
+        },
+        "roas": {
+          "$ref": "#/$defs/optionalRange"
+        },
+        "overlaps_n": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reliable": {
+          "enum": [
+            0,
+            1
+          ]
+        }
+      }
+    }
+  }
+}

@@ -47,7 +47,7 @@ POPULATION_SHA256 = (
     "b962c25f3d262fd5c6c8306dceb29859ad7f0d54d370afd04f6fe29b9a7fc15b"
 )
 CATALOG_SHA256 = (
-    "a25547d2582c2000465f5fbbad7c4e7ecd20fb6c9311b745699764f62b6bed61"
+    "7ce0f8e85985b39653b11d79f0e3a9fbe1b2f28d299f7612d237296cb7077cca"
 )
 PACKAGE_ID = "pkg_807d3ddbae57a52a_9aacd3beb350725b"
 # The v2 reference (220 geographies) stays in the repository as the point the first
@@ -440,6 +440,18 @@ class FederalGeoAllocatorFailureTest(unittest.TestCase):
         self._assert_code(
             "DUPLICATE_SOURCE_ROW_ID",
             [_row(), _row(budget=1.0)],
+        )
+
+    def test_one_source_row_on_several_local_geos_the_same_day(self) -> None:
+        """A weekly package routes one oblast row to several model units; each keeps the plan row's id."""
+
+        first, second = sorted(self.context.geo_by_label)[:2]
+        result = self.allocator.allocate(
+            [_row(geo=first, budget=60.0), _row(geo=second, budget=40.0)]
+        )
+        self.assertEqual(
+            sorted((row["geo"], row["allocated_spend_rub"]) for row in result.expanded_rows),
+            [(first, 60.0), (second, 40.0)],
         )
 
     def test_missing_source_row_id(self) -> None:

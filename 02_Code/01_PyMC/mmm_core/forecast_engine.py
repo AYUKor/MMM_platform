@@ -49,6 +49,7 @@ from .forecast_geo_availability import (
 from .model_package import sha256_file
 from .media_history import LAG_MODE, bound_media_history, scaled_history_lags
 from .model_package_reader import ModelPackage
+from .weekly_package import PACKAGE_TYPE as WEEKLY_PACKAGE_TYPE, is_weekly_manifest
 from .serving_semantics import (
     SERVING_CORE_TARGET,
     SERVING_POLICY_VERSION,
@@ -326,6 +327,17 @@ def _runtime_lineage(model_run_dir: str | Path, *, purpose: str) -> dict[str, An
         )
     else:
         raise ValueError(f"Unsupported lineage purpose: {purpose}")
+    manifest = read_json(run_dir / "model_manifest.json") or {}
+    if is_weekly_manifest(manifest):
+        # weekly joint package (weekly_package.py): its own file list, and the weekly engine code
+        code_files.extend(
+            [Path(__file__).with_name("weekly_engine.py").resolve(), Path(__file__).with_name("weekly_package.py").resolve()]
+        )
+        package_files = ["model_manifest.json", *sorted((manifest.get("files") or {}).keys())]
+        return {
+            "code_sha256": {path.name: sha256_file(path) for path in code_files},
+            "model_artifact_sha256": {name: sha256_file(run_dir / name) for name in package_files},
+        }
     package_files = [
         "model_manifest.json",
         "capability_matrix.csv",
@@ -1686,6 +1698,26 @@ def read_daily_flighting(path: str | Path) -> list[dict[str, Any]]:
     return out
 
 
+def load_forecast_engine(
+    model_run_dir: str | Path,
+    *,
+    auto_export: bool = True,
+    validate_package_lineage: bool = True,
+) -> Any:
+    """Engine for the package type: weekly joint packages (weekly_package.py) get WeeklyJointEngine, every other
+    package the daily ForecastEngine exactly as before."""
+    run_dir = resolve_path(model_run_dir)
+    if is_weekly_manifest(read_json(run_dir / "model_manifest.json") or {}):
+        from .weekly_engine import WeeklyJointEngine
+
+        return WeeklyJointEngine.from_run_dir(run_dir, validate_package_lineage=validate_package_lineage)
+    return ForecastEngine.from_run_dir(
+        run_dir,
+        auto_export=auto_export,
+        validate_package_lineage=validate_package_lineage,
+    )
+
+
 def run_forecast_from_flighting(
     model_run_dir: str | Path,
     flighting_path: str | Path,
@@ -1699,7 +1731,7 @@ def run_forecast_from_flighting(
 ) -> dict[str, Any]:
     started_at = datetime.now(timezone.utc)
     started_perf = time.monotonic()
-    engine = ForecastEngine.from_run_dir(
+    engine = load_forecast_engine(
         model_run_dir,
         auto_export=validate_package_lineage,
         validate_package_lineage=validate_package_lineage,
@@ -1737,6 +1769,11 @@ def run_forecast_from_flighting(
         "output_sha256": {name: sha256_file(Path(path)) for name, path in paths.items()},
         "outputs": paths,
     }
+    if getattr(engine, "package_type", "") == WEEKLY_PACKAGE_TYPE:
+        card["model_package_type"] = WEEKLY_PACKAGE_TYPE
+        card["model_name"] = engine.package.manifest.get("model_name")
+        card["roas_level_label"] = engine.package.manifest.get("roas_level_label_ru")
+        card["denominator_analog_year"] = "same_week_52_weeks_earlier"
     write_json(Path(output_dir) / f"{_safe_id(run_id)}_forecast_run_card.json", card)
     return card
 
@@ -1993,6 +2030,9 @@ def _support_cap_rub_for_cell(
     limit: str = "p95",
 ) -> float:
     """Return a total-budget cap consistent with the cell's daily profile."""
+    if hasattr(engine, "support_cap_rub"):
+        # weekly joint package: the cap of the cell's peak week (WeeklyJointEngine.support_cap_rub)
+        return float(engine.support_cap_rub(cell, source_plan, limit=limit))
     rows = engine._metadata_rows(
         "support_bounds", ("segment", "channel", "geo_label", "target"),
         (cell["segment"], cell["channel"], cell["geo"], "turnover_per_user"),
@@ -2143,7 +2183,12 @@ def _candidate_policy_bounds(
             engine,
             limit=support_limit,
         )
-        if policy == "optimize":
+        if hasattr(engine, "optimizer_cell_bounds"):
+            # weekly joint package: per-cell corridor around the plan budget (WeeklyJointEngine.optimizer_cell_bounds)
+            lo, hi = engine.optimizer_cell_bounds(
+                cell, current, policy, support_cap, allow_fixed_contraction=allow_fixed_contraction
+            )
+        elif policy == "optimize":
             lo, hi = 0.0, support_cap
         elif policy == "no_increase":
             lo, hi = 0.0, min(current, support_cap)
@@ -2618,6 +2663,9 @@ def _build_turnover_response_kernels(
     analog_missing_geo_policy: str,
 ) -> list[_CellResponseKernel]:
     """Compile the exact serving equation into reusable cell-level response kernels."""
+    if hasattr(engine, "turnover_response_kernels"):
+        # weekly joint package: WeeklyJointEngine.turnover_response_kernels (same response_draws interface)
+        return engine.turnover_response_kernels(plan, cells, campaign_name, n_samples=n_samples, seed=seed)
     cells = cells.reset_index(drop=True)
     fit_lookup = {
         (str(meta.get("segment")), str(meta.get("target"))): (fit_key, meta)
@@ -3356,6 +3404,12 @@ def _candidate_policy_violations(
             violations.append(f"NO_INCREASE_EXCEEDED:{cell['channel']}:{cell['geo']}")
         elif policy not in {"optimize", "no_increase", "fixed_at_plan"} and value > tolerance:
             violations.append(f"BLOCKED_CELL_FUNDED:{cell['channel']}:{cell['geo']}")
+        if (
+            policy == "fixed_at_plan"
+            and getattr(engine, "fixed_cells_exempt_from_support", False)
+            and abs(value - current) <= tolerance
+        ):
+            continue
         hard_cap = _support_cap_rub_for_cell(cell, source_plan, engine, limit="robust_upper")
         if value > hard_cap + max(SUPPORT_ABS_TOL_RUB, abs(hard_cap) * SUPPORT_REL_TOL):
             violations.append(f"ROBUST_SUPPORT_UPPER_EXCEEDED:{cell['channel']}:{cell['geo']}")
@@ -3496,10 +3550,47 @@ def _candidate_support_warnings(summary: pd.DataFrame) -> int:
     return int(pd.to_numeric(sub[warning_column], errors="coerce").fillna(0).max())
 
 
-def _candidate_hard_support_warnings(detail: pd.DataFrame, candidate_name: str) -> int:
+def _candidate_hard_support_warnings(
+    detail: pd.DataFrame,
+    candidate_name: str,
+    exempt_keys: set[tuple[str, str, str]] | None = None,
+) -> int:
     if detail.empty:
         return 0
+    if exempt_keys and {"segment", "geo", "channel"}.issubset(detail.columns):
+        detail = detail[detail["campaign_name"] == candidate_name]
+        keys = zip(detail["segment"].astype(str), detail["geo"].astype(str), detail["channel"].astype(str))
+        detail = detail[[key not in exempt_keys for key in keys]]
     return _candidate_support_level_warnings(detail, candidate_name, {SUPPORT_LEVEL_OUTSIDE})
+
+
+def _fixed_at_plan_support_exempt_keys(
+    candidate: pd.DataFrame,
+    current_cells: pd.DataFrame,
+    engine: ForecastEngine,
+) -> set[tuple[str, str, str]]:
+    """Cells (segment, geo, channel) whose support breach does not count against a candidate.
+
+    Only for engines with fixed_cells_exempt_from_support (weekly joint package): a fixed-at-plan cell kept at the
+    uploaded budget (national TV) is the user's spend, not an optimizer move. The forecast still flags it."""
+    if not getattr(engine, "fixed_cells_exempt_from_support", False) or candidate is None or candidate.empty:
+        return set()
+    keys = ["segment", "geo", "channel"]
+    current_by_key = {
+        tuple(str(row[key]) for key in keys): float(row["budget_rub"])
+        for _, row in current_cells.iterrows()
+    }
+    exempt: set[tuple[str, str, str]] = set()
+    for _, cell in candidate.iterrows():
+        key = tuple(str(cell[name]) for name in keys)
+        capability = engine._capability_row(key[0], "turnover_per_user", key[2])
+        if str(capability.get("optimizer_use") or "") != "fixed_at_plan":
+            continue
+        current = current_by_key.get(key, 0.0)
+        tolerance = max(BUDGET_RECONCILIATION_ABS_TOL_RUB, abs(current) * BUDGET_RECONCILIATION_REL_TOL)
+        if abs(float(cell["budget_rub"]) - current) <= tolerance:
+            exempt.add(key)
+    return exempt
 
 
 def _candidate_support_level_warnings(
@@ -3675,17 +3766,44 @@ def run_optimizer_from_flighting(
         ((workflow_config.get("model_ref") or {}).get("verification_mode"))
         or "full_lineage"
     )
-    engine = ForecastEngine.from_run_dir(
+    engine = load_forecast_engine(
         model_run_dir,
         auto_export=verification_mode == "full_lineage",
         validate_package_lineage=verification_mode == "full_lineage",
     )
-    model_inventory = serving_model_inventory(engine.metadata)
-    if str(decision_policy.get("schema_version") or "").startswith("3."):
-        model_inventory = validate_serving_model_inventory(engine.metadata)
+    weekly = getattr(engine, "package_type", "") == WEEKLY_PACKAGE_TYPE
+    if weekly:
+        model_inventory = engine.serving_inventory(
+            validate=str(decision_policy.get("schema_version") or "").startswith("3.")
+        )
+    else:
+        model_inventory = serving_model_inventory(engine.metadata)
+        if str(decision_policy.get("schema_version") or "").startswith("3."):
+            model_inventory = validate_serving_model_inventory(engine.metadata)
     plan = pd.DataFrame(read_daily_flighting(flighting_path))
     plan["date"] = pd.to_datetime(plan["date"]).dt.date
     output_dir = ensure_dir(output_dir)
+    optimizer_flighting_path = resolve_path(flighting_path)
+    weekly_plan_notes: dict[str, Any] = {}
+    if weekly:
+        # The uploaded total is checked on the uploaded campaigns before they are split by direction.
+        configured_total = budget_cfg.get("total_budget_rub")
+        if configured_total is not None:
+            if plan["campaign_name"].nunique() != 1:
+                raise ValueError("budget.total_budget_rub is ambiguous for a multi-campaign input; use campaign-level budgets")
+            uploaded_total = float(plan["budget_rub"].sum())
+            tolerance = max(BUDGET_RECONCILIATION_ABS_TOL_RUB, abs(uploaded_total) * BUDGET_RECONCILIATION_REL_TOL)
+            if abs(float(configured_total) - uploaded_total) > tolerance:
+                raise ValueError(
+                    f"Configured optimizer budget {float(configured_total):.2f} does not match uploaded campaign budget {uploaded_total:.2f}"
+                )
+            budget_cfg = {key: value for key, value in budget_cfg.items() if key != "total_budget_rub"}
+        plan, weekly_plan_notes = engine.optimizer_plan(plan)
+        weekly_plan_notes["cell_corridor"] = engine.set_optimizer_corridor(
+            (workflow_config.get("optimizer") or {}).get("weekly_cell_corridor")
+        )
+        optimizer_flighting_path = output_dir / f"{_safe_id(run_id)}_optimizer_flighting_daily.csv"
+        plan.assign(date=pd.to_datetime(plan["date"]).dt.strftime("%Y-%m-%d")).to_csv(optimizer_flighting_path, index=False)
     candidate_summaries: list[dict[str, Any]] = []
     finalist_rows: list[dict[str, Any]] = []
     allocation_rows: list[dict[str, Any]] = []
@@ -3920,7 +4038,9 @@ def run_optimizer_from_flighting(
             score = _candidate_score(cand_summary, objective_contract)
             downside_score = _candidate_downside_score(cand_summary, objective_contract)
             support_warnings = _candidate_support_warnings(cand_summary)
-            hard_support_warnings = _candidate_hard_support_warnings(search_detail, cand_name)
+            hard_support_warnings = _candidate_hard_support_warnings(
+                search_detail, cand_name, _fixed_at_plan_support_exempt_keys(cand_cells, cells, engine)
+            )
             elevated_support_warnings = _candidate_support_level_warnings(
                 search_detail,
                 cand_name,
@@ -4136,7 +4256,11 @@ def run_optimizer_from_flighting(
                         cand_name,
                         {SUPPORT_LEVEL_STRONG},
                     ),
-                    "hard_support_warnings_n": _candidate_hard_support_warnings(finalist_detail, cand_name),
+                    "hard_support_warnings_n": _candidate_hard_support_warnings(
+                        finalist_detail,
+                        cand_name,
+                        _fixed_at_plan_support_exempt_keys(cand_by_name[cand_name], cells, engine),
+                    ),
                     "diagnostic_target_rows": diagnostic_rows,
                     "caution_target_rows": caution_rows,
                     "risk_policy_violations_n": risk_policy_violations,
@@ -4332,6 +4456,8 @@ def run_optimizer_from_flighting(
         "model_activation_status": engine.package.activation_status,
         "model_production_blockers": list(engine.package.manifest.get("production_blockers") or []),
         "runtime_lineage": _runtime_lineage(model_run_dir, purpose="optimizer"),
+        "optimizer_flighting_path": str(optimizer_flighting_path),
+        "optimizer_flighting_sha256": sha256_file(optimizer_flighting_path),
         "outputs": {
             "candidate_scores_csv": str(candidate_path),
             "finalist_summary_csv": str(finalist_path),
@@ -4349,5 +4475,12 @@ def run_optimizer_from_flighting(
             "xlsx": sha256_file(xlsx_path),
         },
     }
+    if weekly:
+        card["model_package_type"] = WEEKLY_PACKAGE_TYPE
+        card["model_name"] = engine.package.manifest.get("model_name")
+        card["roas_level_label"] = engine.package.manifest.get("roas_level_label_ru")
+        card["denominator_analog_year"] = "same_week_52_weeks_earlier"
+        card["weekly_optimizer_plan"] = weekly_plan_notes
+        card["weekly_search_kernel"] = "cell_alone_exact_weekly_response; finalists rescored jointly"
     write_json(output_dir / f"{_safe_id(run_id)}_optimizer_run_card.json", card)
     return card

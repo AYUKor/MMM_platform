@@ -44,10 +44,25 @@ from services.geo_catalog import (  # noqa: E402
 SPEND_POLICY_PATH = (
     PYMC_CODE_DIR / "configs" / "historical_geo_budget_spend_columns_v1.json"
 )
+# The weekly joint package (Заноза) aggregates its weekly panel: week_start, model unit, five model channels
+# (Indoor is inside OOH_Total there).
+WEEKLY_SPEND_POLICY_PATH = (
+    PYMC_CODE_DIR / "configs" / "historical_geo_budget_spend_columns_weekly_v1.json"
+)
+SPEND_POLICY_PATHS = (SPEND_POLICY_PATH, WEEKLY_SPEND_POLICY_PATH)
 
 
 class HistoricalModelGeoBudgetError(ValueError):
     """Raised when package-bound historical spend evidence is inconsistent."""
+
+
+def _spend_policy(version: Any) -> Any:
+    """The approved spend-columns policy the artifact names; an unknown version fails closed."""
+    for path in SPEND_POLICY_PATHS:
+        policy = load_spend_columns_policy(path)
+        if policy.spend_columns_version == version:
+            return policy
+    raise HistoricalModelGeoBudgetError("Historical geo-budget policy metadata differs")
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -233,7 +248,7 @@ def build_historical_model_geo_budget_v1(
             reason_code="historical_artifact_unavailable",
         )
 
-    policy = load_spend_columns_policy(SPEND_POLICY_PATH)
+    policy = _spend_policy(metadata.get("spend_columns_version"))
     if (
         metadata.get("metadata_schema_version") != "1.0.0"
         or metadata.get("artifact_version") != ARTIFACT_VERSION
@@ -372,5 +387,7 @@ def build_historical_model_geo_budget_v1(
 __all__ = [
     "HistoricalModelGeoBudgetError",
     "SPEND_POLICY_PATH",
+    "SPEND_POLICY_PATHS",
+    "WEEKLY_SPEND_POLICY_PATH",
     "build_historical_model_geo_budget_v1",
 ]

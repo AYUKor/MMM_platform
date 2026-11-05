@@ -20,6 +20,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .weekly_package import is_weekly_manifest
+from .weekly_plan_routing import WeeklyPlanRouter
 from .federal_geo_allocator import (
     FederalGeoAllocationContext,
     FederalGeoAllocationError,
@@ -1410,6 +1412,88 @@ def _forecast_geo_availability_for_rows(
     )
 
 
+WEEKLY_AVAILABILITY_POLICY_VERSION = "WEEKLY_BASELINE_ALWAYS_AVAILABLE_V1"
+
+
+def _weekly_forecast_geo_availability_for_rows(
+    package: ModelPackage,
+    plan_rows: list[dict[str, Any]],
+    *,
+    package_id: str,
+    future_controls: dict[str, Any],
+) -> tuple[
+    dict[str, Any],
+    dict[str, tuple[str, ...]],
+    dict[str, dict[str, Any]],
+    set[tuple[str, str, str]],
+]:
+    """Weekly joint package: every unit of a direction is forecast-ready for any plan period.
+
+    The weekly engine takes a unit's baseline turnover from the same week one year earlier and, where that week is
+    missing, from the unit's median week (manifest baseline_rule), so no unit drops out for lack of future controls.
+    A federal row is spread over all units of its direction, as the panel spread the agency's federal rows.
+    """
+
+    manifest = getattr(package, "manifest", None) or {}
+    declared: dict[str, set[str]] = defaultdict(set)
+    for row in _read_csv(Path(package.run_dir) / "target_denominator_metadata.csv"):
+        direction = str(row.get("segment") or "").strip()
+        label = str(row.get("geo_label") or "").strip()
+        if direction and label:
+            declared[direction].add(label)
+    lmax_days = 7 * int(manifest.get("adstock_l_weeks") or 0)
+    ready_by_source_row_id: dict[str, tuple[str, ...]] = {}
+    eligibility_audit_by_source_row_id: dict[str, dict[str, Any]] = {}
+    source_rows: list[dict[str, Any]] = []
+    for row in plan_rows:
+        source_row_id = str(row.get("source_row_id") or "")
+        start = _parse_date(row.get("date") or row.get("start_date"))
+        end = _parse_date(row.get("date") or row.get("end_date"))
+        if start is None or end is None:
+            continue
+        direction = str(row.get("segment") or "")
+        labels = tuple(sorted(declared.get(direction, set())))
+        compact = {
+            "package_id": package_id,
+            "direction": direction,
+            "channel": str(row.get("channel") or ""),
+            "target": "turnover_per_user",
+            "campaign_start": start.isoformat(),
+            "campaign_end": end.isoformat(),
+            "required_start": start.isoformat(),
+            "required_end": end.isoformat(),
+            "lmax": lmax_days,
+            "analog_year": future_controls.get("analog_year"),
+            "missing_geo_policy": "weekly_baseline_rule",
+            "baseline_rule": str(manifest.get("baseline_rule") or ""),
+            "denominator_policy_version": WEEKLY_AVAILABILITY_POLICY_VERSION,
+            "availability_policy_version": WEEKLY_AVAILABILITY_POLICY_VERSION,
+            "declared_geo_count": len(labels),
+            "ready_geo_count": len(labels),
+            "excluded_geo_count": 0,
+            "unavailable_geos": [],
+        }
+        is_federal = is_federal_geo(row.get("geo"))
+        source_rows.append(
+            {"source_row_id": source_row_id, "source_geo": str(row.get("geo") or ""), "is_federal": is_federal, **compact}
+        )
+        eligibility_audit_by_source_row_id[source_row_id] = compact
+        if is_federal:
+            ready_by_source_row_id[source_row_id] = labels
+    audit = {
+        "schema_version": "1.0.0",
+        "package_id": package_id,
+        "availability_policy_version": WEEKLY_AVAILABILITY_POLICY_VERSION,
+        "denominator_policy_version": WEEKLY_AVAILABILITY_POLICY_VERSION,
+        "analog_year": future_controls.get("analog_year"),
+        "missing_geo_policy": "weekly_baseline_rule",
+        "source_rows_n": len(source_rows),
+        "blocking_local_source_rows_n": 0,
+        "source_rows": source_rows,
+    }
+    return audit, ready_by_source_row_id, eligibility_audit_by_source_row_id, set()
+
+
 def _apply_temporal_availability_to_validation(
     validation_rows: list[dict[str, Any]],
     blocked_local_keys: set[tuple[str, str, str]],
@@ -1571,6 +1655,16 @@ def prepare_campaign_from_config(
                 + ",".join(str(row["source_row_id"]) for row in unknown_geos[:20])
             ),
         )
+    # weekly joint packages: plan rows on an oblast or on a city outside the model reach the model units by the
+    # panel's rules (weekly_plan_routing.py); the normalized file keeps the rows as uploaded
+    plan_rows = normalized_rows
+    weekly_routing: dict[str, Any] | None = None
+    weekly_routing_provenance: list[dict[str, Any]] = []
+    weekly_package = is_weekly_manifest(getattr(package, "manifest", None) or {})
+    if weekly_package:
+        plan_rows, weekly_routing_provenance, weekly_routing = WeeklyPlanRouter.from_package(package).route(
+            normalized_rows
+        )
     forecast_geo_availability_audit: dict[str, Any] | None = None
     ready_geos_by_source_row_id: dict[str, tuple[str, ...]] = {}
     eligibility_audit_by_source_row_id: dict[str, dict[str, Any]] = {}
@@ -1583,9 +1677,9 @@ def prepare_campaign_from_config(
             ready_geos_by_source_row_id,
             eligibility_audit_by_source_row_id,
             blocked_local_availability_keys,
-        ) = _forecast_geo_availability_for_rows(
+        ) = (_weekly_forecast_geo_availability_for_rows if weekly_package else _forecast_geo_availability_for_rows)(
             package,
-            normalized_rows,
+            plan_rows,
             package_id=str(
                 (model_resolution or {}).get("package_id")
                 or package.model_run_id
@@ -1599,7 +1693,7 @@ def prepare_campaign_from_config(
             forecast_geo_availability_audit_path,
             forecast_geo_availability_audit,
         )
-    daily_rows = build_daily_flighting(normalized_rows)
+    daily_rows = build_daily_flighting(plan_rows)
 
     input_total = sum(float(r["budget_rub"]) for r in normalized_rows)
     daily_total = sum(float(r["budget_rub"]) for r in daily_rows)
@@ -1613,6 +1707,11 @@ def prepare_campaign_from_config(
     card_path = output_dir / f"{stem}_campaign_prepare_card.json"
     federal_provenance_path: Path | None = None
     federal_audit_path: Path | None = None
+    weekly_routing_path: Path | None = None
+    if weekly_routing is not None:
+        weekly_routing_path = output_dir / f"{stem}_weekly_geo_routing_provenance.csv"
+        _write_csv(weekly_routing_path, weekly_routing_provenance)
+        weekly_routing = {**weekly_routing, "provenance_path": str(weekly_routing_path)}
 
     if issues_path is not None:
         _write_csv(issues_path, issues)
@@ -1634,7 +1733,7 @@ def prepare_campaign_from_config(
 
     federal_rows_present = any(is_federal_geo(row.get("geo")) for row in daily_rows)
     federal_allocation: dict[str, Any] | None = None
-    validation_input_rows = normalized_rows
+    validation_input_rows = plan_rows
     if federal_rows_present:
         federal_cfg = dict(config.get("federal_geo_allocation") or {})
         population_value = federal_cfg.get("population_file")
@@ -1785,6 +1884,7 @@ def prepare_campaign_from_config(
         "normalized": _campaign_totals(normalized_rows),
         "daily_flighting": _campaign_totals(daily_rows),
         "federal_geo_allocation": federal_allocation,
+        "weekly_geo_routing": weekly_routing,
         "forecast_geo_availability": forecast_geo_availability_audit,
         "budget_reconciliation_abs_diff": round(abs(input_total - daily_total), 6),
         "raw_to_normalized_budget_abs_diff": round(abs(raw_total - input_total), 6),

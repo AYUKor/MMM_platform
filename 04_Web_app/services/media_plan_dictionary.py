@@ -17,6 +17,8 @@ from mmm_core.federal_geo_allocator import (
 from mmm_core.serving_semantics import CHANNEL_DISPLAY_NAMES
 from services.geo_catalog import CanonicalGeoCatalog
 
+REST_OF_OBLAST_GEO_TYPE = "rest_of_oblast"
+
 
 DICTIONARY_FILENAME: Final = "Словарь_для_медиаплана.xlsx"
 _DIRECTION_COLUMNS: Final = (
@@ -84,27 +86,36 @@ def build_media_plan_dictionary(
     _format_table_sheet(channels, widths=(28, 58, 28))
 
     geographies = workbook.create_sheet("Географии")
-    geographies.append(
-        (
-            "Список показывает географии, заявленные текущей моделью. "
-            "Фактическая доступность расчета зависит от дат кампании и "
-            "проверяется при загрузке медиаплана.",
-        )
-    )
-    geographies.merge_cells("A1:E1")
-    geographies["A1"].font = Font(bold=True, color="214E63")
-    geographies["A1"].fill = PatternFill("solid", fgColor="DDEBF2")
-    geographies["A1"].alignment = Alignment(wrap_text=True, vertical="center")
-    geographies.row_dimensions[1].height = 34
-    geographies.append(
-        ("География", *(display for _, display in _DIRECTION_COLUMNS))
-    )
     eligible_ids = {
         direction: {geo.geo_id for geo in context.eligible_by_direction.get(direction, ())}
         for direction, _ in _DIRECTION_COLUMNS
     }
+    # The catalog holds the geographies of every served package; the sheet lists the current model's only.
+    model_ids = set().union(*eligible_ids.values())
+    model_entries = [entry for entry in catalog.entries if str(entry["geo_id"]) in model_ids]
+    note = (
+        "Список показывает географии, заявленные текущей моделью. "
+        "Фактическая доступность расчета зависит от дат кампании и "
+        "проверяется при загрузке медиаплана."
+    )
+    if any(entry["geo_type"] == REST_OF_OBLAST_GEO_TYPE for entry in model_entries):
+        note += (
+            " Строку на всю область модель тоже принимает: наружная реклама "
+            "уходит в «область (кроме городов)», а ТВ, радио и диджитал "
+            "делятся по населению между городами области и остальной областью. "
+            "Один файл медиаплана описывает одно направление."
+        )
+    geographies.append((note,))
+    geographies.merge_cells("A1:E1")
+    geographies["A1"].font = Font(bold=True, color="214E63")
+    geographies["A1"].fill = PatternFill("solid", fgColor="DDEBF2")
+    geographies["A1"].alignment = Alignment(wrap_text=True, vertical="center")
+    geographies.row_dimensions[1].height = 34 if len(note) < 200 else 64
+    geographies.append(
+        ("География", *(display for _, display in _DIRECTION_COLUMNS))
+    )
     for entry in sorted(
-        catalog.entries,
+        model_entries,
         key=lambda row: str(row["geo_display_name"]).casefold(),
     ):
         geo_id = str(entry["geo_id"])

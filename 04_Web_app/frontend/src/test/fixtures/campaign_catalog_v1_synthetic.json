@@ -1,0 +1,754 @@
+{
+ "contract_name": "campaign_catalog_v1",
+ "schema_version": "1.0.0",
+ "record_origin": "verified_model_package_artifact",
+ "status": "available",
+ "title": "Прошлые кампании",
+ "display_text": "Каталог прошлых кампаний модели «Заноза»: 12 кампаний, оценка есть у 11.",
+ "package_id": "pkg_abababababababab_2222222222222222",
+ "model_version": "synthetic_model_run",
+ "model_display_name": "Заноза",
+ "artifact_id": "artifact_cc7821227d4749a4c5740c07",
+ "catalog_version": "synthetic_catalog_v1",
+ "period_start": "2025-01-06",
+ "period_end": "2026-06-28",
+ "roas_level_label": "уровень ROAS по отрасли",
+ "summary": {
+  "campaigns_n": 12,
+  "computed_n": 11,
+  "reliable_n": 9,
+  "up_to_120_days_n": 9,
+  "longer_120_days_n": 3,
+  "budget_rub": 481731278.01,
+  "computed_budget_rub": 457326252.38,
+  "turnover_increment_rub": 739350147.2435092,
+  "weighted_roas": 1.6166798721827385
+ },
+ "download": {
+  "file_name": "Каталог_прошлых_кампаний_Заноза_20261105.xlsx",
+  "size_bytes": 16023,
+  "sha256": "6b3d00c713ae0a805d4882afd95237d52c144979d4d46097186651b0c8f72688",
+  "download_path": "/api/v1/campaign-catalog/download",
+  "sheets": [
+   "Тех. информация",
+   "Кампании до 120 дней",
+   "Кампании длиннее 120 дней"
+  ]
+ },
+ "notes": [
+  {
+   "code": "roas_industry_level",
+   "display_text": "Уровень ROAS по отрасли: общий уровень отдачи каналов привязан к отраслевым значениям, данные распределяют его по городам и неделям. Уровень — допущение, а не измерение."
+  },
+  {
+   "code": "campaign_effect_leave_one_out",
+   "display_text": "Эффект кампании — то, что потеряли бы без неё, если остальные кампании оставить. Поэтому эффекты кампаний в сумме не больше эффекта канала, а ROAS кампании обычно ниже ROAS канала."
+  },
+  {
+   "code": "range_p10_p90",
+   "display_text": "Оценка — середина возможных значений; «от» и «до» — границы, в которые эффект попадает с вероятностью 80%."
+  },
+  {
+   "code": "reliability_flag",
+   "display_text": "Надёжность: 1 — оценке можно доверять, 0 — смотреть с осторожностью."
+  },
+  {
+   "code": "overlaps",
+   "display_text": "Пересечения: сколько других кампаний того же направления шли в те же дни и города."
+  }
+ ],
+ "campaigns": [
+  {
+   "number": 1,
+   "name": "Тестовая кампания 1",
+   "directions": [
+    "ТС5/Онлайн"
+   ],
+   "start_date": "2026-01-18",
+   "end_date": "2026-06-30",
+   "days_n": 164,
+   "duration_group": "120_days_and_longer",
+   "budget_rub": 31960563.98,
+   "channels": [
+    {
+     "channel_id": "Digital_Performance",
+     "display_name": "Цифровая реклама",
+     "budget_rub": 31960563.98,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "Digital_Performance",
+   "cities": [
+    "Москва",
+    "Санкт-Петербург",
+    "Казань",
+    "Екатеринбург",
+    "Новосибирск"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 81604192.26586065,
+    "low": 57122934.58610244,
+    "high": 114245869.17220488
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 1.2176174359079124,
+    "low": 0.8523322051355386,
+    "high": 1.7046644102710773
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.00021719509124178848,
+    "low": -0.00043439018248357696,
+    "high": 0.0008687803649671539
+   },
+   "roas": {
+    "estimate": 2.5532776053928896,
+    "low": 1.7872943237750225,
+    "high": 3.574588647550045
+   },
+   "overlaps_n": 4,
+   "reliable": 1
+  },
+  {
+   "number": 2,
+   "name": "Тестовая кампания 2",
+   "directions": [
+    "ТС5/Оффлайн"
+   ],
+   "start_date": "2025-09-28",
+   "end_date": "2025-11-13",
+   "days_n": 47,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 7370112.02,
+   "channels": [
+    {
+     "channel_id": "OOH_Total",
+     "display_name": "Наружная реклама",
+     "budget_rub": 4341245.55,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Радио",
+     "display_name": "Радио",
+     "budget_rub": 3028866.47,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "OOH_Total",
+   "cities": [
+    "Санкт-Петербург",
+    "Казань",
+    "Екатеринбург",
+    "Новосибирск",
+    "Нижний Новгород",
+    "Самара",
+    "Краснодар",
+    "Ростов-на-Дону"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 16064094.593304677,
+    "low": 11244866.215313274,
+    "high": 22489732.43062655
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.0016190688619106934,
+    "low": 0.0011333482033374853,
+    "high": 0.0022666964066749705
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.005355485412794958,
+    "low": -0.010710970825589916,
+    "high": 0.021421941651179832
+   },
+   "roas": {
+    "estimate": 2.1796269242193524,
+    "low": 1.5257388469535467,
+    "high": 3.0514776939070933
+   },
+   "overlaps_n": 2,
+   "reliable": 1
+  },
+  {
+   "number": 3,
+   "name": "Тестовая кампания 3",
+   "directions": [
+    "ТСХ/Онлайн"
+   ],
+   "start_date": "2025-07-19",
+   "end_date": "2025-08-18",
+   "days_n": 31,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 66297718.41,
+   "channels": [
+    {
+     "channel_id": "Digital_Performance",
+     "display_name": "Цифровая реклама",
+     "budget_rub": 24173302.23,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Indoor",
+     "display_name": "Indoor",
+     "budget_rub": 37439623.04,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Нац_ТВ",
+     "display_name": "Национальное ТВ",
+     "budget_rub": 4684793.14,
+     "nationwide": true
+    }
+   ],
+   "main_channel_id": "Indoor",
+   "cities": [
+    "Казань"
+   ],
+   "nationwide_channels": [
+    "Национальное ТВ"
+   ],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 162589725.8631726,
+    "low": 113812808.10422081,
+    "high": 227625616.20844162
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.05694731671391115,
+    "low": 0.039863121699737804,
+    "high": 0.07972624339947561
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.008680920540535927,
+    "low": -0.017361841081071853,
+    "high": 0.03472368216214371
+   },
+   "roas": {
+    "estimate": 2.452418118790773,
+    "low": 1.716692683153541,
+    "high": 3.433385366307082
+   },
+   "overlaps_n": 3,
+   "reliable": 0
+  },
+  {
+   "number": 4,
+   "name": "Тестовая кампания 4",
+   "directions": [
+    "ТС5/Онлайн",
+    "ТСХ/Оффлайн"
+   ],
+   "start_date": "2025-04-16",
+   "end_date": "2025-05-21",
+   "days_n": 36,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 33571380.51,
+   "channels": [
+    {
+     "channel_id": "Радио",
+     "display_name": "Радио",
+     "budget_rub": 33571380.51,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "Радио",
+   "cities": [
+    "Москва",
+    "Санкт-Петербург"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 85094359.26718423,
+    "low": 59566051.48702896,
+    "high": 119132102.97405791
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 5.0566278711630925,
+    "low": 3.5396395098141644,
+    "high": 7.079279019628329
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.021675358081588766,
+    "low": -0.04335071616317753,
+    "high": 0.08670143232635506
+   },
+   "roas": {
+    "estimate": 2.534729223954223,
+    "low": 1.7743104567679562,
+    "high": 3.5486209135359124
+   },
+   "overlaps_n": 4,
+   "reliable": 1
+  },
+  {
+   "number": 5,
+   "name": "Тестовая кампания 5",
+   "directions": [
+    "ТС5/Онлайн"
+   ],
+   "start_date": "2025-08-21",
+   "end_date": "2025-08-30",
+   "days_n": 10,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 24405025.630000003,
+   "channels": [
+    {
+     "channel_id": "Digital_Performance",
+     "display_name": "Цифровая реклама",
+     "budget_rub": 10622045.39,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Нац_ТВ",
+     "display_name": "Национальное ТВ",
+     "budget_rub": 13782980.24,
+     "nationwide": true
+    }
+   ],
+   "main_channel_id": "Нац_ТВ",
+   "cities": [
+    "Санкт-Петербург",
+    "Казань",
+    "Екатеринбург"
+   ],
+   "nationwide_channels": [
+    "Национальное ТВ"
+   ],
+   "status": "not_computed",
+   "status_display_text": "Нет оценки: деньги кампании пришлись на города или недели, которых нет в модели.",
+   "turnover_increment_rub": null,
+   "orders_per_1000_buyers": null,
+   "avg_basket_increment_rub": null,
+   "roas": null,
+   "overlaps_n": 0,
+   "reliable": 0
+  },
+  {
+   "number": 7,
+   "name": "Тестовая кампания 7",
+   "directions": [
+    "ТС5/Оффлайн"
+   ],
+   "start_date": "2025-06-04",
+   "end_date": "2025-12-20",
+   "days_n": 200,
+   "duration_group": "120_days_and_longer",
+   "budget_rub": 70070448.89999999,
+   "channels": [
+    {
+     "channel_id": "OOH_Total",
+     "display_name": "Наружная реклама",
+     "budget_rub": 34862295.08,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Радио",
+     "display_name": "Радио",
+     "budget_rub": 7830309.64,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Рег_ТВ",
+     "display_name": "Региональное ТВ",
+     "budget_rub": 27377844.18,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "OOH_Total",
+   "cities": [
+    "Казань"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 40021613.16904043,
+    "low": 28015129.218328297,
+    "high": 56030258.436656594
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.47600621653089153,
+    "low": 0.33320435157162404,
+    "high": 0.6664087031432481
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.00017748982231580984,
+    "low": -0.0003549796446316197,
+    "high": 0.0007099592892632394
+   },
+   "roas": {
+    "estimate": 0.5711625056970404,
+    "low": 0.3998137539879283,
+    "high": 0.7996275079758566
+   },
+   "overlaps_n": 2,
+   "reliable": 1
+  },
+  {
+   "number": 8,
+   "name": "Тестовая кампания 8",
+   "directions": [
+    "ТСХ/Онлайн"
+   ],
+   "start_date": "2026-01-26",
+   "end_date": "2026-03-05",
+   "days_n": 39,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 24693427.16,
+   "channels": [
+    {
+     "channel_id": "Digital_Performance",
+     "display_name": "Цифровая реклама",
+     "budget_rub": 24693427.16,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "Digital_Performance",
+   "cities": [
+    "Москва"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 51422364.835620016,
+    "low": 35995655.38493401,
+    "high": 71991310.76986802
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.0015377675145537663,
+    "low": 0.0010764372601876364,
+    "high": 0.0021528745203752728
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.23298511270627617,
+    "low": 0.09319404508251047,
+    "high": 0.4193732028712971
+   },
+   "roas": {
+    "estimate": 2.082431268143989,
+    "low": 1.4577018877007921,
+    "high": 2.9154037754015842
+   },
+   "overlaps_n": 0,
+   "reliable": 1
+  },
+  {
+   "number": 9,
+   "name": "Тестовая кампания 9",
+   "directions": [
+    "ТС5/Онлайн",
+    "ТСХ/Оффлайн"
+   ],
+   "start_date": "2025-09-06",
+   "end_date": "2025-09-28",
+   "days_n": 23,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 61738728.87,
+   "channels": [
+    {
+     "channel_id": "OOH_Total",
+     "display_name": "Наружная реклама",
+     "budget_rub": 33665184.83,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Радио",
+     "display_name": "Радио",
+     "budget_rub": 28073544.04,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "OOH_Total",
+   "cities": [
+    "Санкт-Петербург",
+    "Казань",
+    "Екатеринбург",
+    "Новосибирск"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 156217837.89895457,
+    "low": 109352486.52926819,
+    "high": 218704973.05853638
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.08451038905435539,
+    "low": 0.059157272338048766,
+    "high": 0.11831454467609753
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.00516901391559811,
+    "low": -0.01033802783119622,
+    "high": 0.02067605566239244
+   },
+   "roas": {
+    "estimate": 2.5303053813740526,
+    "low": 1.7712137669618366,
+    "high": 3.5424275339236733
+   },
+   "overlaps_n": 3,
+   "reliable": 0
+  },
+  {
+   "number": 10,
+   "name": "Тестовая кампания 10",
+   "directions": [
+    "ТС5/Онлайн"
+   ],
+   "start_date": "2025-11-13",
+   "end_date": "2025-12-05",
+   "days_n": 23,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 60915489.35,
+   "channels": [
+    {
+     "channel_id": "Digital_Performance",
+     "display_name": "Цифровая реклама",
+     "budget_rub": 33916816.13,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Indoor",
+     "display_name": "Indoor",
+     "budget_rub": 13402004.87,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Нац_ТВ",
+     "display_name": "Национальное ТВ",
+     "budget_rub": 13596668.35,
+     "nationwide": true
+    }
+   ],
+   "main_channel_id": "Digital_Performance",
+   "cities": [
+    "Казань",
+    "Екатеринбург",
+    "Новосибирск",
+    "Нижний Новгород",
+    "Самара",
+    "Краснодар",
+    "Ростов-на-Дону",
+    "Воронеж",
+    "Пермь"
+   ],
+   "nationwide_channels": [
+    "Национальное ТВ"
+   ],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 67726263.18755016,
+    "low": 47408384.23128511,
+    "high": 94816768.46257022
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 7.987056149052354,
+    "low": 5.590939304336648,
+    "high": 11.181878608673296
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.0003767983730567562,
+    "low": -0.0007535967461135124,
+    "high": 0.0015071934922270248
+   },
+   "roas": {
+    "estimate": 1.111806929735354,
+    "low": 0.7782648508147478,
+    "high": 1.5565297016294957
+   },
+   "overlaps_n": 1,
+   "reliable": 1
+  },
+  {
+   "number": 11,
+   "name": "Тестовая кампания 11",
+   "directions": [
+    "ТС5/Оффлайн"
+   ],
+   "start_date": "2025-08-03",
+   "end_date": "2025-09-10",
+   "days_n": 39,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 4375445.25,
+   "channels": [
+    {
+     "channel_id": "Радио",
+     "display_name": "Радио",
+     "budget_rub": 4375445.25,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "Радио",
+   "cities": [
+    "Москва",
+    "Нижегородская область",
+    "Республика Татарстан"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 9773228.887971478,
+    "low": 6841260.221580034,
+    "high": 13682520.443160068
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.0033478397436064004,
+    "low": 0.00234348782052448,
+    "high": 0.00468697564104896
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.09607129304288958,
+    "low": 0.03842851721715584,
+    "high": 0.17292832747720124
+   },
+   "roas": {
+    "estimate": 2.233653566564792,
+    "low": 1.5635574965953543,
+    "high": 3.1271149931907085
+   },
+   "overlaps_n": 1,
+   "reliable": 1
+  },
+  {
+   "number": 12,
+   "name": "Тестовая кампания 12",
+   "directions": [
+    "ТСХ/Онлайн"
+   ],
+   "start_date": "2025-02-21",
+   "end_date": "2025-09-08",
+   "days_n": 200,
+   "duration_group": "120_days_and_longer",
+   "budget_rub": 26373360.69,
+   "channels": [
+    {
+     "channel_id": "Digital_Performance",
+     "display_name": "Цифровая реклама",
+     "budget_rub": 5640681.48,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Нац_ТВ",
+     "display_name": "Национальное ТВ",
+     "budget_rub": 20732679.21,
+     "nationwide": true
+    }
+   ],
+   "main_channel_id": "Нац_ТВ",
+   "cities": [
+    "Санкт-Петербург",
+    "Казань",
+    "Екатеринбург",
+    "Новосибирск"
+   ],
+   "nationwide_channels": [
+    "Национальное ТВ"
+   ],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 22291535.227031622,
+    "low": 15604074.658922132,
+    "high": 31208149.317844264
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 2.0161653560514874,
+    "low": 1.411315749236041,
+    "high": 2.822631498472082
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.04287816802177517,
+    "low": -0.08575633604355035,
+    "high": 0.1715126720871007
+   },
+   "roas": {
+    "estimate": 0.8452292253934824,
+    "low": 0.5916604577754376,
+    "high": 1.1833209155508753
+   },
+   "overlaps_n": 0,
+   "reliable": 1
+  },
+  {
+   "number": 13,
+   "name": "Тестовая кампания 13",
+   "directions": [
+    "ТС5/Онлайн",
+    "ТСХ/Оффлайн"
+   ],
+   "start_date": "2025-02-05",
+   "end_date": "2025-04-10",
+   "days_n": 65,
+   "duration_group": "up_to_120_days",
+   "budget_rub": 69959577.24,
+   "channels": [
+    {
+     "channel_id": "OOH_Total",
+     "display_name": "Наружная реклама",
+     "budget_rub": 33052886.83,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Радио",
+     "display_name": "Радио",
+     "budget_rub": 29977325.29,
+     "nationwide": false
+    },
+    {
+     "channel_id": "Рег_ТВ",
+     "display_name": "Региональное ТВ",
+     "budget_rub": 6929365.12,
+     "nationwide": false
+    }
+   ],
+   "main_channel_id": "OOH_Total",
+   "cities": [
+    "Казань",
+    "Екатеринбург",
+    "Новосибирск",
+    "Нижний Новгород",
+    "Самара",
+    "Краснодар",
+    "Ростов-на-Дону"
+   ],
+   "nationwide_channels": [],
+   "status": "computed",
+   "status_display_text": null,
+   "turnover_increment_rub": {
+    "estimate": 46544932.04781871,
+    "low": 32581452.433473095,
+    "high": 65162904.86694619
+   },
+   "orders_per_1000_buyers": {
+    "estimate": 0.002421331465221956,
+    "low": 0.0016949320256553692,
+    "high": 0.0033898640513107385
+   },
+   "avg_basket_increment_rub": {
+    "estimate": 0.0033612878928761126,
+    "low": -0.006722575785752225,
+    "high": 0.01344515157150445
+   },
+   "roas": {
+    "estimate": 0.665311796955889,
+    "low": 0.4657182578691223,
+    "high": 0.9314365157382446
+   },
+   "overlaps_n": 5,
+   "reliable": 1
+  }
+ ],
+ "updated_at_utc": "2026-11-05T05:00:00+00:00"
+}

@@ -84,6 +84,32 @@ class ModelRootWarningsTest(unittest.TestCase):
                 self.assertIn("model_preprod_restricted", [item.code for item in _model_root_warnings(run_card)])
 
 
+class ReportDisplayValuesMappedTest(unittest.TestCase):
+    """Every recommendation type and cell status the marketer report writes has a code in the adapter."""
+
+    def test_report_values_have_codes(self) -> None:
+        for domain, text, code in (
+            ("recommendation_type", "Надежный support-safe план", "reallocate_for_reliability"),
+            ("recommendation_type", "Перераспределить ради эффективности", "reallocate_for_effect"),
+            ("cell_support_status", "Не оценено для Scenario 6", "not_evaluated"),
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(_status(domain, text).code, code)
+
+    def test_report_source_values_are_all_mapped(self) -> None:
+        from adapters.optimizer_result_adapter import STATUS_DISPLAY_TO_CODE
+
+        source = (
+            WEB_APP_DIR.parent / "02_Code" / "02_Budget_optimizer" / "marketer_report.py"
+        ).read_text(encoding="utf-8")
+        for domain in ("recommendation_type", "cell_support_status", "plan_status"):
+            written = set(re.findall(rf'{domain}\s*=\s*"([^"]+)"', source)) | set(
+                re.findall(rf'"{domain}":\s*"([^"]+)"', source)
+            )
+            with self.subTest(domain=domain):
+                self.assertEqual(written - set(STATUS_DISPLAY_TO_CODE[domain]), set())
+
+
 class DecisionResultV1ContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

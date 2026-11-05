@@ -57,6 +57,21 @@ HISTORICAL_EXTENSION_FILES = {
         "historical_geo_budget_v1/historical_model_geo_budget_v1.sample.json"
     ),
 }
+CAMPAIGN_CATALOG_DIR = "campaign_catalog_v1"
+CAMPAIGN_CATALOG_DATA = f"{CAMPAIGN_CATALOG_DIR}/campaign_catalog_v1.json"
+CAMPAIGN_CATALOG_WORKBOOK = f"{CAMPAIGN_CATALOG_DIR}/campaign_catalog_v1.xlsx"
+CAMPAIGN_CATALOG_METADATA = f"{CAMPAIGN_CATALOG_DIR}/campaign_catalog_v1.metadata.json"
+CAMPAIGN_CATALOG_EXTENSION_FILES = {
+    PurePosixPath(CAMPAIGN_CATALOG_DATA),
+    PurePosixPath(CAMPAIGN_CATALOG_WORKBOOK),
+    PurePosixPath(CAMPAIGN_CATALOG_METADATA),
+}
+# The historical aggregate is always shipped; the past-campaign catalog is optional and, when
+# shipped, comes as all three of its files.
+EXTENSION_LAYOUTS = (
+    frozenset(HISTORICAL_EXTENSION_FILES),
+    frozenset(HISTORICAL_EXTENSION_FILES | CAMPAIGN_CATALOG_EXTENSION_FILES),
+)
 
 
 @dataclass(frozen=True)
@@ -351,15 +366,21 @@ def load_release_contract(fin_root: Path, *, verify_transfer: bool = True) -> Re
     if len(mappings) != expected_files or sum(row.bytes for row in mappings) != expected_bytes:
         raise ValueError("Model closure count/bytes mismatch")
     extension_mappings = [row for row in mappings if row.role == "PACKAGE_EXTENSIONS"]
-    if len(extension_mappings) != 5:
-        raise ValueError(f"Expected exactly five package-extension files, got {len(extension_mappings)}")
+    if len(extension_mappings) not in {len(layout) for layout in EXTENSION_LAYOUTS}:
+        raise ValueError(
+            "Expected the five historical package-extension files, optionally with the three "
+            f"campaign-catalog files, got {len(extension_mappings)}"
+        )
     package_root = REGISTRY_RELATIVE_ROOT / "package_artifacts" / package_id
     actual_extension_targets = {
         row.target_relative_path.relative_to(package_root)
         for row in extension_mappings
         if row.target_relative_path.is_relative_to(package_root)
     }
-    if actual_extension_targets != HISTORICAL_EXTENSION_FILES:
+    if (
+        len(actual_extension_targets) != len(extension_mappings)
+        or actual_extension_targets not in EXTENSION_LAYOUTS
+    ):
         raise ValueError("Package-extension target mapping does not preserve package_id layout")
     if any(not row.source_relative_path.is_relative_to(EXTENSION_SOURCE_ROOT) for row in extension_mappings):
         raise ValueError("Package-extension source is outside model/package_extensions")
@@ -501,10 +522,78 @@ def _verify_file(path: Path, sha: str, size: int, label: str) -> None:
         raise ValueError(f"SHA-256 mismatch for {label}: {path}")
 
 
+def _verify_campaign_catalog_semantics(
+    actual_index: Mapping[str, Path],
+    registration: Mapping[str, Any],
+    contract: ReleaseContract,
+) -> dict[str, Any]:
+    """The optional catalog must be bound to the registered package, fully checked and byte-identical."""
+
+    metadata = _read_json(actual_index[CAMPAIGN_CATALOG_METADATA], "campaign catalog metadata")
+    if metadata.get("artifact_version") != CAMPAIGN_CATALOG_DIR:
+        raise ValueError("Campaign catalog metadata version differs")
+    identity = {
+        "package_id": contract.package_id,
+        "package_input_fingerprint": registration.get("package_input_fingerprint"),
+        "model_run_id": registration.get("model_run_id"),
+    }
+    if any(not value or metadata.get(key) != value for key, value in identity.items()):
+        raise ValueError("Campaign catalog is not bound to the registered package")
+    checks = metadata.get("checks")
+    if (
+        not isinstance(checks, list)
+        or not checks
+        or any(not isinstance(row, Mapping) or row.get("status") != "passed" for row in checks)
+    ):
+        raise ValueError("Campaign catalog publication checks did not all pass")
+    for key, relative in (("data", CAMPAIGN_CATALOG_DATA), ("workbook", CAMPAIGN_CATALOG_WORKBOOK)):
+        entry = metadata.get(key)
+        if not isinstance(entry, Mapping) or entry.get("relative_path") != PurePosixPath(relative).name:
+            raise ValueError(f"Campaign catalog {key} entry differs")
+        _verify_file(
+            actual_index[relative],
+            str(entry.get("sha256") or ""),
+            entry.get("size_bytes"),
+            f"campaign catalog {key}",
+        )
+    data = _read_json(actual_index[CAMPAIGN_CATALOG_DATA], "campaign catalog data")
+    if any(data.get(key) != value for key, value in identity.items()) or data.get(
+        "catalog_version"
+    ) != metadata.get("catalog_version"):
+        raise ValueError("Campaign catalog data identity differs from its metadata")
+    campaigns = data.get("campaigns")
+    summary = data.get("summary")
+    if (
+        not isinstance(campaigns, list)
+        or not isinstance(summary, Mapping)
+        or len(campaigns) != metadata.get("campaigns_n")
+        or summary.get("campaigns_n") != metadata.get("campaigns_n")
+        or summary.get("computed_n") != metadata.get("computed_n")
+    ):
+        raise ValueError("Campaign catalog counts differ from its metadata")
+    return {
+        "status": "passed",
+        "artifact_id": metadata.get("artifact_id"),
+        "catalog_version": metadata.get("catalog_version"),
+        "campaigns_n": metadata.get("campaigns_n"),
+        "computed_n": metadata.get("computed_n"),
+        "workbook_sha256": metadata["workbook"].get("sha256"),
+        "checks_passed": len(checks),
+    }
+
+
 def _verify_extension_semantics(candidate_root: Path, contract: ReleaseContract) -> dict[str, Any]:
     package_root = candidate_root / Path(contract.package_artifacts_root.as_posix())
     actual_index = _file_index(package_root)
-    expected = {path.as_posix() for path in HISTORICAL_EXTENSION_FILES}
+    catalog_shipped = any(name.startswith(f"{CAMPAIGN_CATALOG_DIR}/") for name in actual_index)
+    expected = {
+        path.as_posix()
+        for path in (
+            HISTORICAL_EXTENSION_FILES | CAMPAIGN_CATALOG_EXTENSION_FILES
+            if catalog_shipped
+            else HISTORICAL_EXTENSION_FILES
+        )
+    }
     actual = set(actual_index)
     missing = sorted(expected - actual)
     unexpected = sorted(actual - expected)
@@ -600,25 +689,37 @@ def _verify_extension_semantics(candidate_root: Path, contract: ReleaseContract)
         or coverage.get("unlocated_geographies_n") != 0
     ):
         raise ValueError("Historical extension response sample coverage is not complete")
+    consumers = {
+        "package_artifacts_manifest_v1.json": "registry/package identity resolution",
+        "historical_geo_budget_v1.build.json": "build-to-manifest identity binding",
+        "historical_geo_budget_v1.metadata.json": "runtime metadata/hash resolution",
+        "historical_geo_budget_v1.parquet": "runtime artifact hash/bytes resolution",
+        "historical_model_geo_budget_v1.sample.json": "available business-state baseline",
+    }
+    campaign_catalog = None
+    if catalog_shipped:
+        campaign_catalog = _verify_campaign_catalog_semantics(actual_index, registration, contract)
+        consumers.update(
+            {
+                "campaign_catalog_v1.metadata.json": "catalog package binding, checks and hashes",
+                "campaign_catalog_v1.json": "past-campaign list and cards",
+                "campaign_catalog_v1.xlsx": "catalog Excel download",
+            }
+        )
     return {
         "status": "passed",
-        "files": 5,
+        "files": len(expected),
         "unexpected": 0,
         "missing": 0,
         "sha_mismatch": 0,
         "bytes_mismatch": 0,
-        "consumers": {
-            "package_artifacts_manifest_v1.json": "registry/package identity resolution",
-            "historical_geo_budget_v1.build.json": "build-to-manifest identity binding",
-            "historical_geo_budget_v1.metadata.json": "runtime metadata/hash resolution",
-            "historical_geo_budget_v1.parquet": "runtime artifact hash/bytes resolution",
-            "historical_model_geo_budget_v1.sample.json": "available business-state baseline",
-        },
+        "consumers": consumers,
         "artifact": {
             "artifact_id": artifact.get("artifact_id"),
             "sha256": expected_artifact_sha,
             "bytes": expected_artifact_bytes,
         },
+        "campaign_catalog": campaign_catalog,
         "expected_response": sample,
     }
 
@@ -1019,6 +1120,28 @@ def production_equivalent_preflight(
         business_gate = assert_historical_business_state(
             historical_payload, expected_response
         )
+        catalog_gate = None
+        expected_catalog = extension_semantics.get("campaign_catalog")
+        if expected_catalog is not None:
+            catalog_status, catalog_payload, _ = _http_json(
+                "GET",
+                base_url + "/api/v1/campaign-catalog",
+                headers={"Cookie": session_cookie, "Origin": base_url},
+            )
+            if (
+                catalog_status != 200
+                or catalog_payload.get("status") != "available"
+                or catalog_payload.get("artifact_id") != expected_catalog["artifact_id"]
+                or len(catalog_payload.get("campaigns") or []) != expected_catalog["campaigns_n"]
+            ):
+                raise ValueError(
+                    f"Campaign catalog endpoint is not the shipped catalog (HTTP {catalog_status})"
+                )
+            catalog_gate = {
+                "http": 200,
+                "artifact_id": expected_catalog["artifact_id"],
+                "campaigns_n": expected_catalog["campaigns_n"],
+            }
         result = {
             "schema_version": SCHEMA_VERSION,
             "status": "passed",
@@ -1040,6 +1163,7 @@ def production_equivalent_preflight(
                 "http": 200,
                 "artifact_identity": extension_semantics["artifact"],
             },
+            "campaign_catalog": catalog_gate,
             "extensions": candidate_verification["extensions"],
             "alternate_port": selected_port,
             "production_state_used": False,

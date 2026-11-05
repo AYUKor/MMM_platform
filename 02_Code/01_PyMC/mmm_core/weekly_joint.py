@@ -1,0 +1,924 @@
+"""Joint weekly MMM for the fourth pass (panel v3): orders and average check together, turnover = orders x check.
+
+One model for all four segments (ТС5/ТСХ x Онлайн/Оффлайн). For every model unit u (city, or oblast rest per
+composition period) and week t, for target k in {orders, check}:
+
+    log y[k,u,t] = a[k,u] + slope[k,u]*t + trend[k,s](t) + season[k,s](t) + city_wave[k,u](t) + holidays
+                   + resort summer + gamma[k,s] . controls[u,t] + week_shock[k,s,t]
+                   + sum_c beta[k,c,u] * sat_c(adstock_c(spend per resident[c,u,t] / m_ref[s,c])) + e[k,u,t]
+
+    e[k,u,t] = rho[k,s] * e[k,u,t-1] + innovation;  check innovation regressed on the orders innovation.
+
+beta is not sampled directly: it is computed from ROAS at the typical spend m_ref, so the priors are in ROAS
+space. R_orders has the owner's moderate log-normal ranges (channel -> segment -> unit for local channels),
+R_check is centred at 0. Turnover ROAS = R_orders + R_check at typical spend; the exact number is computed
+afterwards by switching each channel off (roas_table).
+
+week_shock is a common, shrunk shock of a segment-week (not a free effect per date): it carries the common
+noise that made old intervals 3-5 times too narrow. Every week-level part has one owner (v6): the line belongs to
+slope0, the yearly wave to Fourier, single weeks to holidays, the rest of the trend to the hinges, and the shock
+only to what none of them can produce. v7: every unit has its own yearly wave around its segment's (shrunk, scale
+sig_city_wave): in the real pilot of 03.11 the segment wave alone let cities whose spring rises more than their
+segment's pass that rise to the ads that run in spring (OOH in ТС5 stores 9.6; simple fixed-effect fit 14 with a
+common wave, 3 with own city waves). Controls enter as deviations from their segment-week mean (the common part
+of the weather and of the calendar is owned by the week-level terms). Adstock (normalized geometric, 8 weeks) and saturation
+(1 - exp(-x/lambda)) are shared by both targets and all segments of a channel.
+
+Data: panels/04_2025_2026Q2_fourth_pass/v3_20261102 and the national per-1000 table next to it
+(prepared/04_2025_2026Q2_fourth_pass/07_media_units_v3_20261102). July-September 2026 are never read.
+"""
+from __future__ import annotations
+
+import dataclasses
+from dataclasses import dataclass, field
+
+import numpy as np
+import pandas as pd
+
+CHANNELS = ['Нац_ТВ', 'Рег_ТВ', 'Радио', 'OOH_Total', 'Digital_Performance', 'Нац_ТВ_офлайн_в_онлайн']
+NATIONAL_TV_CROSS = 'Нац_ТВ_офлайн_в_онлайн'   # offline-label TV fed to online: off by default since v4 (owner 02.11)
+LOCAL_UNIT_DEVIATION = {'Рег_ТВ', 'OOH_Total', 'Digital_Performance'}   # channels with city-level differences
+SEGMENTS = ['ТС5/Онлайн', 'ТС5/Оффлайн', 'ТСХ/Онлайн', 'ТСХ/Оффлайн']
+TIERS = ['small', 'medium', 'large']
+TARGETS = ['orders', 'check']
+RESORTS = {'СОЧИ', 'АНАПА', 'ГЕЛЕНДЖИК'}
+ADSTOCK_L = 8
+KNOT_EVERY_WEEKS = 7
+HARMONICS = 2         # yearly harmonics of the segment season (v15 option 4: the season follows the weeks of last year)
+WAVE_HARMONICS = 2    # own city waves and the resort season always keep the first two harmonics
+SEASON_HIGH_SD_FACTOR = 0.5   # prior scale of harmonics 3+ relative to the first two
+WEEK_SHOCK_CENTRED_MIN_UNITS = 50   # v6: segments with at least this many units get the centred week shock
+CITY_WAVE_SD = 0.05   # v7: prior scale of a unit's own yearly wave around its segment's (real spread 0.01-0.05)
+# v6: nonworking_share left out: in panel v3 it is the same in every unit each week (national calendar), so after
+# removing the segment-week mean nothing is left; the holiday dummies own the calendar.
+CONTROLS = ['temp_dev_from_norm_c', 'log1p_precip', 'log1p_snow']
+
+# ROAS priors, log-normal (median, sd of log). Owner's moderate set (30.10.2026): national TV 2 (90% 0.5-8),
+# digital 3 (90% 0.5-12), other channels 1.2 (90% 0.28-5.4). Offline-label TV on online turnover: 0.3.
+PRIOR_SETS = {
+    'moderate': {'Нац_ТВ': (2.0, 0.843), 'Digital_Performance': (3.0, 0.97), 'Рег_ТВ': (1.22, 0.9),
+                 'Радио': (1.22, 0.9), 'OOH_Total': (1.22, 0.9), NATIONAL_TV_CROSS: (0.3, 1.1)},
+    'meridian': {c: (1.22, 0.9) for c in CHANNELS} | {NATIONAL_TV_CROSS: (0.3, 1.1)},
+    'wide': {c: (1.5, 1.4) for c in CHANNELS} | {NATIONAL_TV_CROSS: (0.3, 1.4)},
+}
+# v8 check (03.11): the owner's moderate medians held almost fixed (log sd 0.1). Its approximation loss against the
+# free fit tells how much worse the data like the industry-level ROAS (a difference of a few units = no evidence).
+PRIOR_SETS['moderate_pinned'] = {c: (m, 0.1) for c, (m, _) in PRIOR_SETS['moderate'].items()}
+CHECK_ROAS_SD = 0.5        # ROAS through the average check, Normal(0, 0.5) at segment level (v12: --check-sd)
+MEDIA_GEO = ('unit', 'tier')   # v12: 'unit' = own ROAS deviation per city for local channels (v6-v11); 'tier' = none,
+                               # cities differ only by size tier and by spend per resident (saturation)
+LAM_PRIOR_DEFAULT = (1.0, 0.5)  # saturation scale lam ~ LogNormal(log 1, 0.5) per channel (v1-v12)
+# v13 (03.11): lam medians of the model without the industry yardstick (real_production_v6, sampled, R-hat 1.008).
+# With the per-segment yardstick of v11 the national TV lam fell to 0.14 (4 SD below its prior centre): the model held
+# the industry level in cells where the data show ~0 by turning always-on national TV into a constant, fully saturated
+# block (marginal ROAS ~4% of the average, every national TV campaign ~0 in the catalog). '--lam-prior data:SD' takes
+# the shape of each channel's curve from the model without the yardstick; the yardstick then sets only the level.
+LAM_DATA_ONLY = {'Нац_ТВ': 1.011, 'Рег_ТВ': 1.03, 'Радио': 1.354, 'OOH_Total': 0.969, 'Digital_Performance': 2.648}
+ADSTOCK_PRIOR = {'Нац_ТВ': (6, 4), NATIONAL_TV_CROSS: (6, 4), 'Рег_ТВ': (6, 4), 'Радио': (4, 6),
+                 'OOH_Total': (4, 6), 'Digital_Performance': (2, 8)}   # Beta(a, b) for weekly decay
+# The decay priors follow common industry ranges for weekly models (e.g. Meta's open-source Robyn guidance):
+# TV 0.3-0.8, radio and OOH 0.1-0.4, digital 0-0.3 (Beta(6,4): 90% in 0.33-0.84; Beta(4,6): 0.16-0.67;
+# Beta(2,8): 0.04-0.45).
+# v8 option adstock='long' (03.11): a 26-week window instead of 8, so a TV effect at the top of its range is not
+# cut (decay 0.8 leaves 17% of the effect beyond 8 weeks), and the weeks before the panel start get the unit's
+# average spend of its first 26 weeks instead of zero (2024 spend is unknown, a zero would make early 2025 look
+# ad-free). The decay priors stay the industry ones above: a half-year carry-over is not an accepted short-term
+# effect (Alex 03.11), so the long window must not open them up.
+ADSTOCK_L_LONG = 26
+ADSTOCK_PRIOR_LONG = dict(ADSTOCK_PRIOR)
+# v9 option --weaken (03.11, Alex: find what in the data takes the ad effect and lower its weight step by step,
+# without steering at ROAS). The injection check showed which baseline parts take a known effect: AR(1) inertia
+# (radio/OOH up to 15% in v6), unit slopes (OOH up to 11%), own city waves and the segment season (radio up to 10%
+# each); trend, week shocks and weather < 1% each. Each can be weakened: rho prior Beta(a, b) (default 8, 2: mean
+# 0.8, pulls to high inertia), prior scale of the unit-slope spread (0.2), multiplier of the fixed own-wave
+# spread (1), prior scale of the segment and resort Fourier coefficients (0.3, 0.2 scaled together). A step is
+# kept only if the injection is found more fully AND both placebos stay near zero; ROAS itself is never the goal.
+BASE_DEFAULT = dict(rho=(8.0, 2.0), slope=0.2, wave=1.0, season=0.3)
+# v10 option --anchor SET:SD (03.11). The checks of 03.11 showed the data do not tell the overall ROAS level: spend
+# moved 13-39 weeks gets the same ROAS as the real spend, the city level takes the always-on part, cross-city
+# comparisons are confounded (budgets follow sales), and holding the channel ROAS near industry costs about as much
+# fit as the noise. The anchor puts the industry yardstick on the quantity it is quoted in: the realized turnover
+# ROAS of each channel over the fit window (sum of T*(1-exp(-c)) over all observed unit-weeks / spend), as
+# LogNormal(log median of SET, SD). It replaces the ROAS prior at reference spend (use with --prior-set wide, or the
+# yardstick counts twice). Segments, size tiers, cities and the weeks still split the effect from the data.
+# v11 (03.11, after Alex chose the industry level): with the channel-total yardstick the model put the extra effect
+# into ТС5 stores, where turnover is largest and a small share is invisible, while ТСХ and delivery stayed below 1.
+# 'SET:SD:segment' puts the same yardstick on each network x direction separately (realized ROAS of each segment
+# and channel); then the data only split it across cities (by spend pressure) and weeks.
+ANCHOR_BY = ('channel', 'segment')
+
+
+def parse_lam_prior(spec: str) -> tuple[np.ndarray, np.ndarray] | None:
+    """'' -> None (LAM_PRIOR_DEFAULT for every channel); 'data:0.1' -> LAM_DATA_ONLY medians with log-SD 0.1;
+    'Нац_ТВ=1.0:0.1,Радио=1.3:0.2' -> those channels, the others keep LAM_PRIOR_DEFAULT. Returns (log median, log SD) [C]."""
+    if not spec:
+        return None
+    med = np.full(len(CHANNELS), LAM_PRIOR_DEFAULT[0])
+    sd = np.full(len(CHANNELS), LAM_PRIOR_DEFAULT[1])
+    if spec.startswith('data:'):
+        v = float(spec.split(':', 1)[1])
+        for c, m in LAM_DATA_ONLY.items():
+            med[CHANNELS.index(c)], sd[CHANNELS.index(c)] = m, v
+    else:
+        for kv in filter(None, (x.strip() for x in spec.split(','))):
+            c, _, ms = kv.partition('=')
+            if c not in CHANNELS or ':' not in ms:
+                raise ValueError(f'--lam-prior C=median:sd with C in {CHANNELS}, or data:SD')
+            m, v = ms.split(':')
+            med[CHANNELS.index(c)], sd[CHANNELS.index(c)] = float(m), float(v)
+    return np.log(med), sd
+
+
+def parse_anchor(spec: str) -> tuple[str, float, str] | None:
+    """'moderate:0.3' -> ('moderate', 0.3, 'channel'); 'moderate:0.1:segment' -> ('moderate', 0.1, 'segment');
+    '' -> None."""
+    if not spec:
+        return None
+    parts = spec.split(':')
+    if len(parts) not in (2, 3) or parts[0] not in PRIOR_SETS or not parts[1]:
+        raise ValueError(f'--anchor SET:SD[:BY] with SET in {sorted(PRIOR_SETS)}, BY in {ANCHOR_BY}')
+    by = parts[2] if len(parts) == 3 else 'channel'
+    if by not in ANCHOR_BY:
+        raise ValueError(f'--anchor SET:SD[:BY] with BY in {ANCHOR_BY}')
+    return parts[0], float(parts[1]), by
+
+
+def parse_weaken(spec: str) -> dict:
+    """'rho=2:2,slope=0.1,wave=0.5,season=0.15' -> baseline settings (unnamed parts keep BASE_DEFAULT)."""
+    out = dict(BASE_DEFAULT)
+    for kv in filter(None, (x.strip() for x in (spec or '').split(','))):
+        k, v = kv.split('=')
+        k = k.strip()
+        if k not in BASE_DEFAULT:
+            raise ValueError(f'--weaken: unknown part {k}; use {sorted(BASE_DEFAULT)}')
+        out[k] = tuple(float(x) for x in v.split(':')) if k == 'rho' else float(v)
+        if k == 'rho' and len(out[k]) != 2:
+            raise ValueError('--weaken rho=a:b')
+    return out
+
+
+@dataclass
+class ModelData:
+    weeks: pd.DatetimeIndex
+    ad_units: pd.DataFrame          # one row per segment|unit_label: seg index, tier, tau, pop_k
+    model_units: pd.DataFrame       # one row per segment|model_unit_id: seg index, ad unit index
+    spend_pr: np.ndarray            # [A, W, C] rub per resident per week (full history for adstock)
+    m_ref: np.ndarray               # [S, C] typical positive weekly spend per resident (0 = channel absent)
+    chan_mask: np.ndarray           # [S, C] 1 if the channel is modelled in the segment
+    obs: pd.DataFrame               # observations: indices, targets, controls
+    trend_basis: np.ndarray         # [W, K] hinges made orthogonal to [1, t, Fourier] (v6)
+    t_year: np.ndarray              # [W]
+    fourier: np.ndarray             # [W, 2 x harmonics] (first 4 columns: the yearly and half-year pairs)
+    holidays: np.ndarray            # [W, H]
+    holiday_names: list
+    controls_mean: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    controls_sd: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    trend_coef: np.ndarray = field(default_factory=lambda: np.zeros(0))   # basis(t) = hinges(t) - [1, t, F] @ coef
+    knot_every: int = KNOT_EVERY_WEEKS
+    harmonics: int = HARMONICS
+
+    @property
+    def dims(self) -> dict:
+        return dict(A=len(self.ad_units), M=len(self.model_units), W=len(self.weeks), C=len(CHANNELS),
+                    S=len(SEGMENTS), N=len(self.obs), K=self.trend_basis.shape[1], H=self.holidays.shape[1])
+
+
+def _holiday_matrix(weeks: pd.DatetimeIndex) -> tuple[np.ndarray, list]:
+    """Weeks (Mon-Sun) containing Russian retail peaks. Dummies, not free week effects."""
+    def contains(month, day):
+        return np.array([any((w + pd.Timedelta(days=i)).month == month and (w + pd.Timedelta(days=i)).day == day
+                             for i in range(7)) for w in weeks], dtype=float)
+    pre_ny = np.array([any((w + pd.Timedelta(days=i)).month == 12 and 24 <= (w + pd.Timedelta(days=i)).day <= 30
+                           for i in range(7)) for w in weeks], dtype=float)
+    ny = contains(12, 31) + contains(1, 1)
+    ny = (ny > 0).astype(float)
+    jan_hol = np.array([(w + pd.Timedelta(days=3)).month == 1 and (w + pd.Timedelta(days=3)).day <= 10 for w in weeks],
+                       dtype=float) * (1 - ny)
+    cols = {'pre_new_year': pre_ny * (1 - ny), 'new_year': ny, 'jan_holidays': jan_hol,
+            'feb23': contains(2, 23), 'mar8': contains(3, 8), 'may1': contains(5, 1), 'may9': contains(5, 9),
+            'jun12': contains(6, 12), 'nov4': contains(11, 4)}
+    return np.column_stack(list(cols.values())), list(cols)
+
+
+def fourier_matrix(weeks: pd.DatetimeIndex, harmonics: int = HARMONICS) -> np.ndarray:
+    """[W, 2 x harmonics]: sin, cos of the yearly wave, then of the half-year wave, ... (mid-week day of year)."""
+    doy = (weeks + pd.Timedelta(days=3)).dayofyear.to_numpy() / 365.25
+    cols = []
+    for h in range(1, int(harmonics) + 1):
+        cols += [np.sin(2 * np.pi * h * doy), np.cos(2 * np.pi * h * doy)]
+    return np.column_stack(cols)
+
+
+def prepare(panel_path: str, national_csv: str, fit_window_end: str | None = None, cross_tv: bool = False,
+            top_units_per_segment: int | None = None, m_ref_csv: str | None = None,
+            knot_every: int = KNOT_EVERY_WEEKS, harmonics: int = HARMONICS) -> ModelData:
+    """top_units_per_segment: keep only the N largest units of each segment by turnover (fast/medium stages).
+    m_ref_csv (v14): typical spend per resident (segment, channel, m_ref) taken from another panel instead of this one.
+    Panel v4 spreads Moscow and SPb regional TV and radio over their oblasts, which moves the typical spend of those
+    channels by up to 30%; with the v3 values the saturation scale lam keeps its meaning (the curve shape of
+    --lam-prior data comes from a v3 fit) and v14 differs from v13 only by where the money lands."""
+    p = pd.read_parquet(panel_path)
+    assert p.week_start.max() <= pd.Timestamp('2026-06-22'), 'панель выходит за 28.06.2026'
+    if top_units_per_segment:
+        tot = p[p.target_valid_week & p.fit_exclude_reason.fillna('').eq('')].groupby(['segment', 'unit_label']).turnover_total.sum()
+        keep = {(s, u) for s, g in tot.groupby(level=0) for (_, u) in g.nlargest(top_units_per_segment).index}
+        p = p[[(s, u) in keep for s, u in zip(p.segment, p.unit_label)]].copy()
+    nat = pd.read_csv(national_csv, encoding='utf-8-sig', parse_dates=['week_start'])
+    weeks = pd.DatetimeIndex(sorted(p.week_start.unique()))
+    W = len(weeks)
+    widx = {w: i for i, w in enumerate(weeks)}
+    sidx = {s: i for i, s in enumerate(SEGMENTS)}
+    p['seg_i'] = p.segment.map(sidx)
+    p['ad_key'] = p.segment + '|' + p.unit_label
+    p['mu_key'] = p.segment + '|' + p.model_unit_id
+    p['w_i'] = p.week_start.map(widx)
+
+    ok = (p.target_valid_week & p.fit_exclude_reason.fillna('').eq('') & ~p.warmup_week
+          & (p.turnover_total > 0) & (p.orders_cnt > 0))
+    if fit_window_end is not None:
+        ok &= p.week_start <= pd.Timestamp(fit_window_end)
+
+    ad = (p.groupby('ad_key').agg(segment=('segment', 'first'), seg_i=('seg_i', 'first'), unit_label=('unit_label', 'first'),
+                                  network=('network', 'first'), channel=('channel', 'first'), tier=('size_tier', 'first'),
+                                  pop_k=('population_k', 'max'))
+          .reset_index())
+    tpr = (p[ok].assign(tpr=p.turnover_total / (p.population_k * 1000)).groupby('ad_key').tpr.median())
+    ad['tau'] = ad.ad_key.map(tpr)
+    ad['tier_i'] = ad.tier.map({t: i for i, t in enumerate(TIERS)}).fillna(0).astype(int)
+    ad['resort'] = ad.unit_label.isin(RESORTS).astype(int)
+    ad = ad[ad.tau.notna()].reset_index(drop=True)      # units with no usable week carry nothing
+    aidx = {k: i for i, k in enumerate(ad.ad_key)}
+    A, C, S = len(ad), len(CHANNELS), len(SEGMENTS)
+
+    # full spend history per ad unit: own rows where present, national per-1000 where the unit did not exist yet
+    spend = np.zeros((A, W, C))
+    q = p[p.ad_key.isin(aidx)]
+    a_i = q.ad_key.map(aidx).to_numpy()
+    for j, c in enumerate(CHANNELS[:5]):
+        spend[a_i, q.w_i.to_numpy(), j] = q[f'spend_{c}'].to_numpy()
+    present = np.zeros((A, W), bool)
+    present[a_i, q.w_i.to_numpy()] = True
+    natp = nat.pivot_table(index=['segment', 'week_start'], columns='model_channel', values='rub_per_1000', aggfunc='sum').fillna(0)
+    for i, r in ad.iterrows():
+        for j, c in enumerate(CHANNELS[:5]):
+            if c not in natp.columns:
+                continue
+            ser = natp[c].xs(r.segment, level='segment') if r.segment in natp.index.get_level_values(0) else None
+            if ser is None:
+                continue
+            v = ser.reindex(weeks).fillna(0).to_numpy() * r.pop_k
+            spend[i, ~present[i], j] = v[~present[i]]
+        if r.channel == 'Онлайн':      # offline-label national TV of the same network, per resident x population
+            off = f'{r.network}/Оффлайн'
+            if off in natp.index.get_level_values(0) and 'Нац_ТВ' in natp.columns:
+                spend[i, :, C - 1] = natp['Нац_ТВ'].xs(off, level='segment').reindex(weeks).fillna(0).to_numpy() * r.pop_k
+    spend_pr = spend / (ad.pop_k.to_numpy()[:, None, None] * 1000.0)
+
+    m_ref = np.zeros((S, C))
+    for s in range(S):
+        sel = ad.seg_i.to_numpy() == s
+        for j in range(C):
+            x = spend_pr[sel, :, j]
+            pos = x[x > 0]
+            if pos.size >= 20:
+                m_ref[s, j] = pos.mean()
+    if m_ref_csv:
+        mr = pd.read_csv(m_ref_csv, encoding='utf-8-sig')
+        for r in mr.itertuples(index=False):
+            s_, j_ = sidx[r.segment], CHANNELS.index(r.channel)
+            if m_ref[s_, j_] > 0 and r.m_ref > 0:
+                m_ref[s_, j_] = float(r.m_ref)
+    chan_mask = (m_ref > 0).astype(float)
+    if not cross_tv:      # owner 02.11: store ads act only on stores, delivery ads only on delivery (no cross channel)
+        chan_mask[:, CHANNELS.index(NATIONAL_TV_CROSS)] = 0.0
+
+    mu = (p[p.ad_key.isin(aidx)].groupby('mu_key').agg(ad_key=('ad_key', 'first'), seg_i=('seg_i', 'first'))
+          .reset_index())
+    mu = mu[mu.mu_key.isin(p[ok].mu_key)].reset_index(drop=True)
+    midx = {k: i for i, k in enumerate(mu.mu_key)}
+    mu['ad_i'] = mu.ad_key.map(aidx)
+
+    o = p[ok & p.mu_key.isin(midx)].copy().sort_values(['mu_key', 'week_start']).reset_index(drop=True)
+    o['m_i'] = o.mu_key.map(midx)
+    o['a_i'] = o.ad_key.map(aidx)
+    o['tier_i'] = o.size_tier.map({t: i for i, t in enumerate(TIERS)}).fillna(0).astype(int)
+    o['y_orders'] = np.log(o.orders_cnt)
+    o['y_check'] = np.log(o.turnover_total / o.orders_cnt)
+    o['nonworking_share'] = o.nonworking_days / o.n_calendar_days
+    o['log1p_precip'] = np.log1p(o.precipitation_mm.fillna(0).clip(lower=0))
+    o['log1p_snow'] = np.log1p(o.snow_fall_cm.fillna(0).clip(lower=0))
+    o['temp_dev_from_norm_c'] = o.temp_dev_from_norm_c.fillna(0)
+    # v6: controls keep only their deviation from the segment-week mean. The common part (national calendar of days
+    # off, a cold week everywhere) is owned by holidays, season and the week shock; before, both owned it
+    # (pilot v4: R-hat 1.5 on holidays, 1.3 on gamma).
+    o[CONTROLS] = o[CONTROLS] - o.groupby(['seg_i', 'w_i'])[CONTROLS].transform('mean')
+    X = o[CONTROLS].to_numpy(float)
+    cm, cs = X.mean(0), X.std(0) + 1e-9
+    o[CONTROLS] = (X - cm) / cs
+    prev_pos = o.groupby('m_i').cumcount()
+    same = (o.m_i.shift(1) == o.m_i) & (o.w_i.shift(1) == o.w_i - 1)
+    o['prev'] = np.where(same, np.arange(len(o)) - 1, -1)
+    o['first_in_unit'] = prev_pos.eq(0)
+    o['resort'] = o.unit_label.isin(RESORTS).astype(int)
+
+    t = (weeks - weeks[0]).days.to_numpy() / 365.25
+    t_c = t - t.mean()
+    if int(harmonics) < WAVE_HARMONICS:
+        raise ValueError(f'harmonics {harmonics} < {WAVE_HARMONICS}')
+    knots = t[knot_every:-1:knot_every]                      # v6: no knot at the last week (all-zero column)
+    basis = np.maximum(0.0, t[:, None] - knots[None, :])
+    fourier = fourier_matrix(weeks, harmonics)
+    hol, hol_names = _holiday_matrix(weeks)
+    # week-level terms are centred over the weeks: they carry no level, the unit level a[k,u] does. Without this
+    # the common shift of all unit levels and of the trend is a flat ridge (pilot 02.11: R-hat 6 on level/trend).
+    basis = basis - basis.mean(0)
+    fourier = fourier - fourier.mean(0)
+    hol = hol - hol.mean(0)
+    # v6: over 78 weeks the hinges reproduce the yearly Fourier pair almost exactly (R2 0.999; half-year pair 0.98)
+    # and contain the straight line: flat ridges between trend, season and slope0 (fast v5: R-hat about 1.5 on
+    # fourier, tau_trend, slope0, z_trend). The hinges are made orthogonal to [1, t, Fourier]; same fitted space.
+    G = np.column_stack([np.ones_like(t_c), t_c, fourier])
+    trend_coef = np.linalg.lstsq(G, basis, rcond=None)[0]
+    basis = basis - G @ trend_coef
+    return ModelData(weeks=weeks, ad_units=ad, model_units=mu, spend_pr=spend_pr, m_ref=m_ref, chan_mask=chan_mask,
+                     obs=o, trend_basis=basis, t_year=t_c, fourier=fourier, holidays=hol, holiday_names=hol_names,
+                     controls_mean=cm, controls_sd=cs, trend_coef=trend_coef, knot_every=int(knot_every),
+                     harmonics=int(harmonics))
+
+
+# ---------------------------------------------------------------- model (numpyro / JAX)
+
+def adstock_sat(spend_norm, alpha, lam, L: int = ADSTOCK_L, pad_steady: bool = False):
+    """spend_norm [A, W, C] (spend per resident / m_ref); alpha, lam [C]. Returns sat [A, W, C] and sat(1) [C].
+    L: adstock window in weeks; pad_steady: weeks before the first one get the unit's mean spend of its first L
+    weeks (v8 long adstock) instead of zero."""
+    import jax.numpy as jnp
+    A, W, C = spend_norm.shape
+    lags = jnp.arange(L)
+    w = alpha[None, :] ** lags[:, None]               # [L, C]
+    w = w / w.sum(0, keepdims=True)
+    head = (jnp.broadcast_to(jnp.asarray(spend_norm)[:, :L, :].mean(1, keepdims=True), (A, L - 1, C)) if pad_steady
+            else jnp.zeros((A, L - 1, C)))
+    pad = jnp.concatenate([head, spend_norm], axis=1)
+    x = sum(w[l][None, None, :] * pad[:, L - 1 - l: L - 1 - l + W, :] for l in range(L))
+    sat = 1.0 - jnp.exp(-x / lam[None, None, :])
+    return sat, 1.0 - jnp.exp(-1.0 / lam)
+
+
+def with_targets(arr: dict, y: np.ndarray) -> dict:
+    """Copy of arr whose unit means (ybar) come from targets y [2, N] (real or simulated)."""
+    m = arr['m_i']
+    cnt = np.bincount(m)
+    ybar = np.stack([np.bincount(m, weights=y[k]) / cnt for k in range(2)], 1)[m]
+    return arr | {'ybar': ybar}
+
+
+def _week_projector(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
+    """[W, W] projector that removes from a week series the mean, the straight line and every modelled week-level
+    term (trend hinges, Fourier, holidays). v2 removed the level and the line; v5 also the other week terms, which
+    the shock could copy at no cost (pilot v4: R-hat 1.7 on the week shock, 1.6 on holidays, 1.3 on Fourier)."""
+    X = np.column_stack([np.ones_like(t), t] + [np.reshape(m, (len(t), -1)) for m in week_terms])
+    return np.eye(len(t)) - X @ np.linalg.pinv(X, rcond=1e-8)
+
+
+def _week_basis(t: np.ndarray, *week_terms: np.ndarray) -> np.ndarray:
+    """[W, R] orthonormal basis of the week series no modelled week term can produce (range of _week_projector).
+
+    v6: the shock is written in these R coordinates. In v5 it was P @ z with z of length W, so W - R directions of z
+    never touched the data; they are not along single coordinates, the sampler's per-coordinate scaling cannot
+    handle them, and they wandered (fast v5: R-hat 2.1 on z_week). Q z with z ~ N(0, I_R) is the same prior N(0, P).
+    """
+    vals, vecs = np.linalg.eigh(_week_projector(t, *week_terms))
+    return vecs[:, vals > 0.5]
+
+
+def placebo_spend(d: ModelData, spec: str) -> ModelData:
+    """Placebo check: the same spend put where it could not have worked; a fit on it should find ROAS near zero.
+
+    'shift:K' moves every unit's spend K weeks later, circularly over the whole history (K = 26 puts spring money
+    into autumn); 'swap:SEED' gives every unit the per-resident spend of another unit of its segment (one random
+    permutation per segment, the same for all channels; national channels, equal everywhere, do not change, so
+    use a shift for them). Typical spend (m_ref) and the targets stay as they are.
+    """
+    kind, _, arg = spec.partition(':')
+    sp = d.spend_pr.copy()
+    if kind == 'shift':
+        sp = np.roll(sp, int(arg), axis=1)
+    elif kind == 'swap':
+        rng = np.random.default_rng(int(arg))
+        seg = d.ad_units.seg_i.to_numpy()
+        for s in np.unique(seg):
+            idx = np.where(seg == s)[0]
+            sp[idx] = d.spend_pr[rng.permutation(idx)]
+    else:
+        raise ValueError(f'placebo {spec}: use shift:K or swap:SEED')
+    return dataclasses.replace(d, spend_pr=sp)
+
+def model_arrays(d: ModelData, city_wave: bool = True, wave_centred: bool = True, slope_centred: bool = False,
+                 wave_scale: str = 'learned', adstock: str = 'short', roas_scale: str = 'equal',
+                 weaken: str = '', anchor: str = '', media_geo: str = 'unit', check_sd: float = CHECK_ROAS_SD,
+                 lam_prior: str = '') -> dict:
+    """Arrays of the model. city_wave=False gives the v6 model exactly (no own yearly wave per unit).
+    wave_centred / slope_centred only change the sampler's coordinates (v7b), not the model.
+    wave_scale='fixed' (v7c): the spread of the own waves is not a parameter but is set from the data being fitted
+    (with_fixed_wave_scale); call with_fixed_wave_scale(d, arr, y) once the targets are known."""
+    if wave_scale not in ('learned', 'fixed'):
+        raise ValueError(f'wave_scale {wave_scale}')
+    if adstock not in ('short', 'long'):
+        raise ValueError(f'adstock {adstock}')
+    if roas_scale not in ('equal', 'turnover', 'gamma'):
+        raise ValueError(f'roas_scale {roas_scale}')
+    if media_geo not in MEDIA_GEO:
+        raise ValueError(f'media_geo {media_geo}')
+    ab = ADSTOCK_PRIOR_LONG if adstock == 'long' else ADSTOCK_PRIOR
+    base = parse_weaken(weaken)
+    lp = parse_lam_prior(lam_prior)
+    anc = parse_anchor(anchor)
+    o = d.obs
+    ad = d.ad_units
+    seg_m = d.model_units.seg_i.to_numpy()
+    M = len(d.model_units)
+    resort_m = (np.bincount(o.m_i, o.resort, minlength=M) > 0).astype(int)
+    # own waves are deviations from the wave of their group (segment x resort): the group's wave is owned by the
+    # segment Fourier and the resort Fourier, so the mean of the own waves of a group is not a second owner
+    grp_m = seg_m * 2 + resort_m
+    G = 2 * len(SEGMENTS)
+    a_obs, w_obs, s_obs = o.a_i.to_numpy(), o.w_i.to_numpy(), o.seg_i.to_numpy()
+    spend_rub_n = (d.spend_pr[a_obs, w_obs, :] * (ad.pop_k.to_numpy()[a_obs] * 1000.0)[:, None]
+                   * d.chan_mask[s_obs])                                                   # [N, C] as in roas_from_contrib
+    if anc and anc[2] == 'segment':
+        # v11: one yardstick per segment x channel, [S, C]
+        sp_sc = np.zeros((len(SEGMENTS), len(CHANNELS)))
+        np.add.at(sp_sc, s_obs, spend_rub_n)
+        tgt = np.log([PRIOR_SETS[anc[0]][c][0] for c in CHANNELS])
+        anchor_arrays = dict(anchor=anchor, anchor_on=True, anchor_by='segment', anchor_sd=anc[1],
+                             anchor_log_target=np.broadcast_to(tgt, sp_sc.shape).copy(),
+                             anchor_spend_c=sp_sc, anchor_mask_c=(sp_sc > 0).astype(float))
+    elif anc:
+        anchor_arrays = dict(anchor=anchor, anchor_on=True, anchor_by='channel', anchor_sd=anc[1],
+                             anchor_log_target=np.log([PRIOR_SETS[anc[0]][c][0] for c in CHANNELS]),
+                             anchor_spend_c=spend_rub_n.sum(0), anchor_mask_c=(spend_rub_n.sum(0) > 0).astype(float))
+    else:
+        anchor_arrays = dict(anchor='', anchor_on=False)
+    lam_arrays = dict(lam_loc=lp[0], lam_sd=lp[1]) if lp is not None else {}
+    return anchor_arrays | lam_arrays | dict(
+        city_wave=bool(city_wave), wave_centred=bool(wave_centred), slope_centred=bool(slope_centred), wave_scale=wave_scale,
+        adstock=adstock, adstock_l=ADSTOCK_L_LONG if adstock == 'long' else ADSTOCK_L, adstock_pad_steady=adstock == 'long',
+        adstock_ab=np.array([ab[c] for c in CHANNELS], float),
+        weaken=weaken or '', rho_ab=np.array(base['rho'], float), slope_sd=float(base['slope']),
+        wave_mult=float(base['wave']), season_sd=float(base['season']),
+        wave_grp_m=grp_m, wave_grp_onehot_m=np.eye(G)[grp_m],
+        wave_grp_count_m=np.maximum(np.bincount(grp_m, minlength=G), 1).astype(float),
+        spend_norm=np.where(d.m_ref[ad.seg_i.to_numpy()][:, None, :] > 0,
+                            d.spend_pr / np.where(d.m_ref > 0, d.m_ref, 1.0)[ad.seg_i.to_numpy()][:, None, :], 0.0),
+        m_ref_a=d.m_ref[ad.seg_i.to_numpy()],                 # [A, C]
+        mask_a=d.chan_mask[ad.seg_i.to_numpy()],              # [A, C]
+        tau_a=ad.tau.to_numpy(),
+        # v8 option, city ROAS by turnover per resident: ROAS of a city = R * (its turnover per resident / segment
+        # median) ** g. 'equal' (v6/v7): g = 0, the same ROAS in every city of a segment at the same pressure;
+        # 'turnover': g = 1, the same pressure lifts sales by the same share everywhere; 'gamma': g ~ Beta(2, 2)
+        # learned from the data (gamma_geo)
+        roas_scale=roas_scale,
+        geo_ratio_a=(ad.tau / ad.groupby('seg_i').tau.transform('median')).to_numpy(float),
+        seg_a=ad.seg_i.to_numpy(), tier_a=ad.tier_i.to_numpy(),
+        # v12 media_geo='tier': no own ROAS deviation per city (with the segment anchor of v11 the extra effect went into
+        # the city with the largest turnover, e.g. Moscow 6.3 in ТСХ delivery digital); z_unit stays a parameter with no
+        # effect, so every downstream script reads the same draws
+        media_geo=media_geo, check_sd=float(check_sd), lam_prior=lam_prior,
+        local_c=np.array([c in LOCAL_UNIT_DEVIATION and media_geo == 'unit' for c in CHANNELS], float),
+        m_i=o.m_i.to_numpy(), a_i=o.a_i.to_numpy(), w_i=o.w_i.to_numpy(), s_i=o.seg_i.to_numpy(),
+        tier_i=o.tier_i.to_numpy(), prev=o.prev.to_numpy(), resort=o.resort.to_numpy().astype(float),
+        X=o[CONTROLS].to_numpy(float), basis=d.trend_basis, t=d.t_year, F=d.fourier, H=d.holidays,
+        seg_m=d.model_units.seg_i.to_numpy(),
+        seg_onehot_m=np.eye(len(SEGMENTS))[d.model_units.seg_i.to_numpy()],          # [M, S]
+        seg_count_m=np.maximum(np.bincount(d.model_units.seg_i.to_numpy(), minlength=len(SEGMENTS)), 1),
+        week_basis=_week_basis(d.t_year, d.trend_basis, d.fourier, d.holidays),              # [W, R]
+        # v6: centred shock where a segment has many units (each week's shock is pinned by the data, and the
+        # non-centred form makes a curved ridge between sig_week and every coefficient); non-centred otherwise
+        wk_centred=(np.bincount(d.model_units.seg_i.to_numpy(), minlength=len(SEGMENTS)) >= WEEK_SHOCK_CENTRED_MIN_UNITS
+                    ).astype(float),
+        ybar=np.column_stack([o.groupby('m_i').y_orders.transform('mean'), o.groupby('m_i').y_check.transform('mean')]),
+    )
+
+
+def numpyro_model(arr: dict, dims: dict, prior_set: str = 'moderate', y=None):
+    import jax.numpy as jnp
+    import numpyro
+    import numpyro.distributions as dist
+    A, M, W, C, S, K, H = (dims[k] for k in 'AMWCSKH')
+    N = len(arr['m_i'])
+    pri = PRIOR_SETS[prior_set]
+
+    # media: adstock + saturation shared across segments and targets
+    a_ab = arr['adstock_ab'] if 'adstock_ab' in arr else np.array([ADSTOCK_PRIOR[c] for c in CHANNELS], float)
+    alpha = numpyro.sample('alpha', dist.Beta(a_ab[:, 0], a_ab[:, 1]))
+    if 'lam_loc' in arr:   # v13 --lam-prior
+        lam = numpyro.sample('lam', dist.LogNormal(arr['lam_loc'], arr['lam_sd']))
+    else:
+        lam = numpyro.sample('lam', dist.LogNormal(0.0, 0.5).expand([C]))
+    sat, sat1 = adstock_sat(arr['spend_norm'], alpha, lam, arr.get('adstock_l', ADSTOCK_L), arr.get('adstock_pad_steady', False))
+
+    mu_r = np.log([pri[c][0] for c in CHANNELS]); sd_r = np.array([pri[c][1] for c in CHANNELS])
+    logR = numpyro.sample('logR_orders', dist.Normal(mu_r, sd_r))                          # [C] channel level
+    sig_seg = numpyro.sample('sig_seg', dist.HalfNormal(0.4))
+    z_seg = numpyro.sample('z_seg', dist.Normal(0, 1).expand([S, C]))
+    logR_s = logR[None, :] + sig_seg * z_seg                                             # [S, C]
+    sig_tier = numpyro.sample('sig_tier', dist.HalfNormal(0.2))
+    z_tier = numpyro.sample('z_tier', dist.Normal(0, 1).expand([3, C]))
+    sig_unit = numpyro.sample('sig_unit', dist.HalfNormal(0.3))
+    z_unit = numpyro.sample('z_unit', dist.Normal(0, 1).expand([A, C]))
+    logR_a = (logR_s[arr['seg_a']] + sig_tier * z_tier[arr['tier_a']]
+              + sig_unit * z_unit * arr['local_c'][None, :])
+    R_orders_a = jnp.exp(logR_a)                                                         # [A, C]
+    R_check_s = numpyro.sample('R_check', dist.Normal(0, arr.get('check_sd', CHECK_ROAS_SD)).expand([S, C]))
+    R_check_a = R_check_s[arr['seg_a']]
+    numpyro.deterministic('R_orders_seg', jnp.exp(logR_s))
+    rs = arr.get('roas_scale', 'equal')
+    if rs == 'gamma':
+        geo = arr['geo_ratio_a'] ** numpyro.sample('gamma_geo', dist.Beta(2.0, 2.0))
+    else:
+        geo = arr['geo_ratio_a'] if rs == 'turnover' else np.ones(A)
+    conv = (arr['m_ref_a'] / (arr['tau_a'][:, None] * sat1[None, :]) * arr['mask_a']
+            * geo[:, None])                                                              # ROAS -> beta
+    beta = jnp.stack([R_orders_a * conv, R_check_a * conv])                              # [2, A, C]
+    contrib = jnp.einsum('kac,awc->kaw', beta, sat)                                      # [2, A, W]
+    media = contrib[:, arr['a_i'], arr['w_i']]                                           # [2, N]
+
+    # base
+    a_m = numpyro.sample('a', dist.Normal(0, 0.3).expand([2, M]))
+    sig_slope = numpyro.sample('sig_slope', dist.HalfNormal(arr.get('slope_sd', 0.2)).expand([2]))
+    if arr.get('slope_centred', False):
+        # v7b option: centred unit slopes (78 weeks pin each slope; the non-centred form makes a curved ridge)
+        slope_u = numpyro.sample('slope_unit', dist.Normal(jnp.zeros((2, M)), sig_slope[:, None]))
+    else:
+        slope_u = sig_slope[:, None] * numpyro.sample('z_slope', dist.Normal(0, 1).expand([2, M]))
+    # unit slopes are deviations from the segment slope: centred within each segment
+    slope_u = slope_u - (slope_u @ arr['seg_onehot_m'] / arr['seg_count_m'][None, :])[:, arr['seg_m']]
+    slope0 = numpyro.sample('slope0', dist.Normal(0, 0.3).expand([2, S]))
+    tau_tr = numpyro.sample('tau_trend', dist.HalfNormal(0.5).expand([2]))
+    z_tr = numpyro.sample('z_trend', dist.Normal(0, 1).expand([2, S, K]))
+    trend = slope0[:, :, None] * arr['t'][None, None, :] + jnp.einsum('wk,jsk->jsw', arr['basis'], tau_tr[:, None, None] * z_tr)
+    s_sd = arr.get('season_sd', 0.3)
+    nF = arr['F'].shape[1]
+    nW = 2 * WAVE_HARMONICS
+    F_w = arr['F'][:, :nW]                                                      # yearly and half-year pairs
+    # harmonics 3+ (v15 option) get a smaller prior; with 2 harmonics this is the v6-v13 prior exactly
+    f_sd = s_sd * np.where(np.arange(nF) < nW, 1.0, SEASON_HIGH_SD_FACTOR)
+    four = numpyro.sample('fourier', dist.Normal(0, f_sd).expand([2, S, nF]))  # v6: owns the whole yearly wave
+    four_res = numpyro.sample('fourier_resort', dist.Normal(0, s_sd * 2 / 3).expand([2, nW]))
+    hol = numpyro.sample('holidays', dist.Normal(0, 0.2).expand([2, S, H]))
+    season = jnp.einsum('wf,jsf->jsw', arr['F'], four) + jnp.einsum('wh,jsh->jsw', arr['H'], hol)
+    gam = numpyro.sample('gamma', dist.Normal(0, 0.05).expand([2, S, arr['X'].shape[1]]))
+    sig_wk = numpyro.sample('sig_week', dist.HalfNormal(0.03).expand([2, S]))
+    c_wk = arr['wk_centred'][None, :, None]                                             # 1 centred, 0 non-centred
+    R = arr['week_basis'].shape[1]
+    v_wk = numpyro.sample('v_week', dist.Normal(0, sig_wk[:, :, None] ** c_wk).expand([2, S, R]))
+    week_shock = jnp.einsum('jsr,wr->jsw', v_wk * sig_wk[:, :, None] ** (1 - c_wk), arr['week_basis'])
+    base_sw = trend + season + week_shock                                                # [2, S, W]
+    s_i, w_i, m_i = arr['s_i'], arr['w_i'], arr['m_i']
+    mu = (arr['ybar'].T + a_m[:, m_i] + slope_u[:, m_i] * arr['t'][w_i][None, :]
+          + base_sw[:, s_i, w_i] + (four_res @ F_w[w_i].T) * arr['resort'][None, :]
+          + jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']) + media)
+    if arr.get('city_wave', False):
+        # v7: own yearly wave of every unit, a shrunk deviation from its group's wave (centred within the group)
+        if arr.get('wave_scale', 'learned') == 'fixed':
+            # v7c: fixed spread of the own waves, set from the data (with_fixed_wave_scale). Real fast v7/v7b (03.11):
+            # with a learned spread, the spread, rho/sigma of AR(1) and the unit slopes trade slow city deviations
+            # and the chains stay in different modes (energy gaps 150-330) in both coordinates; world C mixes.
+            sc = jnp.asarray(arr['wave_sd_fixed'])[:, arr['seg_m'], None]               # [2, M, 1]
+        else:
+            sig_cw = numpyro.sample('sig_city_wave', dist.HalfNormal(CITY_WAVE_SD).expand([2, S]))
+            sc = sig_cw[:, arr['seg_m'], None]                                          # [2, M, 1]
+        nf = nW
+        if arr.get('wave_centred', False):
+            # v7b: centred own waves. Real fast v7 (03.11): with the non-centred form sig_city_wave, rho, sig_slope
+            # did not mix (R-hat 2.1-2.8, chains in different modes); 78 weeks pin each unit's wave.
+            raw = numpyro.sample('city_wave', dist.Normal(jnp.zeros((2, M, nf)), sc))
+        else:
+            raw = sc * numpyro.sample('z_city_wave', dist.Normal(0, 1).expand([2, M, nf]))
+        g_mean = jnp.einsum('jmf,mg->jgf', raw, arr['wave_grp_onehot_m'] / arr['wave_grp_count_m'][None, :])
+        cw = raw - g_mean[:, arr['wave_grp_m'], :]                                       # [2, M, F]
+        mu = mu + jnp.einsum('jnf,nf->jn', cw[:, m_i, :], F_w[w_i])
+    if arr.get('emit_parts', False):
+        # diagnostics only (08_weekly_joint_injection_absorption.py): the fitted parts of log y per row; never set
+        # in sampling runs (these [2, N] sites would be stored with every draw)
+        numpyro.deterministic('part_level', arr['ybar'].T + a_m[:, m_i])
+        numpyro.deterministic('part_unit_slope', slope_u[:, m_i] * arr['t'][w_i][None, :])
+        numpyro.deterministic('part_trend', trend[:, s_i, w_i])
+        numpyro.deterministic('part_season', season[:, s_i, w_i] + (four_res @ F_w[w_i].T) * arr['resort'][None, :])
+        numpyro.deterministic('part_week_shock', week_shock[:, s_i, w_i])
+        numpyro.deterministic('part_controls', jnp.einsum('jnx,nx->jn', gam[:, s_i, :], arr['X']))
+        numpyro.deterministic('part_city_wave', jnp.einsum('jnf,nf->jn', cw[:, m_i, :], F_w[w_i])
+                              if arr.get('city_wave', False) else jnp.zeros_like(media))
+        numpyro.deterministic('part_media', media)
+        numpyro.deterministic('part_mu', mu)
+
+    # AR(1) errors per target and segment, check innovation regressed on the orders innovation
+    rho_ab = arr.get('rho_ab', (8.0, 2.0))
+    rho = numpyro.sample('rho', dist.Beta(float(rho_ab[0]), float(rho_ab[1])).expand([2, S]))
+    sig = numpyro.sample('sigma', dist.HalfNormal(0.1).expand([2, S, 3]))
+    b_oc = numpyro.sample('b_check_on_orders', dist.Normal(0, 0.5).expand([S]))
+    nu = 6.0
+    if y is None:
+        return
+    if arr.get('anchor_on', False):
+        # v10: industry yardstick on the realized turnover ROAS of each channel over the fit window (v11: or of
+        # each segment x channel)
+        cn = beta[:, arr['a_i'], :] * sat[arr['a_i'], arr['w_i'], :]                     # [2, N, C]
+        eff_n = jnp.exp(y[0] + y[1])[:, None] * (1.0 - jnp.exp(-(cn[0] + cn[1])))       # [N, C]
+        if arr.get('anchor_by', 'channel') == 'segment':
+            eff = jnp.zeros(arr['anchor_spend_c'].shape).at[arr['s_i']].add(eff_n)      # [S, C]
+        else:
+            eff = jnp.sum(eff_n, axis=0)                                                # [C]
+        mask = arr['anchor_mask_c']
+        roas_c = jnp.maximum(eff / np.where(mask > 0, arr['anchor_spend_c'], 1.0), 1e-3)
+        numpyro.deterministic('roas_realized', roas_c)
+        lp = dist.Normal(arr['anchor_log_target'], arr['anchor_sd']).log_prob(jnp.log(roas_c))
+        numpyro.factor('anchor_realized_roas', jnp.sum(lp * mask))
+    r = y - mu                                                                          # [2, N]
+    has_prev = arr['prev'] >= 0
+    prev = np.where(has_prev, arr['prev'], 0)
+    rho_n = rho[:, s_i]
+    e = jnp.where(has_prev[None, :], r - rho_n * r[:, prev], r * jnp.sqrt(1 - rho_n ** 2))
+    sc = sig[:, s_i, arr['tier_i']]
+    e_c_cond = e[1] - b_oc[s_i] * e[0] * sc[1] / sc[0]
+    # first week of a run: stationary scale; Jacobian of r -> e = r*sqrt(1-rho^2)
+    numpyro.factor('ar_first_jacobian', 0.5 * jnp.sum(jnp.where(has_prev[None, :], 0.0, jnp.log1p(-rho_n ** 2))))
+    numpyro.sample('lik_orders', dist.StudentT(nu, 0.0, sc[0]), obs=e[0])
+    numpyro.sample('lik_check', dist.StudentT(nu, 0.0, sc[1]), obs=e_c_cond)
+
+
+# ---------------------------------------------------------------- start of sampling: mode search from several starts
+
+ROAS_KEYS = ['alpha', 'lam', 'logR_orders', 'sig_seg', 'z_seg', 'sig_tier', 'z_tier', 'sig_unit', 'z_unit', 'R_check']
+
+
+def roas_keys(arr: dict) -> list[str]:
+    """Parameters that set the media effect of a fit with these arrays (ROAS_KEYS, plus gamma_geo when learned)."""
+    return ROAS_KEYS + (['gamma_geo'] if arr.get('roas_scale', 'equal') == 'gamma' else [])
+
+
+def multi_start_map(arr: dict, dims: dict, prior_set: str, y, n_starts: int = 8, steps: int = 4000,
+                    seed: int = 0, radius: float = 2.0, lr: tuple = (0.03, 0.003)) -> list[dict]:
+    """Search the posterior mode from several starts (point estimate + Adam), compiled once.
+
+    Start 0 is the prior median; the others are random points (uniform in [-radius, radius] on the unconstrained
+    scale, as NUTS starts by default). Each result: start, loss (= minus log joint at the end, lower is better),
+    loss_at_75pct (to see whether it settled), unconstrained point (for NUTS init_params) and the constrained
+    values of the ROAS keys. The pilot of 02.11 showed a chain stuck in a false solution: comparing the losses
+    of the starts tells a sampler trap (much worse loss) from a solution the data cannot rule out (similar loss).
+    """
+    import jax
+    import jax.numpy as jnp
+    import numpyro
+    from numpyro.infer import SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoDelta
+    from numpyro.infer.initialization import init_to_median
+    from numpyro.infer.svi import SVIState
+
+    guide = AutoDelta(numpyro_model, init_loc_fn=init_to_median(num_samples=15))
+    optim = numpyro.optim.Adam(lambda i: lr[0] * (lr[1] / lr[0]) ** (i / steps))
+    svi = SVI(numpyro_model, guide, optim, Trace_ELBO())
+    state0 = svi.init(jax.random.PRNGKey(seed), arr, dims, prior_set, y=y)
+
+    @jax.jit
+    def run(state):
+        def body(st, _):
+            return svi.update(st, arr, dims, prior_set, y=y)
+        return jax.lax.scan(body, state, None, length=steps)
+
+    u0 = svi.optim.get_params(state0.optim_state)
+    rng = np.random.default_rng(seed)
+    out = []
+    for i in range(n_starts):
+        if i == 0:
+            st = state0
+        else:
+            u = {k: jnp.asarray(rng.uniform(-radius, radius, np.shape(v)), dtype=jnp.result_type(v)) for k, v in u0.items()}
+            st = SVIState(svi.optim.init(u), state0.mutable_state, jax.random.PRNGKey(seed + i))
+        st, losses = run(st)
+        losses = np.asarray(losses)
+        u_end = svi.optim.get_params(st.optim_state)
+        c_end = svi.get_params(st)
+        suffix = '_auto_loc'
+        out.append(dict(start=i, init='prior_median' if i == 0 else f'random_{radius:g}',
+                        loss=float(np.mean(losses[-50:])), loss_at_75pct=float(np.mean(losses[int(0.75 * steps) - 50:int(0.75 * steps)])),
+                        finite=bool(np.isfinite(losses[-1])),
+                        unconstrained={k[:-len(suffix)]: np.asarray(v) for k, v in u_end.items() if k.endswith(suffix)},
+                        point={k[:-len(suffix)]: np.asarray(v) for k, v in c_end.items() if k.endswith(suffix)}))
+    return out
+
+
+def multi_start_vi(arr: dict, dims: dict, prior_set: str, y, n_starts: int = 8, steps: int = 15000,
+                   seed: int = 0, radius: float = 2.0, lr: tuple = (0.01, 0.001), init_scale: float = 0.05,
+                   tail: int = 1000) -> list[dict]:
+    """Approximate the posterior from several starts (independent normals on the unconstrained scale), compiled once.
+
+    Version 3 (02.11 after the v2 pilot): on all 621 units the single best point (multi_start_map) is degenerate,
+    the city deviations of the local channels fit noise and blow their ROAS up to 12-176 in both simulated worlds,
+    while the sampled posterior of the v1 pilot sat at sane values. The approximation counts the volume of the
+    posterior, not only its peak, so its centre lies where the posterior mass is. Each result: start, loss
+    (= minus ELBO averaged over the last `tail` steps, lower is better), loss_at_75pct, unconstrained centre and
+    scale (NUTS chains start at draws from this approximation) and the constrained centre of every latent site.
+    """
+    import jax
+    import jax.numpy as jnp
+    import numpyro
+    from numpyro.infer import SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoNormal
+    from numpyro.infer.initialization import init_to_median
+    from numpyro.infer.svi import SVIState
+
+    guide = AutoNormal(numpyro_model, init_loc_fn=init_to_median(num_samples=15), init_scale=init_scale)
+    optim = numpyro.optim.Adam(lambda i: lr[0] * (lr[1] / lr[0]) ** (i / steps))
+    svi = SVI(numpyro_model, guide, optim, Trace_ELBO())
+    state0 = svi.init(jax.random.PRNGKey(seed), arr, dims, prior_set, y=y)
+
+    @jax.jit
+    def run(state):
+        def body(st, _):
+            return svi.update(st, arr, dims, prior_set, y=y)
+        return jax.lax.scan(body, state, None, length=steps)
+
+    u0 = svi.optim.get_params(state0.optim_state)
+    rng = np.random.default_rng(seed)
+    loc_sfx, sc_sfx = '_auto_loc', '_auto_scale'
+    out = []
+    for i in range(n_starts):
+        if i == 0:
+            st = state0
+        else:
+            u = {k: (jnp.asarray(rng.uniform(-radius, radius, np.shape(v)), dtype=jnp.result_type(v))
+                     if k.endswith(loc_sfx) else v) for k, v in u0.items()}
+            st = SVIState(svi.optim.init(u), state0.mutable_state, jax.random.PRNGKey(seed + i))
+        st, losses = run(st)
+        losses = np.asarray(losses)
+        c_end = svi.get_params(st)
+        q = int(0.75 * steps)
+        out.append(dict(start=i, init='prior_median' if i == 0 else f'random_{radius:g}',
+                        loss=float(np.mean(losses[-tail:])), loss_at_75pct=float(np.mean(losses[max(q - tail, 0):q])),
+                        finite=bool(np.all(np.isfinite(losses[-tail:]))),
+                        unconstrained={k[:-len(loc_sfx)]: np.asarray(v) for k, v in c_end.items() if k.endswith(loc_sfx)},
+                        scale={k[:-len(sc_sfx)]: np.asarray(v) for k, v in c_end.items() if k.endswith(sc_sfx)},
+                        point={k: np.asarray(v) for k, v in guide.median(c_end).items()}))
+    return out
+
+
+def init_params_from(start: dict, n_chains: int, jitter: float = 0.05, seed: int = 0) -> dict:
+    """NUTS init_params [chains, ...] (unconstrained): draws from the approximation when it has scales (v3),
+    otherwise the point with a small jitter per chain (v2)."""
+    rng = np.random.default_rng(seed)
+    sc = start.get('scale') or {}
+    return {k: v[None] + (sc[k][None] if k in sc else jitter) * rng.standard_normal((n_chains,) + v.shape)
+            for k, v in start['unconstrained'].items()}
+
+
+# ---------------------------------------------------------------- ROAS by switching channels off
+
+def media_contrib_draw(arr: dict, draw: dict) -> np.ndarray:
+    """Per-channel log contributions [2, A, W, C] for one posterior draw (numpy)."""
+    import jax.numpy as jnp
+    sat, sat1 = adstock_sat(arr['spend_norm'], jnp.asarray(draw['alpha']), jnp.asarray(draw['lam']),
+                            arr.get('adstock_l', ADSTOCK_L), arr.get('adstock_pad_steady', False))
+    logR_s = draw['logR_orders'][None, :] + draw['sig_seg'] * draw['z_seg']
+    logR_a = (logR_s[arr['seg_a']] + draw['sig_tier'] * draw['z_tier'][arr['tier_a']]
+              + draw['sig_unit'] * draw['z_unit'] * arr['local_c'][None, :])
+    rs = arr.get('roas_scale', 'equal')
+    geo = (arr['geo_ratio_a'] ** float(draw['gamma_geo']) if rs == 'gamma'
+           else arr['geo_ratio_a'] if rs == 'turnover' else np.ones(len(arr['tau_a'])))
+    conv = arr['m_ref_a'] / (arr['tau_a'][:, None] * np.asarray(sat1)[None, :]) * arr['mask_a'] * geo[:, None]
+    beta = np.stack([np.exp(logR_a) * conv, draw['R_check'][arr['seg_a']] * conv])
+    return np.asarray(beta)[:, :, None, :] * np.asarray(sat)[None]
+
+
+def roas_from_contrib(d: ModelData, arr: dict, contrib: np.ndarray, turnover: np.ndarray) -> pd.DataFrame:
+    """Turnover ROAS by segment and channel: sum over observed unit-weeks of T*(1-exp(-(cO+cC))) / spend.
+
+    contrib [2, A, W, C]; turnover [N] observed (or simulated) weekly turnover of the fit rows.
+    Spend is counted on the same unit-weeks. The orders/check split is proportional to cO and cC.
+    """
+    a_i, w_i = arr['a_i'], arr['w_i']
+    cO = contrib[0][a_i, w_i, :]
+    cC = contrib[1][a_i, w_i, :]
+    tot = cO + cC
+    inc = turnover[:, None] * (1 - np.exp(-tot))
+    share_o = np.divide(cO, tot, out=np.full_like(cO, 0.5), where=np.abs(tot) > 1e-12)
+    pop = d.ad_units.pop_k.to_numpy()[a_i] * 1000
+    spend = d.spend_pr[a_i, w_i, :] * pop[:, None]
+    seg = arr['s_i']
+    rows = []
+    for s, sname in enumerate(SEGMENTS):
+        sel = seg == s
+        for j, c in enumerate(CHANNELS):
+            sp = spend[sel, j].sum()
+            if sp <= 0 or d.chan_mask[s, j] == 0:
+                continue
+            rows.append(dict(segment=sname, channel=c, spend_rub=sp, effect_rub=inc[sel, j].sum(),
+                             effect_orders_rub=(inc[sel, j] * share_o[sel, j]).sum(),
+                             roas=inc[sel, j].sum() / sp))
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------- simulated world
+
+def real_city_waves(d: ModelData, arr: dict, min_obs: int = 26, y: np.ndarray | None = None) -> np.ndarray:
+    """Each model unit's own yearly wave in the real data, [2, M, F]: Fourier part of a fit of the unit's log target
+    around its segment's week mean, with the unit's own level and line. Used to put the real trap into a world.
+    y [2, N] (optional): use these targets instead of the real ones (a simulated world). Units with fewer than
+    min_obs weeks get zeros."""
+    o = d.obs
+    M, nf = len(d.model_units), 2 * WAVE_HARMONICS
+    m_i, w_i = arr['m_i'], arr['w_i']
+    out = np.zeros((2, M, nf))
+    for k, col in enumerate(['y_orders', 'y_check']):
+        v = o[col] if y is None else pd.Series(np.asarray(y[k], float), index=o.index)
+        dm = v - v.groupby(o.m_i).transform('mean')
+        r = (dm - dm.groupby([o.seg_i, o.w_i]).transform('mean')).to_numpy()
+        for m in range(M):
+            sel = m_i == m
+            if sel.sum() < min_obs:
+                continue
+            Z = np.column_stack([np.ones(sel.sum()), d.t_year[w_i[sel]], d.fourier[w_i[sel], :nf]])
+            out[k, m] = np.linalg.lstsq(Z, r[sel], rcond=None)[0][2:]
+    return out
+
+
+WAVE_SD_FLOOR = 0.005
+
+
+def fixed_wave_scale(d: ModelData, arr: dict, y: np.ndarray, min_obs: int = 26) -> np.ndarray:
+    """v7c: spread of the own yearly waves per target and segment, [2, S], from the data being fitted: robust sd
+    (1.4826 x median absolute deviation) of the units' Fourier coefficients (real_city_waves on y, units with at
+    least min_obs weeks), each taken around the median of its group (segment x resort), as in the model. It holds
+    the units' estimation noise too, so it is a little wider than the true spread (the waves are shrunk less)."""
+    cw = real_city_waves(d, arr, min_obs=min_obs, y=y)
+    n_obs = np.bincount(arr['m_i'], minlength=cw.shape[1])
+    ok = n_obs >= min_obs
+    grp, seg = arr['wave_grp_m'], arr['seg_m']
+    out = np.full((2, len(SEGMENTS)), WAVE_SD_FLOOR)
+    for k in range(2):
+        dev = np.zeros_like(cw[k])
+        for g in np.unique(grp[ok]):
+            sel = ok & (grp == g)
+            dev[sel] = cw[k, sel] - np.median(cw[k, sel], axis=0)
+        for s in range(len(SEGMENTS)):
+            sel = ok & (seg == s)
+            if sel.sum() >= 3:
+                out[k, s] = max(WAVE_SD_FLOOR, 1.4826 * float(np.median(np.abs(dev[sel]))))
+    return out
+
+
+def with_fixed_wave_scale(d: ModelData, arr: dict, y: np.ndarray) -> dict:
+    """Arrays with the fixed own-wave spread set from the targets y (only used when arr['wave_scale'] == 'fixed')."""
+    if not arr.get('city_wave', False) or arr.get('wave_scale', 'learned') != 'fixed':
+        return arr
+    return dict(arr, wave_sd_fixed=fixed_wave_scale(d, arr, y) * float(arr.get('wave_mult', 1.0)))
+
+
+def simulate(d: ModelData, arr: dict, truth: dict, seed: int = 0) -> tuple[np.ndarray, dict]:
+    """Targets from the model with known parameters, real spend, real units and real baseline shape.
+
+    truth: R_orders {channel: ROAS through orders}, R_check {channel: ROAS through check}, alpha {c}, lam {c},
+    unit_sd (log sd of unit ROAS deviation for local channels), rho (orders, check), sigma (orders, check),
+    sig_week (orders, check), b_check_on_orders, city_wave (bool: add every unit's own real yearly wave, v7 world C).
+    Baseline per segment = real segment-week mean of unit-demeaned log target, smoothed over 5 weeks.
+    """
+    rng = np.random.default_rng(seed)
+    o = d.obs
+    C, S, A = len(CHANNELS), len(SEGMENTS), len(d.ad_units)
+    draw = dict(alpha=np.array([truth['alpha'][c] for c in CHANNELS]), lam=np.array([truth['lam'][c] for c in CHANNELS]),
+                logR_orders=np.log([truth['R_orders'][c] for c in CHANNELS]), sig_seg=0.0, z_seg=np.zeros((S, C)),
+                sig_tier=0.0, z_tier=np.zeros((3, C)), sig_unit=truth.get('unit_sd', 0.3),
+                z_unit=rng.standard_normal((A, C)),
+                R_check=np.tile([truth['R_check'][c] for c in CHANNELS], (S, 1)))
+    contrib = media_contrib_draw(arr, draw)                                    # [2, A, W, C]
+    media = contrib.sum(-1)[:, arr['a_i'], arr['w_i']]                          # [2, N]
+    ys = []
+    for k, col in enumerate(['y_orders', 'y_check']):
+        dm = o[col] - o.groupby('m_i')[col].transform('mean')
+        sw = dm.groupby([o.seg_i, o.w_i]).mean().unstack(0).reindex(range(len(d.weeks))).ffill().bfill()
+        smooth = sw.rolling(5, center=True, min_periods=1).mean()
+        base = smooth.to_numpy()[arr['w_i'], arr['s_i']]
+        shock = rng.normal(0, truth['sig_week'][k], (S, len(d.weeks)))[arr['s_i'], arr['w_i']]
+        ys.append(o.groupby('m_i')[col].transform('mean').to_numpy() + base + shock)
+    y = np.vstack(ys) + media
+    if truth.get('city_wave', False):
+        cw = real_city_waves(d, arr)
+        y = y + np.einsum('jnf,nf->jn', cw[:, arr['m_i'], :], d.fourier[arr['w_i'], :2 * WAVE_HARMONICS])
+    # AR(1) noise per model unit, check innovations correlated with orders innovations
+    eps = np.zeros_like(y)
+    rho, sig, b = truth['rho'], truth['sigma'], truth['b_check_on_orders']
+    for n in range(len(o)):
+        pv = arr['prev'][n]
+        io = rng.standard_t(6) * sig[0]
+        ic = b * io * sig[1] / sig[0] + rng.standard_t(6) * sig[1]
+        if pv >= 0:
+            eps[0, n] = rho[0] * eps[0, pv] + io
+            eps[1, n] = rho[1] * eps[1, pv] + ic
+        else:
+            eps[0, n] = io / np.sqrt(1 - rho[0] ** 2)
+            eps[1, n] = ic / np.sqrt(1 - rho[1] ** 2)
+    y = y + eps
+    turnover = np.exp(y[0] + y[1])
+    truth_roas = roas_from_contrib(d, arr, contrib, turnover)
+    return y, dict(contrib=contrib, turnover=turnover, roas=truth_roas)

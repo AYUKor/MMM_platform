@@ -26,7 +26,7 @@ from services.media_plan_dictionary import build_media_plan_dictionary  # noqa: 
 class MediaPlanDictionaryTest(unittest.TestCase):
     def test_workbook_is_generated_from_context_and_canonical_catalog(self) -> None:
         catalog = load_canonical_geo_catalog()
-        self.assertEqual(catalog.geographies_n, 223)
+        self.assertEqual(catalog.geographies_n, 281)
         eligible = tuple(
             EligibleGeo(
                 geo_id=str(row["geo_id"]),
@@ -88,7 +88,9 @@ class MediaPlanDictionaryTest(unittest.TestCase):
             geography_rows[1],
             ("География", "ТС5 Онлайн", "ТС5 Офлайн", "ТСХ Онлайн", "ТСХ Офлайн"),
         )
-        self.assertEqual(len(geography_rows) - 2, 223)
+        # only the model's geographies: the union of the directions (the first 220 catalog entries here)
+        self.assertEqual(len(geography_rows) - 2, max(counts.values()))
+        self.assertTrue(all("Да" in row[1:] for row in geography_rows[2:]))
         for index, expected in enumerate(counts.values(), start=1):
             self.assertEqual(
                 sum(row[index] == "Да" for row in geography_rows[2:]),

@@ -196,7 +196,8 @@ def main() -> None:
     marketer_report = build_marketer_report(
         ReportPaths(
             model_run_dir=model_run_dir,
-            flighting_path=Path(prep.flighting_path),
+            # the flighting the optimizer worked on (a weekly joint package splits campaigns by direction)
+            flighting_path=Path(optimizer_card.get("optimizer_flighting_path") or prep.flighting_path),
             optimizer_output_dir=output_dir,
             output_xlsx=output_dir / "marketer_preprod_forecast_optimizer_report.xlsx",
             run_id=run_id,

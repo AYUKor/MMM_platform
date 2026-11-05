@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "X5 MMM Research Product API",
-    "version": "1.12.0",
+    "version": "1.13.0",
     "description": "Versioned HTTP boundary for local pilot authentication, administration, campaign upload, validation, asynchronous calculation jobs, browser-safe progress, results, product navigation, model information, help and artifacts. The API contains no MMM mathematics."
   },
   "servers": [{"url": "/", "description": "Same-origin reverse proxy or localhost"}],
@@ -479,6 +479,50 @@
         }
       }
     },
+    "/api/v1/campaign-catalog": {
+      "get": {
+        "operationId": "getCampaignCatalogV1",
+        "description": "Past-campaign catalog published for the active model package; the numbers are served exactly as the package extension holds them.",
+        "responses": {
+          "200": {
+            "description": "Verified catalog of the active package, or the empty not-published state",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CampaignCatalogV1"}}}
+          },
+          "400": {"$ref": "#/components/responses/ApiError"},
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/campaign-catalog/download": {
+      "get": {
+        "operationId": "downloadCampaignCatalogWorkbook",
+        "description": "Published Excel of the whole past-campaign catalog; the hash recorded at publication is re-checked on the bytes sent.",
+        "responses": {
+          "200": {
+            "description": "Catalog workbook with three sheets",
+            "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {"schema": {"type": "string", "format": "binary"}}}
+          },
+          "400": {"$ref": "#/components/responses/ApiError"},
+          "404": {"$ref": "#/components/responses/ApiError"},
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
+    "/api/v1/campaign-catalog/{campaign_number}": {
+      "get": {
+        "operationId": "getCampaignCardV1",
+        "parameters": [{"$ref": "#/components/parameters/CampaignNumber"}],
+        "responses": {
+          "200": {
+            "description": "One campaign of the published catalog, the same record as in the list",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CampaignCardV1"}}}
+          },
+          "400": {"$ref": "#/components/responses/ApiError"},
+          "404": {"$ref": "#/components/responses/ApiError"},
+          "503": {"$ref": "#/components/responses/ApiError"}
+        }
+      }
+    },
     "/api/v1/help/catalog": {
       "get": {
         "operationId": "getHelpCatalog",
@@ -686,12 +730,13 @@
     },
     "parameters": {
       "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 16, "maxLength": 128}},
-      "ContractName": {"name": "contract_name", "in": "path", "required": true, "schema": {"enum": ["application-lifecycle-v1", "decision-result-v1", "result-overview-v1", "product-api-v1", "job-progress-view-v1", "job-result-view-v1", "job-result-view-v2", "validation-result-v2", "model-passport-v2", "model-overview-v2", "geo-catalog-v1", "workspace-geo-budget-v1", "scenario-media-plan-v1", "scenario-media-plan-v2", "mmm-fact-catalog-v1", "workspace-home-v1", "calculation-history-v1", "model-overview-v1", "help-catalog-v1", "auth-session-v1", "admin-user-list-v1", "admin-user-detail-v1", "admin-user-mutation-v1", "admin-role-catalog-v1", "admin-system-status-v1", "admin-audit-log-v1"]}},
+      "ContractName": {"name": "contract_name", "in": "path", "required": true, "schema": {"enum": ["application-lifecycle-v1", "decision-result-v1", "result-overview-v1", "product-api-v1", "job-progress-view-v1", "job-result-view-v1", "job-result-view-v2", "validation-result-v2", "model-passport-v2", "model-overview-v2", "geo-catalog-v1", "workspace-geo-budget-v1", "scenario-media-plan-v1", "scenario-media-plan-v2", "mmm-fact-catalog-v1", "workspace-home-v1", "calculation-history-v1", "model-overview-v1", "help-catalog-v1", "auth-session-v1", "admin-user-list-v1", "admin-user-detail-v1", "admin-user-mutation-v1", "admin-role-catalog-v1", "admin-system-status-v1", "admin-audit-log-v1", "campaign-catalog-v1", "campaign-card-v1"]}},
       "UserId": {"name": "user_id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^usr_[0-9a-f]{24}$"}},
       "UploadId": {"name": "upload_id", "in": "path", "required": true, "schema": {"type": "string"}},
       "ValidationId": {"name": "validation_id", "in": "path", "required": true, "schema": {"type": "string"}},
       "JobId": {"name": "job_id", "in": "path", "required": true, "schema": {"type": "string"}},
       "ArtifactId": {"name": "artifact_id", "in": "path", "required": true, "schema": {"type": "string"}},
+      "CampaignNumber": {"name": "campaign_number", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[1-9][0-9]{0,3}$"}},
       "ScenarioId": {"name": "scenario_id", "in": "query", "required": true, "schema": {"enum": ["S01", "S02", "S03", "S04", "S05", "S06"]}},
       "Page": {"name": "page", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "default": 1}},
       "PageSize": {"name": "page_size", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 500, "default": 100}},
@@ -759,6 +804,8 @@
       "GeoCatalogV1": {"$ref": "/api/v1/contracts/geo-catalog-v1.json"},
       "WorkspaceGeoBudgetV1": {"$ref": "/api/v1/contracts/workspace-geo-budget-v1.json"},
       "HistoricalModelGeoBudgetV1": {"$ref": "/api/v1/contracts/historical-model-geo-budget-v1.json"},
+      "CampaignCatalogV1": {"$ref": "/api/v1/contracts/campaign-catalog-v1.json"},
+      "CampaignCardV1": {"$ref": "/api/v1/contracts/campaign-card-v1.json"},
       "ScenarioMediaPlan": {"$ref": "./contracts/scenario-media-plan-v1.json"},
       "ScenarioMediaPlanV2": {"$ref": "/api/v1/contracts/scenario-media-plan-v2.json"},
       "MmmFactCatalog": {"$ref": "./contracts/mmm-fact-catalog-v1.json"},

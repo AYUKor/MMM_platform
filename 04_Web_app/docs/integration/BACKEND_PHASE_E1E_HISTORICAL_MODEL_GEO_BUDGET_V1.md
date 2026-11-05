@@ -118,6 +118,19 @@ The existing registered package inventory is not rewritten. This additive
 extension is deliberate: changing the old model directory or registration
 after promotion would invalidate model-package immutability.
 
+### Weekly joint package (Заноза)
+
+A weekly joint package (`weekly_joint_v1`) is built from its weekly panel with
+`02_Code/01_PyMC/configs/historical_geo_budget_spend_columns_weekly_v1.json`:
+date column `week_start`, geography column `unit_label` (city units and the
+«<ОБЛАСТЬ> (КРОМЕ ГОРОДОВ)» rest units of `geo_catalog_v1_2026_11_05`), and the
+five model spend columns in rubles (Indoor is inside `spend_OOH_Total` in that
+panel). Each panel row is one direction, unit and week, so a unit's total is
+the money of all its directions. `active_days_n` counts weeks with spend for
+this artifact. The web service accepts an artifact only when its
+`spend_columns_version` and config hash match one of the two approved
+policies.
+
 ## Build command
 
 ```bash

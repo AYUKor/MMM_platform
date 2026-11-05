@@ -32,6 +32,7 @@ if str(PYMC_CODE_DIR) not in sys.path:
     sys.path.insert(0, str(PYMC_CODE_DIR))
 
 from mmm_core.forecast_engine import _compile_decision_policy
+from mmm_core.weekly_package import is_weekly_manifest
 from mmm_core.model_package import sha256_file
 
 SCENARIOS = [
@@ -2085,6 +2086,7 @@ def _write_dynamic_workbook(
     allocation: pd.DataFrame,
     model_activation_status: str,
     production_blockers: list[str],
+    model_notes: list[list[str]] | None = None,
 ) -> None:
     paths.output_xlsx.parent.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
@@ -2101,6 +2103,7 @@ def _write_dynamic_workbook(
             ["Рекомендация", "Учитывает надежность, размер прироста, вероятность улучшения и операционный объем перелива бюджета."],
             ["Launch / cancel", "Не определяется автоматически, пока не утвержден ROAS или contribution-margin hurdle."],
             ["Статус модели", f"{model_activation_status}; blockers: {', '.join(production_blockers) if production_blockers else 'нет'}"],
+            *(model_notes or []),
         ],
         columns=["Понятие", "Как читать"],
     )
@@ -2384,6 +2387,124 @@ def _write_dynamic_workbook(
     wb.save(paths.output_xlsx)
 
 
+def _weekly_corridor_edge_notes(
+    recommendations: pd.DataFrame | None,
+    allocation: pd.DataFrame | None,
+    flighting: pd.DataFrame | None,
+    corridor: dict[str, Any],
+) -> list[list[str]]:
+    """Per recommended plan: how many optimized cells sit on the corridor bounds (weekly joint package)."""
+    if recommendations is None or allocation is None or flighting is None or not corridor:
+        return []
+    need_a = {"candidate_name", "source_campaign_name", "segment", "geo", "channel", "budget_rub", "optimizer_policy"}
+    if recommendations.empty or allocation.empty or flighting.empty or not need_a.issubset(allocation.columns):
+        return []
+    up, keep = float(corridor.get("max_increase_ratio", 0.0)), float(corridor.get("min_keep_ratio", 0.0))
+    plan = flighting.groupby(["campaign_name", "segment", "geo", "channel"])["budget_rub"].sum()
+    rows: list[list[str]] = []
+    for _, rec in recommendations.iterrows():
+        cells = allocation[
+            (allocation["candidate_name"].astype(str) == str(rec.get("candidate_name")))
+            & (allocation["optimizer_policy"].astype(str) == "optimize")
+        ].copy()
+        if cells.empty:
+            continue
+        cells["plan_rub"] = [
+            float(plan.get((r.source_campaign_name, r.segment, r.geo, r.channel), 0.0)) for r in cells.itertuples()
+        ]
+        cells = cells[cells["plan_rub"] > 0]
+        if cells.empty:
+            continue
+        budget = cells["budget_rub"].astype(float)
+        ratio = budget / cells["plan_rub"]
+        cells["at_up"] = (ratio - up).abs() <= 2e-3
+        cells["at_keep"] = (ratio - keep).abs() <= 2e-3
+        on_edge = cells["at_up"] | cells["at_keep"]
+        # the history limit of the candidate (p95 / p99 / robust upper), when the corridor is not the binding bound
+        cap_col = {"p95": "safe_support_cap_rub", "p99": "automatic_support_cap_rub",
+                   "robust_upper": "robust_support_cap_rub"}.get(str(cells.get("support_limit_policy",
+                                                                                pd.Series([""])).iloc[0]))
+        at_hist = pd.Series(False, index=cells.index)
+        if cap_col and cap_col in cells:
+            cap = pd.to_numeric(cells[cap_col], errors="coerce")
+            at_hist = ((budget - cap).abs() <= np.maximum(1000.0, 2e-3 * cap.abs())).fillna(False) & ~on_edge
+        n_edge, n_hist = int(on_edge.sum()), int(at_hist.sum())
+        if not n_edge and not n_hist:
+            continue
+        by_ch = cells.groupby("channel")[["at_up", "at_keep"]].all()
+        all_up = [str(c) for c in by_ch.index[by_ch["at_up"]]]
+        all_keep = [str(c) for c in by_ch.index[by_ch["at_keep"]]]
+        text = (f"Из {len(cells)} ячеек: {n_edge} на границах коридора, {n_hist} на пределе исторических трат, "
+                f"свободно {len(cells) - n_edge - n_hist}")
+        if all_up:
+            text += f"; везде ×{up:g}: {', '.join(all_up)}"
+        if all_keep:
+            text += f"; везде ×{keep:g}: {', '.join(all_keep)}"
+        bound = all_up or all_keep or n_edge + n_hist >= 0.8 * len(cells)
+        text += (". Выигрыш этой рекомендации задан ограничениями, а не найден по данным." if bound
+                 else ". Часть выигрыша задана ограничениями.")
+        rows.append([f"Упор в границы: {rec.get('campaign_name')}", text])
+    return rows
+
+
+def _weekly_model_notes(
+    paths: ReportPaths,
+    manifest: dict[str, Any],
+    run_card: dict[str, Any],
+    recommendations: pd.DataFrame | None = None,
+    allocation: pd.DataFrame | None = None,
+    flighting: pd.DataFrame | None = None,
+) -> list[list[str]]:
+    """Plain-language caveats of a weekly joint model package (weekly_package.py) for sheet 00."""
+    if not is_weekly_manifest(manifest):
+        return []
+    cap = _read_csv(paths.model_run_dir / "capability_matrix.csv")
+    messages = (
+        cap.loc[cap.get("optimizer_use", pd.Series(dtype=str)).astype(str).eq("optimize"), "marketer_message"]
+        .dropna().astype(str).unique().tolist()
+        if not cap.empty and "marketer_message" in cap
+        else []
+    )
+    plan_notes = run_card.get("weekly_optimizer_plan") or {}
+    corridor = plan_notes.get("cell_corridor") or {}
+    rules = manifest.get("optimizer_rules") or {}
+    fixed = ", ".join(rules.get("fixed_at_plan_channels") or []) or "нет"
+    notes = [
+        ["Модель", f"«{manifest.get('model_name', '')}», недельная модель заказов и среднего чека; эффект кампании = "
+                   "дополнительный оборот за окно модели (кампания и перенос эффекта на следующие недели)."],
+        ["Уровень ROAS", f"{manifest.get('roas_level_label_ru', '')}: общий уровень отдачи каналов взят из отраслевых "
+                         "ориентиров, данные задают распределение по сетям, городам и неделям."],
+    ]
+    if messages:
+        notes.append(["Оговорка модели", messages[0]])
+    notes.append(["Вероятность улучшения", "Считается внутри модели. Перенос денег между каналами опирается на "
+                  "уровни каналов из отраслевого ориентира, поэтому вероятность около 1 не означает выигрыш, "
+                  "проверенный на данных."])
+    if corridor:
+        notes.append(["Ограничения оптимизатора",
+                      f"Каждая ячейка город × канал меняется от {corridor.get('min_keep_ratio')} до "
+                      f"{corridor.get('max_increase_ratio')} своего бюджета в плане и не выше исторических трат: "
+                      "ячейка, у которой план выше исторических трат, срезается до них, даже ниже нижней границы. "
+                      "Деньги не переходят между направлениями (сеть и онлайн/офлайн). "
+                      f"Как в плане: {fixed}; если такой канал в плане выше исторических трат, прогноз это "
+                      "показывает, но рекомендацию это не снимает."])
+        notes.append(["Границы и выигрыш",
+                      "Если рекомендация упирается в границы (канал везде на верхней или нижней границе), "
+                      "размер выигрыша задан шириной этих границ, а не найден по данным: при других границах "
+                      "будет другое число. Направление переноса показывает, какой канал модель считает "
+                      "более отдающим."])
+        notes.extend(_weekly_corridor_edge_notes(recommendations, allocation, flighting, corridor))
+    blocker_ru = {
+        "ROAS_LEVEL_INDUSTRY_ANCHOR": "уровень ROAS из отраслевого ориентира",
+        "OOT_PREREG_NOT_PASSED": "проверка на отложенных кварталах формально не пройдена",
+        "OOT_NOT_SEALED_Q3_PENDING": "закрытая проверка на 3 квартале впереди",
+    }
+    blockers = [blocker_ru.get(str(b), str(b)) for b in manifest.get("production_blockers") or []]
+    if blockers:
+        notes.append(["Ограничения статуса", "; ".join(blockers) + "."])
+    return notes
+
+
 def build_marketer_report(paths: ReportPaths) -> dict[str, Any]:
     """Build the workbook strictly from completed optimizer artifacts."""
     flighting = _read_csv(paths.flighting_path)
@@ -2432,6 +2553,7 @@ def build_marketer_report(paths: ReportPaths) -> dict[str, Any]:
         allocation=allocation,
         model_activation_status=str(manifest.get("activation_status") or "unknown"),
         production_blockers=list(manifest.get("production_blockers") or []),
+        model_notes=_weekly_model_notes(paths, manifest, run_card, recommendations, allocation, flighting),
     )
 
     scenario_results_path = paths.optimizer_output_dir / "marketer_report_scenario_results.csv"
