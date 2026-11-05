@@ -282,6 +282,24 @@ HTTP_ERROR_CATALOG: dict[str, dict[str, Any]] = {
         "display_text": "Исторические расходы активной модели временно недоступны.",
         "user_action": "Обновите страницу позже или сообщите ответственному за инструмент.",
     },
+    "CAMPAIGN_CATALOG_NOT_PUBLISHED": {
+        "http_status": 404,
+        "retryable": False,
+        "display_text": "Каталог прошлых кампаний для активной модели пока не опубликован.",
+        "user_action": "Вернитесь позже: каталог появится после публикации для активной модели.",
+    },
+    "CAMPAIGN_NOT_FOUND": {
+        "http_status": 404,
+        "retryable": False,
+        "display_text": "Кампании с таким номером нет в каталоге активной модели.",
+        "user_action": "Откройте список прошлых кампаний и выберите кампанию из него.",
+    },
+    "CAMPAIGN_CATALOG_UNAVAILABLE": {
+        "http_status": 503,
+        "retryable": True,
+        "display_text": "Каталог прошлых кампаний временно недоступен.",
+        "user_action": "Обновите страницу позже или сообщите ответственному за инструмент.",
+    },
     "PRODUCT_NAVIGATION_INCONSISTENT": {
         "http_status": 409,
         "retryable": False,

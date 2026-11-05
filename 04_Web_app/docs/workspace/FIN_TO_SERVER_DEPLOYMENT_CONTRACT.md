@@ -97,11 +97,23 @@ model/package_extensions/package_artifacts_manifest_v1.json
 model/package_extensions/historical_geo_budget_v1/*
   -> 03_Outputs/01_PyMC_outputs/00_Model_registry/
      package_artifacts/<package_id>/historical_geo_budget_v1/*
+
+model/package_extensions/campaign_catalog_v1/*          (optional)
+  -> 03_Outputs/01_PyMC_outputs/00_Model_registry/
+     package_artifacts/<package_id>/campaign_catalog_v1/*
 ```
+
+The past-campaign catalog is optional. When it is shipped, all three of its files
+(`campaign_catalog_v1.json`, `campaign_catalog_v1.xlsx`,
+`campaign_catalog_v1.metadata.json`) must be present; its metadata must carry the
+registered `package_id`, `package_input_fingerprint` and `model_run_id`, every
+recorded publication check must have passed, and the data and Excel files must
+match the recorded SHA-256 and size.
 
 All work happens in a new sibling staging directory. The final candidate appears
 only after application Git identity, frontend dist, complete model closure and all
-five package-extension files pass path, SHA-256, byte and semantic binding checks.
+five package-extension files (eight with the campaign catalog) pass path, SHA-256,
+byte and semantic binding checks.
 An existing candidate is never replaced and a failed partial staging directory is
 removed without touching any completed release.
 
@@ -130,12 +142,15 @@ PASS requires all of the following in one run:
 
 - exact application commit/tree and package ID;
 - complete frontend dist and 63-file model closure;
-- package extensions `5/5`, with zero missing, unexpected, SHA or byte mismatch;
+- package extensions `5/5` (or `8/8` with the campaign catalog), with zero missing,
+  unexpected, SHA or byte mismatch;
 - `/health = ok` and `/ready = ready`;
 - authenticated `GET /api/v1/model/historical-geo-budget` returns HTTP 200,
   `record_origin=verified_model_package_artifact`, `status=available`, the expected
   package/artifact identity, full expected coverage and exact manifest-backed
-  business totals.
+  business totals;
+- when the campaign catalog is shipped, authenticated `GET /api/v1/campaign-catalog`
+  returns HTTP 200, `status=available`, the shipped `artifact_id` and every campaign.
 
 HTTP 200 and a schema-valid response are not enough when a contract supports
 `available`, `partial` and `unavailable`. Deployment acceptance must assert the

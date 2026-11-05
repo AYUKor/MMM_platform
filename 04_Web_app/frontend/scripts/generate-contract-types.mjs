@@ -71,6 +71,16 @@ const contracts = [
     output: "historical-model-geo-budget-v1.ts",
   },
   {
+    schema: "campaign_catalog_v1.schema.json",
+    typeName: "CampaignCatalogV1",
+    output: "campaign-catalog-v1.ts",
+  },
+  {
+    schema: "campaign_card_v1.schema.json",
+    typeName: "CampaignCardV1",
+    output: "campaign-card-v1.ts",
+  },
+  {
     schema: "scenario_media_plan_v1.schema.json",
     typeName: "ScenarioMediaPlanV1",
     output: "scenario-media-plan-v1.ts",

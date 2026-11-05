@@ -5,6 +5,8 @@ import { AdminRolesPage } from "../pages/AdminRolesPage";
 import { AdminSystemStatusPage } from "../pages/AdminSystemStatusPage";
 import { AdminUsersPage } from "../pages/AdminUsersPage";
 import { CalculationsPage } from "../pages/CalculationsPage";
+import { CampaignCardPage } from "../pages/CampaignCardPage";
+import { CampaignCatalogPage } from "../pages/CampaignCatalogPage";
 import { HelpPage } from "../pages/HelpPage";
 import { HomePage } from "../pages/HomePage";
 import { JobProgressPage } from "../pages/JobProgressPage";
@@ -27,6 +29,8 @@ export const routes: RouteObject[] = [
       { path: "calculations/new", element: <RequirePermission permission="calculation.create"><NewCalculationPage /></RequirePermission> },
       { path: "calculations/:id/progress", element: <RequirePermission permission="calculation.read"><JobProgressPage /></RequirePermission> },
       { path: "calculations/:id/result", element: <RequirePermission permission="result.read"><ResultOverviewPage /></RequirePermission> },
+      { path: "campaigns", element: <RequirePermission permission="model.read"><CampaignCatalogPage /></RequirePermission> },
+      { path: "campaigns/:number", element: <RequirePermission permission="model.read"><CampaignCardPage /></RequirePermission> },
       { path: "model", element: <RequirePermission permission="model.read"><ModelPassportPage /></RequirePermission> },
       { path: "help", element: <RequirePermission permission="help.read"><HelpPage /></RequirePermission> },
       { path: "admin", element: <AdminIndexPage /> },

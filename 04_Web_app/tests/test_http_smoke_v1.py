@@ -646,7 +646,7 @@ class HttpSmokeV1Test(unittest.TestCase):
 
         status, openapi, _ = self._request("GET", "/api/v1/openapi.json")
         self.assertEqual(status, 200)
-        self.assertEqual(openapi["info"]["version"], "1.12.0")
+        self.assertEqual(openapi["info"]["version"], "1.13.0")
         self.assertIn("/api/v1/auth/register", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/progress-view", openapi["paths"])
         self.assertIn("/api/v1/jobs/{job_id}/result-view", openapi["paths"])
@@ -661,6 +661,9 @@ class HttpSmokeV1Test(unittest.TestCase):
         self.assertIn("/api/v1/meta/geo-catalog", openapi["paths"])
         self.assertIn("/api/v1/workspace/geo-budget", openapi["paths"])
         self.assertIn("/api/v1/model/historical-geo-budget", openapi["paths"])
+        self.assertIn("/api/v1/campaign-catalog", openapi["paths"])
+        self.assertIn("/api/v1/campaign-catalog/download", openapi["paths"])
+        self.assertIn("/api/v1/campaign-catalog/{campaign_number}", openapi["paths"])
         self.assertIn("/api/v1/help/catalog", openapi["paths"])
         self.assertIn("/api/v1/templates/media-plan-dictionary", openapi["paths"])
         for contract in (
@@ -677,6 +680,8 @@ class HttpSmokeV1Test(unittest.TestCase):
             "geo-catalog-v1",
             "workspace-geo-budget-v1",
             "historical-model-geo-budget-v1",
+            "campaign-catalog-v1",
+            "campaign-card-v1",
             "scenario-media-plan-v1",
             "scenario-media-plan-v2",
             "mmm-fact-catalog-v1",
@@ -698,6 +703,8 @@ class HttpSmokeV1Test(unittest.TestCase):
             "GeoCatalogV1",
             "WorkspaceGeoBudgetV1",
             "HistoricalModelGeoBudgetV1",
+            "CampaignCatalogV1",
+            "CampaignCardV1",
             "ScenarioMediaPlanV2",
         ):
             reference = openapi["components"]["schemas"][schema_name]["$ref"]

@@ -26,6 +26,8 @@ describe("router", () => {
     expect(childPaths).toContain("calculations/:id/result");
     expect(childPaths).toContain("calculations/:id/progress");
     expect(childPaths).toContain("calculations/new");
+    expect(childPaths).toContain("campaigns");
+    expect(childPaths).toContain("campaigns/:number");
     expect(childPaths).toContain("model");
     expect(childPaths).toContain("help");
   });
@@ -47,6 +49,8 @@ describe("router", () => {
   it("declares route access from explicit permissions", () => {
     expect(routePermission("calculations/new")).toBe("calculation.create");
     expect(routePermission("calculations/:id/result")).toBe("result.read");
+    expect(routePermission("campaigns")).toBe("model.read");
+    expect(routePermission("campaigns/:number")).toBe("model.read");
     expect(routePermission("admin/users")).toBe("admin.users.read");
     expect(routePermission("admin/roles")).toBe("admin.users.read");
     expect(routePermission("admin/system")).toBe("admin.system.read");
