@@ -70,6 +70,7 @@ from mmm_core.io import load_config  # noqa: E402
 from mmm_core.model_package import sha256_file  # noqa: E402
 from mmm_core.model_package_reader import ModelPackage, ModelPackageError  # noqa: E402
 from mmm_core.model_registry import resolve_model_reference  # noqa: E402
+from mmm_core.weekly_package import is_weekly_manifest  # noqa: E402
 from services.geo_catalog import (  # noqa: E402
     ALIASES_PATH,
     CATALOG_PATH,
@@ -748,6 +749,20 @@ class LocalCampaignService:
                     "forecast_geo_availability": availability_artifact,
                 },
             )
+            directions_issue = self._weekly_single_direction_issue(package, prep)
+            if directions_issue is not None:
+                invalid = replace(
+                    valid,
+                    status=LifecycleStatus(
+                        "invalid", "План нельзя отправить в расчет"
+                    ),
+                    finished_at_utc=_utc_now(),
+                    blocking_errors=(directions_issue,),
+                    job_creation_allowed=False,
+                )
+                invalid.validate()
+                self.state.write_validation(invalid)
+                return
             if int(prep.summary["validation"].get("unsupported_rows_n") or 0) > 0:
                 issue = self._validation_failure_issue(validation.validation_id)
                 invalid = replace(
@@ -985,6 +1000,42 @@ class LocalCampaignService:
         )
         blocked.validate()
         return blocked
+
+    @staticmethod
+    def _weekly_single_direction_issue(package: Any, prep: Any) -> ValidationIssue | None:
+        """A weekly joint package keeps every direction apart, so one uploaded plan is one direction.
+
+        The weekly optimizer treats each direction of a plan as its own campaign (money never moves between
+        directions), and the browser result shows exactly one campaign.
+        """
+
+        if not is_weekly_manifest(getattr(package, "manifest", None) or {}):
+            return None
+        rows = _read_csv(Path(prep.normalized_path))
+        directions = sorted({str(row.get("segment") or "").strip() for row in rows} - {""})
+        if len(directions) <= 1:
+            return None
+        listed = ", ".join(f"«{value}»" for value in directions)
+        display_text = (
+            f"В плане несколько направлений: {listed}. Модель считает каждое "
+            "направление отдельно и не переносит деньги между ними, поэтому "
+            "загрузите план каждого направления отдельным файлом."
+        )
+        return ValidationIssue(
+            code="ONE_DIRECTION_PER_PLAN",
+            severity="blocking",
+            display_text=display_text,
+            scope="upload",
+            recoverable=True,
+            what=display_text,
+            why=(
+                "Реклама магазинов действует только на магазины, реклама доставки только "
+                "на доставку; бюджеты направлений не смешиваются."
+            ),
+            recommended_action=(
+                "Разделите медиаплан по направлениям и загрузите каждый файл отдельно."
+            ),
+        )
 
     def _validation_failure_issue(self, validation_id: str) -> ValidationIssue:
         preparation_dir = (
