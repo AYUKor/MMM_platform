@@ -17,7 +17,7 @@ export interface Serving {
   core_target: "turnover_per_user";
   serving_targets_n: 1;
   active_serving_models_n: 4;
-  research_models_in_package_n: 12;
+  research_models_in_package_n: 12 | 1;
   calculation_allowed: boolean;
   production_claim_allowed: boolean;
 }

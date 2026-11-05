@@ -816,6 +816,67 @@ class BusinessSemanticsV2Test(unittest.TestCase):
         self.assertNotIn("avg_basket", serialized)
         self.assertNotIn("orders_diagnostic_only", serialized)
 
+    def _weekly_passport_v1(self) -> dict:
+        passport_v1 = json.loads(
+            (FIXTURE_DIR / "model_passport_v1_synthetic.json").read_text(encoding="utf-8")
+        )
+        passport_v1["record_origin"] = "verified_model_package"
+        passport_v1["package"]["gate_policy_version"] = "weekly_joint_v1"
+        passport_v1["coverage"]["segments"] = [
+            "ТС5/Онлайн", "ТС5/Оффлайн", "ТСХ/Онлайн", "ТСХ/Оффлайн",
+        ]
+        passport_v1["coverage"]["targets"] = [{"target": "turnover_per_user"}]
+        passport_v1["caveats"] = [
+            *passport_v1.get("caveats", []),
+            {"code": "weekly_model", "display_text": "Модель обучена на недельных данных."},
+        ]
+        return passport_v1
+
+    def test_weekly_joint_package_publishes_one_model_serving_four_segments(self) -> None:
+        passport = build_model_passport_v2(self._weekly_passport_v1())
+        _schema_valid(load_model_passport_v2_schema(), passport)
+        self.assertEqual(passport["serving"]["research_models_in_package_n"], 1)
+        self.assertEqual(passport["serving"]["active_serving_models_n"], 4)
+        self.assertEqual(passport["serving"]["serving_targets_n"], 1)
+        overview = build_model_overview_v2({"limitations": []}, passport)
+        _schema_valid(load_model_overview_v2_schema(), overview)
+        self.assertEqual(overview["serving"], passport["serving"])
+
+    def test_weekly_joint_package_fails_closed_on_an_inconsistent_inventory(self) -> None:
+        cases = {
+            "gate policy without the weekly caveat": lambda value: value.update(
+                caveats=[row for row in value["caveats"] if row.get("code") != "weekly_model"]
+            ),
+            "weekly caveat on a daily gate policy": lambda value: value["package"].update(
+                gate_policy_version="daily_gate_v1"
+            ),
+            "a second served target": lambda value: value["coverage"]["targets"].append(
+                {"target": "orders_per_user"}
+            ),
+            "three segments": lambda value: value["coverage"].update(
+                segments=value["coverage"]["segments"][:3]
+            ),
+            "a duplicated segment": lambda value: value["coverage"].update(
+                segments=[*value["coverage"]["segments"][:3], value["coverage"]["segments"][0]]
+            ),
+        }
+        for name, mutate in cases.items():
+            with self.subTest(name):
+                value = self._weekly_passport_v1()
+                mutate(value)
+                with self.assertRaises(ValueError):
+                    build_model_passport_v2(value)
+
+    def test_model_contracts_reject_an_unapproved_inventory_pair(self) -> None:
+        passport = build_model_passport_v2(self._weekly_passport_v1())
+        for research, active in ((1, 1), (12, 1), (4, 4), (True, 4)):
+            with self.subTest(research=research, active=active):
+                value = copy.deepcopy(passport)
+                value["serving"]["research_models_in_package_n"] = research
+                value["serving"]["active_serving_models_n"] = active
+                with self.assertRaises(BusinessSemanticsContractError):
+                    validate_model_passport_v2(value)
+
     def _production_passport_v1(self) -> dict:
         passport_v1 = json.loads(
             (FIXTURE_DIR / "model_passport_v1_synthetic.json").read_text(encoding="utf-8")

@@ -70,6 +70,8 @@ export function ModelOverviewView({
 }: ModelOverviewViewProps) {
   const serving = passport.serving;
   const production = serving.production_claim_allowed;
+  // A weekly joint package is one model of orders and average check serving all segments.
+  const weeklyJoint = serving.research_models_in_package_n === 1;
   const ready = serving.calculation_allowed && overview.summary.calculation_allowed;
   const constraints = [
     ...passport.validation.production_blockers.map((item) => ({
@@ -126,15 +128,16 @@ export function ModelOverviewView({
             решением о запуске кампании.
           </p>
           <strong>
-            Приложение использует модели оборота. Модели заказов и среднего чека
-            сохранены для исследований, но не участвуют в расчете рекомендаций.
+            {weeklyJoint
+              ? "Приложение использует одну совместную недельную модель заказов и среднего чека. Оборот считается как заказы, умноженные на средний чек, по каждому направлению."
+              : "Приложение использует модели оборота. Модели заказов и среднего чека сохранены для исследований, но не участвуют в расчете рекомендаций."}
           </strong>
         </div>
         <dl className={styles.modelHeroFacts}>
           <div><dt>Основной показатель</dt><dd>Дополнительный оборот</dd></div>
           <div><dt>Serving-показателей</dt><dd>{formatInteger(serving.serving_targets_n)}</dd></div>
-          <div><dt>Активных serving-моделей</dt><dd>{formatInteger(serving.active_serving_models_n)}</dd></div>
-          <div><dt>{production ? "Моделей в пакете" : "Исследовательских моделей в пакете"}</dt><dd>{formatInteger(serving.research_models_in_package_n)}</dd></div>
+          <div><dt>{weeklyJoint ? "Направлений в расчете" : "Активных serving-моделей"}</dt><dd>{formatInteger(serving.active_serving_models_n)}</dd></div>
+          <div><dt>{weeklyJoint ? "Совместных моделей в пакете" : production ? "Моделей в пакете" : "Исследовательских моделей в пакете"}</dt><dd>{formatInteger(serving.research_models_in_package_n)}</dd></div>
         </dl>
       </section>
 

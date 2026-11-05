@@ -34,6 +34,17 @@ from contracts.product_api_v1 import (  # noqa: E402
 
 
 SCHEMA_VERSION = "2.0.0"
+# Serving inventories the model page may publish, as (models in the package, active
+# serving models). A daily package holds 12 research fits, of which the 4 turnover
+# fits serve. The weekly joint package («Заноза», weekly_joint_v1) is one joint model
+# of orders and average check that serves the same 4 segments.
+WEEKLY_JOINT_RESEARCH_MODELS_N = 1
+APPROVED_SERVING_INVENTORIES = frozenset(
+    {
+        (RESEARCH_MODELS_N, ACTIVE_SERVING_MODELS_N),
+        (WEEKLY_JOINT_RESEARCH_MODELS_N, ACTIVE_SERVING_MODELS_N),
+    }
+)
 JOB_RESULT_VIEW_CONTRACT = "job_result_view_v2"
 VALIDATION_RESULT_CONTRACT = "validation_result_v2"
 MODEL_PASSPORT_CONTRACT = "model_passport_v2"
@@ -730,12 +741,19 @@ def _validate_serving_summary(payload: Mapping[str, Any], contract_name: str) ->
         "target_id": SERVING_TARGET_ID,
         "core_target": SERVING_CORE_TARGET,
         "serving_targets_n": 1,
-        "active_serving_models_n": ACTIVE_SERVING_MODELS_N,
-        "research_models_in_package_n": RESEARCH_MODELS_N,
     }
     for key, value in expected.items():
         if serving.get(key) != value:
             raise BusinessSemanticsContractError(f"serving.{key} is inconsistent")
+    inventory = (
+        serving.get("research_models_in_package_n"),
+        serving.get("active_serving_models_n"),
+    )
+    if (
+        not all(type(value) is int for value in inventory)
+        or inventory not in APPROVED_SERVING_INVENTORIES
+    ):
+        raise BusinessSemanticsContractError("serving model inventory is inconsistent")
     production_claim = serving.get("production_claim_allowed")
     if not isinstance(production_claim, bool):
         raise BusinessSemanticsContractError("serving.production_claim_allowed must be boolean")
