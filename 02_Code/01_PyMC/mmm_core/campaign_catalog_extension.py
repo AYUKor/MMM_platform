@@ -1020,6 +1020,61 @@ def compare_with_numbers_csv(
     return {"rows": len(records), "mismatches": mismatches}
 
 
+# The package ROAS table holds medians over 200 evenly spaced posterior draws (05 roas_draws; the package check
+# replays it with weekly_engine.replay_roas_table(200)). The catalog takes its own evenly spaced draws (meta n_draws,
+# 1000 for Заноза): same fit and formula, other draws, so the two medians differ by Monte Carlo noise. A cell passes
+# within 2% of the package median or within 4 standard errors of that noise; another fit or formula lands far beyond.
+# Standard error of a median over n draws ~ 1.2533 * sigma / sqrt(n), sigma from the package 90% interval.
+PACKAGE_ROAS_TABLE_DRAWS = 200
+MODEL_ROAS_RELATIVE_TOLERANCE = 0.02
+MODEL_ROAS_MAX_Z = 4.0
+
+
+def _finite_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def model_roas_parity(source: SourceCatalog, identity: PackageIdentity) -> tuple[bool, dict[str, Any]]:
+    """Catalog model ROAS (median over its draws) next to the package table (median over 200 draws), cell by cell."""
+
+    draws = source.meta.get("n_draws")
+    catalog_draws = draws if isinstance(draws, int) and not isinstance(draws, bool) and draws > 0 else None
+    by_cell = {(row.get("segment"), row.get("channel")): row for row in identity.model_roas_rows}
+    relative: list[float] = []
+    z_scores: list[float] = []
+    failed: list[str] = []
+    for row in source.roas_check_rows:
+        reference = by_cell.get((row.get("segment"), row.get("channel")))
+        value = _finite_or_none(row.get("model_roas_fit_rows"))
+        if reference is None or value is None:
+            continue
+        model_roas = float(reference["roas_median"])
+        difference = abs(value - model_roas)
+        cell_relative = difference / max(abs(model_roas), 1e-12)
+        relative.append(cell_relative)
+        low, high = _finite_or_none(reference.get("roas_q05")), _finite_or_none(reference.get("roas_q95"))
+        z = None
+        if catalog_draws and low is not None and high is not None and high > low:
+            sigma = (high - low) / (2 * 1.6448536269514722)
+            noise = 1.2533141373155003 * sigma * math.sqrt(1 / PACKAGE_ROAS_TABLE_DRAWS + 1 / catalog_draws)
+            z = difference / noise
+            z_scores.append(z)
+        if cell_relative > MODEL_ROAS_RELATIVE_TOLERANCE and (z is None or z > MODEL_ROAS_MAX_Z):
+            failed.append(f"{row.get('segment')} {row.get('channel')}")
+    return bool(relative) and not failed, {
+        "cells": len(relative),
+        "max_relative_difference": max(relative) if relative else None,
+        "max_z": max(z_scores) if z_scores else None,
+        "catalog_draws": catalog_draws,
+        "package_table_draws": PACKAGE_ROAS_TABLE_DRAWS,
+        "failed_cells": failed[:10],
+    }
+
+
 def catalog_checks(
     records: Sequence[Mapping[str, Any]],
     source: SourceCatalog,
@@ -1070,21 +1125,14 @@ def catalog_checks(
             {"catalog_npz_sha256": source_npz, "package_npz_sha256": identity.npz_sha256},
         )
     )
-    differences: list[float] = []
-    by_cell = {(row.get("segment"), row.get("channel")): row for row in identity.model_roas_rows}
-    for row in source.roas_check_rows:
-        reference = by_cell.get((row.get("segment"), row.get("channel")))
-        value = row.get("model_roas_fit_rows")
-        if reference is None or value in (None, "", "nan"):
-            continue
-        model_roas = float(reference["roas_median"])
-        differences.append(abs(float(value) - model_roas) / max(abs(model_roas), 1e-12))
+    parity_passed, parity = model_roas_parity(source, identity)
     checks.append(
         _check(
             "catalog_model_roas_equals_package_table",
-            bool(differences) and max(differences) <= 0.02,
-            "ROAS модели по направлениям и каналам в расчёте каталога совпадает с таблицей пакета (до 2%).",
-            {"cells": len(differences), "max_relative_difference": max(differences) if differences else None},
+            parity_passed,
+            "ROAS модели по направлениям и каналам в расчёте каталога совпадает с таблицей пакета: разница до 2% "
+            "или в пределах случайного разброса (каталог и таблица взяли разное число розыгрышей одной модели).",
+            parity,
         )
     )
     return checks

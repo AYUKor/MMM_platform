@@ -197,6 +197,34 @@ class CampaignCatalogExtensionTests(unittest.TestCase):
         self._rewrite_csv("check_catalog_vs_model_roas.csv", scale)
         self.assertEqual(self._check_status()["catalog_model_roas_equals_package_table"], "failed")
 
+    def test_model_roas_within_draw_noise_passes_and_far_off_fails(self) -> None:
+        # Package table with a 90% interval of median -/+ 15%: draw noise of 200 vs 40 draws is ~2% of the median.
+        package_dir, package_id = write_synthetic_package_dir(self.root / "package_interval", roas_interval=0.15)
+        identity = extension.package_identity_from_dir(package_dir, package_id)
+
+        def parity(factor: float) -> tuple[bool, dict]:
+            def scale(rows: list[dict[str, str]]) -> None:
+                rows[0]["model_roas_fit_rows"] = str(float(rows[0]["model_roas_fit_rows"]) * factor)
+
+            write_synthetic_catalog_dir(self.catalog_dir)
+            self._rewrite_csv("check_catalog_vs_model_roas.csv", scale)
+            return extension.model_roas_parity(extension.load_source_catalog(self.catalog_dir), identity)
+
+        passed, value = parity(1.05)
+        self.assertTrue(passed)
+        self.assertAlmostEqual(value["max_relative_difference"], 0.05, places=6)
+        self.assertLess(value["max_z"], extension.MODEL_ROAS_MAX_Z)
+        self.assertEqual((value["catalog_draws"], value["package_table_draws"], value["failed_cells"]), (40, 200, []))
+
+        passed, value = parity(1.12)
+        self.assertFalse(passed)
+        self.assertGreater(value["max_z"], extension.MODEL_ROAS_MAX_Z)
+        self.assertEqual(len(value["failed_cells"]), 1)
+
+        passed, value = parity(1.0)
+        self.assertTrue(passed)
+        self.assertEqual(value["max_relative_difference"], 0.0)
+
     def test_numbers_csv_difference_fails(self) -> None:
         def change(rows: list[dict[str, str]]) -> None:
             rows[1]["бюджет_млн"] = str(float(rows[1]["бюджет_млн"]) + 0.01)

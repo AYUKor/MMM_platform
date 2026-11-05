@@ -200,17 +200,28 @@ def write_synthetic_catalog_dir(root: Path, *, campaigns_n: int = 12, npz_sha256
     return root
 
 
-def write_synthetic_package_dir(root: Path, *, npz_sha256: str = "a" * 64, panel_sha256: str = "d" * 64) -> tuple[Path, str]:
-    """Write a minimal weekly package folder (manifest fingerprint over its files); return it and its package_id."""
+def write_synthetic_package_dir(
+    root: Path,
+    *,
+    npz_sha256: str = "a" * 64,
+    panel_sha256: str = "d" * 64,
+    roas_interval: float | None = None,
+) -> tuple[Path, str]:
+    """Write a minimal weekly package folder (manifest fingerprint over its files); return it and its package_id.
+
+    roas_interval adds roas_q05 / roas_q95 = median * (1 -/+ roas_interval) to the ROAS table, as a real package has.
+    """
 
     root.mkdir(parents=True, exist_ok=True)
     (root / "run_config.json").write_text(json.dumps({"npz_sha256": npz_sha256}), encoding="utf-8")
     roas_rows = []
     for s_index, segment in enumerate(SEGMENTS):
         for c_index, channel in enumerate(_MODEL_CHANNELS):
-            roas_rows.append(
-                {"segment": segment, "channel": channel, "roas_median": synthetic_model_roas(s_index, c_index)}
-            )
+            median = synthetic_model_roas(s_index, c_index)
+            row: dict[str, Any] = {"segment": segment, "channel": channel, "roas_median": median}
+            if roas_interval is not None:
+                row.update(roas_q05=median * (1 - roas_interval), roas_q95=median * (1 + roas_interval))
+            roas_rows.append(row)
     _write_csv(root / "model_roas_table.csv", roas_rows)
     files = {name: sha256_file(root / name) for name in ("run_config.json", "model_roas_table.csv")}
     fingerprint = hashlib.sha256(json.dumps(files, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
