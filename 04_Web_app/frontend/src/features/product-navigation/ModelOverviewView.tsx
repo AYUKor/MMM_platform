@@ -153,7 +153,7 @@ export function ModelOverviewView({
           <div>
             <dt>Период обучения</dt>
             <dd>{periodLabel(overview.summary.training_period)}</dd>
-            <small>Дневные данные</small>
+            <small>{weeklyJoint ? "Недельные данные" : "Дневные данные"}</small>
           </div>
           <div>
             <dt>Статус пакета</dt>

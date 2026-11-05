@@ -318,6 +318,8 @@ describe("Phase D product-navigation views", () => {
     expect(screen.getByText("Направлений в расчете").parentElement as HTMLElement).toHaveTextContent("4");
     expect(screen.getByText("Совместных моделей в пакете").parentElement as HTMLElement).toHaveTextContent("1");
     expect(screen.getByText(/одну совместную недельную модель заказов и среднего чека/)).toBeInTheDocument();
+    expect(screen.getByText("Недельные данные")).toBeInTheDocument();
+    expect(screen.queryByText("Дневные данные")).not.toBeInTheDocument();
     expect(screen.queryByText(/Модели заказов и среднего чека сохранены для исследований/)).not.toBeInTheDocument();
     expect(screen.queryByText("Активных serving-моделей")).not.toBeInTheDocument();
     expect(screen.queryByText("Исследовательских моделей в пакете")).not.toBeInTheDocument();
